@@ -16,6 +16,7 @@
 #include "Helper.h"
 #include "JUCEHeaders.h"
 #include "SyncTimer.h"
+#include "WaveFormItem.h"
 
 using namespace std;
 
@@ -84,6 +85,7 @@ void startTimer(int interval) { syncTimer.startTimer(interval); }
 
 void stopTimer() { syncTimer.stopTimer(); }
 
+<<<<<<< HEAD
 void startLoop(const char* filepath) {
   //  ScopedJuceInitialiser_GUI libraryInitialiser;
 
@@ -130,4 +132,9 @@ void initJuce() {
 void shutdownJuce() {
   elThread.stopThread(500);
   initializer = nullptr;
+=======
+void registerGraphicTypes()
+{
+    qmlRegisterType<WaveFormItem>("JuceGraphics", 1, 0, "WaveFormItem");
+>>>>>>> 5d4ff66 (can be instantiated from QML)
 }

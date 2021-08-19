@@ -37,6 +37,10 @@ void shutdownJuce();
 void startTimer(int interval);
 void stopTimer();
 void registerTimerCallback(void (*functionPtr)());
+<<<<<<< HEAD
 
 void startLoop(const char* filepath);
+=======
+void registerGraphicTypes();
+>>>>>>> 5d4ff66 (can be instantiated from QML)
 }
