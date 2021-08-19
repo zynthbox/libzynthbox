@@ -6,8 +6,12 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_core/juce_core.h>
 #include <juce_events/juce_events.h>
+<<<<<<< HEAD
 
 #include "../tracktion_engine/modules/tracktion_engine/tracktion_engine.h"
 
 namespace te = tracktion_engine;
 using namespace juce;
+=======
+#include <juce_graphics/juce_graphics.h>
+>>>>>>> 62f9957 (wave painting actually works)
