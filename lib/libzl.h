@@ -31,14 +31,29 @@ void ClipAudioSource_setPitch(ClipAudioSource* c, float pitchChange);
 /// END ClipAudioSource API Bridge
 //////////////
 
+//////////////
+/// SyncTimer API Bridge
+//////////////
+void SyncTimer_startTimer(int interval);
+void SyncTimer_stopTimer();
+void SyncTimer_registerTimerCallback(void (*functionPtr)());
+void SyncTimer_addClip(ClipAudioSource* clip);
+void SyncTimer_removeClip(ClipAudioSource* clip);
+//////////////
+/// END SyncTimer API Bridge
+//////////////
+
 void initJuce();
 void shutdownJuce();
 
+<<<<<<< HEAD
 void startTimer(int interval);
 void stopTimer();
 void registerTimerCallback(void (*functionPtr)());
 <<<<<<< HEAD
 
+=======
+>>>>>>> 7d78d37 (Implement sync playing from c++)
 void startLoop(const char* filepath);
 =======
 void registerGraphicTypes();
