@@ -48,8 +48,8 @@ ClipAudioSource* ClipAudioSource_new(const char* filepath) {
   return sClip;
 }
 
-void ClipAudioSource_play(ClipAudioSource* c, bool shouldLoop) {
-  Helper::callFunctionOnMessageThread([&]() { c->play(shouldLoop); }, true);
+void ClipAudioSource_play(ClipAudioSource* c) {
+  Helper::callFunctionOnMessageThread([&]() { c->play(); }, true);
 }
 
 void ClipAudioSource_stop(ClipAudioSource* c) {
@@ -102,15 +102,11 @@ void SyncTimer_registerTimerCallback(void (*functionPtr)()) {
 void SyncTimer_addClip(ClipAudioSource* clip) {
   Helper::callFunctionOnMessageThread([&]() { syncTimer.addClip(clip); }, true);
 }
-
-void SyncTimer_removeClip(ClipAudioSource* clip) {
-  Helper::callFunctionOnMessageThread([&]() { syncTimer.removeClip(clip); },
-                                      true);
-}
 //////////////
 /// END SyncTimer API Bridge
 //////////////
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 void startLoop(const char* filepath) {
   //  ScopedJuceInitialiser_GUI libraryInitialiser;
@@ -142,6 +138,8 @@ void startLoop(const char* filepath) {
   //  MessageManager::getInstance()->runDispatchLoop();
 }
 
+=======
+>>>>>>> 9236df2 (Keep looping clip once started at beat 1)
 void initJuce() {
   cerr << "### INIT JUCE\n";
   elThread.startThread();
