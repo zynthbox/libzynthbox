@@ -60,5 +60,9 @@ void startLoop(const char* filepath);
 =======
 >>>>>>> 9236df2 (Keep looping clip once started at beat 1)
 void registerGraphicTypes();
+<<<<<<< HEAD
 >>>>>>> 5d4ff66 (can be instantiated from QML)
+=======
+void stopClips(int size, ClipAudioSource** clips);
+>>>>>>> a3fce31 (- Implement stopping an array of clips)
 }
