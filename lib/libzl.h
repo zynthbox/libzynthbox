@@ -90,20 +90,22 @@ extern "C" {
 //////////////
 /// ClipAudioSource API Bridge
 //////////////
-ClipAudioSource* ClipAudioSource_new(const char* filepath);
-void ClipAudioSource_setProgressCallback(ClipAudioSource* c, void *obj, void (*functionPtr)(void*));
-void ClipAudioSource_connectProgress(ClipAudioSource* c, void *obj);
-void ClipAudioSource_play(ClipAudioSource* c, bool loop);
-void ClipAudioSource_stop(ClipAudioSource* c);
-float ClipAudioSource_getDuration(ClipAudioSource* c);
-float ClipAudioSource_getProgress(ClipAudioSource* c);
-const char* ClipAudioSource_getFileName(ClipAudioSource* c);
-void ClipAudioSource_setStartPosition(ClipAudioSource* c,
+ClipAudioSource *ClipAudioSource_new(const char *filepath);
+void ClipAudioSource_setProgressCallback(ClipAudioSource *c, void *obj,
+                                         void (*functionPtr)(void *));
+void ClipAudioSource_connectProgress(ClipAudioSource *c, void *obj);
+void ClipAudioSource_play(ClipAudioSource *c, bool loop);
+void ClipAudioSource_stop(ClipAudioSource *c);
+float ClipAudioSource_getDuration(ClipAudioSource *c);
+float ClipAudioSource_getProgress(ClipAudioSource *c);
+const char *ClipAudioSource_getFileName(ClipAudioSource *c);
+void ClipAudioSource_setStartPosition(ClipAudioSource *c,
                                       float startPositionInSeconds);
-void ClipAudioSource_setLength(ClipAudioSource* c, float lengthInSeconds);
-void ClipAudioSource_setSpeedRatio(ClipAudioSource* c, float speedRatio);
-void ClipAudioSource_setPitch(ClipAudioSource* c, float pitchChange);
-void ClipAudioSource_destroy(ClipAudioSource* c);
+void ClipAudioSource_setLength(ClipAudioSource *c, float lengthInSeconds);
+void ClipAudioSource_setSpeedRatio(ClipAudioSource *c, float speedRatio);
+void ClipAudioSource_setPitch(ClipAudioSource *c, float pitchChange);
+void ClipAudioSource_setGain(ClipAudioSource *c, float db);
+void ClipAudioSource_destroy(ClipAudioSource *c);
 //////////////
 /// END ClipAudioSource API Bridge
 //////////////
@@ -114,8 +116,8 @@ void ClipAudioSource_destroy(ClipAudioSource* c);
 void SyncTimer_startTimer(int interval);
 void SyncTimer_stopTimer();
 void SyncTimer_registerTimerCallback(void (*functionPtr)());
-void SyncTimer_queueClipToStart(ClipAudioSource* clip);
-void SyncTimer_queueClipToStop(ClipAudioSource* clip);
+void SyncTimer_queueClipToStart(ClipAudioSource *clip);
+void SyncTimer_queueClipToStop(ClipAudioSource *clip);
 //////////////
 /// END SyncTimer API Bridge
 //////////////
@@ -123,6 +125,6 @@ void SyncTimer_queueClipToStop(ClipAudioSource* clip);
 void initJuce();
 void shutdownJuce();
 void registerGraphicTypes();
-void stopClips(int size, ClipAudioSource** clips);
+void stopClips(int size, ClipAudioSource **clips);
 }
 >>>>>>> 400988a (progress reporting from tracktion to qml)
