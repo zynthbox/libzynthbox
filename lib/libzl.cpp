@@ -259,8 +259,8 @@ public:
 
   void stopClip(ClipAudioSource *c) { c->stop(); }
 
-  void setClipLength(ClipAudioSource *c, float lengthInSeconds) {
-    c->setLength(lengthInSeconds);
+  void setClipLength(ClipAudioSource *c, int beat, int bpm) {
+    c->setLength(beat, bpm);
   }
 
   void setClipStartPosition(ClipAudioSource *c, float startPositionInSeconds) {
@@ -333,8 +333,8 @@ void ClipAudioSource_setStartPosition(ClipAudioSource *c,
   elThread.setClipStartPosition(c, startPositionInSeconds);
 }
 
-void ClipAudioSource_setLength(ClipAudioSource *c, float lengthInSeconds) {
-  elThread.setClipLength(c, lengthInSeconds);
+void ClipAudioSource_setLength(ClipAudioSource *c, int beat, int bpm) {
+  elThread.setClipLength(c, beat, bpm);
 }
 
 void ClipAudioSource_setSpeedRatio(ClipAudioSource *c, float speedRatio) {
