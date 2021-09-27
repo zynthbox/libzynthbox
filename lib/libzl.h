@@ -82,6 +82,8 @@ void stopClips(int size, ClipAudioSource** clips);
 
 #pragma once
 
+#include <QObject>
+
 class ClipAudioSource;
 class SyncTimer;
 
@@ -115,6 +117,7 @@ void ClipAudioSource_destroy(ClipAudioSource *c);
 //////////////
 /// SyncTimer API Bridge
 //////////////
+QObject *SyncTimer_instance();
 void SyncTimer_startTimer(int interval);
 void SyncTimer_stopTimer();
 void SyncTimer_registerTimerCallback(void (*functionPtr)(int));
