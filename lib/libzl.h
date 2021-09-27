@@ -82,8 +82,8 @@ void stopClips(int size, ClipAudioSource** clips);
 
 #pragma once
 
-#include "ClipAudioSource.h"
-#include "SyncTimer.h"
+class ClipAudioSource;
+class SyncTimer;
 
 extern "C" {
 
