@@ -296,11 +296,11 @@ JuceEventLoopThread elThread;
 //////////////
 /// ClipAudioSource API Bridge
 //////////////
-ClipAudioSource *ClipAudioSource_new(const char *filepath) {
+ClipAudioSource *ClipAudioSource_new(const char *filepath, bool muted) {
   ClipAudioSource *sClip;
 
   Helper::callFunctionOnMessageThread(
-      [&]() { sClip = new ClipAudioSource(syncTimer, filepath); }, true);
+      [&]() { sClip = new ClipAudioSource(syncTimer, filepath, muted); }, true);
 
   return sClip;
 }
