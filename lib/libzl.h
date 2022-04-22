@@ -142,6 +142,5 @@ void shutdownJuce();
 void registerGraphicTypes();
 void stopClips(int size, ClipAudioSource **clips);
 float dBFromVolume(float vol);
-void setRecordingAudioLevelCallback(void (*functionPtr)(float));
 }
 >>>>>>> 400988a (progress reporting from tracktion to qml)
