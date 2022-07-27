@@ -243,6 +243,7 @@ using namespace std::chrono;
 #include <QtQml/qqml.h>
 #include <QQmlEngine>
 #include <QQmlContext>
+#include <QString>
 
 #include "ClipAudioSource.h"
 #include "Helper.h"
@@ -588,6 +589,7 @@ void stopClips(int size, ClipAudioSource **clips) {
 float dBFromVolume(float vol) { return te::volumeFaderPositionToDB(vol); }
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 >>>>>>> 2246f24 (Add API to get dB from volume)
 =======
 
@@ -597,3 +599,25 @@ void setRecordingAudioLevelCallback(void (*functionPtr)(float)) {
 >>>>>>> 6ae7881 (Implement jack client to listen to input audio level)
 =======
 >>>>>>> be89107 (Implement AudioLevels QML Singleton Type to expose audio levels of jack ports as properties)
+=======
+
+bool AudioLevels_isRecording() {
+  return audioLevelsInstance->isRecording();
+}
+
+void AudioLevels_setRecordGlobalPlayback(bool shouldRecord) {
+  audioLevelsInstance->setRecordGlobalPlayback(shouldRecord);
+}
+
+void AudioLevels_setGlobalPlaybackFilenamePrefix(const char *fileNamePrefix) {
+  audioLevelsInstance->setGlobalPlaybackFilenamePrefix(QString::fromUtf8(fileNamePrefix));
+}
+
+void AudioLevels_startRecording() {
+  audioLevelsInstance->startRecording();
+}
+
+void AudioLevels_stopRecording() {
+  audioLevelsInstance->stopRecording();
+}
+>>>>>>> ffd17cc (AudioLevels :)
