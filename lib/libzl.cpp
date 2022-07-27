@@ -617,4 +617,32 @@ void AudioLevels_startRecording() {
 void AudioLevels_stopRecording() {
   AudioLevels::instance()->stopRecording();
 }
+<<<<<<< HEAD
 >>>>>>> ffd17cc (AudioLevels :)
+=======
+
+void AudioLevels_setRecordPortsFilenamePrefix(const char *fileNamePrefix)
+{
+  AudioLevels::instance()->setRecordPortsFilenamePrefix(QString::fromUtf8(fileNamePrefix));
+}
+
+void AudioLevels_addRecordPort(const char *portName, int channel)
+{
+  AudioLevels::instance()->addRecordPort(QString::fromUtf8(portName), channel);
+}
+
+void AudioLevels_removeRecordPort(const char *portName, int channel)
+{
+  AudioLevels::instance()->removeRecordPort(QString::fromUtf8(portName), channel);
+}
+
+void AudioLevels_clearRecordPorts()
+{
+  AudioLevels::instance()->clearRecordPorts();
+}
+
+void AudioLevels_setShouldRecordPorts(bool shouldRecord)
+{
+  AudioLevels::instance()->setShouldRecordPorts(shouldRecord);
+}
+>>>>>>> 00c1200 (libzl : Add port recorder methods to C API for consumption)
