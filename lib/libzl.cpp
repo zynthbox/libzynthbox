@@ -252,6 +252,7 @@ using namespace std::chrono;
 #include "SyncTimer.h"
 #include "WaveFormItem.h"
 #include "AudioLevels.h"
+#include "MidiRouter.h"
 
 using namespace std;
 
@@ -564,6 +565,9 @@ void initJuce() {
   }
   auto duration = duration_cast<milliseconds>(high_resolution_clock::now() - start);
   qDebug() << "### JUCE initialisation took" << duration.count() << "ms";
+
+  qDebug() << "Initialising MidiRouter";
+  MidiRouter::instance();
 
   qDebug() << "Initialising SamplerSynth";
   SamplerSynth::instance()->initialize(tracktionEngine);
