@@ -253,6 +253,7 @@ using namespace std::chrono;
 #include "WaveFormItem.h"
 #include "AudioLevels.h"
 #include "MidiRouter.h"
+#include "JackPassthrough.h"
 
 using namespace std;
 
@@ -677,4 +678,31 @@ void AudioLevels_setShouldRecordPorts(bool shouldRecord)
 {
   AudioLevels::instance()->setShouldRecordPorts(shouldRecord);
 }
+<<<<<<< HEAD
 >>>>>>> 00c1200 (libzl : Add port recorder methods to C API for consumption)
+=======
+
+void JackPassthrough_setPanAmount(int channel, float amount)
+{
+  if (channel == -2) {
+    qobject_cast<JackPassthrough*>(MidiRouter::instance()->globalEffectsPassthroughClient())->setPanAmount(amount);
+  } else if (channel == -1) {
+    qobject_cast<JackPassthrough*>(MidiRouter::instance()->globalPlaybackClient())->setPanAmount(amount);
+  } else if (channel > -1 && channel < 10) {
+    qobject_cast<JackPassthrough*>(MidiRouter::instance()->channelPassthroughClients().at(channel))->setPanAmount(amount);
+  }
+}
+
+float JackPassthrough_getPanAmount(int channel)
+{
+  float amount{0.0f};
+  if (channel == -2) {
+    amount = qobject_cast<JackPassthrough*>(MidiRouter::instance()->globalEffectsPassthroughClient())->panAmount();
+  } else if (channel == -1) {
+    amount = qobject_cast<JackPassthrough*>(MidiRouter::instance()->globalPlaybackClient())->panAmount();
+  } else if (channel > -1 && channel < 10) {
+    amount = qobject_cast<JackPassthrough*>(MidiRouter::instance()->channelPassthroughClients().at(channel))->panAmount();
+  }
+  return amount;
+}
+>>>>>>> af71e88 (libzl: Expose JackPassthrough panning through the libzl api bridge)

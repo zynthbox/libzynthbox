@@ -90,7 +90,7 @@ class SyncTimer;
 extern "C" {
 
 //////////////
-/// ClipAudioSource API Bridge
+/// BEGIN ClipAudioSource API Bridge
 //////////////
 ClipAudioSource *ClipAudioSource_byID(int id);
 ClipAudioSource *ClipAudioSource_new(const char *filepath, bool muted = false);
@@ -127,7 +127,7 @@ int ClipAudioSource_id(ClipAudioSource *c);
 //////////////
 
 //////////////
-/// SyncTimer API Bridge
+/// BEGIN SyncTimer API Bridge
 //////////////
 QObject *SyncTimer_instance();
 void SyncTimer_startTimer(int interval);
@@ -153,7 +153,7 @@ void stopClips(int size, ClipAudioSource **clips);
 float dBFromVolume(float vol);
 
 //////////////
-/// AudioLevels API Bridge
+/// BEGIN AudioLevels API Bridge
 //////////////
 bool AudioLevels_isRecording();
 void AudioLevels_setRecordGlobalPlayback(bool shouldRecord);
@@ -167,6 +167,25 @@ void AudioLevels_clearRecordPorts();
 void AudioLevels_setShouldRecordPorts(bool shouldRecord);
 /// //////////////
 /// END AudioLevels API Bridge
+//////////////
+
+//////////////
+/// BEGIN JackPassthrough API Bridge
+//////////////
+/**
+ * \brief Set the panning amount for the given channel
+ * @param channel The channel you wish to set the pan amount for (-1 is GlobalFX, -2 is GlobalPlayback, 0-9 is the channel with that index)
+ * @param amount The amount (-1 through 1, 0 being neutral) that you wish to set as the new pan amount
+ */
+void JackPassthrough_setPanAmount(int channel, float amount);
+/**
+* \brief Retrieve the panning amount for the given channel
+ * @param channel The channel you wish to get the pan amount for (-1 is GlobalFX, -2 is GlobalPlayback, 0-9 is the channel with that index)
+ * @return The panning amount for the given channel (-1 through 1, 0 being neutral or if channel is out of bounds)
+ */
+float JackPassthrough_getPanAmount(int channel);
+//////////////
+/// END JackPassthrough API Bridge
 //////////////
 }
 >>>>>>> 400988a (progress reporting from tracktion to qml)
