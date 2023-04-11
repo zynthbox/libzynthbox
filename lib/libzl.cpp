@@ -768,4 +768,27 @@ void JackPassthrough_setDryAmount(int channel, float amount)
       qobject_cast<JackPassthrough*>(MidiRouter::instance()->channelPassthroughClients().at(channel))->setDryAmount(amount);
     }
 }
+<<<<<<< HEAD
 >>>>>>> 9ad92bb (libzl : Add API to get/set dryAmount)
+=======
+
+float JackPassthrough_getMuted(int channel)
+{
+    bool muted{false};
+    if (channel == -1) {
+      muted = qobject_cast<JackPassthrough*>(MidiRouter::instance()->globalPlaybackClient())->muted();
+    } else if (channel > -1 && channel < 10) {
+      muted = qobject_cast<JackPassthrough*>(MidiRouter::instance()->channelPassthroughClients().at(channel))->muted();
+    }
+    return muted;
+}
+
+void JackPassthrough_setMuted(int channel, bool muted)
+{
+    if (channel == -1) {
+      qobject_cast<JackPassthrough*>(MidiRouter::instance()->globalPlaybackClient())->setMuted(muted);
+    } else if (channel > -1 && channel < 10) {
+      qobject_cast<JackPassthrough*>(MidiRouter::instance()->channelPassthroughClients().at(channel))->setMuted(muted);
+    }
+}
+>>>>>>> e4f6950 (libzl : Add APIs to set muted property)
