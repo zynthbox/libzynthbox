@@ -20,6 +20,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${ECM_MODULE_PATH} ${CMAKE_CURRENT_LI
 
 find_package(Qt5 ${QT_MIN_VERSION} REQUIRED CONFIG COMPONENTS Core Gui Quick Qml)
 find_package(KF5Kirigami2 2.7.0)
+find_package(Python 3.5 REQUIRED COMPONENTS Interpreter)
 
 include(FindPkgConfig)
 include(KDEInstallDirs)

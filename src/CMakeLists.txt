@@ -1,3 +1,8 @@
+execute_process(
+  COMMAND "${Python_EXECUTABLE}" -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"
+  OUTPUT_VARIABLE Python_VERSION
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+
 add_library(zynthbox SHARED)
 
 target_sources(zynthbox
