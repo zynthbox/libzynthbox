@@ -150,12 +150,10 @@ class SamplerSynthImpl;
 class SamplerSynthPrivate {
 public:
     SamplerSynthPrivate() {
-        syncTimer = SyncTimer::instance();
     }
     ~SamplerSynthPrivate() {
         qDeleteAll(channels);
     }
-    SyncTimer* syncTimer{nullptr};
     QMutex synthMutex;
     bool syncLocked{false};
     SamplerSynthImpl *synth{nullptr};
@@ -313,7 +311,7 @@ void SamplerSynth::unregisterClip(ClipAudioSource *clip)
 void SamplerSynth::handleClipCommand(ClipCommand *clipCommand)
 {
     qWarning() << Q_FUNC_INFO << "This function is not sufficiently safe - schedule notes using SyncTimer::scheduleClipCommand instead!";
-    handleClipCommand(clipCommand, d->syncTimer ? d->syncTimer->jackPlayhead() : 0);
+    handleClipCommand(clipCommand, SyncTimer::instance()->jackPlayhead());
 }
 
 float SamplerSynth::cpuLoad() const
