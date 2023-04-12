@@ -6,7 +6,6 @@
 #include "SamplerSynthSound.h"
 #include "SamplerSynthVoice.h"
 #include "ClipCommand.h"
-#include "libzl.h"
 #include "SyncTimer.h"
 
 #include <QDebug>
@@ -151,7 +150,7 @@ class SamplerSynthImpl;
 class SamplerSynthPrivate {
 public:
     SamplerSynthPrivate() {
-        syncTimer = qobject_cast<SyncTimer*>(SyncTimer_instance());
+        syncTimer = SyncTimer::instance();
     }
     ~SamplerSynthPrivate() {
         qDeleteAll(channels);

@@ -1,93 +1,40 @@
-<<<<<<< HEAD
 /*
-  ==============================================================================
-
-    libzl.h
-    Created: 10 Aug 2021 10:12:17am
-    Author:  root
-
-  ==============================================================================
-*/
+ * Copyright (C) 2021 Dan Leinir Turthra Jensen <admin@leinir.dk>
+ * Copyright (C) 2023 Anupam Basak <anupam.basak27@gmail.com>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) version 3, or any
+ * later version accepted by the membership of KDE e.V. (or its
+ * successor approved by the membership of KDE e.V.), which shall
+ * act as a proxy defined in Section 6 of version 3 of the license.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
 
 #pragma once
 
-#include "ClipAudioSource.h"
-#include "SyncTimer.h"
-
-extern "C" {
-
-//////////////
-/// ClipAudioSource API Bridge
-//////////////
-ClipAudioSource* ClipAudioSource_new(const char* filepath);
-void ClipAudioSource_play(ClipAudioSource* c);
-void ClipAudioSource_stop(ClipAudioSource* c);
-float ClipAudioSource_getDuration(ClipAudioSource* c);
-const char* ClipAudioSource_getFileName(ClipAudioSource* c);
-void ClipAudioSource_setStartPosition(ClipAudioSource* c,
-                                      float startPositionInSeconds);
-void ClipAudioSource_setLength(ClipAudioSource* c, float lengthInSeconds);
-void ClipAudioSource_setSpeedRatio(ClipAudioSource* c, float speedRatio);
-void ClipAudioSource_setPitch(ClipAudioSource* c, float pitchChange);
-void ClipAudioSource_destroy(ClipAudioSource* c);
-//////////////
-/// END ClipAudioSource API Bridge
-//////////////
-
-//////////////
-/// SyncTimer API Bridge
-//////////////
-void SyncTimer_startTimer(int interval);
-void SyncTimer_stopTimer();
-void SyncTimer_registerTimerCallback(void (*functionPtr)());
-void SyncTimer_queueClipToStart(ClipAudioSource* clip);
-void SyncTimer_queueClipToStop(ClipAudioSource* clip);
-//////////////
-/// END SyncTimer API Bridge
-//////////////
-
-void initJuce();
-void shutdownJuce();
-<<<<<<< HEAD
-
-<<<<<<< HEAD
-void startTimer(int interval);
-void stopTimer();
-void registerTimerCallback(void (*functionPtr)());
-<<<<<<< HEAD
-
-=======
->>>>>>> 7d78d37 (Implement sync playing from c++)
-void startLoop(const char* filepath);
-=======
-=======
->>>>>>> 9236df2 (Keep looping clip once started at beat 1)
-void registerGraphicTypes();
-<<<<<<< HEAD
->>>>>>> 5d4ff66 (can be instantiated from QML)
-=======
-void stopClips(int size, ClipAudioSource** clips);
->>>>>>> a3fce31 (- Implement stopping an array of clips)
-}
-=======
-/*
-  ==============================================================================
-
-    libzl.h
-    Created: 10 Aug 2021 10:12:17am
-    Author:  root
-
-  ==============================================================================
-*/
-
-#pragma once
-
-#include <QObject>
+#include <QtGlobal>
 
 class ClipAudioSource;
 class SyncTimer;
 
 extern "C" {
+
+void initialize();
+void shutdown();
+// Called by zynthbox when the configuration in webconf has been changed (for example the midi setup, so our MidiRouter can pick up any changes)
+void reloadZynthianConfiguration();
+void stopClips(int size, ClipAudioSource **clips);
+float dBFromVolume(float vol);
 
 //////////////
 /// BEGIN ClipAudioSource API Bridge
@@ -129,7 +76,6 @@ int ClipAudioSource_id(ClipAudioSource *c);
 //////////////
 /// BEGIN SyncTimer API Bridge
 //////////////
-QObject *SyncTimer_instance();
 void SyncTimer_startTimer(int interval);
 void SyncTimer_setBpm(uint bpm);
 int SyncTimer_getMultiplier();
@@ -144,14 +90,6 @@ void SyncTimer_queueClipToStopOnChannel(ClipAudioSource *clip, int midiChannel);
 /// END SyncTimer API Bridge
 //////////////
 
-void initJuce();
-void shutdownJuce();
-// Called by zynthbox when the configuration in webconf has been changed (for example the midi setup, so our MidiRouter can pick up any changes)
-void reloadZynthianConfiguration();
-void registerGraphicTypes();
-void stopClips(int size, ClipAudioSource **clips);
-float dBFromVolume(float vol);
-
 //////////////
 /// BEGIN AudioLevels API Bridge
 //////////////
@@ -165,7 +103,7 @@ void AudioLevels_addRecordPort(const char *portName, int channel);
 void AudioLevels_removeRecordPort(const char *portName, int channel);
 void AudioLevels_clearRecordPorts();
 void AudioLevels_setShouldRecordPorts(bool shouldRecord);
-/// //////////////
+/// //////////
 /// END AudioLevels API Bridge
 //////////////
 
@@ -240,4 +178,3 @@ void JackPassthrough_setMuted(int channel, bool muted);
 /// END JackPassthrough API Bridge
 //////////////
 }
->>>>>>> 400988a (progress reporting from tracktion to qml)

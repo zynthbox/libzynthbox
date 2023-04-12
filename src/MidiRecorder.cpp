@@ -24,9 +24,7 @@
 #include "Note.h"
 #include "PlayGridManager.h"
 #include "PatternModel.h"
-
-#include <libzl.h>
-#include <SyncTimer.h>
+#include "SyncTimer.h"
 
 #include <QDebug>
 #include <QTimer>
@@ -64,7 +62,7 @@ MidiRecorder::MidiRecorder(QObject *parent)
     : QObject(parent)
     , d(new MidiRecorderPrivate)
 {
-    SyncTimer *syncTimer = qobject_cast<SyncTimer*>(SyncTimer_instance());
+    SyncTimer *syncTimer = SyncTimer::instance();
     connect(syncTimer, &SyncTimer::timerRunningChanged,
             this, [this, syncTimer]()
             {
@@ -203,7 +201,7 @@ void MidiRecorder::forceToChannel(int channel)
 void MidiRecorder::playRecording()
 {
 //     qDebug() << Q_FUNC_INFO;
-    SyncTimer *syncTimer = qobject_cast<SyncTimer*>(SyncTimer_instance());
+    SyncTimer *syncTimer = SyncTimer::instance();
     juce::MidiBuffer midiBuffer;
     double mostRecentTimestamp{-1};
     for (const juce::MidiMessageSequence::MidiEventHolder *holder : d->midiMessageSequence) {
@@ -228,7 +226,7 @@ void MidiRecorder::playRecording()
 
 void MidiRecorder::stopPlayback()
 {
-    SyncTimer *syncTimer = qobject_cast<SyncTimer*>(SyncTimer_instance());
+    SyncTimer *syncTimer = SyncTimer::instance();
     syncTimer->stop();
 }
 

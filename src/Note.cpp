@@ -20,9 +20,7 @@
  */
 
 #include "Note.h"
-
-#include <libzl.h>
-#include <SyncTimer.h>
+#include "SyncTimer.h"
 
 class Note::Private {
 public:
@@ -43,7 +41,7 @@ Note::Note(PlayGridManager* parent)
     , d(new Private)
 {
     d->playGridManager = parent;
-    d->syncTimer = qobject_cast<SyncTimer*>(SyncTimer_instance());
+    d->syncTimer = SyncTimer::instance();
 }
 
 Note::~Note()

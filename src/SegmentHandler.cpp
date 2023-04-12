@@ -23,13 +23,13 @@
 #include "PlayGridManager.h"
 #include "SequenceModel.h"
 
-#include "libzl.h"
 // Hackety hack - we don't need all the thing, just need to convince CAS it exists
 #define JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED 1
 #include "ClipAudioSource.h"
 #include "ClipCommand.h"
 #include "SyncTimer.h"
 #include "TimerCommand.h"
+#include "plugin.h"
 
 #include <QDebug>
 #include <QTimer>
@@ -82,7 +82,7 @@ public:
     SegmentHandlerPrivate(SegmentHandler *q)
         : q(q)
     {
-        syncTimer = qobject_cast<SyncTimer*>(SyncTimer_instance());
+        syncTimer = SyncTimer::instance();
         playGridManager = PlayGridManager::instance();
         playfieldState = new PlayfieldState();
     }

@@ -30,10 +30,10 @@
 // Hackety hack - we don't need all the thing, just need some storage things (MidiBuffer and MidiNote specifically)
 #define JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED 1
 #include <juce_audio_formats/juce_audio_formats.h>
-#include <libzl.h>
-#include <ClipAudioSource.h>
-#include <MidiRouter.h>
-#include <SyncTimer.h>
+#include "ClipAudioSource.h"
+#include "MidiRouter.h"
+#include "SyncTimer.h"
+#include "plugin.h"
 
 #include <QQmlEngine>
 #include <QDebug>
@@ -374,7 +374,7 @@ PlayGridManager::PlayGridManager(QObject* parent)
     : QObject(parent)
     , d(new Private(this))
 {
-    setSyncTimer(SyncTimer_instance());
+    setSyncTimer(SyncTimer::instance());
     QDir mySequenceLocation{QString("%1/sequences/my-sequences").arg(QString(qgetenv("ZYNTHIAN_MY_DATA_DIR")))};
     if (!mySequenceLocation.exists()) {
         mySequenceLocation.mkpath(mySequenceLocation.path());

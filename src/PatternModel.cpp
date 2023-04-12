@@ -33,12 +33,12 @@
 #define JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED 1
 #include <juce_audio_formats/juce_audio_formats.h>
 
-#include <libzl.h>
-#include <ClipCommand.h>
-#include <ClipAudioSource.h>
-#include <MidiRouter.h>
-#include <SyncTimer.h>
-#include <TimerCommand.h>
+#include "ClipCommand.h"
+#include "ClipAudioSource.h"
+#include "MidiRouter.h"
+#include "SyncTimer.h"
+#include "TimerCommand.h"
+#include "plugin.h"
 
 static const QString midiNoteNames[128]{
     "C-1", "C#-1", "D-1", "D#-1", "E-1", "F-1", "F#-1", "G-1", "G#-1", "A-1", "A#-1", "B-1",
@@ -77,7 +77,7 @@ public:
         layerDataPuller->setInterval(100);
         layerDataPuller->setSingleShot(true);
         connect(layerDataPuller, &QTimer::timeout, this, &ZLPatternSynchronisationManager::retrieveLayerData);
-        syncTimer = qobject_cast<SyncTimer*>(SyncTimer_instance());
+        syncTimer = SyncTimer::instance();
     };
     PatternModel *q{nullptr};
     SyncTimer *syncTimer{nullptr};
@@ -569,7 +569,7 @@ PatternModel::PatternModel(SequenceModel* parent)
     connect(d->zlSyncManager, &ZLPatternSynchronisationManager::recordingPopupActiveChanged, midiChannelUpdater, QOverload<>::of(&QTimer::start));
 
     connect(d->playGridManager, &PlayGridManager::midiMessage, this, &PatternModel::handleMidiMessage, Qt::DirectConnection);
-    connect(qobject_cast<SyncTimer*>(SyncTimer_instance()), &SyncTimer::clipCommandSent, this, [this](ClipCommand *clipCommand){
+    connect(SyncTimer::instance(), &SyncTimer::clipCommandSent, this, [this](ClipCommand *clipCommand){
         for (ClipAudioSource *needle : qAsConst(d->clips)) {
             if (needle && needle == clipCommand->clip) {
                 Note *note = qobject_cast<Note*>(PlayGridManager::instance()->getNote(clipCommand->midiNote, d->midiChannel));
@@ -948,7 +948,7 @@ void PatternModel::setNoteDestination(const PatternModel::NoteDestination &noteD
         // Before switching the destination, first let's quickly send a little note off for aaaaall notes on this channel
         juce::MidiBuffer buffer;
         buffer.addEvent(juce::MidiMessage::allNotesOff(d->midiChannel + 1), 0);
-        qobject_cast<SyncTimer*>(SyncTimer_instance())->sendMidiBufferImmediately(buffer);
+        SyncTimer::instance()->sendMidiBufferImmediately(buffer);
         d->noteDestination = noteDestination;
         Q_EMIT noteDestinationChanged();
     }

@@ -1,7 +1,6 @@
 #include "MidiRouter.h"
 #include "JackPassthrough.h"
 #include "SyncTimer.h"
-#include "libzl.h"
 #include "DeviceMessageTranslations.h"
 #include "TransportManager.h"
 
@@ -214,7 +213,7 @@ public:
         externalOutListener.identifier = MidiRouter::ExternalOutPort;
         externalOutListener.waitTime = 5;
         listenerPorts[3] = &externalOutListener;
-        syncTimer = qobject_cast<SyncTimer*>(SyncTimer_instance());
+        syncTimer = SyncTimer::instance();
     };
     ~MidiRouterPrivate() {
         if (jackClient) {

@@ -23,9 +23,7 @@
 #include "Note.h"
 #include "PatternModel.h"
 #include "SegmentHandler.h"
-
-#include <libzl.h>
-#include <SyncTimer.h>
+#include "SyncTimer.h"
 
 #include <QCollator>
 #include <QDebug>
@@ -120,7 +118,7 @@ public:
 public Q_SLOTS:
     void bpmChanged() {
         q->setBpm(zlSong->property("bpm").toInt());
-        qobject_cast<SyncTimer*>(SyncTimer_instance())->setBpm(q->bpm());
+        SyncTimer::instance()->setBpm(q->bpm());
     }
     void scenesModelChanged() {
         setZlScenesModel(zlSong->property("scenesModel").value<QObject*>());
@@ -222,7 +220,7 @@ SequenceModel::SequenceModel(PlayGridManager* parent)
 {
     d->playGridManager = parent;
     d->zlSyncManager = new ZLSequenceSynchronisationManager(this);
-    d->syncTimer = qobject_cast<SyncTimer*>(SyncTimer_instance());
+    d->syncTimer = SyncTimer::instance();
     d->segmentHandler = SegmentHandler::instance();
     connect(d->syncTimer, &SyncTimer::timerRunningChanged, this, [this](){
         if (!d->syncTimer->timerRunning()) {

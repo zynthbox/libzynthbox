@@ -1,243 +1,31 @@
-<<<<<<< HEAD
 /*
-  ==============================================================================
+ * Copyright (C) 2021 Dan Leinir Turthra Jensen <admin@leinir.dk>
+ * Copyright (C) 2023 Anupam Basak <anupam.basak27@gmail.com>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) version 3, or any
+ * later version accepted by the membership of KDE e.V. (or its
+ * successor approved by the membership of KDE e.V.), which shall
+ * act as a proxy defined in Section 6 of version 3 of the license.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
 
-    libzl.cpp
-    Created: 9 Aug 2021 6:28:51pm
-    Author:  root
-
-  ==============================================================================
-*/
-
-#include "libzl.h"
-
-#include <iostream>
-
-#include "ClipAudioSource.h"
-#include "Helper.h"
-#include "JUCEHeaders.h"
-#include "SyncTimer.h"
-#include "WaveFormItem.h"
-
-using namespace std;
-
-ScopedJuceInitialiser_GUI* initializer = nullptr;
-SyncTimer* syncTimer = new SyncTimer();
-
-class JuceEventLoopThread : public Thread {
- public:
-  JuceEventLoopThread() : Thread("Juce EventLoop Thread") {}
-
-  void run() override {
-    if (initializer == nullptr) initializer = new ScopedJuceInitialiser_GUI();
-
-    MessageManager::getInstance()->runDispatchLoop();
-  }
-
-  void playClip(ClipAudioSource* c) { c->play(); }
-
-  void stopClip(ClipAudioSource* c) { c->stop(); }
-
-  void setClipLength(ClipAudioSource* c, float lengthInSeconds) {
-    c->setLength(lengthInSeconds);
-  }
-
-  void setClipStartPosition(ClipAudioSource* c, float startPositionInSeconds) {
-    c->setStartPosition(startPositionInSeconds);
-  }
-
-  void setClipSpeedRatio(ClipAudioSource* c, float speedRatio) {
-    c->setSpeedRatio(speedRatio);
-  }
-
-  void setClipPitch(ClipAudioSource* c, float pitchChange) {
-    c->setPitch(pitchChange);
-  }
-
-  void stopClips(int size, ClipAudioSource** clips) {
-    for (int i = 0; i < size; i++) {
-      ClipAudioSource* clip = clips[i];
-
-      cerr << "Stopping clip arr[" << i << "] : " << clips[i] << endl;
-      clip->stop();
-    }
-  }
-
-  void destroyClip(ClipAudioSource* c) { delete c; }
-};
-
-JuceEventLoopThread elThread;
-
-//////////////
-/// ClipAudioSource API Bridge
-//////////////
-ClipAudioSource* ClipAudioSource_new(const char* filepath) {
-  ClipAudioSource* sClip;
-
-  Helper::callFunctionOnMessageThread(
-      [&]() { sClip = new ClipAudioSource(syncTimer, filepath); }, true);
-
-  return sClip;
-}
-
-void ClipAudioSource_play(ClipAudioSource* c) {
-  //  Helper::callFunctionOnMessageThread([&]() { c->play(); }, true);
-  elThread.playClip(c);
-}
-
-void ClipAudioSource_stop(ClipAudioSource* c) {
-  cerr << "libzl : Stop Clip " << c;
-
-  //  Helper::callFunctionOnMessageThread([&]() { c->stop(); });  //, true);
-  //  c->stop();
-
-  elThread.stopClip(c);
-}
-
-float ClipAudioSource_getDuration(ClipAudioSource* c) {
-  return c->getDuration();
-}
-
-const char* ClipAudioSource_getFileName(ClipAudioSource* c) {
-  return c->getFileName();
-}
-
-void ClipAudioSource_setStartPosition(ClipAudioSource* c,
-                                      float startPositionInSeconds) {
-  //  Helper::callFunctionOnMessageThread(
-  //      [&]() { c->setStartPosition(startPositionInSeconds); }, true);
-  elThread.setClipStartPosition(c, startPositionInSeconds);
-}
-
-void ClipAudioSource_setLength(ClipAudioSource* c, float lengthInSeconds) {
-  //  Helper::callFunctionOnMessageThread([&]() { c->setLength(lengthInSeconds);
-  //  },
-  //                                      true);
-  elThread.setClipLength(c, lengthInSeconds);
-}
-
-void ClipAudioSource_setSpeedRatio(ClipAudioSource* c, float speedRatio) {
-  //  Helper::callFunctionOnMessageThread([&]() { c->setSpeedRatio(speedRatio);
-  //  },
-  //                                      true);
-  elThread.setClipSpeedRatio(c, speedRatio);
-}
-
-void ClipAudioSource_setPitch(ClipAudioSource* c, float pitchChange) {
-  //  Helper::callFunctionOnMessageThread([&]() { c->setPitch(pitchChange); },
-  //                                      true);
-
-  elThread.setClipPitch(c, pitchChange);
-}
-
-void ClipAudioSource_destroy(ClipAudioSource* c) { elThread.destroyClip(c); }
-//////////////
-/// END ClipAudioSource API Bridge
-//////////////
-
-//////////////
-/// SynTimer API Bridge
-//////////////
-void SyncTimer_startTimer(int interval) { syncTimer->start(interval); }
-
-void SyncTimer_stopTimer() { syncTimer->stop(); }
-
-void SyncTimer_registerTimerCallback(void (*functionPtr)()) {
-  syncTimer->setCallback(functionPtr);
-}
-
-void SyncTimer_queueClipToStart(ClipAudioSource* clip) {
-  Helper::callFunctionOnMessageThread(
-      [&]() { syncTimer->queueClipToStart(clip); }, true);
-}
-
-void SyncTimer_queueClipToStop(ClipAudioSource* clip) {
-  Helper::callFunctionOnMessageThread(
-      [&]() { syncTimer->queueClipToStop(clip); }, true);
-}
-//////////////
-/// END SyncTimer API Bridge
-//////////////
-
-<<<<<<< HEAD
-<<<<<<< HEAD
-void startLoop(const char* filepath) {
-  //  ScopedJuceInitialiser_GUI libraryInitialiser;
-
-  //  te::Engine engine{"libzl"};
-  //  te::Edit edit{engine, te::createEmptyEdit(engine), te::Edit::forEditing,
-  //                nullptr, 0};
-  //  te::TransportControl& transport{edit.getTransport()};
-
-  //  auto wavFile = File(filepath);
-  //  const File editFile("/tmp/editfile");
-  //  auto clip = EngineHelpers::loadAudioFileAsClip(edit, wavFile);
-
-  //  te::TimeStretcher ts;
-
-  //  for (auto mode : ts.getPossibleModes(engine, true)) {
-  //    cerr << "Mode : " << mode << endl;
-  //  }
-
-  //  clip->setAutoTempo(false);
-  //  clip->setAutoPitch(false);
-  //  clip->setTimeStretchMode(te::TimeStretcher::defaultMode);
-
-  //  EngineHelpers::loopAroundClip(*clip);
-  //  clip->setSpeedRatio(2.0);
-  //  clip->setPitchChange(12);
-  //  EngineHelpers::loopAroundClip(*clip);
-
-  //  MessageManager::getInstance()->runDispatchLoop();
-}
-
-=======
->>>>>>> 9236df2 (Keep looping clip once started at beat 1)
-void initJuce() {
-  cerr << "### INIT JUCE\n";
-  elThread.startThread();
-}
-
-void shutdownJuce() {
-  elThread.stopThread(500);
-  initializer = nullptr;
-<<<<<<< HEAD
-=======
-void registerGraphicTypes()
-{
-    qmlRegisterType<WaveFormItem>("JuceGraphics", 1, 0, "WaveFormItem");
->>>>>>> 5d4ff66 (can be instantiated from QML)
-=======
-}
-
-void registerGraphicTypes() {
-  qmlRegisterType<WaveFormItem>("JuceGraphics", 1, 0, "WaveFormItem");
->>>>>>> 80dd50d (Refactor and add logs)
-}
-
-void stopClips(int size, ClipAudioSource** clips) {
-  elThread.stopClips(size, clips);
-}
-=======
-/*
-  ==============================================================================
-
-    libzl.cpp
-    Created: 9 Aug 2021 6:28:51pm
-    Author:  root
-
-  ==============================================================================
-*/
-
-#include "libzl.h"
+#include "plugin.h"
 
 #include <unistd.h>
 #include <iostream>
 #include <chrono>
-using namespace std::chrono;
-
 #include <jack/jack.h>
-
 #include <QDebug>
 #include <QTimer>
 #include <QtQml/qqml.h>
@@ -254,8 +42,20 @@ using namespace std::chrono;
 #include "AudioLevels.h"
 #include "MidiRouter.h"
 #include "JackPassthrough.h"
+#include "FilterProxy.h"
+#include "MidiRecorder.h"
+#include "Note.h"
+#include "NotesModel.h"
+#include "PatternImageProvider.h"
+#include "PatternModel.h"
+#include "PlayGrid.h"
+#include "SettingsContainer.h"
+#include "SegmentHandler.h"
+#include "MidiRouter.h"
+#include "SyncTimer.h"
 
 using namespace std;
+using namespace std::chrono;
 
 ScopedJuceInitialiser_GUI *initializer = nullptr;
 SyncTimer *syncTimer{nullptr};
@@ -322,8 +122,129 @@ public:
 
 JuceEventLoopThread elThread;
 
+void registerTypes(const char *uri)
+{
+  qmlRegisterType<FilterProxy>(uri, 1, 0, "FilterProxy");
+  qmlRegisterUncreatableType<Note>(uri, 1, 0, "Note", "Use the getNote function on the main PlayGrid global object to get one of these");
+  qmlRegisterUncreatableType<NotesModel>(uri, 1, 0, "NotesModel", "Use the getModel function on the main PlayGrid global object to get one of these");
+  qmlRegisterUncreatableType<PatternModel>(uri, 1, 0, "PatternModel", "Use the getPatternModel function on the main PlayGrid global object to get one of these");
+  qmlRegisterUncreatableType<SettingsContainer>(uri, 1, 0, "SettingsContainer", "This is for internal use only");
+  qmlRegisterType<PlayGrid>(uri, 1, 0, "PlayGrid");
+  qmlRegisterSingletonType<PlayGridManager>(uri, 1, 0, "PlayGridManager", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
+    Q_UNUSED(scriptEngine)
+    // Register pattern ImageProvider here as we dont have access to QQmlEngine outside of this callback
+    engine->addImageProvider("pattern", new PatternImageProvider());
+    PlayGridManager *playGridManager = PlayGridManager::instance();
+    playGridManager->setEngine(engine);
+    QQmlEngine::setObjectOwnership(playGridManager, QQmlEngine::CppOwnership);
+    return playGridManager;
+  });
+  qmlRegisterSingletonType<SegmentHandler>(uri, 1, 0, "SegmentHandler", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
+    Q_UNUSED(engine)
+    Q_UNUSED(scriptEngine)
+    SegmentHandler *segmentHandler = SegmentHandler::instance();
+    QQmlEngine::setObjectOwnership(segmentHandler, QQmlEngine::CppOwnership);
+    return segmentHandler;
+  });
+  qmlRegisterSingletonType<MidiRecorder>(uri, 1, 0, "MidiRecorder", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
+    Q_UNUSED(engine)
+    Q_UNUSED(scriptEngine)
+    MidiRecorder *midiRecorder = MidiRecorder::instance();
+    QQmlEngine::setObjectOwnership(midiRecorder, QQmlEngine::CppOwnership);
+    return midiRecorder;
+  });
+  qmlRegisterSingletonType<MidiRouter>(uri, 1, 0, "MidiRouter", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
+    Q_UNUSED(engine)
+    Q_UNUSED(scriptEngine)
+    MidiRouter *midiRouter = MidiRouter::instance();
+    QQmlEngine::setObjectOwnership(midiRouter, QQmlEngine::CppOwnership);
+    return midiRouter;
+  });
+  qmlRegisterSingletonType<SyncTimer>(uri, 1, 0, "SyncTimer", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
+    Q_UNUSED(engine)
+    Q_UNUSED(scriptEngine)
+    SyncTimer *syncTimer = SyncTimer::instance();
+    QQmlEngine::setObjectOwnership(syncTimer, QQmlEngine::CppOwnership);
+    return syncTimer;
+  });
+  qmlRegisterSingletonType<AudioLevels>(uri, 1, 0, "AudioLevels", [](QQmlEngine */*engine*/, QJSEngine *scriptEngine) -> QObject * {
+    Q_UNUSED(scriptEngine)
+    return AudioLevels::instance();
+  });
+  qmlRegisterType<WaveFormItem>(uri, 1, 0, "WaveFormItem");
+}
+
+class ZLEngineBehavior : public te::EngineBehaviour {
+  bool autoInitialiseDeviceManager() override { return false; }
+};
+
+void initialize() {
+  qDebug() << "### JUCE initialisation start";
+  elThread.startThread();
+  qDebug() << "Started juce event loop, initialising...";
+
+  bool initialisationCompleted{false};
+  auto juceInitialiser = [&](){
+    qDebug() << "Instantiating tracktion engine";
+    tracktionEngine = new te::Engine("libzynthbox", nullptr, std::make_unique<ZLEngineBehavior>());
+    qDebug() << "Setting device type to JACK";
+    tracktionEngine->getDeviceManager().deviceManager.setCurrentAudioDeviceType("JACK", true);
+    qDebug() << "Initialising device manager";
+    tracktionEngine->getDeviceManager().initialise(0, 2);
+    qDebug() << "Initialisation completed";
+    initialisationCompleted = true;
+  };
+  auto start = high_resolution_clock::now();
+  while (!initialisationCompleted) {
+    Helper::callFunctionOnMessageThread(juceInitialiser, true, 10000);
+    if (!initialisationCompleted) {
+      qWarning() << "Failed to initialise juce in 10 seconds, retrying...";
+      if (tracktionEngine) {
+        delete tracktionEngine;
+        tracktionEngine = nullptr;
+      }
+    }
+  }
+  auto duration = duration_cast<milliseconds>(high_resolution_clock::now() - start);
+  qDebug() << "### JUCE initialisation took" << duration.count() << "ms";
+
+  qDebug() << "Initialising SyncTimer";
+  syncTimer = SyncTimer::instance();
+
+  qDebug() << "Initialising MidiRouter";
+  MidiRouter::instance();
+
+  QObject::connect(MidiRouter::instance(), &MidiRouter::addedHardwareInputDevice, syncTimer, &SyncTimer::addedHardwareInputDevice);
+  QObject::connect(MidiRouter::instance(), &MidiRouter::removedHardwareInputDevice, syncTimer, &SyncTimer::removedHardwareInputDevice);
+  QObject::connect(MidiRouter::instance(), &MidiRouter::addedHardwareOutputDevice, syncTimer, &SyncTimer::addedHardwareOutputDevice);
+  QObject::connect(MidiRouter::instance(), &MidiRouter::removedHardwareOutputDevice, syncTimer, &SyncTimer::removedHardwareOutputDevice);
+
+  qDebug() << "Initialising SamplerSynth";
+  SamplerSynth::instance()->initialize(tracktionEngine);
+
+  // Make sure to have the AudioLevels instantiated by explicitly calling instance
+  AudioLevels::instance();
+
+  registerTypes("io.zynthbox.components");
+}
+
+void shutdown() {
+  elThread.stopThread(500);
+  initializer = nullptr;
+}
+
+void reloadZynthianConfiguration() {
+  MidiRouter::instance()->reloadConfiguration();
+}
+
+void stopClips(int size, ClipAudioSource **clips) {
+  elThread.stopClips(size, clips);
+}
+
+float dBFromVolume(float vol) { return te::volumeFaderPositionToDB(vol); }
+
 //////////////
-/// ClipAudioSource API Bridge
+/// BEGIN ClipAudioSource API Bridge
 //////////////
 ClipAudioSource *ClipAudioSource_byID(int id) {
     ClipAudioSource *clip{nullptr};
@@ -349,7 +270,6 @@ ClipAudioSource *ClipAudioSource_new(const char *filepath, bool muted) {
 }
 
 void ClipAudioSource_play(ClipAudioSource *c, bool loop) {
-  cerr << "libzl : Start Clip " << c << std::endl;
   Helper::callFunctionOnMessageThread(
       [&]() {
         elThread.playClip(c, loop);
@@ -357,7 +277,6 @@ void ClipAudioSource_play(ClipAudioSource *c, bool loop) {
 }
 
 void ClipAudioSource_stop(ClipAudioSource *c) {
-  cerr << "libzl : Stop Clip " << c << std::endl;
   Helper::callFunctionOnMessageThread(
       [&]() {
         elThread.stopClip(c);
@@ -365,7 +284,6 @@ void ClipAudioSource_stop(ClipAudioSource *c) {
 }
 
 void ClipAudioSource_playOnChannel(ClipAudioSource *c, bool loop, int midiChannel) {
-  cerr << "libzl : Play Clip " << c << " on channel " << midiChannel << std::endl;
   Helper::callFunctionOnMessageThread(
       [&]() {
         elThread.playClipOnChannel(c, loop, midiChannel);
@@ -373,7 +291,6 @@ void ClipAudioSource_playOnChannel(ClipAudioSource *c, bool loop, int midiChanne
 }
 
 void ClipAudioSource_stopOnChannel(ClipAudioSource *c, int midiChannel) {
-  cerr << "libzl : Stop Clip " << c << " on channel " << midiChannel << std::endl;
   Helper::callFunctionOnMessageThread(
       [&]() {
         elThread.stopClipOnChannel(c, midiChannel);
@@ -493,10 +410,8 @@ int ClipAudioSource_id(ClipAudioSource *c) { return c->id(); }
 //////////////
 
 //////////////
-/// SynTimer API Bridge
+/// BEGIN SyncTimer API Bridge
 //////////////
-QObject *SyncTimer_instance() { return syncTimer; }
-
 void SyncTimer_startTimer(int interval) { syncTimer->start(interval); }
 
 void SyncTimer_setBpm(uint bpm) { syncTimer->setBpm(bpm); }
@@ -530,7 +445,6 @@ void SyncTimer_queueClipToStop(ClipAudioSource *clip) {
 }
 
 void SyncTimer_queueClipToStopOnChannel(ClipAudioSource *clip, int midiChannel) {
-  cerr << "libzl : Queue Clip " << clip << " to stop on channel " << midiChannel << std::endl;
   Helper::callFunctionOnMessageThread(
       [&]() { syncTimer->queueClipToStopOnChannel(clip, midiChannel); }, true);
 }
@@ -538,99 +452,9 @@ void SyncTimer_queueClipToStopOnChannel(ClipAudioSource *clip, int midiChannel) 
 /// END SyncTimer API Bridge
 //////////////
 
-class ZLEngineBehavior : public te::EngineBehaviour {
-  bool autoInitialiseDeviceManager() override { return false; }
-};
-
-void initJuce() {
-  qDebug() << "### JUCE initialisation start";
-  elThread.startThread();
-  qDebug() << "Started juce event loop, initialising...";
-
-  bool initialisationCompleted{false};
-  auto juceInitialiser = [&](){
-    qDebug() << "Instantiating tracktion engine";
-    tracktionEngine = new te::Engine("libzl", nullptr, std::make_unique<ZLEngineBehavior>());
-    qDebug() << "Setting device type to JACK";
-    tracktionEngine->getDeviceManager().deviceManager.setCurrentAudioDeviceType("JACK", true);
-    qDebug() << "Initialising device manager";
-    tracktionEngine->getDeviceManager().initialise(0, 2);
-    qDebug() << "Initialisation completed";
-    initialisationCompleted = true;
-  };
-  auto start = high_resolution_clock::now();
-  while (!initialisationCompleted) {
-    Helper::callFunctionOnMessageThread(juceInitialiser, true, 10000);
-    if (!initialisationCompleted) {
-      qWarning() << "Failed to initialise juce in 10 seconds, retrying...";
-      if (tracktionEngine) {
-        delete tracktionEngine;
-        tracktionEngine = nullptr;
-      }
-    }
-  }
-  auto duration = duration_cast<milliseconds>(high_resolution_clock::now() - start);
-  qDebug() << "### JUCE initialisation took" << duration.count() << "ms";
-
-  qDebug() << "Initialising SyncTimer";
-  syncTimer = SyncTimer::instance();
-
-  qDebug() << "Initialising MidiRouter";
-  MidiRouter::instance();
-
-  QObject::connect(MidiRouter::instance(), &MidiRouter::addedHardwareInputDevice, syncTimer, &SyncTimer::addedHardwareInputDevice);
-  QObject::connect(MidiRouter::instance(), &MidiRouter::removedHardwareInputDevice, syncTimer, &SyncTimer::removedHardwareInputDevice);
-  QObject::connect(MidiRouter::instance(), &MidiRouter::addedHardwareOutputDevice, syncTimer, &SyncTimer::addedHardwareOutputDevice);
-  QObject::connect(MidiRouter::instance(), &MidiRouter::removedHardwareOutputDevice, syncTimer, &SyncTimer::removedHardwareOutputDevice);
-
-  qDebug() << "Initialising SamplerSynth";
-  SamplerSynth::instance()->initialize(tracktionEngine);
-
-  // Make sure to have the AudioLevels instantiated by explicitly calling instance
-  AudioLevels::instance();
-
-  qmlRegisterSingletonType<AudioLevels>("libzl", 1, 0, "AudioLevels", [](QQmlEngine */*engine*/, QJSEngine *scriptEngine) -> QObject * {
-    Q_UNUSED(scriptEngine)
-
-    return AudioLevels::instance();
-  });
-}
-
-void shutdownJuce() {
-  elThread.stopThread(500);
-  initializer = nullptr;
-}
-
-void reloadZynthianConfiguration() {
-  MidiRouter::instance()->reloadConfiguration();
-}
-
-void registerGraphicTypes() {
-  qmlRegisterType<WaveFormItem>("JuceGraphics", 1, 0, "WaveFormItem");
-}
-
-void stopClips(int size, ClipAudioSource **clips) {
-  elThread.stopClips(size, clips);
-}
-<<<<<<< HEAD
->>>>>>> 400988a (progress reporting from tracktion to qml)
-=======
-
-float dBFromVolume(float vol) { return te::volumeFaderPositionToDB(vol); }
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
->>>>>>> 2246f24 (Add API to get dB from volume)
-=======
-
-void setRecordingAudioLevelCallback(void (*functionPtr)(float)) {
-  recordingAudioLevelCallback = functionPtr;
-}
->>>>>>> 6ae7881 (Implement jack client to listen to input audio level)
-=======
->>>>>>> be89107 (Implement AudioLevels QML Singleton Type to expose audio levels of jack ports as properties)
-=======
-
+//////////////
+/// BEGIN AudioLevels API Bridge
+//////////////
 bool AudioLevels_isRecording() {
   return AudioLevels::instance()->isRecording();
 }
@@ -650,9 +474,6 @@ void AudioLevels_startRecording() {
 void AudioLevels_stopRecording() {
   AudioLevels::instance()->stopRecording();
 }
-<<<<<<< HEAD
->>>>>>> ffd17cc (AudioLevels :)
-=======
 
 void AudioLevels_setRecordPortsFilenamePrefix(const char *fileNamePrefix)
 {
@@ -678,10 +499,13 @@ void AudioLevels_setShouldRecordPorts(bool shouldRecord)
 {
   AudioLevels::instance()->setShouldRecordPorts(shouldRecord);
 }
-<<<<<<< HEAD
->>>>>>> 00c1200 (libzl : Add port recorder methods to C API for consumption)
-=======
+/// //////////
+/// END AudioLevels API Bridge
+//////////////
 
+//////////////
+/// BEGIN JackPassthrough API Bridge
+//////////////
 void JackPassthrough_setPanAmount(int channel, float amount)
 {
   if (channel == -1) {
@@ -701,9 +525,6 @@ float JackPassthrough_getPanAmount(int channel)
   }
   return amount;
 }
-<<<<<<< HEAD
->>>>>>> af71e88 (libzl: Expose JackPassthrough panning through the libzl api bridge)
-=======
 
 float JackPassthrough_getWetFx1Amount(int channel)
 {
@@ -745,9 +566,6 @@ void JackPassthrough_setWetFx2Amount(int channel, float amount)
       qobject_cast<JackPassthrough*>(MidiRouter::instance()->channelPassthroughClients().at(channel))->setWetFx2Amount(amount);
     }
 }
-<<<<<<< HEAD
->>>>>>> ef3a0eb (libzl : Add APIs for {get|set}ting wetFx{1|2}  amounts)
-=======
 
 float JackPassthrough_getDryAmount(int channel)
 {
@@ -768,9 +586,6 @@ void JackPassthrough_setDryAmount(int channel, float amount)
       qobject_cast<JackPassthrough*>(MidiRouter::instance()->channelPassthroughClients().at(channel))->setDryAmount(amount);
     }
 }
-<<<<<<< HEAD
->>>>>>> 9ad92bb (libzl : Add API to get/set dryAmount)
-=======
 
 float JackPassthrough_getMuted(int channel)
 {
@@ -791,4 +606,6 @@ void JackPassthrough_setMuted(int channel, bool muted)
       qobject_cast<JackPassthrough*>(MidiRouter::instance()->channelPassthroughClients().at(channel))->setMuted(muted);
     }
 }
->>>>>>> e4f6950 (libzl : Add APIs to set muted property)
+//////////////
+/// END JackPassthrough API Bridge
+//////////////
