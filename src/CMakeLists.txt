@@ -83,3 +83,6 @@ target_include_directories(zynthbox
 )
 
 install(TARGETS zynthbox LIBRARY DESTINATION lib)
+
+# Install zyncoder module to Python dist-packages
+install(FILES libzynthbox.py DESTINATION lib/python${Python_VERSION}/dist-packages/)
