@@ -2,7 +2,6 @@
 
 #include "ClipAudioSourcePositionsModel.h"
 #include "ClipCommand.h"
-#include "libzl.h"
 #include "SamplerSynthSound.h"
 #include "SyncTimer.h"
 
@@ -20,7 +19,7 @@ static inline float velocityToGain(const float &velocity) {
 class SamplerSynthVoicePrivate {
 public:
     SamplerSynthVoicePrivate() {
-        syncTimer = qobject_cast<SyncTimer*>(SyncTimer_instance());
+        syncTimer = qobject_cast<SyncTimer*>(SyncTimer::instance());
     }
 
     SyncTimer *syncTimer{nullptr};
