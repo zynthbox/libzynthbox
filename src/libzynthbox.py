@@ -118,6 +118,19 @@ def init():
 
             libzynthbox_so.ClipAudioSource_destroy.argtypes = [ctypes.c_void_p]
 
+            libzynthbox_so.ClipAudioSource_adsrAttack.argtypes = [ctypes.c_void_p]
+            libzynthbox_so.ClipAudioSource_adsrAttack.restype = ctypes.c_float
+            libzynthbox_so.ClipAudioSource_setADSRAttack.argtypes = [ctypes.c_void_p, ctypes.c_float]
+            libzynthbox_so.ClipAudioSource_adsrDecay.argtypes = [ctypes.c_void_p]
+            libzynthbox_so.ClipAudioSource_adsrDecay.restype = ctypes.c_float
+            libzynthbox_so.ClipAudioSource_setADSRDecay.argtypes = [ctypes.c_void_p, ctypes.c_float]
+            libzynthbox_so.ClipAudioSource_adsrSustain.argtypes = [ctypes.c_void_p]
+            libzynthbox_so.ClipAudioSource_adsrSustain.restype = ctypes.c_float
+            libzynthbox_so.ClipAudioSource_setADSRSustain.argtypes = [ctypes.c_void_p, ctypes.c_float]
+            libzynthbox_so.ClipAudioSource_adsrRelease.argtypes = [ctypes.c_void_p]
+            libzynthbox_so.ClipAudioSource_adsrRelease.restype = ctypes.c_float
+            libzynthbox_so.ClipAudioSource_setADSRRelease.argtypes = [ctypes.c_void_p, ctypes.c_float]
+
             libzynthbox_so.AudioLevels_setRecordGlobalPlayback.argtypes = [ctypes.c_bool]
             libzynthbox_so.AudioLevels_setGlobalPlaybackFilenamePrefix.argtypes = [ctypes.c_char_p]
 
@@ -438,6 +451,38 @@ class ClipAudioSource(QObject):
     def destroy(self):
         if libzynthbox_so:
             libzynthbox_so.ClipAudioSource_destroy(self.obj)
+
+    def get_adsrAttack(self):
+        if libzynthbox_so:
+            return libzynthbox_so.ClipAudioSource_adsrAttack(self.obj)
+
+    def set_adsrAttack(self, newValue):
+        if libzynthbox_so:
+            libzynthbox_so.ClipAudioSource_setADSRAttack(self.obj, newValue)
+
+    def get_adsrDecay(self):
+        if libzynthbox_so:
+            return libzynthbox_so.ClipAudioSource_adsrDecay(self.obj)
+
+    def set_adsrDecay(self, newValue):
+        if libzynthbox_so:
+            libzynthbox_so.ClipAudioSource_setADSRDecay(self.obj, newValue)
+
+    def get_adsrSustain(self):
+        if libzynthbox_so:
+            return libzynthbox_so.ClipAudioSource_adsrSustain(self.obj)
+
+    def set_adsrSustain(self, newValue):
+        if libzynthbox_so:
+            libzynthbox_so.ClipAudioSource_setADSRSustain(self.obj, newValue)
+
+    def get_adsrRelease(self):
+        if libzynthbox_so:
+            return libzynthbox_so.ClipAudioSource_adsrRelease(self.obj)
+
+    def set_adsrRelease(self, newValue):
+        if libzynthbox_so:
+            libzynthbox_so.ClipAudioSource_setADSRRelease(self.obj, newValue)
 
     def get_cpp_obj(self):
         return self.obj
