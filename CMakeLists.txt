@@ -21,18 +21,24 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${ECM_MODULE_PATH} ${CMAKE_CURRENT_LI
 find_package(Qt5 ${QT_MIN_VERSION} REQUIRED CONFIG COMPONENTS Core Gui Quick Qml)
 find_package(KF5Kirigami2 2.7.0)
 find_package(Python 3.5 REQUIRED COMPONENTS Interpreter)
+find_program(SHIBOKEN_GENERATOR shiboken2-generator)
 
 include(FindPkgConfig)
 include(KDEInstallDirs)
 include(ECMInstallIcons)
 
 pkg_check_modules(RTMIDI REQUIRED rtmidi)
-pkg_check_modules (W2GTK4 REQUIRED webkit2gtk-4.0)
-pkg_check_modules(RTMIDI REQUIRED rtmidi)
 pkg_check_modules(Jack REQUIRED jack)
 
-include_directories (${W2GTK4_INCLUDE_DIRS})
-link_directories (${W2GTK4_LIBRARY_DIRS})
+set(BINDINGS_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/bindings)
+set(SHIBOKEN_TYPESYSTEM_DIR )
+file(MAKE_DIRECTORY ${BINDINGS_OUTPUT_DIR})
+
+execute_process(
+  COMMAND "${Python_EXECUTABLE}" -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"
+  OUTPUT_VARIABLE Python_VERSION
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+
 include_directories(tracktion_engine/modules/)
 add_subdirectory(tracktion_engine/modules/juce)
 add_subdirectory(tracktion_engine/modules)
