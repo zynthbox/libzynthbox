@@ -1,0 +1,10 @@
+<!DOCTYPE typesystem PUBLIC "http://www.pyside.org/TypeSystem/1.0" "pyside-typesystem.dtd">
+<typesystem package="Zynthbox">
+    <load-typesystem name="typesystem_core.xml" generate="no"/>
+    <load-typesystem name="typesystem_gui.xml" generate="no"/>
+    <load-typesystem name="typesystem_qml.xml" generate="no"/>
+    <object-type name="AudioLevels">
+    </object-type>
+    <object-type name="MidiRouter">
+    </object-type>
+</typesystem>

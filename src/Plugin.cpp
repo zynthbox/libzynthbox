@@ -140,10 +140,8 @@ float Plugin::dBFromVolume(float vol)
     return te::volumeFaderPositionToDB(vol);
 }
 
-void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
+void Plugin::registerTypes(const char *uri)
 {
-    engine->addImageProvider("pattern", new PatternImageProvider());
-
     qmlRegisterType<FilterProxy>(uri, 1, 0, "FilterProxy");
     qmlRegisterUncreatableType<Note>(uri, 1, 0, "Note", "Use the getNote function on the main PlayGrid global object to get one of these");
     qmlRegisterUncreatableType<NotesModel>(uri, 1, 0, "NotesModel", "Use the getModel function on the main PlayGrid global object to get one of these");
@@ -152,6 +150,7 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
     qmlRegisterType<PlayGrid>(uri, 1, 0, "PlayGrid");
     qmlRegisterSingletonType<PlayGridManager>(uri, 1, 0, "PlayGridManager", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
         Q_UNUSED(scriptEngine)
+        engine->addImageProvider("pattern", new PatternImageProvider());
         PlayGridManager *playGridManager = PlayGridManager::instance();
         playGridManager->setEngine(engine);
         QQmlEngine::setObjectOwnership(playGridManager, QQmlEngine::CppOwnership);
