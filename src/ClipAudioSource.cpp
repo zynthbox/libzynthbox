@@ -161,6 +161,7 @@ ClipAudioSource::ClipAudioSource(tracktion_engine::Engine *engine, SyncTimer *sy
           clip->setAutoTempo(false);
           clip->setAutoPitch(false);
           clip->setTimeStretchMode(te::TimeStretcher::defaultMode);
+          d->adsr.setSampleRate(clip->getAudioFile().getSampleRate());
         }
 
         transport.setLoopRange(te::EditTimeRange::withStartAndLength(
@@ -403,6 +404,8 @@ void ClipAudioSource::Private::timerCallback() {
     if (!clip->needsRender() && isRendering) {
         isRendering = false;
         Q_EMIT q->playbackFileChanged();
+        adsr.setSampleRate(clip->getAudioFile().getSampleRate());
+        adsr.setParameters(adsr.getParameters());
     }
   }
 }
