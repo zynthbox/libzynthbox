@@ -1,13 +1,10 @@
-execute_process(
-  COMMAND "${Python_EXECUTABLE}" -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"
-  OUTPUT_VARIABLE Python_VERSION
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
+set(TYPESYSTEM_FILE ${CMAKE_CURRENT_SOURCE_DIR}/plugin_typesystem.xml)
 
 add_library(zynthbox SHARED)
 
 target_sources(zynthbox
     PRIVATE
-        plugin.cpp
+        Plugin.cpp
         ClipAudioSource.cpp
         ClipAudioSourcePositionsModel.cpp
         MidiRouter.cpp
@@ -54,7 +51,6 @@ target_compile_definitions(zynthbox
 target_link_libraries(zynthbox
     PRIVATE
         ${RTMIDI_LIBRARIES}
-        ${W2GTK4_LIBRARIES}
         ${Jack_LIBRARIES}
         tracktion::tracktion_engine
         tracktion::tracktion_graph
@@ -87,7 +83,13 @@ target_include_directories(zynthbox
         $<TARGET_PROPERTY:zynthbox,INCLUDE_DIRECTORIES>
 )
 
+add_custom_target(python-bindings
+    COMMAND ${SHIBOKEN_GENERATOR} --generator-set=shiboken2 --typesystem-paths=${SHIBOKEN_TYPESYSTEM_DIR} --typesystem-file=${TYPESYSTEM_FILE} --output-directory=${BINDINGS_OUTPUT_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/Plugin.h
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/Plugin.h
+)
+
 install(TARGETS zynthbox LIBRARY DESTINATION lib)
+install(DIRECTORY ${BINDINGS_OUTPUT_DIR}/ DESTINATION lib/python${Python_VERSION}/site-packages/)
 
 # Install zyncoder module to Python dist-packages
 install(FILES libzynthbox.py DESTINATION lib/python${Python_VERSION}/dist-packages/)
