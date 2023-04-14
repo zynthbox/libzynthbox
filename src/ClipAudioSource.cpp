@@ -630,10 +630,11 @@ float ClipAudioSource::adsrAttack() const
 
 void ClipAudioSource::setADSRAttack(const float& newValue)
 {
-  if (d->adsr.getParameters().attack != newValue) {
-    juce::ADSR::Parameters params;
+  juce::ADSR::Parameters params = d->adsr.getParameters();
+  if (params.attack != newValue) {
     params.attack = newValue;
     d->adsr.setParameters(params);
+    Q_EMIT adsrParametersChanged();
   }
 }
 
@@ -644,10 +645,11 @@ float ClipAudioSource::adsrDecay() const
 
 void ClipAudioSource::setADSRDecay(const float& newValue)
 {
-  if (d->adsr.getParameters().decay != newValue) {
-    juce::ADSR::Parameters params;
+  juce::ADSR::Parameters params = d->adsr.getParameters();
+  if (params.decay != newValue) {
     params.decay = newValue;
     d->adsr.setParameters(params);
+    Q_EMIT adsrParametersChanged();
   }
 }
 
@@ -658,10 +660,11 @@ float ClipAudioSource::adsrSustain() const
 
 void ClipAudioSource::setADSRSustain(const float& newValue)
 {
-  if (d->adsr.getParameters().sustain != newValue) {
-    juce::ADSR::Parameters params;
+  juce::ADSR::Parameters params = d->adsr.getParameters();
+  if (params.sustain != newValue) {
     params.sustain = newValue;
     d->adsr.setParameters(params);
+    Q_EMIT adsrParametersChanged();
   }
 }
 
@@ -672,16 +675,18 @@ float ClipAudioSource::adsrRelease() const
 
 void ClipAudioSource::setADSRRelease(const float& newValue)
 {
-  if (d->adsr.getParameters().release != newValue) {
-    juce::ADSR::Parameters params;
+  juce::ADSR::Parameters params = d->adsr.getParameters();
+  if (params.release != newValue) {
     params.release = newValue;
     d->adsr.setParameters(params);
+    Q_EMIT adsrParametersChanged();
   }
 }
 
 void ClipAudioSource::setADSRParameters(const juce::ADSR::Parameters& parameters)
 {
   d->adsr.setParameters(parameters);
+  Q_EMIT adsrParametersChanged();
 }
 
 const juce::ADSR::Parameters & ClipAudioSource::adsrParameters() const
