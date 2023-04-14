@@ -33,7 +33,6 @@
 #include "ClipAudioSource.h"
 #include "MidiRouter.h"
 #include "SyncTimer.h"
-#include "plugin.h"
 
 #include <QQmlEngine>
 #include <QDebug>
@@ -1149,11 +1148,11 @@ void PlayGridManager::sendAMidiNoteMessage(unsigned char midiNote, unsigned char
 
 QObject *PlayGridManager::getClipById(int clipID) const
 {
-    QObject *clip{ClipAudioSource_byID(clipID)};
-    if (clip) {
-        QQmlEngine::setObjectOwnership(clip, QQmlEngine::CppOwnership);
-    }
-    return clip;
+//    QObject *clip{ClipAudioSource_byID(clipID)};
+//    if (clip) {
+//        QQmlEngine::setObjectOwnership(clip, QQmlEngine::CppOwnership);
+//    }
+//    return clip;
 }
 
 // Since we've got a QObject up at the top which wants mocing

@@ -38,7 +38,6 @@
 #include "MidiRouter.h"
 #include "SyncTimer.h"
 #include "TimerCommand.h"
-#include "plugin.h"
 
 static const QString midiNoteNames[128]{
     "C-1", "C#-1", "D-1", "D#-1", "E-1", "F-1", "F#-1", "G-1", "G#-1", "A-1", "A#-1", "B-1",
@@ -1202,14 +1201,14 @@ void PatternModel::setClipIds(const QVariantList &clipIds)
     }
     if (changed) {
         QList<ClipAudioSource*> newClips;
-        for (const QVariant &clipId: clipIds) {
-            ClipAudioSource *newClip = ClipAudioSource_byID(clipId.toInt());
-            newClips << newClip;
-            if (newClip) {
-                connect(newClip, &QObject::destroyed, this, [this, newClip](){ d->clips.removeAll(newClip); });
-            }
-        }
-        d->clips = newClips;
+//        for (const QVariant &clipId: clipIds) {
+//            ClipAudioSource *newClip = ClipAudioSource_byID(clipId.toInt());
+//            newClips << newClip;
+//            if (newClip) {
+//                connect(newClip, &QObject::destroyed, this, [this, newClip](){ d->clips.removeAll(newClip); });
+//            }
+//        }
+//        d->clips = newClips;
         Q_EMIT clipIdsChanged();
     }
 }

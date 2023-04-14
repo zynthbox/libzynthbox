@@ -29,7 +29,6 @@
 #include "ClipCommand.h"
 #include "SyncTimer.h"
 #include "TimerCommand.h"
-#include "plugin.h"
 
 #include <QDebug>
 #include <QTimer>
@@ -105,7 +104,7 @@ public:
             clipCommand->startPlayback = (command->operation == TimerCommand::StartClipLoopOperation); // otherwise, if statement above ensures it's a stop clip loop operation
             clipCommand->stopPlayback = !clipCommand->startPlayback;
             clipCommand->midiChannel = command->parameter;
-            clipCommand->clip = ClipAudioSource_byID(command->parameter2);
+//            clipCommand->clip = ClipAudioSource_byID(command->parameter2);
             clipCommand->midiNote = command->parameter3;
             clipCommand->volume = clipCommand->clip->volumeAbsolute();
             clipCommand->looping = true;
