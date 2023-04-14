@@ -21,6 +21,7 @@
  */
 
 #pragma once
+#define JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED 1
 
 #include <QCoreApplication>
 #include <QObject>
@@ -28,6 +29,7 @@
 #include <atomic>
 #include <mutex>
 
+#include "ClipAudioSource.h"
 #include "JUCEHeaders.h"
 #include "JuceEventLoop.h"
 
@@ -49,7 +51,7 @@ public:
 
 private:
     explicit Plugin(QObject *parent = nullptr);
-    void registerTypes(QQmlEngine *engine, const char *uri);
+    void registerTypes(const char *uri);
 
     te::Engine *tracktionEngine{nullptr};
     QList<ClipAudioSource*> createdClips;

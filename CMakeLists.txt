@@ -21,7 +21,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${ECM_MODULE_PATH} ${CMAKE_CURRENT_LI
 find_package(Qt5 ${QT_MIN_VERSION} REQUIRED CONFIG COMPONENTS Core Gui Quick Qml)
 find_package(KF5Kirigami2 2.7.0)
 find_package(Python 3.5 REQUIRED COMPONENTS Interpreter)
-find_program(SHIBOKEN_GENERATOR shiboken2-generator)
+find_program(SHIBOKEN_GENERATOR shiboken2)
 
 include(FindPkgConfig)
 include(KDEInstallDirs)
@@ -33,6 +33,8 @@ pkg_check_modules(Jack REQUIRED jack)
 set(BINDINGS_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/bindings)
 set(SHIBOKEN_TYPESYSTEM_DIR )
 file(MAKE_DIRECTORY ${BINDINGS_OUTPUT_DIR})
+
+message(Qt5_DIRS=${Qt5Core_INCLUDE_DIRS})
 
 execute_process(
   COMMAND "${Python_EXECUTABLE}" -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"
