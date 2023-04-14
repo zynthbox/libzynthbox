@@ -200,8 +200,8 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
                 const float envelopeValue = d->adsr.getNextSample();
 
                 // just using a very simple linear interpolation here..
-                float l = sampleDuration > pos ? (inL[pos] * invAlpha + inL[pos + 1] * alpha * d->lgain * envelopeValue * clipVolume): 0;
-                float r = (inR != nullptr && sampleDuration > pos) ? (inR[pos] * invAlpha + inR[pos + 1] * alpha * d->rgain * envelopeValue * clipVolume) : l;
+                float l = sampleDuration > pos ? ((inL[pos] * invAlpha + inL[pos + 1] * alpha) * d->lgain * envelopeValue * clipVolume): 0;
+                float r = (inR != nullptr && sampleDuration > pos) ? ((inR[pos] * invAlpha + inR[pos + 1] * alpha) * d->rgain * envelopeValue * clipVolume) : l;
 
                 // Implement M/S Panning
                 const float mSignal = 0.5 * (l + r);
