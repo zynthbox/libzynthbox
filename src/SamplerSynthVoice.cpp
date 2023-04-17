@@ -16,15 +16,35 @@ static inline float velocityToGain(const float &velocity) {
     return velocity;
 }
 
+#define DataRingSize 128
+struct alignas(32) DataRingEntry {
+    DataRingEntry *previous{nullptr};
+    DataRingEntry *next{nullptr};
+    jack_nframes_t time{0};
+    int data{-1};
+    bool processed{true};
+};
+
 class SamplerSynthVoicePrivate {
 public:
     SamplerSynthVoicePrivate() {
         syncTimer = qobject_cast<SyncTimer*>(SyncTimer::instance());
+
+        DataRingEntry* entryPrevious{&aftertouchRing[DataRingSize - 1]};
+        for (quint64 i = 0; i < DataRingSize; ++i) {
+            entryPrevious->next = &aftertouchRing[i];
+            aftertouchRing[i].previous = entryPrevious;
+            entryPrevious = &aftertouchRing[i];
+        }
+        aftertouchRingReadHead = aftertouchRingWriteHead = aftertouchRing;
     }
 
     SyncTimer *syncTimer{nullptr};
     ClipCommand *clipCommand{nullptr};
     ClipAudioSource *clip{nullptr};
+    DataRingEntry aftertouchRing[DataRingSize];
+    DataRingEntry *aftertouchRingReadHead{nullptr};
+    DataRingEntry *aftertouchRingWriteHead{nullptr};
     qint64 clipPositionId{-1};
     quint64 startTick{0};
     quint64 nextLoopTick{0};
@@ -170,6 +190,16 @@ void SamplerSynthVoice::stopNote (float /*velocity*/, bool allowTailOff)
 void SamplerSynthVoice::pitchWheelMoved (int /*newValue*/) {}
 void SamplerSynthVoice::controllerMoved (int /*controllerNumber*/, int /*newValue*/) {}
 
+void SamplerSynthVoice::handleAftertouch(jack_nframes_t time, int pressure)
+{
+    if (d->clipCommand) {
+        d->aftertouchRingWriteHead->processed = false;
+        d->aftertouchRingWriteHead->time = time;
+        d->aftertouchRingWriteHead->data = pressure;
+        d->aftertouchRingWriteHead = d->aftertouchRingWriteHead->next;
+    }
+}
+
 void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_default_audio_sample_t *rightBuffer, jack_nframes_t nframes, jack_nframes_t /*current_frames*/, jack_time_t current_usecs, jack_time_t next_usecs, float /*period_usecs*/)
 {
     if (auto* playingSound = static_cast<SamplerSynthSound*> (getCurrentlyPlayingSound().get()))
@@ -194,6 +224,11 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
             const double sourceSampleRate = playingSound->sourceSampleRate();
             const bool isLooping = d->clipCommand->looping;
             for(jack_nframes_t frame = 0; frame < nframes; ++frame) {
+                while (d->aftertouchRingReadHead->processed == false && d->aftertouchRingReadHead->time <= frame) {
+                    d->lgain = d->rgain = (float(d->aftertouchRingReadHead->data)/127.0f);
+                    d->aftertouchRingReadHead->processed = true;
+                    d->aftertouchRingReadHead = d->aftertouchRingReadHead->next;
+                }
                 const int pos = (int) d->sourceSamplePosition;
                 const float alpha = (float) (d->sourceSamplePosition - pos);
                 const float invAlpha = 1.0f - alpha;
