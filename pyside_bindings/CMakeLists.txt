@@ -39,6 +39,7 @@ set(pyside2_path /usr/lib/python3/dist-packages/PySide2)
 set(python_include_dir /usr/include/python3.7m)
 set(shiboken_include_dir /usr/include/shiboken2)
 set(shiboken_shared_libraries /usr/lib/arm-linux-gnueabihf/libshiboken2.cpython-37m-arm-linux-gnueabihf.so.5.11.2)
+set(pyside2_shared_libraries /usr/lib/arm-linux-gnueabihf/libpyside2.cpython-37m-arm-linux-gnueabihf.so)
 set(python_linking_data /usr/lib;python3.7m)
 set(shiboken_path /usr/bin/shiboken2)
 
@@ -71,6 +72,10 @@ add_custom_command(
     COMMAND shiboken2
                 --debug-level=full
                 --generator-set=shiboken
+                --enable-parent-ctor-heuristic
+                --enable-return-value-heuristic
+                --enable-pyside-extensions
+                --use-isnull-as-nb_nonzero
                 --language-level=c++17
                 --output-directory=${BINDINGS_OUTPUT_DIR}
                 --typesystem-paths=/usr/share/PySide2/typesystems/
@@ -115,16 +120,14 @@ target_include_directories(${bindings_library} PRIVATE ${shiboken_include_dir})
 target_include_directories(${bindings_library} PRIVATE ${CMAKE_SOURCE_DIR})
 
 target_link_libraries(${bindings_library} PRIVATE ${shiboken_shared_libraries})
-target_link_libraries(${bindings_library} PRIVATE zynthbox)
+target_link_libraries(${bindings_library} PRIVATE zynthbox ${pyside2_shared_libraries})
+
+set_property(TARGET ${bindings_library} PROPERTY PREFIX "")
+set_property(TARGET ${bindings_library} PROPERTY OUTPUT_NAME "${bindings_library}${PYTHON_EXTENSION_SUFFIX}")
 
 install(
-    TARGETS ${bindings_library} zynthbox
-    LIBRARY DESTINATION lib/python3/dist-packages/Zynthbox
-    RUNTIME DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}
-)
-install(
-    FILES __init__.py
-    DESTINATION lib/python3/dist-packages/Zynthbox
+    TARGETS ${bindings_library}
+    LIBRARY DESTINATION lib/python3/dist-packages/
 )
 
 ### END CMake target - bindings_library
