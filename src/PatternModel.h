@@ -25,6 +25,7 @@
 #include "NotesModel.h"
 #include "SequenceModel.h"
 
+struct ClipCommand;
 /**
  * \brief A way to keep channel of the notes which make up a conceptual song pattern
  *
@@ -588,6 +589,7 @@ public:
     void handleSequenceStop();
 
     Q_SLOT void handleMidiMessage(const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const double& timeStamp);
+    void midiMessageToClipCommands(QList<ClipCommand*> *listToPopulate, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3) const;
 private:
     friend class ZLPatternSynchronisationManager;
     class Private;

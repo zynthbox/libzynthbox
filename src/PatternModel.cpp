@@ -1792,21 +1792,6 @@ void PatternModel::handleSequenceStop()
 
 void PatternModel::handleMidiMessage(const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const double& timeStamp)
 {
-    // If orphaned, or the sequence is asking for sounds to happen, make sounds
-    if ((!d->sequence || (d->sequence->shouldMakeSounds() && (d->sequence->soloPatternObject() == this || d->enabled)))
-        // But also, don't make sounds unless we're sample-triggering or slicing (otherwise the synths will handle it)
-        && (d->noteDestination == SampleTriggerDestination || d->noteDestination == SampleSlicedDestination)) {
-        if (0x7F < byte1 && byte1 < 0xA0) {
-            const int midiChannel = (byte1 < 0x90 ? byte1 - 0x80 : byte1 - 0x90);
-            // FIXME We've got a problem - why is the "dunno" channel 9? There's a channel there, that's going to cause issues...
-            if (d->midiChannel == midiChannel || ((d->midiChannel < 0 || d->midiChannel > 8) && midiChannel == 9)) {
-                const QList<ClipCommand*> commands = d->midiMessageToClipCommands(byte1, byte2, byte3);
-                for (ClipCommand *command : qAsConst(commands)) {
-                    d->syncTimer->scheduleClipCommand(command, 0);
-                }
-            }
-        }
-    }
     // if we're recording live, and it's a note-on message, create a newnotedata and add to list of notes being recorded
     if (d->recordingLive && 0x8F < byte1 && byte1 < 0xA0) {
         const int midiChannel = byte1 - 0x90;
@@ -1839,6 +1824,15 @@ void PatternModel::handleMidiMessage(const unsigned char &byte1, const unsigned 
                 }
             }
         }
+    }
+}
+
+void PatternModel::midiMessageToClipCommands(QList<ClipCommand*> *listToPopulate, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3) const
+{
+    if ((!d->sequence || (d->sequence->shouldMakeSounds() && (d->sequence->soloPatternObject() == this || d->enabled)))
+        // But also, don't make sounds unless we're sample-triggering or slicing (otherwise the synths will handle it)
+        && (d->noteDestination == SampleTriggerDestination || d->noteDestination == SampleSlicedDestination)) {
+            listToPopulate->append(d->midiMessageToClipCommands(byte1, byte2, byte3));
     }
 }
 

@@ -3,6 +3,7 @@
 
 #include "JUCEHeaders.h"
 #include "Helper.h"
+#include "PlayGridManager.h"
 #include "SamplerSynthSound.h"
 #include "SamplerSynthVoice.h"
 #include "ClipCommand.h"
@@ -58,6 +59,14 @@ public:
     float cpuLoad{0.0f};
 
     bool enabled{true};
+
+    inline PlayGridManager* playGridManager() {
+        if (!m_playGridManager) {
+            m_playGridManager = PlayGridManager::instance();
+        }
+        return m_playGridManager;
+    }
+    PlayGridManager *m_playGridManager{nullptr};
 };
 
 static int client_process(jack_nframes_t nframes, void* arg) {
@@ -145,15 +154,16 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                     eventChannel = (byte1 & 0xf);
                     // only react to the event if it's on our channel
                     if (eventChannel == midiChannel) {
-                        if (0x79 < byte1 && byte1 < 0x90) {
-                            // Note Off message
-                            // const int note{event.buffer[1]};
-                            // const int velocity{event.buffer[2]};
-                            // Baby steps, let's get the aftertouch working, then we'll rework the note-on/offery
-                        } else if (0x8F < byte1 && byte1 < 0xA0) {
-                            // Note On message
-                            // const int note{event.buffer[1]};
-                            // const int velocity{event.buffer[2]};
+                        if (0x79 < byte1 && byte1 < 0xA0) {
+                            // Note Off or On message
+                            const int note{event.buffer[1]};
+                            const int velocity{event.buffer[2]};
+                            QList<ClipCommand*> commands;
+                            commands.reserve(5);
+                            playGridManager()->midiMessageToClipCommands(&commands, byte1, note, velocity);
+                            for (ClipCommand *command : qAsConst(commands)) {
+                                handleCommand(command, event.time);
+                            }
                         } else if (0x9F < byte1 && byte1 < 0xB0) {
                             // Polyphonic Aftertouch
                             const int note{event.buffer[1]};

@@ -971,6 +971,13 @@ void PlayGridManager::updateNoteState(QVariantMap metadata)
     Q_EMIT mostRecentlyChangedNotesChanged();
 }
 
+void PlayGridManager::midiMessageToClipCommands(QList<ClipCommand*> *listToPopulate, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3) const
+{
+    for (const PatternModel *patternModel : qAsConst(d->patternModels)) {
+        patternModel->midiMessageToClipCommands(listToPopulate, byte1, byte2, byte3);
+    }
+}
+
 QObject *PlayGridManager::zlDashboard() const
 {
     return d->zlSyncManager->zlDashboard;
