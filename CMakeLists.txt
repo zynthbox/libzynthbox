@@ -31,10 +31,7 @@ pkg_check_modules(RTMIDI REQUIRED rtmidi)
 pkg_check_modules(Jack REQUIRED jack)
 
 set(BINDINGS_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/bindings)
-set(SHIBOKEN_TYPESYSTEM_DIR )
 file(MAKE_DIRECTORY ${BINDINGS_OUTPUT_DIR})
-
-message(Qt5_DIRS=${Qt5Core_INCLUDE_DIRS})
 
 execute_process(
   COMMAND "${Python_EXECUTABLE}" -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"
@@ -46,3 +43,4 @@ add_subdirectory(tracktion_engine/modules/juce)
 add_subdirectory(tracktion_engine/modules)
 
 add_subdirectory(src)
+add_subdirectory(pyside_bindings)
