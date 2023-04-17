@@ -252,11 +252,10 @@ void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick
             if (midiChannel == clipCommand->midiChannel) {
                 for (SamplerSynthVoice * voice : qAsConst(voices)) {
                     const ClipCommand *currentVoiceCommand = voice->currentCommand();
-                    if (voice->getCurrentlyPlayingSound().get() == sound && currentVoiceCommand->equivalentTo(clipCommand)) {
+                    if (voice->isTailingOff == false && voice->getCurrentlyPlayingSound().get() == sound && currentVoiceCommand->equivalentTo(clipCommand)) {
                         voice->stopNote(0.0f, true);
-                        // We may have more than one thing going for the same sound on the same note, which... shouldn't
-                        // really happen, but it's ugly and we just need to deal with that when stopping, so, stop /all/
-                        // the voices where both the sound and the command match.
+                        // Since we may have more than one going at the same time (since we allow long releases), just stop the first one
+                        break;
                     }
                 }
             }

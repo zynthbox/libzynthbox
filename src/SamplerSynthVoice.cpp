@@ -153,6 +153,7 @@ void SamplerSynthVoice::startNote (int midiNoteNumber, float velocity, Synthesis
             d->adsr.reset();
             d->adsr.setSampleRate(sound->sourceSampleRate());
             d->adsr.setParameters(d->clip->adsrParameters());
+            isTailingOff = false;
             d->adsr.noteOn();
         }
     }
@@ -167,6 +168,7 @@ void SamplerSynthVoice::stopNote (float /*velocity*/, bool allowTailOff)
     if (allowTailOff)
     {
         d->adsr.noteOff();
+        isTailingOff = true;
     }
     else
     {
@@ -184,6 +186,7 @@ void SamplerSynthVoice::stopNote (float /*velocity*/, bool allowTailOff)
         }
         d->nextLoopTick = 0;
         d->nextLoopUsecs = 0;
+        isTailingOff = false;
     }
 }
 
