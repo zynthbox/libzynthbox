@@ -21,7 +21,7 @@
 
 using namespace juce;
 
-#define SAMPLER_CHANNEL_VOICE_COUNT 8
+#define SAMPLER_CHANNEL_VOICE_COUNT 16
 
 struct SamplerCommand {
     quint64 timestamp;
@@ -313,7 +313,7 @@ SamplerSynth::~SamplerSynth()
 void SamplerSynth::initialize(tracktion_engine::Engine *engine)
 {
     d->engine = engine;
-    qInfo() << Q_FUNC_INFO << "Registering ten (plus two global) channels, with 8 voices each";
+    qInfo() << Q_FUNC_INFO << "Registering ten (plus two global) channels, with" << SAMPLER_CHANNEL_VOICE_COUNT << "voices each";
     for (int channelIndex = 0; channelIndex < 12; ++channelIndex) {
         QString channelName;
         if (channelIndex == 0) {
