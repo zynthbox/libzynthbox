@@ -15,6 +15,7 @@
 #include <QTimer>
 
 #include <jack/jack.h>
+#include <jack/midiport.h>
 #include <jack/statistics.h>
 
 using namespace juce;
@@ -99,7 +100,7 @@ SamplerChannel::SamplerChannel(const QString &clientName)
             if (jack_activate(jackClient) == 0) {
                 jackConnect(jackClient, QString("%1:%2").arg(clientName).arg(portNameLeft).toUtf8(), QLatin1String{"system:playback_1"});
                 jackConnect(jackClient, QString("%1:%2").arg(clientName).arg(portNameRight).toUtf8(), QLatin1String{"system:playback_2"});
-                jackConnect(jackClient, QLatin1String("ZynMidiRouter:midi_out"), QString("%1:midiIn").arg(clientName));
+                jackConnect(jackClient, QLatin1String("ZLRouter:PassthroughOut"), QString("%1:midiIn").arg(clientName));
                 qInfo() << Q_FUNC_INFO << "Successfully created and set up" << clientName;
             } else {
                 qWarning() << Q_FUNC_INFO << "Failed to activate SamplerSynth Jack client" << clientName;
@@ -125,6 +126,58 @@ int SamplerChannel::process(jack_nframes_t nframes) {
         jack_time_t next_usecs;
         float period_usecs;
         jack_get_cycle_times(jackClient, &current_frames, &current_usecs, &next_usecs, &period_usecs);
+
+        // First, let's handle ourselves some midi input
+        void* inputBuffer = jack_port_get_buffer(midiInPort, nframes);
+        jack_midi_event_t event;
+        int eventChannel{-1};
+        uint32_t eventIndex = 0;
+        while (true) {
+            if (int err = jack_midi_event_get(&event, inputBuffer, eventIndex)) {
+                if (err != -ENOBUFS) {
+                    qWarning() << clientName << "jack_midi_event_get failed, received note lost! Attempted to fetch at index" << eventIndex << "and the error code is" << err;
+                }
+                // Otherwise we can be reasonably certain that it's just the end of the buffer
+                break;
+            } else {
+                const unsigned char &byte1 = event.buffer[0];
+                if (0x7F < byte1 &&  byte1 < 0xf0) {
+                    eventChannel = (byte1 & 0xf);
+                    // only react to the event if it's on our channel
+                    if (eventChannel == midiChannel) {
+                        if (0x79 < byte1 && byte1 < 0x90) {
+                            // Note Off message
+                            // const int note{event.buffer[1]};
+                            // const int velocity{event.buffer[2]};
+                            // Baby steps, let's get the aftertouch working, then we'll rework the note-on/offery
+                        } else if (0x8F < byte1 && byte1 < 0xA0) {
+                            // Note On message
+                            // const int note{event.buffer[1]};
+                            // const int velocity{event.buffer[2]};
+                        } else if (0x9F < byte1 && byte1 < 0xB0) {
+                            // Polyphonic Aftertouch
+                            const int note{event.buffer[1]};
+                            const int pressure{event.buffer[2]};
+                            for (SamplerSynthVoice *voice : qAsConst(voices)) {
+                                if (voice->isPlaying && voice->currentCommand()->midiNote == note) {
+                                    voice->handleAftertouch(event.time, pressure);
+                                }
+                            }
+                        } else if (0xCF < byte1 && byte1 < 0xE0) {
+                            // Non-polyphonic aftertouch
+                            const int pressure{event.buffer[1]};
+                            for (SamplerSynthVoice *voice : qAsConst(voices)) {
+                                if (voice->isPlaying) {
+                                    voice->handleAftertouch(event.time, pressure);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            ++eventIndex;
+        }
+
         // Then, if we've actually got our ports set up, let's play whatever voices are active
         jack_default_audio_sample_t *leftBuffer{nullptr}, *rightBuffer{nullptr};
         if (leftPort && rightPort) {
