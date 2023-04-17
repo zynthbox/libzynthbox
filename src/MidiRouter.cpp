@@ -517,12 +517,12 @@ public:
                                             noteActivation = 0;
                                         }
                                         adjustedCurrentChannel = device->activeNoteChannel[midiNote];
-                                        currentOutput = outputs[adjustedCurrentChannel];
-                                        if (currentChannel == adjustedCurrentChannel) {
-                                            event.buffer[0] = event.buffer[0] - eventChannel + currentChannel;
-                                        } else {
-                                            event.buffer[0] = event.buffer[0] - eventChannel + adjustedCurrentChannel;
-                                        }
+                                    } else {
+                                        adjustedCurrentChannel = currentChannel;
+                                    }
+                                    currentOutput = outputs[adjustedCurrentChannel];
+                                    if (0x7F < byte1 && byte1 < 0xF0) {
+                                        event.buffer[0] = event.buffer[0] - eventChannel + adjustedCurrentChannel;
                                     }
 
                                     const double timestamp = currentJackPlayhead + (event.time * microsecondsPerFrame / subbeatLengthInMicroseconds);
