@@ -36,12 +36,13 @@ set(generated_sources
 
 # Set shiboken path, Python path, include paths and linker flags.
 set(pyside2_path /usr/lib/python3/dist-packages/PySide2)
-set(python_include_dir /usr/include/python3.7m)
+set(python_include_dir /usr/include/python3.9)
 set(shiboken_include_dir /usr/include/shiboken2)
-set(shiboken_shared_libraries /usr/lib/arm-linux-gnueabihf/libshiboken2.cpython-37m-arm-linux-gnueabihf.so.5.11.2)
-set(pyside2_shared_libraries /usr/lib/arm-linux-gnueabihf/libpyside2.cpython-37m-arm-linux-gnueabihf.so)
-set(python_linking_data /usr/lib;python3.7m)
+set(shiboken_shared_libraries /usr/lib/arm-linux-gnueabihf/libshiboken2.cpython-39-arm-linux-gnueabihf.so)
+set(pyside2_shared_libraries /usr/lib/arm-linux-gnueabihf/libpyside2.cpython-39-arm-linux-gnueabihf.so)
+set(python_linking_data /usr/lib;python3.9)
 set(shiboken_path /usr/bin/shiboken2)
+set(qt5_include_dir /usr/include/arm-linux-gnueabihf/qt5/)
 
 if(NOT EXISTS ${shiboken_path})
     message(FATAL_ERROR "Shiboken executable not found at path: ${shiboken_path}")
@@ -79,14 +80,13 @@ add_custom_command(
                 --language-level=c++17
                 --output-directory=${BINDINGS_OUTPUT_DIR}
                 --typesystem-paths=/usr/share/PySide2/typesystems/
-                -I/usr/include/arm-linux-gnueabihf/qt5/
-                -I/usr/include/arm-linux-gnueabihf/qt5/QtCore
-                -I/usr/include/arm-linux-gnueabihf/qt5/QtGui
-                -I/usr/include/arm-linux-gnueabihf/qt5/QtQml
-                -I/usr/include/arm-linux-gnueabihf/qt5/QtNetwork
-                -I/usr/lib/arm-linux-gnueabihf/qt5//mkspecs/linux-g++
-                -I/zynthian/libzynthbox/tracktion_engine/modules/juce/modules/
-                -I/zynthian/libzynthbox/tracktion_engine/modules/
+                -I${qt5_include_dir}
+                -I${qt5_include_dir}/QtCore
+                -I${qt5_include_dir}/QtGui
+                -I${qt5_include_dir}/QtQml
+                -I${qt5_include_dir}/QtNetwork
+                -I${CMAKE_SOURCE_DIR}/tracktion_engine/modules/
+                -I${CMAKE_SOURCE_DIR}/tracktion_engine/modules/juce/modules/
                 ${wrapped_header}
                 ${typesystem_file}
     DEPENDS ${generated_sources_dependencies}
