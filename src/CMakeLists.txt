@@ -83,19 +83,4 @@ target_include_directories(zynthbox
         $<TARGET_PROPERTY:zynthbox,INCLUDE_DIRECTORIES>
 )
 
-# add_custom_command(TARGET zynthbox POST_BUILD
-#     COMMAND ${SHIBOKEN_GENERATOR} --generator-set=shiboken --typesystem-paths=${SHIBOKEN_TYPESYSTEM_DIR} --typesystem-file=${TYPESYSTEM_FILE} --output-directory=${BINDINGS_OUTPUT_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/Plugin.h
-#     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/Plugin.h
-#     COMMENT "Generating Python Bindings"
-# )
-
-# add_custom_command(TARGET zynthbox POST_BUILD
-#     COMMAND shiboken2 ${CMAKE_CURRENT_SOURCE_DIR}/Plugin.h ${CMAKE_CURRENT_SOURCE_DIR}/zynthbox.typesystem.xml --output-directory=${BINDINGS_OUTPUT_DIR} --typesystem-paths=/usr/local/lib/python3.7/dist-packages/PySide2/typesystems/ -I/usr/include/arm-linux-gnueabihf/qt5/:/usr/include/arm-linux-gnueabihf/qt5/QtCore:/usr/lib/arm-linux-gnueabihf/qt5//mkspecs/linux-g++:/zynthian/libzynthbox/tracktion_engine/modules/juce/modules/:/zynthian/libzynthbox/tracktion_engine/modules/ --language-level=c++17
-#     COMMENT "Generating Python Bindings"
-# )
-
 install(TARGETS zynthbox LIBRARY DESTINATION lib)
-# install(DIRECTORY ${BINDINGS_OUTPUT_DIR}/ DESTINATION lib/python${Python_VERSION}/site-packages/)
-
-# Install zyncoder module to Python dist-packages
-# install(FILES libzynthbox.py DESTINATION lib/python${Python_VERSION}/dist-packages/)
