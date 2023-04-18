@@ -77,12 +77,6 @@ struct alignas(64) StepData {
     bool played{true};
 };
 
-struct alignas(32) ClipCommandRingEntry {
-    ClipCommand *clipCommand{nullptr};
-    ClipCommandRingEntry *previous{nullptr};
-    ClipCommandRingEntry *next{nullptr};
-};
-
 using frame_clock = std::conditional_t<
     std::chrono::high_resolution_clock::is_steady,
     std::chrono::high_resolution_clock,
@@ -286,14 +280,6 @@ public:
         }
         stepReadHead = stepRing;
 
-        ClipCommandRingEntry* clipPrevious{&sentOutClipsRing[FreshCommandStashSize - 1]};
-        for (quint64 i = 0; i < FreshCommandStashSize; ++i) {
-            clipPrevious->next = &sentOutClipsRing[i];
-            sentOutClipsRing[i].previous = clipPrevious;
-            clipPrevious = &sentOutClipsRing[i];
-        }
-        sentOutClipsReadHead = sentOutClipsWriteHead = sentOutClipsRing;
-
         for (int i = 0; i < FreshCommandStashSize; ++i) {
             freshClipCommands << new ClipCommand;
             freshTimerCommands << new TimerCommand;
@@ -346,9 +332,7 @@ public:
     int callbackCount{0};
     TimerCallback callbacks[CallbackSpaces];
 
-    ClipCommandRingEntry sentOutClipsRing[FreshCommandStashSize];
-    ClipCommandRingEntry *sentOutClipsReadHead{nullptr};
-    ClipCommandRingEntry *sentOutClipsWriteHead{nullptr};
+    ClipCommandRing sentOutClipsRing;
 
     StepData stepRing[StepRingCount];
     // The next step to be read in the step ring
@@ -411,10 +395,8 @@ public:
 
         // Finally, notify any listeners that commands have been sent out
         // You must not delete the commands themselves here, as SamplerSynth takes ownership of them
-        while (sentOutClipsReadHead->clipCommand) {
-            Q_EMIT q->clipCommandSent(sentOutClipsReadHead->clipCommand);
-            sentOutClipsReadHead->clipCommand = nullptr;
-            sentOutClipsReadHead = sentOutClipsReadHead->next;
+        while (sentOutClipsRing.readHead->clipCommand) {
+            Q_EMIT q->clipCommandSent(sentOutClipsRing.read());
         }
     }
 
@@ -552,8 +534,7 @@ public:
                 for (ClipCommand *clipCommand : qAsConst(stepData->clipCommands)) {
                     // Using the protected function, which only we (and SamplerSynth) can use, to ensure less locking
                     samplerSynth->handleClipCommand(clipCommand, jackPlayhead);
-                    sentOutClipsWriteHead->clipCommand = clipCommand;
-                    sentOutClipsWriteHead = sentOutClipsWriteHead->next;
+                    sentOutClipsRing.write(clipCommand, 0);
                 }
 
                 // Do playback control things as the last thing, otherwise we might end up affecting things
@@ -574,8 +555,7 @@ public:
                                 ClipCommand *clipCommand = static_cast<ClipCommand *>(command->variantParameter.value<void*>());
                                 if (clipCommand) {
                                     samplerSynth->handleClipCommand(clipCommand, jackPlayhead);
-                                    sentOutClipsWriteHead->clipCommand = clipCommand;
-                                    sentOutClipsWriteHead = sentOutClipsWriteHead->next;
+                                    sentOutClipsRing.write(clipCommand, 0);
                                 } else {
                                     qWarning() << Q_FUNC_INFO << "Failed to retrieve clip command from clip based timer command";
                                 }
@@ -590,8 +570,7 @@ public:
                                 ClipCommand *clipCommand = static_cast<ClipCommand *>(command->dataParameter);
                                 if (clipCommand) {
                                     samplerSynth->handleClipCommand(clipCommand, jackPlayhead);
-                                    sentOutClipsWriteHead->clipCommand = clipCommand;
-                                    sentOutClipsWriteHead = sentOutClipsWriteHead->next;
+                                    sentOutClipsRing.write(clipCommand, 0);
                                 } else {
                                     qWarning() << Q_FUNC_INFO << "Failed to retrieve clip command from clip based timer command";
                                 }
@@ -917,10 +896,8 @@ void SyncTimer::stop() {
 
     // Make sure we're actually informing about any clips that have been sent out, in case we
     // hit somewhere between a jack roll and a synctimer tick
-    while (d->sentOutClipsReadHead->clipCommand) {
-        Q_EMIT clipCommandSent(d->sentOutClipsReadHead->clipCommand);
-        d->sentOutClipsReadHead->clipCommand = nullptr;
-        d->sentOutClipsReadHead = d->sentOutClipsReadHead->next;
+    while (d->sentOutClipsRing.readHead->clipCommand) {
+        Q_EMIT clipCommandSent(d->sentOutClipsRing.read());
     }
 #ifdef DEBUG_SYNCTIMER_TIMING
     qDebug() << d->intervals;

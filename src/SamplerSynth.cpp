@@ -23,13 +23,6 @@ using namespace juce;
 
 #define SAMPLER_CHANNEL_VOICE_COUNT 16
 
-struct SamplerCommand {
-    quint64 timestamp;
-    ClipCommand* clipCommand{nullptr};
-    SamplerCommand* next{nullptr};
-    SamplerCommand* previous{nullptr};
-};
-
 #define CommandQueueSize 256
 class SamplerChannel
 {
@@ -42,9 +35,7 @@ public:
     }
     int process(jack_nframes_t nframes);
     inline void handleCommand(ClipCommand *clipCommand, quint64 currentTick);
-    SamplerCommand commandRing[CommandQueueSize];
-    SamplerCommand *readHead{nullptr};
-    SamplerCommand *writeHead{nullptr};
+    ClipCommandRing commandRing;
 
     QString clientName;
     jack_client_t *jackClient{nullptr};
@@ -86,13 +77,6 @@ void jackConnect(jack_client_t* jackClient, const QString &from, const QString &
 SamplerChannel::SamplerChannel(const QString &clientName)
     : clientName(clientName)
 {
-    writeHead = readHead = commandRing;
-    SamplerCommand *previous = &commandRing[CommandQueueSize - 1];
-    for (quint64 i = 0; i < CommandQueueSize; ++i) {
-        previous->next = &commandRing[i];
-        commandRing[i].previous = previous;
-        previous = &commandRing[i];
-    }
     jack_status_t real_jack_status{};
     jackClient = jack_client_open(clientName.toUtf8(), JackNullOption, &real_jack_status);
     if (jackClient) {
@@ -124,10 +108,10 @@ SamplerChannel::SamplerChannel(const QString &clientName)
 
 int SamplerChannel::process(jack_nframes_t nframes) {
     // First handle any queued up commands (starting, stopping, changes to voice state, that sort of stuff)
-    while (readHead->clipCommand) {
-        handleCommand(readHead->clipCommand, readHead->timestamp);
-        readHead->clipCommand = nullptr;
-        readHead = readHead->next;
+    quint64 timestamp{0};
+    while (commandRing.readHead->clipCommand) {
+        ClipCommand *command = commandRing.read(&timestamp);
+        handleCommand(command, timestamp);
     }
     if (enabled) {
         jack_nframes_t current_frames;
@@ -158,11 +142,9 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                             // Note Off or On message
                             const int note{event.buffer[1]};
                             const int velocity{event.buffer[2]};
-                            QList<ClipCommand*> commands;
-                            commands.reserve(5);
-                            playGridManager()->midiMessageToClipCommands(&commands, byte1, note, velocity);
-                            for (ClipCommand *command : qAsConst(commands)) {
-                                handleCommand(command, event.time);
+                            playGridManager()->midiMessageToClipCommands(&commandRing, byte1, note, velocity);
+                            while (commandRing.readHead->clipCommand) {
+                                handleCommand(commandRing.read(), event.time);
                             }
                         } else if (0x9F < byte1 && byte1 < 0xB0) {
                             // Polyphonic Aftertouch
@@ -388,13 +370,10 @@ void SamplerSynth::handleClipCommand(ClipCommand *clipCommand, quint64 currentTi
 {
     if (d->clipSounds.contains(clipCommand->clip) && clipCommand->midiChannel + 2 < d->channels.count()) {
         SamplerChannel *channel = d->channels[clipCommand->midiChannel + 2];
-        if (channel->writeHead->clipCommand) {
+        if (channel->commandRing.writeHead->clipCommand) {
             qWarning() << Q_FUNC_INFO << "Big problem! Attempted to add a clip command to the queue, but we've not handled the one that's already in the queue.";
         } else {
-            SamplerCommand* ringPosition = channel->writeHead;
-            channel->writeHead = channel->writeHead->next;
-            ringPosition->clipCommand = clipCommand;
-            ringPosition->timestamp = currentTick;
+            channel->commandRing.write(clipCommand, currentTick);
         }
     }
 }

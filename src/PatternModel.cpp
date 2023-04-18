@@ -395,33 +395,32 @@ public:
         return found;
     }
     /**
-     * Returns a (potentially empty) list of ClipCommands which match the midi message passed to the function
+     * Writes any ClipCommands which match the midi message passed to the function to the list also passed in
+     * @param listToPopulate The command ring that should have commands written to it
      * @param byte1 The first byte of a midi message
      * @param byte2 The seconds byte of a midi message
      * @param byte3 The third byte of a midi message
-     * @return A list of ClipCommand instances matching the midi event (list can be empty)
      */
-    QList<ClipCommand*> midiMessageToClipCommands(const int &byte1, const int &byte2, const int &byte3) const {
-        QList<ClipCommand*> commands;
-        const QList<ClipAudioSource*> clips = clipsForMidiNote(byte2);
-        for (ClipAudioSource *clip : clips) {
-            ClipCommand *command = ClipCommand::channelCommand(clip, midiChannel);
-            command->startPlayback = byte1 > 0x8F;
-            command->stopPlayback = byte1 < 0x90;
-            if (command->startPlayback) {
-                command->changeVolume = true;
-                command->volume = float(byte3) / float(128);
+    void midiMessageToClipCommands(ClipCommandRing *listToPopulate, const int &byte1, const int &byte2, const int &byte3) const {
+        for (ClipAudioSource *clip : qAsConst(clips)) {
+            if (clip && clip->keyZoneStart() <= byte2 && byte2 <= clip->keyZoneEnd()) {
+                ClipCommand *command = ClipCommand::channelCommand(clip, midiChannel);
+                command->startPlayback = byte1 > 0x8F;
+                command->stopPlayback = byte1 < 0x90;
+                if (command->startPlayback) {
+                    command->changeVolume = true;
+                    command->volume = float(byte3) / float(128);
+                }
+                if (noteDestination == SampleSlicedDestination) {
+                    command->midiNote = 60;
+                    command->changeSlice = true;
+                    command->slice = clip->sliceForMidiNote(byte2);
+                } else {
+                    command->midiNote = byte2;
+                }
+                listToPopulate->write(command, 0);
             }
-            if (noteDestination == SampleSlicedDestination) {
-                command->midiNote = 60;
-                command->changeSlice = true;
-                command->slice = clip->sliceForMidiNote(byte2);
-            } else {
-                command->midiNote = byte2;
-            }
-            commands << command;
         }
-        return commands;
     }
 };
 
@@ -1827,12 +1826,12 @@ void PatternModel::handleMidiMessage(const unsigned char &byte1, const unsigned 
     }
 }
 
-void PatternModel::midiMessageToClipCommands(QList<ClipCommand*> *listToPopulate, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3) const
+void PatternModel::midiMessageToClipCommands(ClipCommandRing *listToPopulate, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3) const
 {
     if ((!d->sequence || (d->sequence->shouldMakeSounds() && (d->sequence->soloPatternObject() == this || d->enabled)))
         // But also, don't make sounds unless we're sample-triggering or slicing (otherwise the synths will handle it)
         && (d->noteDestination == SampleTriggerDestination || d->noteDestination == SampleSlicedDestination)) {
-            listToPopulate->append(d->midiMessageToClipCommands(byte1, byte2, byte3));
+            d->midiMessageToClipCommands(listToPopulate, byte1, byte2, byte3);
     }
 }
 
