@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QVariant>
+#include <QDebug>
 
 #include "SyncTimer.h"
 
@@ -60,4 +61,48 @@ struct alignas(64) TimerCommand {
             command->variantParameter.clear();
         }
     }
+};
+
+#define TimerCommandRingSize 4096
+class TimerCommandRing {
+public:
+    struct Entry {
+        Entry *next{nullptr};
+        Entry *previous{nullptr};
+        TimerCommand *timerCommand{nullptr};
+        quint64 timestamp;
+    };
+    explicit TimerCommandRing() {
+        Entry* entryPrevious{&ringData[TimerCommandRingSize - 1]};
+        for (quint64 i = 0; i < TimerCommandRingSize; ++i) {
+            entryPrevious->next = &ringData[i];
+            ringData[i].previous = entryPrevious;
+            entryPrevious = &ringData[i];
+        }
+        readHead = writeHead = ringData;
+    }
+    ~TimerCommandRing() {
+    }
+
+    void write(TimerCommand *command, quint64 timestamp) {
+        if (writeHead->timerCommand) {
+            qWarning() << Q_FUNC_INFO << "There is already a clip command stored at the write location:" << writeHead->timerCommand << "This likely means the buffer size is too small, which will require attention at the api level.";
+        }
+        writeHead->timerCommand = command;
+        writeHead->timestamp = timestamp;
+        writeHead = writeHead->next;
+    }
+    TimerCommand *read(quint64 *timestamp = nullptr) {
+        if (timestamp) {
+            *timestamp = readHead->timestamp;
+        }
+        TimerCommand *command = readHead->timerCommand;
+        readHead = readHead->next;
+        return command;
+    }
+
+    Entry *readHead{nullptr};
+    Entry *writeHead{nullptr};
+private:
+    Entry ringData[TimerCommandRingSize];
 };
