@@ -257,7 +257,6 @@ private:
 using TimerCallback = void(*)(int);
 #define CallbackSpaces 16
 
-#define FreshCommandStashSize 4096
 #define StepRingCount 32768
 SyncTimerThread *timerThread{nullptr};
 class SyncTimerPrivate {
@@ -280,10 +279,13 @@ public:
         }
         stepReadHead = stepRing;
 
-        for (int i = 0; i < FreshCommandStashSize; ++i) {
-            freshClipCommands << new ClipCommand;
-            freshTimerCommands << new TimerCommand;
+        for (int i = 0; i < ClipCommandRingSize; ++i) {
+            freshClipCommands.write(new ClipCommand, 0);
         }
+        for (int i = 0; i < TimerCommandRingSize; ++i) {
+            freshTimerCommands.write(new TimerCommand, 0);
+        }
+
         samplerSynth = SamplerSynth::instance();
         // Dangerzone - direct connection from another thread. Yes, dangerous, but also we need the precision, so we need to dill whit it
         QObject::connect(timerThread, &SyncTimerThread::timeout, q, [this](){ hiResTimerCallback(); }, Qt::DirectConnection);
@@ -296,23 +298,15 @@ public:
         objectGarbageHandler.setSingleShot(true);
         QObject::connect(&objectGarbageHandler, &QTimer::timeout, q, [this](){
             // Stuff any commands we've been asked to delete back into the list, at a reasonable location, and cleaned up
-            QMutableListIterator<TimerCommand*> freshTimerCommandsIterator(freshTimerCommands);
-            while (freshTimerCommandsIterator.hasNext() && timerCommandsToDelete.count() > 0) {
-                TimerCommand *value = freshTimerCommandsIterator.next();
-                if (value == nullptr) {
-                    TimerCommand* refreshedCommand = timerCommandsToDelete.takeFirst();
-                    TimerCommand::clear(refreshedCommand);
-                    freshTimerCommandsIterator.setValue(refreshedCommand);
-                }
+            while (freshTimerCommands.writeHead->timerCommand == nullptr && timerCommandsToDelete.readHead->timerCommand) {
+                TimerCommand* refreshedCommand = timerCommandsToDelete.read();
+                TimerCommand::clear(refreshedCommand);
+                freshTimerCommands.write(refreshedCommand, 0);
             }
-            QMutableListIterator<ClipCommand*> freshClipCommandsIterator(freshClipCommands);
-            while (freshClipCommandsIterator.hasNext() && clipCommandsToDelete.count() > 0) {
-                ClipCommand *value = freshClipCommandsIterator.next();
-                if (value == nullptr) {
-                    ClipCommand *refreshedCommand = clipCommandsToDelete.takeFirst();
-                    ClipCommand::clear(refreshedCommand);
-                    freshClipCommandsIterator.setValue(refreshedCommand);
-                }
+            while (freshClipCommands.writeHead->clipCommand == nullptr && clipCommandsToDelete.readHead->clipCommand) {
+                ClipCommand *refreshedCommand = clipCommandsToDelete.read();
+                ClipCommand::clear(refreshedCommand);
+                freshClipCommands.write(refreshedCommand, 0);
             }
         });
     }
@@ -360,10 +354,10 @@ public:
         return stepData;
     }
 
-    QList<TimerCommand*> timerCommandsToDelete;
-    QList<TimerCommand*> freshTimerCommands;
-    QList<ClipCommand*> clipCommandsToDelete;
-    QList<ClipCommand*> freshClipCommands;
+    TimerCommandRing timerCommandsToDelete;
+    TimerCommandRing freshTimerCommands;
+    ClipCommandRing clipCommandsToDelete;
+    ClipCommandRing freshClipCommands;
     QTimer objectGarbageHandler;
 
     #ifdef DEBUG_SYNCTIMER_TIMING
@@ -1091,41 +1085,33 @@ bool SyncTimer::timerRunning() {
 
 ClipCommand * SyncTimer::getClipCommand()
 {
-    QMutableListIterator<ClipCommand*> freshClipCommandsIterator(d->freshClipCommands);
-    while (freshClipCommandsIterator.hasNext()) {
-        ClipCommand *command = freshClipCommandsIterator.next();
-        if (command) {
-            QMetaObject::invokeMethod(&d->objectGarbageHandler,"start", Qt::QueuedConnection);
-            freshClipCommandsIterator.setValue(nullptr);
-            return command;
-        }
+    ClipCommand *command{nullptr};
+    if (d->freshClipCommands.readHead->clipCommand) {
+        command = d->freshClipCommands.read();
+        QMetaObject::invokeMethod(&d->objectGarbageHandler,"start", Qt::QueuedConnection);
     }
-    return nullptr;
+    return command;
 }
 
 void SyncTimer::deleteClipCommand(ClipCommand* command)
 {
-    d->clipCommandsToDelete << command;
+    d->clipCommandsToDelete.write(command, 0);
     QMetaObject::invokeMethod(&d->objectGarbageHandler,"start", Qt::QueuedConnection);
 }
 
 TimerCommand * SyncTimer::getTimerCommand()
 {
-    QMutableListIterator<TimerCommand*> freshTimerCommandsIterator(d->freshTimerCommands);
-    while (freshTimerCommandsIterator.hasNext()) {
-        TimerCommand *command = freshTimerCommandsIterator.next();
-        if (command) {
-            QMetaObject::invokeMethod(&d->objectGarbageHandler,"start", Qt::QueuedConnection);
-            freshTimerCommandsIterator.setValue(nullptr);
-            return command;
-        }
+    TimerCommand *command{nullptr};
+    if (d->freshTimerCommands.writeHead->timerCommand) {
+        command = d->freshTimerCommands.read();
+        QMetaObject::invokeMethod(&d->objectGarbageHandler,"start", Qt::QueuedConnection);
     }
-    return nullptr;
+    return command;
 }
 
 void SyncTimer::deleteTimerCommand(TimerCommand* command)
 {
-    d->timerCommandsToDelete << command;
+    d->timerCommandsToDelete.write(command, 0);
     QMetaObject::invokeMethod(&d->objectGarbageHandler,"start", Qt::QueuedConnection);
 }
 
