@@ -1,18 +1,17 @@
 set(bindings_library "Zynthbox")
 set(wrapped_header ${CMAKE_CURRENT_SOURCE_DIR}/bindings.h)
 set(typesystem_file ${CMAKE_CURRENT_SOURCE_DIR}/bindings.xml)
+set(typesystems_path /usr/share/PySide2/typesystems/)
 set(generated_sources
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/zynthbox_module_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/plugin_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/audiolevels_wrapper.cpp
 )
-set(pyside2_path /usr/lib/python3/dist-packages/PySide2)
 set(python_include_dir /usr/include/python3.9)
 set(shiboken_include_dir /usr/include/shiboken2)
 set(pyside2_include_dir /usr/include/PySide2)
 set(shiboken_shared_libraries /usr/lib/arm-linux-gnueabihf/libshiboken2.cpython-39-arm-linux-gnueabihf.so)
 set(pyside2_shared_libraries /usr/lib/arm-linux-gnueabihf/libpyside2.cpython-39-arm-linux-gnueabihf.so)
-set(python_linking_data /usr/lib;python3.9)
 set(shiboken_path /usr/bin/shiboken2)
 set(qt5_include_dir /usr/include/arm-linux-gnueabihf/qt5/)
 set(generated_sources_dependencies ${wrapped_header} ${typesystem_file})
@@ -33,7 +32,7 @@ add_custom_command(
                 --use-isnull-as-nb_nonzero
                 --language-level=c++17
                 --output-directory=${CMAKE_CURRENT_BINARY_DIR}
-                --typesystem-paths=/usr/share/PySide2/typesystems/
+                --typesystem-paths=${typesystems_path}
                 -I${qt5_include_dir}
                 -I${qt5_include_dir}/QtCore
                 -I${CMAKE_SOURCE_DIR}/tracktion_engine/modules/
