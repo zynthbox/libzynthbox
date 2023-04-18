@@ -30,9 +30,6 @@ include(ECMInstallIcons)
 pkg_check_modules(RTMIDI REQUIRED rtmidi)
 pkg_check_modules(Jack REQUIRED jack)
 
-set(BINDINGS_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/bindings)
-file(MAKE_DIRECTORY ${BINDINGS_OUTPUT_DIR})
-
 execute_process(
   COMMAND "${Python_EXECUTABLE}" -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"
   OUTPUT_VARIABLE Python_VERSION
