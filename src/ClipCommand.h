@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SyncTimer.h"
+#include <QDebug>
 
 class ClipAudioSource;
 /**
@@ -89,4 +90,48 @@ struct ClipCommand {
         command->changeVolume = false;
         command->volume = 0.0f;
     }
+};
+
+#define ClipCommandRingSize 4096
+class ClipCommandRing {
+public:
+    struct Entry {
+        Entry *next{nullptr};
+        Entry *previous{nullptr};
+        ClipCommand *clipCommand{nullptr};
+        quint64 timestamp;
+    };
+    explicit ClipCommandRing() {
+        Entry* entryPrevious{&ringData[ClipCommandRingSize - 1]};
+        for (quint64 i = 0; i < ClipCommandRingSize; ++i) {
+            entryPrevious->next = &ringData[i];
+            ringData[i].previous = entryPrevious;
+            entryPrevious = &ringData[i];
+        }
+        readHead = writeHead = ringData;
+    }
+    ~ClipCommandRing() {
+    }
+
+    void write(ClipCommand *command, quint64 timestamp) {
+        if (writeHead->clipCommand) {
+            qWarning() << Q_FUNC_INFO << "There is already a clip command stored at the write location:" << writeHead->clipCommand << "This likely means the buffer size is too small, which will require attention at the api level.";
+        }
+        writeHead->clipCommand = command;
+        writeHead->timestamp = timestamp;
+        writeHead = writeHead->next;
+    }
+    ClipCommand *read(quint64 *timestamp = nullptr) {
+        if (timestamp) {
+            *timestamp = readHead->timestamp;
+        }
+        ClipCommand *command = readHead->clipCommand;
+        readHead = readHead->next;
+        return command;
+    }
+
+    Entry *readHead{nullptr};
+    Entry *writeHead{nullptr};
+private:
+    Entry ringData[ClipCommandRingSize];
 };
