@@ -374,7 +374,10 @@ PlayGridManager::PlayGridManager(QObject* parent)
     : QObject(parent)
     , d(new Private(this))
 {
-    setSyncTimer(SyncTimer::instance());
+    d->syncTimer = qobject_cast<SyncTimer*>(SyncTimer::instance());
+    connect(d->syncTimer, &SyncTimer::timerTick, this, &timer_callback, Qt::DirectConnection);
+    connect(d->syncTimer, &SyncTimer::timerRunningChanged, this, &PlayGridManager::metronomeActiveChanged);
+
     QDir mySequenceLocation{QString("%1/sequences/my-sequences").arg(QString(qgetenv("ZYNTHIAN_MY_DATA_DIR")))};
     if (!mySequenceLocation.exists()) {
         mySequenceLocation.mkpath(mySequenceLocation.path());
@@ -1073,22 +1076,6 @@ int PlayGridManager::metronomeBeat64th() const
 int PlayGridManager::metronomeBeat128th() const
 {
     return d->metronomeBeat128th;
-}
-
-void PlayGridManager::setSyncTimer(QObject* syncTimer)
-{
-    if (d->syncTimer != syncTimer) {
-        if (d->syncTimer) {
-            d->syncTimer->removeCallback(&timer_callback);
-            d->syncTimer->disconnect(this);
-        }
-        d->syncTimer = qobject_cast<SyncTimer*>(syncTimer);
-        if (d->syncTimer) {
-            d->syncTimer->addCallback(&timer_callback);
-            connect(d->syncTimer, &SyncTimer::timerRunningChanged, this, &PlayGridManager::metronomeActiveChanged);
-        }
-        Q_EMIT syncTimerChanged();
-    }
 }
 
 QObject* PlayGridManager::syncTimer()

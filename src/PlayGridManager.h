@@ -96,7 +96,7 @@ class PlayGridManager : public QObject
      */
     Q_PROPERTY(int currentMidiChannel READ currentMidiChannel WRITE setCurrentMidiChannel NOTIFY currentMidiChannelChanged)
 
-    Q_PROPERTY(QObject* syncTimer READ syncTimer WRITE setSyncTimer NOTIFY syncTimerChanged)
+    Q_PROPERTY(QObject* syncTimer READ syncTimer CONSTANT)
     Q_PROPERTY(bool metronomeActive READ metronomeActive NOTIFY metronomeActiveChanged)
     Q_PROPERTY(int metronomeBeat4th READ metronomeBeat4th NOTIFY metronomeBeat4thChanged)
     Q_PROPERTY(int metronomeBeat8th READ metronomeBeat8th NOTIFY metronomeBeat8thChanged)
@@ -313,8 +313,6 @@ public:
     Q_INVOKABLE void scheduleNote(unsigned char midiNote, unsigned char midiChannel, bool setOn = true, unsigned char velocity = 64, quint64 duration = 0, quint64 delay = 0);
 
     QObject *syncTimer();
-    void setSyncTimer(QObject *syncTimer);
-    Q_SIGNAL void syncTimerChanged();
 
     // Hook up the playgrid manager to the global timer, without actually starting it
     Q_INVOKABLE void hookUpTimer();
