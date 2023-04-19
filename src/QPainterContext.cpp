@@ -128,7 +128,7 @@ void QPainterContext::restoreState()
     m_painter->restore();
 }
 
-void QPainterContext::beginTransparencyLayer(float opacity)
+void QPainterContext::beginTransparencyLayer(float /*opacity*/)
 {
 
 }
@@ -171,7 +171,7 @@ void QPainterContext::setInterpolationQuality(Graphics::ResamplingQuality)
 }
 
 //==============================================================================
-void QPainterContext::fillRect(const Rectangle<int> &jRect, bool replaceExistingContents)
+void QPainterContext::fillRect(const Rectangle<int> &jRect, bool /*replaceExistingContents*/)
 {
     if (!m_painter) {
         return;
@@ -216,15 +216,14 @@ void QPainterContext::drawLine(const Line<float>&)
 
 void QPainterContext::setFont(const Font&)
 {
-
 }
 
 const Font &QPainterContext::getFont()
 {
-
+    return m_font;
 }
 
-void QPainterContext::drawGlyph(int glyphNumber, const AffineTransform&)
+void QPainterContext::drawGlyph(int /*glyphNumber*/, const AffineTransform&)
 {
 
 }

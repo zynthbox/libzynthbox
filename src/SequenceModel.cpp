@@ -634,7 +634,6 @@ bool SequenceModel::save(const QString &fileName, bool exportOnly)
         if (dataFile.open(QIODevice::WriteOnly) && dataFile.write(data.toUtf8())) {
             dataFile.close();
             if (patternLocation.exists() || patternLocation.mkpath(patternLocation.path())) {
-                int i{0};
                 // The filename for patterns is "pattern-t(trackIndex)-ch(channelIndex)-part(partLetter).pattern.json"
                 const QString sequenceNameForFiles = QString(objectName().toLower()).replace(" ", "-");
                 for (int i = 0; i < PATTERN_COUNT; ++i) {
@@ -651,7 +650,6 @@ bool SequenceModel::save(const QString &fileName, bool exportOnly)
                         } else if (patternFile.exists()) {
                             patternFile.remove();
                         }
-                        ++i;
                     }
                 }
             }

@@ -70,4 +70,5 @@ public:
 private:
     QBrush m_brush;
     QPainter *m_painter = nullptr;
+    juce::Font m_font;
 };

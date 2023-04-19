@@ -619,7 +619,7 @@ float ClipAudioSource::pan() {
 }
 
 void ClipAudioSource::setPan(float pan) {
-  if (auto clip = d->getClip() and d->pan != pan) {
+  if (d->pan != pan) {
     IF_DEBUG_CLIP cerr << "Setting pan : " << pan;
     d->pan = pan;
     Q_EMIT panChanged();

@@ -26,7 +26,7 @@ Q_OBJECT
 
 public:
     WaveFormItem(QQuickItem *parent = nullptr);
-    void paint(QPainter *painter);
+    void paint(QPainter *painter) override;
 
     QString source() const;
     void setSource(QString &source);
@@ -57,8 +57,8 @@ private:
     QString m_source;
 
     QTimer *m_repaintTimer;
-    juce::Graphics m_juceGraphics;
     QPainterContext m_painterContext;
+    juce::Graphics m_juceGraphics;
     QColor m_color;
     std::unique_ptr<juce::AudioFormatReaderSource> m_readerSource;
     juce::AudioTransportSource m_transportSource;
