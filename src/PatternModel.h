@@ -576,13 +576,13 @@ public:
      * @param sequencePosition The position in the sequence that should be considered (literally a count of ticks)
      * @param progressionLength The number of ticks until the next position (that is, how many ticks between this and the next call of the function)
      */
-    void handleSequenceAdvancement(quint64 sequencePosition, int progressionLength) const;
+    void handleSequenceAdvancement(qint64 sequencePosition, int progressionLength) const;
     /**
      * \brief Used by SequenceModel to update its patterns' positions to the actual sequence playback position during playback
      *
      * @param sequencePosition The position in the sequence that should be considered
      */
-    void updateSequencePosition(quint64 sequencePosition);
+    void updateSequencePosition(qint64 sequencePosition);
     /**
      * \brief When turning off playback, this function will turn off any notes that are waiting to be turned off
      */

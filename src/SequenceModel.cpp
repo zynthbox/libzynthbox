@@ -834,8 +834,8 @@ void SequenceModel::advanceSequence()
     if (d->shouldMakeSounds || d->segmentHandler->songMode()) {
         // The timer schedules ahead internally for sequence advancement type things,
         // so the sequenceProgressionLength thing is only for prefilling at this point.
-        const quint64 sequenceProgressionLength{0};
-        const quint64 cumulativeBeat{d->syncTimer->cumulativeBeat()};
+        const int sequenceProgressionLength{0};
+        const qint64 cumulativeBeat{qint64(d->syncTimer->cumulativeBeat())};
         if (d->soloPattern > -1 && d->soloPattern < PATTERN_COUNT) {
             const PatternModel *pattern = d->patternModelIterator[d->soloPattern];
             if (pattern) {
@@ -855,7 +855,7 @@ void SequenceModel::advanceSequence()
 void SequenceModel::updatePatternPositions()
 {
     if (d->shouldMakeSounds) {
-        const quint64 sequencePosition{d->syncTimer->cumulativeBeat() - d->syncTimer->scheduleAheadAmount()};
+        const qint64 sequencePosition{qint64(d->syncTimer->cumulativeBeat() - d->syncTimer->scheduleAheadAmount())};
         if (d->soloPattern > -1 && d->soloPattern < PATTERN_COUNT) {
             PatternModel *pattern = d->patternModelIterator[d->soloPattern];
             if (pattern) {

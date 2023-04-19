@@ -46,7 +46,7 @@ struct TrackState {
     }
     // Whether or not the specified part should be making sounds right now
     bool partStates[PartCount];
-    quint64 partOffset[PartCount];
+    qint64 partOffset[PartCount];
 };
 struct ChannelState {
     ChannelState() {
@@ -93,8 +93,8 @@ public:
     bool songMode{false};
 
     PlayfieldState *playfieldState{nullptr};
-    quint64 playhead{0};
-    QHash<quint64, QList<TimerCommand*> > playlist;
+    qint64 playhead{0};
+    QHash<qint64, QList<TimerCommand*> > playlist;
     QList<ClipAudioSource*> runningLoops;
 
     inline void ensureTimerClipCommand(TimerCommand* command) {
@@ -154,7 +154,7 @@ public:
         if (command->operation == TimerCommand::StartPartOperation) {
 //             qDebug() << Q_FUNC_INFO << "Timer command says to start part" << command->parameter << command->parameter2 << command->parameter3;
             playfieldState->channelStates[command->parameter]->trackStates[command->parameter2]->partStates[command->parameter3] = true;
-            playfieldState->channelStates[command->parameter]->trackStates[command->parameter2]->partOffset[command->parameter3] = command->bigParameter;
+            playfieldState->channelStates[command->parameter]->trackStates[command->parameter2]->partOffset[command->parameter3] = qint64(command->bigParameter);
             Q_EMIT q->playfieldInformationChanged(command->parameter, command->parameter2, command->parameter3);
         } else if(command->operation == TimerCommand::StopPartOperation) {
 //             qDebug() << Q_FUNC_INFO << "Timer command says to stop part" << command->parameter << command->parameter2 << command->parameter3;
@@ -165,7 +165,7 @@ public:
         }
     }
 
-    void movePlayhead(quint64 newPosition, bool ignoreStop = false) {
+    void movePlayhead(qint64 newPosition, bool ignoreStop = false) {
         // Cycle through all positions from the current playhead
         // position to the new one and handle them all - but only
         // if the new position's actually different to the old one
@@ -326,10 +326,10 @@ public Q_SLOTS:
     }
     void updateSegments() {
         static const QLatin1String sampleLoopedType{"sample-loop"};
-        QHash<quint64, QList<TimerCommand*> > playlist;
+        QHash<qint64, QList<TimerCommand*> > playlist;
         if (d->songMode && zLSegmentsModel && zlChannels.count() > 0) {
             // The position of the next set of commands to be added to the hash
-            quint64 segmentPosition{0};
+            qint64 segmentPosition{0};
             QList<QObject*> clipsInPrevious;
             int segmentCount = zLSegmentsModel->property("count").toInt();
             qDebug() << Q_FUNC_INFO << "Working with" << segmentCount << "segments...";
@@ -359,7 +359,7 @@ public Q_SLOTS:
                                 command->operation = TimerCommand::StartPartOperation;
                                 command->parameter2 = clip->property("column").toInt();
                                 command->parameter3 = clip->property("part").toInt();
-                                command->bigParameter = shouldResetPlaybackposition ? segmentPosition : 0;
+                                command->bigParameter = quint64(shouldResetPlaybackposition ? segmentPosition : 0);
                             }
                             commands << command;
                         } else {
@@ -391,7 +391,7 @@ public Q_SLOTS:
                     // TODO Sort commands before adding - we really kind of want stop things before the start things, for when we have restarting added
                     playlist[segmentPosition] = commands;
                     // Finally, make sure the next step is covered
-                    quint64 segmentDuration = ((segment->property("barLength").toInt() * 4) + segment->property("beatLength").toInt()) * d->syncTimer->getMultiplier();
+                    qint64 segmentDuration = ((segment->property("barLength").toInt() * 4) + segment->property("beatLength").toInt()) * d->syncTimer->getMultiplier();
                     segmentPosition += segmentDuration;
                 } else {
                     qWarning() << Q_FUNC_INFO << "Failed to get segment" << segmentIndex;
@@ -494,7 +494,7 @@ int SegmentHandler::playhead() const
     return d->playhead;
 }
 
-void SegmentHandler::startPlayback(quint64 startOffset, quint64 duration)
+void SegmentHandler::startPlayback(qint64 startOffset, quint64 duration)
 {
     if (d->playfieldState) {
         delete d->playfieldState;
@@ -536,7 +536,7 @@ bool SegmentHandler::playfieldState(int channel, int track, int part) const
     return d->playfieldState->channelStates[channel]->trackStates[track]->partStates[part];
 }
 
-quint64 SegmentHandler::playfieldOffset(int channel, int track, int part) const
+qint64 SegmentHandler::playfieldOffset(int channel, int track, int part) const
 {
     return d->playfieldState->channelStates[channel]->trackStates[track]->partOffset[part];
 }

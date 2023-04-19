@@ -66,7 +66,7 @@ public:
     NotesModel *parentModel{nullptr};
     int parentRow{-1};
     QTimer *lastModifiedChanger{nullptr};
-    quint64 lastModified{0};
+    qint64 lastModified{0};
     QList<NotesModel*> childModels;
     bool isEmpty{true};
     int isWorking{0};
@@ -305,7 +305,7 @@ int NotesModel::parentRow() const
     return d->parentRow;
 }
 
-quint64 NotesModel::lastModified() const
+qint64 NotesModel::lastModified() const
 {
     return d->lastModified;
 }

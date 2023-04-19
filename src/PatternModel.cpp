@@ -313,7 +313,7 @@ public:
     int previouslyUpdatedMidiChannel{-1};
 
     juce::MidiBuffer &getOrCreateBuffer(QHash<int, juce::MidiBuffer> &collection, int position);
-    void noteLengthDetails(int noteLength, quint64 &nextPosition, bool &relevantToUs, quint64 &noteDuration);
+    void noteLengthDetails(int noteLength, qint64 &nextPosition, bool &relevantToUs, qint64 &noteDuration);
     int beatSubdivision{0};
     int beatSubdivision2{0};
     int beatSubdivision3{0};
@@ -1555,7 +1555,7 @@ inline juce::MidiBuffer &PatternModel::Private::getOrCreateBuffer(QHash<int, juc
     return collection[realPosition];
 }
 
-inline void PatternModel::Private::noteLengthDetails(int noteLength, quint64 &nextPosition, bool &relevantToUs, quint64 &noteDuration)
+inline void PatternModel::Private::noteLengthDetails(int noteLength, qint64 &nextPosition, bool &relevantToUs, qint64 &noteDuration)
 {
     // Potentially it'd be tempting to try and optimise this manually to use bitwise operators,
     // but GCC already does that for you at -O2, so don't bother :)
@@ -1615,7 +1615,7 @@ inline void PatternModel::Private::noteLengthDetails(int noteLength, quint64 &ne
     }
 }
 
-void PatternModel::handleSequenceAdvancement(quint64 sequencePosition, int progressionLength) const
+void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progressionLength) const
 {
     static const int initialProgression{0};
     static const QLatin1String velocityString{"velocity"};
@@ -1633,15 +1633,15 @@ void PatternModel::handleSequenceAdvancement(quint64 sequencePosition, int progr
         )
     ) {
         const int overrideChannel{(d->midiChannel == 15) ? d->playGridManager->currentMidiChannel() : -1};
-        const quint64 playbackOffset{d->segmentHandler->songMode() ? d->segmentHandler->playfieldOffset(d->channelIndex, d->sequence->sceneIndex(), d->partIndex) : 0};
-        quint64 noteDuration{0};
+        const qint64 playbackOffset{d->segmentHandler->songMode() ? d->segmentHandler->playfieldOffset(d->channelIndex, d->sequence->sceneIndex(), d->partIndex) : 0};
+        qint64 noteDuration{0};
         bool relevantToUs{false};
         // Since this happens at the /end/ of the cycle in a beat, this should be used to schedule beats for the next
         // beat, not the current one. That is to say, prepare the next frame, not the current one (since those notes
         // have already been played).
         for (int progressionIncrement = initialProgression; progressionIncrement <= progressionLength; ++progressionIncrement) {
             // check whether the sequencePosition + progressionIncrement matches our note length
-            quint64 nextPosition = sequencePosition - playbackOffset + progressionIncrement;
+            qint64 nextPosition = sequencePosition - playbackOffset + progressionIncrement;
             d->noteLengthDetails(d->noteLength, nextPosition, relevantToUs, noteDuration);
 
             if (relevantToUs) {
@@ -1743,7 +1743,7 @@ void PatternModel::handleSequenceAdvancement(quint64 sequencePosition, int progr
                         const QHash<int, juce::MidiBuffer> &positionBuffers = d->positionBuffers[nextPosition + (d->bankOffset * d->width)];
                         QHash<int, juce::MidiBuffer>::const_iterator position;
                         for (position = positionBuffers.constBegin(); position != positionBuffers.constEnd(); ++position) {
-                            d->syncTimer->scheduleMidiBuffer(position.value(), qMax(0, progressionIncrement + position.key()));
+                            d->syncTimer->scheduleMidiBuffer(position.value(), quint64(qMax(0, progressionIncrement + position.key())));
                         }
                         break;
                     }
@@ -1753,7 +1753,7 @@ void PatternModel::handleSequenceAdvancement(quint64 sequencePosition, int progr
     }
 }
 
-void PatternModel::updateSequencePosition(quint64 sequencePosition)
+void PatternModel::updateSequencePosition(qint64 sequencePosition)
 {
     // Don't play notes on channel 15, because that's the control channel, and we don't want patterns to play to that
     if ((isPlaying()
@@ -1763,8 +1763,8 @@ void PatternModel::updateSequencePosition(quint64 sequencePosition)
         || sequencePosition == 0
     ) {
         bool relevantToUs{false};
-        quint64 nextPosition{sequencePosition};
-        quint64 noteDuration{0};
+        qint64 nextPosition{sequencePosition};
+        qint64 noteDuration{0};
         d->noteLengthDetails(d->noteLength, nextPosition, relevantToUs, noteDuration);
 
         if (relevantToUs) {
@@ -1839,8 +1839,8 @@ void ZLPatternSynchronisationManager::addRecordedNote(void *recordedNote)
     NewNoteData *newNote = static_cast<NewNoteData*>(recordedNote);
 
     bool relevantToUs{false}; // not relevant
-    quint64 nextPosition{0};
-    quint64 noteDuration{0};
+    qint64 nextPosition{0};
+    qint64 noteDuration{0};
     q->d->noteLengthDetails(q->noteLength(), nextPosition, relevantToUs, noteDuration);
     int deviationAllowance = qMax(1.0, ceil(noteDuration * 0.3));
 

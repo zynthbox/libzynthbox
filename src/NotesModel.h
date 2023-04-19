@@ -32,7 +32,7 @@ class NotesModel : public QAbstractListModel
     Q_PROPERTY(QVariantMap roles READ roles CONSTANT)
     Q_PROPERTY(QObject* parentModel READ parentModel CONSTANT)
     Q_PROPERTY(int parentRow READ parentRow NOTIFY parentRowChanged)
-    Q_PROPERTY(quint64 lastModified READ lastModified NOTIFY lastModifiedChanged)
+    Q_PROPERTY(qint64 lastModified READ lastModified NOTIFY lastModifiedChanged)
     /**
      * \brief Whether or not there are any notes anywhere in the model
      */
@@ -74,7 +74,7 @@ public:
      * \brief When the last change was made on the model (setting notes, metadata, or anything else really)
      * @return The timestamp of the most recent change, to the nearest second
      */
-    quint64 lastModified() const;
+    qint64 lastModified() const;
     Q_SIGNAL void lastModifiedChanged();
     /**
      * \brief Call this to make the object notice that a change has happened (changing lastModified)

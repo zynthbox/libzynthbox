@@ -72,7 +72,7 @@ public:
      * @param startOffset An offset in timer ticks (e.g. beat * syncTimer.getMultiplier()) to start playback at
      * @param duration How long to play for (a duration of 0 - the default - will keep playing until the end of the song)
      */
-    Q_INVOKABLE void startPlayback(quint64 startOffset = 0, quint64 duration = 0);
+    Q_INVOKABLE void startPlayback(qint64 startOffset = 0, quint64 duration = 0);
     /**
      * \brief Stops playback
      */
@@ -85,7 +85,7 @@ public:
     /**
      * \brief Get the offset position for the given part
      */
-    Q_INVOKABLE quint64 playfieldOffset(int channel, int track, int part) const;
+    Q_INVOKABLE qint64 playfieldOffset(int channel, int track, int part) const;
     /**
      * \brief Emitted when the playfield of the given part changed
      * NOTE! Connect to this with a QueuedConnection, otherwise you may hold up playback
