@@ -4,8 +4,11 @@ set(typesystem_file ${CMAKE_CURRENT_SOURCE_DIR}/bindings.xml)
 set(typesystems_path /usr/share/PySide2/typesystems/)
 set(generated_sources
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/zynthbox_module_wrapper.cpp
-        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/plugin_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/audiolevels_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/clipaudiosource_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/plugin_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/synctimer_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirouter_wrapper.cpp
 )
 set(python_include_dir /usr/include/python3.9)
 set(shiboken_include_dir /usr/include/shiboken2)
@@ -24,7 +27,7 @@ endif()
 add_custom_command(
     OUTPUT ${generated_sources}
     COMMAND shiboken2
-                --debug-level=full
+                # --debug-level=full
                 --generator-set=shiboken
                 --enable-parent-ctor-heuristic
                 --enable-return-value-heuristic

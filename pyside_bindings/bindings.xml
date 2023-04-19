@@ -3,5 +3,33 @@
     <load-typesystem name="typesystem_core.xml" generate="no"/>
 
     <object-type name="AudioLevels"></object-type>
+    <object-type name="ClipAudioSource"></object-type>
     <object-type name="Plugin"></object-type>
+    <object-type name="SyncTimer"></object-type>
+    <object-type name="MidiRouter">
+        <!-- Why do we need to inject glue code manually which should be auto injected by typesystem_core? -->
+        <!-- This snippet is from glue/qtcore.cpp -->
+        <inject-code class="native" position="beginning">
+            #ifdef Q_OS_UNIX
+            #include &lt;stdio.h&gt;
+            #include &lt;pthread.h&gt;
+
+            static void qthread_pthread_cleanup(void *arg)
+            {
+                // PYSIDE 1282: When terminating a thread using QThread::terminate()
+                // (pthread_cancel()), QThread::run() is aborted and the lock is released,
+                // but ~GilState() is still executed for some reason. Prevent it from
+                // releasing.
+                auto gil = reinterpret_cast&lt;Shiboken::GilState *&gt;(arg);
+                gil->abandon();
+            }
+            #endif // Q_OS_UNIX
+        </inject-code>
+    </object-type>
+
+    <rejection class="ClipAudioSource" function-name="setProgressCallback" />
+    <rejection class="ClipAudioSource" function-name="setAudioLevelChangedCallback" />
+
+    <rejection class="SyncTimer" function-name="addCallback" />
+    <rejection class="SyncTimer" function-name="removeCallback" />
 </typesystem>
