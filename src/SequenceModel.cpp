@@ -118,7 +118,7 @@ public:
 public Q_SLOTS:
     void bpmChanged() {
         q->setBpm(zlSong->property("bpm").toInt());
-        SyncTimer::instance()->setBpm(q->bpm());
+        SyncTimer::instance()->setBpm(quint64(q->bpm()));
     }
     void scenesModelChanged() {
         setZlScenesModel(zlSong->property("scenesModel").value<QObject*>());

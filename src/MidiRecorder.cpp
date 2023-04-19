@@ -133,7 +133,7 @@ bool MidiRecorder::loadFromMidi(const QByteArray &midiData)
 {
     bool success{false};
 
-    juce::MemoryBlock block(midiData.data(), midiData.size());
+    juce::MemoryBlock block(midiData.data(), size_t(midiData.size()));
     juce::MemoryInputStream in(block, false);
     juce::MidiFile file;
     if (file.readFrom(in, true)) {
@@ -292,7 +292,7 @@ bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorde
 
     // work out how many microseconds we've got per step in the given pattern
     SyncTimer *syncTimer{qobject_cast<SyncTimer*>(patternModel->playGridManager()->syncTimer())};
-    int subbeatsPerStep{0};
+    quint64 subbeatsPerStep{0};
     switch (patternModel->noteLength()) {
     case 1:
         subbeatsPerStep = 32;
