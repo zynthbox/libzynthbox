@@ -52,7 +52,7 @@ class SequenceModel : public QAbstractListModel
      * \brief Sets a reference to the song this Sequence is associated with
      * @note Setting this will cause the Sequence to be reloaded to match that song (and clearing it will load the unassociated sequence)
      */
-    Q_PROPERTY(QObject* song READ song WRITE setSong NOTIFY songChanged);
+    Q_PROPERTY(QObject* song READ song WRITE setSong NOTIFY songChanged)
     /**
      * \brief Index of a pattern which will become the only one played
      * This property which will override all other playback settings. That is, the pattern will be

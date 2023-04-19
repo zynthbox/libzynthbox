@@ -45,7 +45,7 @@ static const QStringList partNames{"a", "b", "c", "d", "e"};
 class ZLSequenceSynchronisationManager : public QObject {
 Q_OBJECT
 public:
-    explicit ZLSequenceSynchronisationManager(SequenceModel *parent = 0)
+    explicit ZLSequenceSynchronisationManager(SequenceModel *parent = nullptr)
         : QObject(parent)
         , q(parent)
     {

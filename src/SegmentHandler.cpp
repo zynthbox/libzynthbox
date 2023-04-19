@@ -201,7 +201,7 @@ public:
 class ZLSegmentHandlerSynchronisationManager : public QObject {
 Q_OBJECT
 public:
-    explicit ZLSegmentHandlerSynchronisationManager(SegmentHandlerPrivate *d, SegmentHandler *parent = 0)
+    explicit ZLSegmentHandlerSynchronisationManager(SegmentHandlerPrivate *d, SegmentHandler *parent = nullptr)
         : QObject(parent)
         , q(parent)
         , d(d)

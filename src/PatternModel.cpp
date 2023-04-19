@@ -68,7 +68,7 @@ struct NewNoteData {
 class ZLPatternSynchronisationManager : public QObject {
 Q_OBJECT
 public:
-    explicit ZLPatternSynchronisationManager(PatternModel *parent = 0)
+    explicit ZLPatternSynchronisationManager(PatternModel *parent = nullptr)
         : QObject(parent)
         , q(parent)
     {

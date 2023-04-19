@@ -250,15 +250,15 @@ class PatternModel : public NotesModel
     /**
      * \brief A reference to the sketchpad Channel object this Pattern is associated with
      */
-    Q_PROPERTY(QObject* zlChannel READ zlChannel WRITE setZlChannel NOTIFY zlChannelChanged);
+    Q_PROPERTY(QObject* zlChannel READ zlChannel WRITE setZlChannel NOTIFY zlChannelChanged)
     /**
      * \brief A reference to the sketchpad Part object this Pattern is associated with
      */
-    Q_PROPERTY(QObject* zlPart READ zlPart WRITE setZlPart NOTIFY zlPartChanged);
+    Q_PROPERTY(QObject* zlPart READ zlPart WRITE setZlPart NOTIFY zlPartChanged)
     /**
      * \brief A reference to the sketchpad Scene object this Pattern is associated with
      */
-    Q_PROPERTY(QObject* zlScene READ zlScene WRITE setZlScene NOTIFY zlSceneChanged);
+    Q_PROPERTY(QObject* zlScene READ zlScene WRITE setZlScene NOTIFY zlSceneChanged)
     /**
      * \brief The global instance of Sketchpad' session dashboard
      */

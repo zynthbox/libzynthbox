@@ -32,11 +32,11 @@ class NotesModel : public QAbstractListModel
     Q_PROPERTY(QVariantMap roles READ roles CONSTANT)
     Q_PROPERTY(QObject* parentModel READ parentModel CONSTANT)
     Q_PROPERTY(int parentRow READ parentRow NOTIFY parentRowChanged)
-    Q_PROPERTY(quint64 lastModified READ lastModified NOTIFY lastModifiedChanged);
+    Q_PROPERTY(quint64 lastModified READ lastModified NOTIFY lastModifiedChanged)
     /**
      * \brief Whether or not there are any notes anywhere in the model
      */
-    Q_PROPERTY(bool isEmpty READ isEmpty NOTIFY isEmptyChanged);
+    Q_PROPERTY(bool isEmpty READ isEmpty NOTIFY isEmptyChanged)
 public:
     explicit NotesModel(PlayGridManager *parent = nullptr);
     explicit NotesModel(NotesModel *parent, int row);

@@ -72,7 +72,7 @@ void timer_callback(int beat) {
 class ZLPGMSynchronisationManager : public QObject {
 Q_OBJECT
 public:
-    explicit ZLPGMSynchronisationManager(PlayGridManager *parent = 0)
+    explicit ZLPGMSynchronisationManager(PlayGridManager *parent = nullptr)
         : QObject(parent)
         , q(parent)
     {
@@ -261,20 +261,21 @@ public:
                 hardwareOutNoteActivations[midiNote] = setOn ? 1 : 0;
                 hardwareOutActiveNotesUpdater->start();
                 break;
+            case MidiRouter::UnknownPort:
             default:
                 qWarning() << Q_FUNC_INFO << "Input event came in from an unknown port, somehow - no idea what to do with this";
                 break;
         }
     }
 
-    void emitMidiMessage(const MidiRouter::ListenerPort &port, const double &timeStamp, const int &midiNote, const int &midiChannel, const int &velocity, const bool &setOn, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3) {
+    void emitMidiMessage(const MidiRouter::ListenerPort &port, const double &timeStamp, const int &/*midiNote*/, const int &/*midiChannel*/, const int &/*velocity*/, const bool &/*setOn*/, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3) {
         if (port == MidiRouter::PassthroughPort) {
             // First notify all our friends of the thing (because they might like to know very quickly)
             Q_EMIT q->midiMessage(byte1, byte2, byte3, timeStamp);
         }
     }
 
-    void updateNoteState(const MidiRouter::ListenerPort &port, const double &timeStamp, const int &midiNote, const int &midiChannel, const int &velocity, const bool &setOn, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3) {
+    void updateNoteState(const MidiRouter::ListenerPort &port, const double &/*timeStamp*/, const int &midiNote, const int &midiChannel, const int &velocity, const bool &setOn, const unsigned char &/*byte1*/, const unsigned char &/*byte2*/, const unsigned char &/*byte3*/) {
         if (port == MidiRouter::PassthroughPort) {
             static const QLatin1String note_on{"note_on"};
             static const QLatin1String note_off{"note_off"};
@@ -1009,7 +1010,8 @@ int PlayGridManager::currentMidiChannel() const
 
 void PlayGridManager::scheduleNote(unsigned char midiNote, unsigned char midiChannel, bool setOn, unsigned char velocity, quint64 duration, quint64 delay)
 {
-    if (d->syncTimer && midiChannel >= 0 && midiChannel <= 15) {
+    // No need for this check, unsigned is always larger than 0
+    if (d->syncTimer /*&& midiChannel >= 0*/ && midiChannel <= 15) {
         d->syncTimer->scheduleNote(midiNote, midiChannel, setOn, velocity, duration, delay);
     }
 }
@@ -1134,7 +1136,8 @@ bool PlayGridManager::metronomeActive() const
 
 void PlayGridManager::sendAMidiNoteMessage(unsigned char midiNote, unsigned char velocity, unsigned char channel, bool setOn)
 {
-    if (channel >= 0 && channel <= 15) {
+    // No need for this check, unsigned is always larger than 0
+    if (/*channel >= 0 &&*/ channel <= 15) {
 //         qDebug() << "Sending midi message" << midiNote << channel << velocity << setOn;
         d->syncTimer->sendNoteImmediately(midiNote, channel, setOn, velocity);
     }

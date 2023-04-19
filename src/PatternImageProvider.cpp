@@ -37,7 +37,7 @@
  * \brief A worker class which does the bulk of the work for PreviewImageProvider
  */
 class PatternRunnable : public QObject, public QRunnable {
-    Q_OBJECT;
+    Q_OBJECT
 public:
     explicit PatternRunnable(const QString &id, const QSize &requestedSize);
     virtual ~PatternRunnable();
