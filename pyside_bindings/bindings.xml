@@ -31,9 +31,6 @@
         </inject-code>
     </object-type>
 
-    <rejection class="ClipAudioSource" function-name="setProgressCallback" />
-    <rejection class="ClipAudioSource" function-name="setAudioLevelChangedCallback" />
-
     <rejection class="SyncTimer" function-name="addCallback" />
     <rejection class="SyncTimer" function-name="removeCallback" />
 </typesystem>
