@@ -372,6 +372,7 @@ public:
         lastRound = thisRound;
 #endif
         while (cumulativeBeat < (jackPlayhead + (scheduleAheadAmount * 2))) {
+            Q_EMIT q->timerTick(beat);
             // Call any callbacks registered to us
             for (int i = 0; i < callbackCount; ++i) {
                 callbacks[i](beat);

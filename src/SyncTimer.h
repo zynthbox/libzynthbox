@@ -15,8 +15,10 @@ struct ClipCommand;
 struct TimerCommand;
 class ClipAudioSource;
 class SyncTimerPrivate;
+/**
+ * \brief A sequencer into which can be scheduled midi events, TimerCommand and ClipCommand instances
+ */
 class SyncTimer : public QObject {
-  // HighResolutionTimer facade
   Q_OBJECT
   Q_PROPERTY(quint64 bpm READ getBpm WRITE setBpm NOTIFY bpmChanged)
   Q_PROPERTY(quint64 scheduleAheadAmount READ scheduleAheadAmount NOTIFY scheduleAheadAmountChanged)
@@ -30,7 +32,22 @@ public:
   };
   explicit SyncTimer(QObject *parent = nullptr);
   virtual ~SyncTimer();
+
+  /**
+   * \brief Fired at each position in the timer
+   * You will receive a tick at a rate equal to what is returned by getMultiplier (this is currently 96ppqn,
+   * but you should not assume things about this and instead operate on the assumption that it is whatever
+   * that function returns).
+   * @param beat The beat inside the current note (a number from 0 through 4*getMultiplier())
+   */
+  Q_SIGNAL void timerTick(int beat);
+  /**
+   * \deprecated
+   */
   void addCallback(void (*functionPtr)(int));
+  /**
+   * \deprecated
+   */
   void removeCallback(void (*functionPtr)(int));
   void queueClipToStart(ClipAudioSource *clip);
   void queueClipToStop(ClipAudioSource *clip);
