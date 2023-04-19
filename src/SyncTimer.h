@@ -55,7 +55,6 @@ public:
   void queueClipToStopOnChannel(ClipAudioSource *clip, int midiChannel);
   void start(int bpm);
   void stop();
-  void stopClip(ClipAudioSource *clip);
   int getInterval(int bpm);
   /**
    * \brief Convert a number of subbeat to seconds, given a specific bpm rate
