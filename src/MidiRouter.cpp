@@ -50,7 +50,9 @@ public:
     }
     ~InputDevice() {}
     // Whether or not we should read events from this device
-    alignas(8) bool enabled{false};
+    alignas(4) bool enabled{false};
+    // Whether we have received a sysex message at some point (meaning we should pass anything that isn't a sysex end message through untouched)
+    alignas(4) bool sysexActive{false};
     // The jack port we connect to for reading events
     jack_port_t* port;
     // The number of times we have received a note activation on this channel
@@ -485,8 +487,22 @@ public:
                             }
                             break;
                         } else {
-                            if (event.buffer[0] < 0xf0) {
+                            if (event.buffer[0] == 0xf0) {
+                                // If we are starting a sysex message, pass the instruction through, and set the device as having started sysex delivery
+                                device->sysexActive = true;
+                                writeEventToBuffer(event, externalOutputBuffer, eventChannel, &externalMostRecentTime, externalOutputPort);
+                                writeEventToBuffer(event, passthroughOutputBuffer, currentChannel, &passthroughOutputMostRecentTime, passthroughOutputPort);
+                            } else if (device->sysexActive) {
+                                // If sysex is active, pass it through
+                                writeEventToBuffer(event, externalOutputBuffer, eventChannel, &externalMostRecentTime, externalOutputPort);
+                                writeEventToBuffer(event, passthroughOutputBuffer, currentChannel, &passthroughOutputMostRecentTime, passthroughOutputPort);
+                                if (event.buffer[0] == 0xF7) {
+                                    // If the message is the sysex end message, make sure we also update our state
+                                    device->sysexActive = false;
+                                }
+                            } else {
                                 // Check whether we've got any message translation to do
+                                eventChannel = 0;
                                 if (event.buffer[0] > 0xAF && event.buffer[0] < 0xC0) {
                                     // Then it's a CC thing, and maybe we want to do a thing?
                                     const jack_midi_event_t &otherEvent = device->device_translations_cc[event.buffer[1]];
@@ -496,7 +512,11 @@ public:
                                         // leave the time code intact
                                     }
                                 }
-                                eventChannel = (event.buffer[0] & 0xf);
+                                if (event.buffer[0] < 0xF0) {
+                                    eventChannel = (event.buffer[0] & 0xf);
+                                } else {
+                                    eventChannel = -1;
+                                }
                                 if (eventChannel > -1 && eventChannel < OUTPUT_CHANNEL_COUNT) {
                                     // Make sure we're using the correct output
                                     // This is done to ensure that if we have any note-on events happen on some
@@ -564,16 +584,11 @@ public:
                                         addMessage(hardwareInListener, timestamp, event);
                                     }
                                 } else if (event.size == 1 || event.size == 2) {
+                                    writeEventToBuffer(event, externalOutputBuffer, eventChannel, &externalMostRecentTime, externalOutputPort);
                                     writeEventToBuffer(event, passthroughOutputBuffer, adjustedCurrentChannel, &passthroughOutputMostRecentTime, passthroughOutputPort);
                                 } else {
                                     qWarning() << "ZLRouter: Something's badly wrong and we've ended up with a message supposedly on channel" << eventChannel;
                                 }
-                            } else if (event.buffer[0] == 0xf0) {
-                                // We don't know what to do with sysex messages, so (for now) we're just ignoring them entirely
-                                // Likely want to pass them through directly to any connected midi output devices, though
-                            } else {
-                                writeEventToBuffer(event, externalOutputBuffer, eventChannel, &externalMostRecentTime, externalOutputPort);
-                                writeEventToBuffer(event, passthroughOutputBuffer, currentChannel, &passthroughOutputMostRecentTime, passthroughOutputPort);
                             }
                         }
                         ++eventIndex;
