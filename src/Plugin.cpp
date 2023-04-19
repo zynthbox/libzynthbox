@@ -140,6 +140,11 @@ float Plugin::dBFromVolume(float vol)
     return te::volumeFaderPositionToDB(vol);
 }
 
+tracktion_engine::Engine *Plugin::getTracktionEngine()
+{
+    return tracktionEngine;
+}
+
 void Plugin::registerTypes(const char *uri)
 {
     qmlRegisterType<FilterProxy>(uri, 1, 0, "FilterProxy");

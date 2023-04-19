@@ -22,6 +22,7 @@
 #include "ClipCommand.h"
 #include "SamplerSynth.h"
 #include "SyncTimer.h"
+#include "Plugin.h"
 
 #define DEBUG_CLIP true
 #define IF_DEBUG_CLIP if (DEBUG_CLIP)
@@ -132,12 +133,11 @@ private:
   ClipAudioSource *m_source = nullptr;
 };
 
-ClipAudioSource::ClipAudioSource(tracktion_engine::Engine *engine, SyncTimer *syncTimer, const char *filepath,
-                                 bool muted, QObject *parent)
+ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *parent)
     : QObject(parent)
     , d(new Private(this)) {
-  d->syncTimer = syncTimer;
-  d->engine = engine;
+  d->syncTimer = SyncTimer::instance();
+  d->engine = Plugin::instance()->getTracktionEngine();
 
   IF_DEBUG_CLIP cerr << "Opening file : " << filepath << endl;
 

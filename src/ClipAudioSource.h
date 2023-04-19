@@ -101,8 +101,7 @@ class ClipAudioSource : public QObject {
      */
     Q_PROPERTY(float adsrRelease READ adsrRelease WRITE setADSRRelease NOTIFY adsrParametersChanged)
 public:
-  explicit ClipAudioSource(tracktion_engine::Engine *engine, SyncTimer *syncTimer, const char *filepath,
-                  bool muted = false, QObject *parent = nullptr);
+  explicit ClipAudioSource(const char *filepath, bool muted = false, QObject *parent = nullptr);
   ~ClipAudioSource() override;
 
   void setProgressCallback(void (*functionPtr)(float));

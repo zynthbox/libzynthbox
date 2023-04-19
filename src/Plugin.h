@@ -49,6 +49,8 @@ public:
     Q_INVOKABLE void reloadZynthianConfiguration();
     Q_INVOKABLE float dBFromVolume(float vol);
 
+    te::Engine* getTracktionEngine();
+
 private:
     explicit Plugin(QObject *parent = nullptr);
     void registerTypes(const char *uri);
