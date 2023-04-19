@@ -7,6 +7,7 @@ set(generated_sources
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/audiolevels_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/clipaudiosource_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/plugin_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/playgridmanager_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/synctimer_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirouter_wrapper.cpp
 )
@@ -38,6 +39,9 @@ add_custom_command(
                 --typesystem-paths=${typesystems_path}
                 -I${qt5_include_dir}
                 -I${qt5_include_dir}/QtCore
+                -I${qt5_include_dir}/QtGui
+                -I${qt5_include_dir}/QtNetwork
+                -I${qt5_include_dir}/QtQml
                 -I${CMAKE_SOURCE_DIR}/tracktion_engine/modules/
                 -I${CMAKE_SOURCE_DIR}/tracktion_engine/modules/juce/modules/
                 ${wrapped_header}
@@ -58,6 +62,9 @@ target_include_directories(${bindings_library}
         ${shiboken_include_dir}
         ${pyside2_include_dir}
         ${pyside2_include_dir}/QtCore
+        ${pyside2_include_dir}/QtGui
+        ${pyside2_include_dir}/QtNetwork
+        ${pyside2_include_dir}/QtQml
         ${CMAKE_SOURCE_DIR}/src
 )
 

@@ -1,10 +1,14 @@
 <!DOCTYPE typesystem PUBLIC "http://www.pyside.org/TypeSystem/1.0" "pyside-typesystem.dtd">
 <typesystem package="Zynthbox">
     <load-typesystem name="typesystem_core.xml" generate="no"/>
+    <load-typesystem name="typesystem_gui.xml" generate="no"/>
+    <load-typesystem name="typesystem_network.xml" generate="no"/>
+    <load-typesystem name="typesystem_qml.xml" generate="no"/>
 
     <object-type name="AudioLevels"></object-type>
     <object-type name="ClipAudioSource"></object-type>
     <object-type name="Plugin"></object-type>
+    <object-type name="PlayGridManager"></object-type>
     <object-type name="SyncTimer"></object-type>
     <object-type name="MidiRouter">
         <!-- Why do we need to inject glue code manually which should be auto injected by typesystem_core? -->
