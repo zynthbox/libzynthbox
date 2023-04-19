@@ -145,8 +145,10 @@ tracktion_engine::Engine *Plugin::getTracktionEngine()
     return tracktionEngine;
 }
 
-void Plugin::registerTypes(const char *uri)
+void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
 {
+    engine->addImageProvider("pattern", new PatternImageProvider());
+
     qmlRegisterType<FilterProxy>(uri, 1, 0, "FilterProxy");
     qmlRegisterUncreatableType<Note>(uri, 1, 0, "Note", "Use the getNote function on the main PlayGrid global object to get one of these");
     qmlRegisterUncreatableType<NotesModel>(uri, 1, 0, "NotesModel", "Use the getModel function on the main PlayGrid global object to get one of these");
@@ -155,7 +157,6 @@ void Plugin::registerTypes(const char *uri)
     qmlRegisterType<PlayGrid>(uri, 1, 0, "PlayGrid");
     qmlRegisterSingletonType<PlayGridManager>(uri, 1, 0, "PlayGridManager", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
         Q_UNUSED(scriptEngine)
-        engine->addImageProvider("pattern", new PatternImageProvider());
         PlayGridManager *playGridManager = PlayGridManager::instance();
         playGridManager->setEngine(engine);
         QQmlEngine::setObjectOwnership(playGridManager, QQmlEngine::CppOwnership);
@@ -194,6 +195,127 @@ void Plugin::registerTypes(const char *uri)
         return AudioLevels::instance();
     });
     qmlRegisterType<WaveFormItem>(uri, 1, 0, "WaveFormItem");
+}
+
+void Plugin::addCreatedClipToMap(ClipAudioSource *clip)
+{
+    createdClipsMap.insert(clip->id(), clip);
+}
+
+void Plugin::removeCreatedClipFromMap(ClipAudioSource *clip)
+{
+    createdClipsMap.remove(clip->id());
+}
+
+ClipAudioSource* Plugin::getClipById(int id)
+{
+    return createdClipsMap.value(id, nullptr);
+}
+
+int Plugin::nextClipId()
+{
+    return ++lastCreatedClipId;
+}
+
+void Plugin::setPanAmount(int channel, float amount)
+{
+    if (channel == -1) {
+        qobject_cast<JackPassthrough*>(MidiRouter::instance()->globalPlaybackClient())->setPanAmount(amount);
+    } else if (channel > -1 && channel < 10) {
+        qobject_cast<JackPassthrough*>(MidiRouter::instance()->channelPassthroughClients().at(channel))->setPanAmount(amount);
+    }
+}
+
+float Plugin::getPanAmount(int channel)
+{
+    float amount{0.0f};
+    if (channel == -1) {
+        amount = qobject_cast<JackPassthrough*>(MidiRouter::instance()->globalPlaybackClient())->panAmount();
+    } else if (channel > -1 && channel < 10) {
+        amount = qobject_cast<JackPassthrough*>(MidiRouter::instance()->channelPassthroughClients().at(channel))->panAmount();
+    }
+    return amount;
+}
+
+float Plugin::getWetFx1Amount(int channel)
+{
+    float amount{0.0f};
+    if (channel == -1) {
+        amount = qobject_cast<JackPassthrough*>(MidiRouter::instance()->globalPlaybackClient())->wetFx1Amount();
+    } else if (channel > -1 && channel < 10) {
+        amount = qobject_cast<JackPassthrough*>(MidiRouter::instance()->channelPassthroughClients().at(channel))->wetFx1Amount();
+    }
+    return amount;
+}
+
+void Plugin::setWetFx1Amount(int channel, float amount)
+{
+    if (channel == -1) {
+        qobject_cast<JackPassthrough*>(MidiRouter::instance()->globalPlaybackClient())->setWetFx1Amount(amount);
+    } else if (channel > -1 && channel < 10) {
+        qobject_cast<JackPassthrough*>(MidiRouter::instance()->channelPassthroughClients().at(channel))->setWetFx1Amount(amount);
+    }
+}
+
+float Plugin::getWetFx2Amount(int channel)
+{
+    float amount{0.0f};
+    if (channel == -1) {
+        amount = qobject_cast<JackPassthrough*>(MidiRouter::instance()->globalPlaybackClient())->wetFx2Amount();
+    } else if (channel > -1 && channel < 10) {
+        amount = qobject_cast<JackPassthrough*>(MidiRouter::instance()->channelPassthroughClients().at(channel))->wetFx2Amount();
+    }
+    return amount;
+}
+
+void Plugin::setWetFx2Amount(int channel, float amount)
+{
+
+    if (channel == -1) {
+        qobject_cast<JackPassthrough*>(MidiRouter::instance()->globalPlaybackClient())->setWetFx2Amount(amount);
+    } else if (channel > -1 && channel < 10) {
+        qobject_cast<JackPassthrough*>(MidiRouter::instance()->channelPassthroughClients().at(channel))->setWetFx2Amount(amount);
+    }
+}
+
+float Plugin::getDryAmount(int channel)
+{
+    float amount{0.0f};
+    if (channel == -1) {
+        amount = qobject_cast<JackPassthrough*>(MidiRouter::instance()->globalPlaybackClient())->dryAmount();
+    } else if (channel > -1 && channel < 10) {
+        amount = qobject_cast<JackPassthrough*>(MidiRouter::instance()->channelPassthroughClients().at(channel))->dryAmount();
+    }
+    return amount;
+}
+
+void Plugin::setDryAmount(int channel, float amount)
+{
+    if (channel == -1) {
+        qobject_cast<JackPassthrough*>(MidiRouter::instance()->globalPlaybackClient())->setDryAmount(amount);
+    } else if (channel > -1 && channel < 10) {
+        qobject_cast<JackPassthrough*>(MidiRouter::instance()->channelPassthroughClients().at(channel))->setDryAmount(amount);
+    }
+}
+
+float Plugin::getMuted(int channel)
+{
+    bool muted{false};
+    if (channel == -1) {
+        muted = qobject_cast<JackPassthrough*>(MidiRouter::instance()->globalPlaybackClient())->muted();
+    } else if (channel > -1 && channel < 10) {
+        muted = qobject_cast<JackPassthrough*>(MidiRouter::instance()->channelPassthroughClients().at(channel))->muted();
+    }
+    return muted;
+}
+
+void Plugin::setMuted(int channel, bool muted)
+{
+    if (channel == -1) {
+        qobject_cast<JackPassthrough*>(MidiRouter::instance()->globalPlaybackClient())->setMuted(muted);
+    } else if (channel > -1 && channel < 10) {
+        qobject_cast<JackPassthrough*>(MidiRouter::instance()->channelPassthroughClients().at(channel))->setMuted(muted);
+    }
 }
 
 std::atomic<Plugin*> Plugin::singletonInstance;

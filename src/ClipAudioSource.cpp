@@ -49,18 +49,12 @@ public:
   te::Engine *engine{nullptr};
   std::unique_ptr<te::Edit> edit;
   bool isRendering{false};
-
   SyncTimer *syncTimer;
-  void (*progressChangedCallback)(float progress) = nullptr;
-  void (*audioLevelChangedCallback)(float leveldB) = nullptr;
-
   juce::File givenFile;
   juce::String chosenPath;
   juce::String fileName;
   QString filePath;
-
   te::LevelMeasurer::Client levelClient;
-
   float startPositionInSeconds = 0;
   float lengthInSeconds = -1;
   float lengthInBeats = -1;
@@ -81,11 +75,11 @@ public:
   int keyZoneEnd{127};
   int rootNote{60};
   juce::ADSR adsr;
-
   qint64 nextPositionUpdateTime{0};
   double firstPositionProgress{0};
-
   qint64 nextGainUpdateTime{0};
+  double progress{0};
+
   void syncAudioLevel() {
     if (nextGainUpdateTime < QDateTime::currentMSecsSinceEpoch()) {
       prevLeveldB = currentLeveldB;
@@ -105,9 +99,6 @@ public:
       if (abs(currentLeveldB - prevLeveldB) > 0.1) {
         // Because emitting from a thread that's not the object's own is a little dirty, so make sure it's done queued
         QMetaObject::invokeMethod(q, &ClipAudioSource::audioLevelChanged, Qt::QueuedConnection);
-        if (audioLevelChangedCallback != nullptr) {
-          audioLevelChangedCallback(currentLeveldB);
-        }
       }
       nextGainUpdateTime = QDateTime::currentMSecsSinceEpoch() + 30;
     }
@@ -138,6 +129,8 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
     , d(new Private(this)) {
   d->syncTimer = SyncTimer::instance();
   d->engine = Plugin::instance()->getTracktionEngine();
+  d->id = Plugin::instance()->nextClipId();
+  Plugin::instance()->addCreatedClipToMap(this);
 
   IF_DEBUG_CLIP cerr << "Opening file : " << filepath << endl;
 
@@ -204,6 +197,7 @@ ClipAudioSource::~ClipAudioSource() {
   IF_DEBUG_CLIP cerr << "Destroying Clip" << endl;
   stop();
   SamplerSynth::instance()->unregisterClip(this);
+  Plugin::instance()->removeCreatedClipFromMap(this);
   Helper::callFunctionOnMessageThread(
     [&]() {
       d->stopTimer();
@@ -214,20 +208,17 @@ ClipAudioSource::~ClipAudioSource() {
     }, true);
 }
 
-void ClipAudioSource::setProgressCallback(void (*functionPtr)(float)) {
-  d->progressChangedCallback = functionPtr;
-}
-
 void ClipAudioSource::syncProgress() {
   if (d->nextPositionUpdateTime < QDateTime::currentMSecsSinceEpoch()) {
     double newPosition = d->startPositionInSeconds / getDuration();
-    if (d->progressChangedCallback != nullptr && d->positionsModel && d->positionsModel->firstProgress() > -1.0f) {
+    if (d->positionsModel && d->positionsModel->firstProgress() > -1.0f) {
       newPosition = d->positionsModel->firstProgress();
     }
     if (abs(d->firstPositionProgress - newPosition) > 0.001) {
       d->firstPositionProgress = newPosition;
+      d->progress = d->firstPositionProgress * getDuration();
       Q_EMIT positionChanged();
-      d->progressChangedCallback(d->firstPositionProgress * getDuration());
+      Q_EMIT progressChanged();
       /// TODO This really wants to be 16, so we can get to 60 updates per second, but that tears to all heck without compositing, so... for now
       // (tested with higher rates, but it tears, so while it looks like an arbitrary number, afraid it's as high as we can go)
       d->nextPositionUpdateTime = QDateTime::currentMSecsSinceEpoch() + 100; // 10 updates per second, this is loooow...
@@ -339,10 +330,6 @@ float ClipAudioSource::volumeAbsolute() const
     }
   }
   return d->volumeAbsolute;
-}
-
-void ClipAudioSource::setAudioLevelChangedCallback(void (*functionPtr)(float)) {
-  d->audioLevelChangedCallback = functionPtr;
 }
 
 void ClipAudioSource::setLength(float beat, int bpm) {
@@ -468,6 +455,11 @@ void ClipAudioSource::setId(int id)
 float ClipAudioSource::audioLevel() const
 {
   return d->currentLeveldB;
+}
+
+float ClipAudioSource::progress() const
+{
+  return d->progress;
 }
 
 double ClipAudioSource::position() const

@@ -26,6 +26,8 @@
 #include <QCoreApplication>
 #include <QObject>
 #include <QList>
+#include <QQmlEngine>
+#include <QHash>
 #include <atomic>
 #include <mutex>
 
@@ -34,7 +36,7 @@
 #include "JuceEventLoop.h"
 
 class Plugin : public QObject {
-Q_OBJECT
+    Q_OBJECT
 
 public:
     static Plugin* instance();
@@ -48,16 +50,85 @@ public:
     // Called by zynthbox when the configuration in webconf has been changed (for example the midi setup, so our MidiRouter can pick up any changes)
     Q_INVOKABLE void reloadZynthianConfiguration();
     Q_INVOKABLE float dBFromVolume(float vol);
+    Q_INVOKABLE te::Engine* getTracktionEngine();
+    Q_INVOKABLE void registerTypes(QQmlEngine *engine, const char *uri);
+    Q_INVOKABLE void addCreatedClipToMap(ClipAudioSource *clip);
+    Q_INVOKABLE void removeCreatedClipFromMap(ClipAudioSource *clip);
+    Q_INVOKABLE ClipAudioSource* getClipById(int id);
+    Q_INVOKABLE int nextClipId();
 
-    te::Engine* getTracktionEngine();
+    /**
+     * \brief Set the panning amount for the given channel
+     * @param channel The channel you wish to set the pan amount for (-1 is GlobalPlayback, 0-9 is the channel with that index)
+     * @param amount The amount (-1 through 1, 0 being neutral) that you wish to set as the new pan amount
+     */
+    Q_INVOKABLE void setPanAmount(int channel, float amount);
+    /**
+    * \brief Retrieve the panning amount for the given channel
+     * @param channel The channel you wish to get the pan amount for (-1 is GlobalPlayback, 0-9 is the channel with that index)
+     * @return The panning amount for the given channel (-1 through 1, 0 being neutral or if channel is out of bounds)
+     */
+    Q_INVOKABLE float getPanAmount(int channel);
+
+    /**
+    * \brief Retrieve the wet amount for Fx1
+     * @param channel The channel you wish to get the wet amount for (-1 is GlobalPlayback, 0-9 is the channel with that index)
+     * @return The wet amount for the given channel (0 through 1, 0 being no audio and 1 being full)
+     */
+    Q_INVOKABLE float getWetFx1Amount(int channel);
+    /**
+     * \brief Set the wet amount for the Fx1
+     * @param channel The channel you wish to get the wet amount for (-1 is GlobalPlayback, 0-9 is the channel with that index)
+     * @param amount The amount (0 through 1, 0 being no audio and 1 being full) that you wish to set as the new wet amount for Fx1
+     */
+    Q_INVOKABLE void setWetFx1Amount(int channel, float amount);
+
+    /**
+    * \brief Retrieve the wet amount for Fx2
+     * @param channel The channel you wish to get the wet amount for (-1 is GlobalPlayback, 0-9 is the channel with that index)
+     * @return The wet amount for the given channel (0 through 1, 0 being no audio and 1 being full)
+     */
+    Q_INVOKABLE float getWetFx2Amount(int channel);
+    /**
+     * \brief Set the wet amount for the Fx2
+     * @param channel The channel you wish to get the wet amount for (-1 is GlobalPlayback, 0-9 is the channel with that index)
+     * @param amount The amount (0 through 1, 0 being no audio and 1 being full) that you wish to set as the new wet amount for Fx2
+     */
+    Q_INVOKABLE void setWetFx2Amount(int channel, float amount);
+
+    /**
+    * \brief Retrieve the dry amount
+     * @param channel The channel you wish to get the dry amount for (-1 is GlobalPlayback, 0-9 is the channel with that index)
+     * @return The dry amount for the given channel (0 through 1, 0 being no audio and 1 being full)
+     */
+    Q_INVOKABLE float getDryAmount(int channel);
+    /**
+     * \brief Set the dry amount
+     * @param channel The channel you wish to set the dry amount for (-1 is GlobalPlayback, 0-9 is the channel with that index)
+     * @param amount The amount (0 through 1, 0 being no audio and 1 being full) that you wish to set as the new dry amount
+     */
+    Q_INVOKABLE void setDryAmount(int channel, float amount);
+
+    /**
+    * \brief Get muted property value
+     * @param channel The channel you wish to get the muted value for (-1 is GlobalPlayback, 0-9 is the channel with that index)
+     * @return The value for the given channel
+     */
+    Q_INVOKABLE float getMuted(int channel);
+    /**
+     * \brief Set muted property value
+     * @param channel The channel you wish to set muted (-1 is GlobalPlayback, 0-9 is the channel with that index)
+     * @param muted The value for the given channel that you wish to set
+     */
+    Q_INVOKABLE void setMuted(int channel, bool muted);
 
 private:
     explicit Plugin(QObject *parent = nullptr);
-    void registerTypes(const char *uri);
 
     te::Engine *tracktionEngine{nullptr};
-    QList<ClipAudioSource*> createdClips;
     JuceEventLoop juceEventLoop;
+    QHash<int, ClipAudioSource *> createdClipsMap;
+    int lastCreatedClipId{-1};
 
     static std::atomic<Plugin*> singletonInstance;
     static std::mutex singletonMutex;

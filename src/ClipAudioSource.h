@@ -38,6 +38,10 @@ class ClipAudioSource : public QObject {
      */
     Q_PROPERTY(float audioLevel READ audioLevel NOTIFY audioLevelChanged)
     /**
+     * \brief The current playback progress as a float
+     */
+    Q_PROPERTY(float progress READ progress NOTIFY progressChanged)
+    /**
      * \brief The current playback position (of the first position in the positions model) in seconds
      */
     Q_PROPERTY(double position READ position NOTIFY positionChanged)
@@ -104,7 +108,6 @@ public:
   explicit ClipAudioSource(const char *filepath, bool muted = false, QObject *parent = nullptr);
   ~ClipAudioSource() override;
 
-  void setProgressCallback(void (*functionPtr)(float));
   void syncProgress();
   void setStartPosition(float startPositionInSeconds);
   float getStartPosition(int slice = -1) const;
@@ -132,7 +135,6 @@ public:
    */
   float volumeAbsolute() const;
   Q_SIGNAL void volumeAbsoluteChanged();
-  void setAudioLevelChangedCallback(void (*functionPtr)(float));
   // Using the channel logic from SamplerSynth, -2 is no-effect global sounds, -1 is the effected global channel, and 0-9 are channels 1 through 10 inclusive
   void play(bool loop = true, int midiChannel = -2);
   // Midi channel logic as play(), except defaulting to stop all the things everywhere
@@ -151,6 +153,9 @@ public:
 
   float audioLevel() const;
   Q_SIGNAL void audioLevelChanged();
+
+  float progress() const;
+  Q_SIGNAL void progressChanged();
 
   double position() const;
   Q_SIGNAL void positionChanged();
