@@ -1,8 +1,8 @@
 set(TYPESYSTEM_FILE ${CMAKE_CURRENT_SOURCE_DIR}/plugin_typesystem.xml)
 
-add_library(zynthbox SHARED)
+add_library(libzynthbox SHARED)
 
-target_sources(zynthbox
+target_sources(libzynthbox
     PRIVATE
         Plugin.cpp
         ClipAudioSource.cpp
@@ -30,7 +30,7 @@ target_sources(zynthbox
         SequenceModel.cpp
         SettingsContainer.cpp
 )
-target_compile_definitions(zynthbox
+target_compile_definitions(libzynthbox
     PUBLIC
         JUCE_PLUGINHOST_AU=0
         JUCE_PLUGINHOST_LADSPA=0
@@ -45,10 +45,10 @@ target_compile_definitions(zynthbox
         JUCE_ALSA=1
         TRACKTION_ENABLE_TIMESTRETCH_SOUNDTOUCH=1
     INTERFACE
-        $<TARGET_PROPERTY:zynthbox,COMPILE_DEFINITIONS>
+        $<TARGET_PROPERTY:libzynthbox,COMPILE_DEFINITIONS>
 )
 
-target_link_libraries(zynthbox
+target_link_libraries(libzynthbox
     PRIVATE
         ${RTMIDI_LIBRARIES}
         ${Jack_LIBRARIES}
@@ -75,12 +75,17 @@ target_link_libraries(zynthbox
         Qt5::Quick
 )
 
-target_include_directories(zynthbox
+target_include_directories(libzynthbox
     PRIVATE
         ${RTMIDI_INCLUDE_DIRS}
         ${Jack_INCLUDE_DIRS}
     INTERFACE
-        $<TARGET_PROPERTY:zynthbox,INCLUDE_DIRECTORIES>
+        $<TARGET_PROPERTY:libzynthbox,INCLUDE_DIRECTORIES>
 )
 
-install(TARGETS zynthbox LIBRARY DESTINATION lib)
+set_property(TARGET libzynthbox PROPERTY PREFIX "")
+
+install(
+    TARGETS libzynthbox
+    LIBRARY DESTINATION lib
+)
