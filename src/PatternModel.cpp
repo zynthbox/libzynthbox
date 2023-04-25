@@ -141,7 +141,7 @@ public:
             }
             zlScene = newZlScene;
             if (zlScene) {
-                connect(zlScene, SIGNAL(enabled_changed()), this, SLOT(sceneEnabledChanged()), Qt::QueuedConnection);
+                connect(zlScene, SIGNAL(enabled_changed(int, int)), this, SLOT(sceneEnabledChanged()), Qt::QueuedConnection);
                 // This seems superfluous...
 //                 connect(zlChannel, SIGNAL(enabled_changed()), this, SLOT(selectedPartChanged()), Qt::QueuedConnection);
                 sceneEnabledChanged();
