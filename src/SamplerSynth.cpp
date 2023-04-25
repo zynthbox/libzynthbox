@@ -155,12 +155,38 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                                     voice->handleAftertouch(event.time, pressure);
                                 }
                             }
+                        } else if (0xAF < byte1 && byte1 < 0xC0) {
+                            // Control/mode change
+                            const int control{event.buffer[1]};
+                            const int value{event.buffer[2]};
+                            for (SamplerSynthVoice *voice : qAsConst(voices)) {
+                                if (voice->isPlaying) {
+                                    voice->handleControlChange(event.time, control, value);
+                                }
+                            }
+                        } else if (0xBF < byte1 && byte1 < 0xD0) {
+                            // Program change
                         } else if (0xCF < byte1 && byte1 < 0xE0) {
                             // Non-polyphonic aftertouch
                             const int pressure{event.buffer[1]};
                             for (SamplerSynthVoice *voice : qAsConst(voices)) {
                                 if (voice->isPlaying) {
                                     voice->handleAftertouch(event.time, pressure);
+                                }
+                            }
+                        } else if (0xDF < byte1 && byte1 < 0xF0) {
+                            // Pitch bend
+                            // Going the other way:
+                            // char byte3 = pitchValue >> 7;
+                            // byte byte2 = pitchValue & 0x7F;
+                            // Per-note pitch bend should be +/- 48 semitones by default
+                            // Master-channel pitch bend should be +/- 2 semitones by default
+                            // Change either to +/- 96 using Registered Parameter Number 0
+                            const float bendMax{2.0};
+                            const float pitchValue = bendMax * (float((event.buffer[2] * 128) + event.buffer[1]) - 8192) / 16383.0;
+                            for (SamplerSynthVoice *voice : qAsConst(voices)) {
+                                if (voice->isPlaying) {
+                                    voice->handlePitchChange(event.time, pitchValue);
                                 }
                             }
                         }
@@ -235,7 +261,8 @@ void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick
                 for (SamplerSynthVoice * voice : qAsConst(voices)) {
                     const ClipCommand *currentVoiceCommand = voice->currentCommand();
                     if (voice->isTailingOff == false && voice->getCurrentlyPlayingSound().get() == sound && currentVoiceCommand->equivalentTo(clipCommand)) {
-                        voice->stopNote(0.0f, true);
+                        voice->setCurrentCommand(clipCommand);
+                        voice->stopNote(clipCommand->volume, true);
                         // Since we may have more than one going at the same time (since we allow long releases), just stop the first one
                         break;
                     }
