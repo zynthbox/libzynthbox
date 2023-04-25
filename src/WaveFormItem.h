@@ -25,7 +25,8 @@ Q_OBJECT
     Q_PROPERTY(qreal end READ end WRITE setEnd NOTIFY endChanged)
 
 public:
-    WaveFormItem(QQuickItem *parent = nullptr);
+    explicit WaveFormItem(QQuickItem *parent = nullptr);
+    ~WaveFormItem() override;
     void paint(QPainter *painter) override;
 
     QString source() const;

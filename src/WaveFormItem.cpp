@@ -30,6 +30,11 @@ WaveFormItem::WaveFormItem(QQuickItem *parent)
     m_thumbnail.addChangeListener(this);
 }
 
+WaveFormItem::~WaveFormItem()
+{
+    m_thumbnail.removeChangeListener(this);
+}
+
 QString WaveFormItem::source() const
 {
     return m_source;
