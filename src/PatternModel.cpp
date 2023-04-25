@@ -409,7 +409,11 @@ public:
                 command->stopPlayback = byte1 < 0x90;
                 if (command->startPlayback) {
                     command->changeVolume = true;
-                    command->volume = float(byte3) / float(128);
+                    command->volume = float(byte3) / float(127);
+                }
+                if (command->stopPlayback) {
+                    // Don't actually set volume, just store the volume for velocity purposes... yes this is kind of a hack
+                    command->volume = float(byte3) / float(127);
                 }
                 if (noteDestination == SampleSlicedDestination) {
                     command->midiNote = 60;
