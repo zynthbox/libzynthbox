@@ -17,34 +17,59 @@ static inline float velocityToGain(const float &velocity) {
 }
 
 #define DataRingSize 128
-struct alignas(32) DataRingEntry {
-    DataRingEntry *previous{nullptr};
-    DataRingEntry *next{nullptr};
-    jack_nframes_t time{0};
-    int data{-1};
-    bool processed{true};
+class DataRing {
+public:
+    struct alignas(32) DataRingEntry {
+        DataRingEntry *previous{nullptr};
+        DataRingEntry *next{nullptr};
+        jack_nframes_t time{0};
+        float data{-1};
+        bool processed{true};
+    };
+
+    DataRing () {
+        DataRingEntry* entryPrevious{&ringData[DataRingSize - 1]};
+        for (quint64 i = 0; i < DataRingSize; ++i) {
+            entryPrevious->next = &ringData[i];
+            ringData[i].previous = entryPrevious;
+            entryPrevious = &ringData[i];
+        }
+        readHead = writeHead = ringData;
+    }
+    ~DataRing() {}
+    void write(jack_nframes_t time, float data) {
+        if (writeHead->processed == false) {
+            qWarning() << Q_FUNC_INFO << "There is already data stored at the write location, which likely means the buffer size is too small, which will require attention at the api level.";
+        }
+        writeHead->time = time;
+        writeHead->data = data;
+        writeHead->processed = false;
+        writeHead = writeHead->next;
+    }
+    float read() {
+        float data = readHead->data;
+        readHead = readHead->next;
+        return data;
+    }
+    DataRingEntry ringData[DataRingSize];
+    DataRingEntry *readHead{nullptr};
+    DataRingEntry *writeHead{nullptr};
 };
 
 class SamplerSynthVoicePrivate {
 public:
     SamplerSynthVoicePrivate() {
         syncTimer = qobject_cast<SyncTimer*>(SyncTimer::instance());
-
-        DataRingEntry* entryPrevious{&aftertouchRing[DataRingSize - 1]};
-        for (quint64 i = 0; i < DataRingSize; ++i) {
-            entryPrevious->next = &aftertouchRing[i];
-            aftertouchRing[i].previous = entryPrevious;
-            entryPrevious = &aftertouchRing[i];
-        }
-        aftertouchRingReadHead = aftertouchRingWriteHead = aftertouchRing;
     }
 
+    DataRing aftertouchRing;
+    DataRing pitchRing;
+    DataRing ccControlRing;
+    DataRing ccValueRing;
+    ADSR adsr;
     SyncTimer *syncTimer{nullptr};
     ClipCommand *clipCommand{nullptr};
     ClipAudioSource *clip{nullptr};
-    DataRingEntry aftertouchRing[DataRingSize];
-    DataRingEntry *aftertouchRingReadHead{nullptr};
-    DataRingEntry *aftertouchRingWriteHead{nullptr};
     qint64 clipPositionId{-1};
     quint64 startTick{0};
     quint64 nextLoopTick{0};
@@ -54,7 +79,6 @@ public:
     double sourceSamplePosition = 0;
     double sourceSampleLength = 0;
     float lgain = 0, rgain = 0;
-    ADSR adsr;
 };
 
 SamplerSynthVoice::SamplerSynthVoice()
@@ -163,8 +187,11 @@ void SamplerSynthVoice::startNote (int midiNoteNumber, float velocity, Synthesis
     }
 }
 
-void SamplerSynthVoice::stopNote (float /*velocity*/, bool allowTailOff)
+void SamplerSynthVoice::stopNote (float velocity, bool allowTailOff)
 {
+    if (velocity > 0) {
+        // Note off velocity (aka "lift" for mpe) is going to need thought...
+    }
     if (allowTailOff)
     {
         d->adsr.noteOff();
@@ -193,13 +220,24 @@ void SamplerSynthVoice::stopNote (float /*velocity*/, bool allowTailOff)
 void SamplerSynthVoice::pitchWheelMoved (int /*newValue*/) {}
 void SamplerSynthVoice::controllerMoved (int /*controllerNumber*/, int /*newValue*/) {}
 
+void SamplerSynthVoice::handleControlChange(jack_nframes_t time, int control, int value)
+{
+    if (d->clipCommand && !isTailingOff) {
+        d->ccControlRing.write(time, control);
+        d->ccValueRing.write(time, value);
+    }
+}
+
 void SamplerSynthVoice::handleAftertouch(jack_nframes_t time, int pressure)
 {
-    if (d->clipCommand) {
-        d->aftertouchRingWriteHead->processed = false;
-        d->aftertouchRingWriteHead->time = time;
-        d->aftertouchRingWriteHead->data = pressure;
-        d->aftertouchRingWriteHead = d->aftertouchRingWriteHead->next;
+    if (d->clipCommand && !isTailingOff) {
+        d->aftertouchRing.write(time, pressure);
+    }
+}
+
+void SamplerSynthVoice::handlePitchChange(jack_nframes_t time, float pitchValue) {
+    if (d->clipCommand && !isTailingOff) {
+        d->pitchRing.write(time, pitchValue);
     }
 }
 
@@ -227,10 +265,17 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
             const double sourceSampleRate = playingSound->sourceSampleRate();
             const bool isLooping = d->clipCommand->looping;
             for(jack_nframes_t frame = 0; frame < nframes; ++frame) {
-                while (d->aftertouchRingReadHead->processed == false && d->aftertouchRingReadHead->time <= frame) {
-                    d->lgain = d->rgain = (float(d->aftertouchRingReadHead->data)/127.0f);
-                    d->aftertouchRingReadHead->processed = true;
-                    d->aftertouchRingReadHead = d->aftertouchRingReadHead->next;
+                while (d->ccControlRing.readHead->processed == false && d->ccControlRing.readHead->time <= frame) {
+                    // Consume the control change values, but... we don't really have anything to properly use them for
+                    d->ccControlRing.read();
+                    d->ccValueRing.read();
+                }
+                while (d->pitchRing.readHead->processed == false && d->pitchRing.readHead->time <= frame) {
+                    d->pitchRatio = std::pow(2.0, (std::clamp(d->pitchRing.read() + double(d->clipCommand->midiNote), 0.0, 127.0) - double(playingSound->rootMidiNote())) / 12.0)
+                            * playingSound->sourceSampleRate() / getSampleRate();
+                }
+                while (d->aftertouchRing.readHead->processed == false && d->aftertouchRing.readHead->time <= frame) {
+                    d->lgain = d->rgain = d->clipCommand->volume = (float(d->aftertouchRing.read())/127.0f);
                 }
                 const int pos = (int) d->sourceSamplePosition;
                 const float alpha = (float) (d->sourceSamplePosition - pos);
@@ -259,6 +304,10 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
 
                 d->sourceSamplePosition += d->pitchRatio;
 
+                if (!d->adsr.isActive()) {
+                    stopNote(d->clipCommand->volume, false);
+                    break;
+                }
                 if (isLooping) {
                     // beat align samples by reading clip duration in beats from clip, saving synctimer's jack playback positions in voice on startNote, and adjust in if (looping) section of process, and make sure the loop is restarted on that beat if deviation is sufficiently large (like... one timer tick is too much maybe?)
                     if (trunc(d->clip->getLengthInBeats()) == d->clip->getLengthInBeats()) {
@@ -285,16 +334,11 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
                 } else {
                     if (d->sourceSamplePosition >= stopPosition)
                     {
-                        stopNote (0.0f, false);
+                        stopNote(d->clipCommand->volume, false);
                         break;
-                    } else if (d->sourceSamplePosition >= (stopPosition - (d->adsr.getParameters().release * sourceSampleRate))) {
-                        // ...really need a way of telling that this has been done already (it's not dangerous, just not pretty, there's maths in there)
-                        stopNote (0.0f, true);
+                    } else if (isTailingOff == false && d->sourceSamplePosition >= (stopPosition - (d->adsr.getParameters().release * sourceSampleRate))) {
+                        stopNote(d->clipCommand->volume, true);
                     }
-                }
-                if (!d->adsr.isActive()) {
-                    stopNote(0.0f, false);
-                    break;
                 }
             }
 
