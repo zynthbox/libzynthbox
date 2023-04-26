@@ -27,7 +27,7 @@ using namespace juce;
 class SamplerChannel
 {
 public:
-    explicit SamplerChannel(const QString &clientName);
+    explicit SamplerChannel(const QString &clientName, const int &midiChannel);
     ~SamplerChannel() {
         if (jackClient) {
             jack_client_close(jackClient);
@@ -74,8 +74,9 @@ void jackConnect(jack_client_t* jackClient, const QString &from, const QString &
     }
 }
 
-SamplerChannel::SamplerChannel(const QString &clientName)
+SamplerChannel::SamplerChannel(const QString &clientName, const int &midiChannel)
     : clientName(clientName)
+    , midiChannel(midiChannel)
 {
     jack_status_t real_jack_status{};
     jackClient = jack_client_open(clientName.toUtf8(), JackNullOption, &real_jack_status);
@@ -93,7 +94,11 @@ SamplerChannel::SamplerChannel(const QString &clientName)
             if (jack_activate(jackClient) == 0) {
                 jackConnect(jackClient, QString("%1:%2").arg(clientName).arg(portNameLeft).toUtf8(), QLatin1String{"system:playback_1"});
                 jackConnect(jackClient, QString("%1:%2").arg(clientName).arg(portNameRight).toUtf8(), QLatin1String{"system:playback_2"});
-                jackConnect(jackClient, QLatin1String("ZLRouter:PassthroughOut"), QString("%1:midiIn").arg(clientName));
+                if (midiChannel < 0) {
+                    jackConnect(jackClient, QLatin1String("ZLRouter:PassthroughOut"), QString("%1:midiIn").arg(clientName));
+                } else {
+                    jackConnect(jackClient, QLatin1String("ZLRouter:Channel%1").arg(QString::number(midiChannel)), QString("%1:midiIn").arg(clientName));
+                }
                 qInfo() << Q_FUNC_INFO << "Successfully created and set up" << clientName;
             } else {
                 qWarning() << Q_FUNC_INFO << "Failed to activate SamplerSynth Jack client" << clientName;
@@ -134,60 +139,59 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                 break;
             } else {
                 const unsigned char &byte1 = event.buffer[0];
+                const int globalChannel{0};
                 if (0x7F < byte1 &&  byte1 < 0xf0) {
+                    // TODO Handle MPE global-channel instructions and upper/lower split...
                     eventChannel = (byte1 & 0xf);
-                    // only react to the event if it's on our channel
-                    if (eventChannel == midiChannel) {
-                        if (0x79 < byte1 && byte1 < 0xA0) {
-                            // Note Off or On message
-                            const int note{event.buffer[1]};
-                            const int velocity{event.buffer[2]};
-                            playGridManager()->midiMessageToClipCommands(&commandRing, byte1, note, velocity);
-                            while (commandRing.readHead->clipCommand) {
-                                handleCommand(commandRing.read(), event.time);
+                    if (0x79 < byte1 && byte1 < 0xA0) {
+                        // Note Off or On message
+                        const int note{event.buffer[1]};
+                        const int velocity{event.buffer[2]};
+                        playGridManager()->midiMessageToClipCommands(&commandRing, midiChannel, byte1, note, velocity);
+                        while (commandRing.readHead->clipCommand) {
+                            handleCommand(commandRing.read(), event.time);
+                        }
+                    } else if (0x9F < byte1 && byte1 < 0xB0) {
+                        // Polyphonic Aftertouch
+                        const int note{event.buffer[1]};
+                        const int pressure{event.buffer[2]};
+                        for (SamplerSynthVoice *voice : qAsConst(voices)) {
+                            if (voice->isPlaying && voice->currentCommand()->midiNote == note && (voice->currentCommand()->midiChannel == eventChannel || eventChannel == globalChannel)) {
+                                voice->handleAftertouch(event.time, pressure);
                             }
-                        } else if (0x9F < byte1 && byte1 < 0xB0) {
-                            // Polyphonic Aftertouch
-                            const int note{event.buffer[1]};
-                            const int pressure{event.buffer[2]};
-                            for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                                if (voice->isPlaying && voice->currentCommand()->midiNote == note) {
-                                    voice->handleAftertouch(event.time, pressure);
-                                }
+                        }
+                    } else if (0xAF < byte1 && byte1 < 0xC0) {
+                        // Control/mode change
+                        const int control{event.buffer[1]};
+                        const int value{event.buffer[2]};
+                        for (SamplerSynthVoice *voice : qAsConst(voices)) {
+                            if (voice->isPlaying && voice->currentCommand()->midiChannel == eventChannel) {
+                                voice->handleControlChange(event.time, control, value);
                             }
-                        } else if (0xAF < byte1 && byte1 < 0xC0) {
-                            // Control/mode change
-                            const int control{event.buffer[1]};
-                            const int value{event.buffer[2]};
-                            for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                                if (voice->isPlaying) {
-                                    voice->handleControlChange(event.time, control, value);
-                                }
+                        }
+                    } else if (0xBF < byte1 && byte1 < 0xD0) {
+                        // Program change
+                    } else if (0xCF < byte1 && byte1 < 0xE0) {
+                        // Non-polyphonic aftertouch
+                        const int pressure{event.buffer[1]};
+                        for (SamplerSynthVoice *voice : qAsConst(voices)) {
+                            if (voice->isPlaying && voice->currentCommand()->midiChannel == eventChannel) {
+                                voice->handleAftertouch(event.time, pressure);
                             }
-                        } else if (0xBF < byte1 && byte1 < 0xD0) {
-                            // Program change
-                        } else if (0xCF < byte1 && byte1 < 0xE0) {
-                            // Non-polyphonic aftertouch
-                            const int pressure{event.buffer[1]};
-                            for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                                if (voice->isPlaying) {
-                                    voice->handleAftertouch(event.time, pressure);
-                                }
-                            }
-                        } else if (0xDF < byte1 && byte1 < 0xF0) {
-                            // Pitch bend
-                            // Going the other way:
-                            // char byte3 = pitchValue >> 7;
-                            // byte byte2 = pitchValue & 0x7F;
-                            // Per-note pitch bend should be +/- 48 semitones by default
-                            // Master-channel pitch bend should be +/- 2 semitones by default
-                            // Change either to +/- 96 using Registered Parameter Number 0
-                            const float bendMax{2.0};
-                            const float pitchValue = bendMax * (float((event.buffer[2] * 128) + event.buffer[1]) - 8192) / 16383.0;
-                            for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                                if (voice->isPlaying) {
-                                    voice->handlePitchChange(event.time, pitchValue);
-                                }
+                        }
+                    } else if (0xDF < byte1 && byte1 < 0xF0) {
+                        // Pitch bend
+                        // Going the other way:
+                        // char byte3 = pitchValue >> 7;
+                        // byte byte2 = pitchValue & 0x7F;
+                        // Per-note pitch bend should be +/- 48 semitones by default
+                        // Master-channel pitch bend should be +/- 2 semitones by default
+                        // Change either to +/- 96 using Registered Parameter Number 0
+                        const float bendMax{2.0};
+                        const float pitchValue = bendMax * (float((event.buffer[2] * 128) + event.buffer[1]) - 8192) / 16383.0;
+                        for (SamplerSynthVoice *voice : qAsConst(voices)) {
+                            if (voice->isPlaying && voice->currentCommand()->midiChannel == eventChannel) {
+                                voice->handlePitchChange(event.time, pitchValue);
                             }
                         }
                     }
@@ -257,41 +261,35 @@ void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick
     SamplerSynthSound *sound = d->clipSounds[clipCommand->clip];
     if (clipCommand->stopPlayback || clipCommand->startPlayback) {
         if (clipCommand->stopPlayback) {
-            if (midiChannel == clipCommand->midiChannel) {
-                for (SamplerSynthVoice * voice : qAsConst(voices)) {
-                    const ClipCommand *currentVoiceCommand = voice->currentCommand();
-                    if (voice->isTailingOff == false && voice->getCurrentlyPlayingSound().get() == sound && currentVoiceCommand->equivalentTo(clipCommand)) {
-                        voice->setCurrentCommand(clipCommand);
-                        voice->stopNote(clipCommand->volume, true);
-                        // Since we may have more than one going at the same time (since we allow long releases), just stop the first one
-                        break;
-                    }
+            for (SamplerSynthVoice * voice : qAsConst(voices)) {
+                const ClipCommand *currentVoiceCommand = voice->currentCommand();
+                if (voice->isTailingOff == false && voice->getCurrentlyPlayingSound().get() == sound && currentVoiceCommand->equivalentTo(clipCommand)) {
+                    voice->setCurrentCommand(clipCommand);
+                    voice->stopNote(clipCommand->volume, true);
+                    // Since we may have more than one going at the same time (since we allow long releases), just stop the first one
+                    break;
                 }
             }
         }
         if (clipCommand->startPlayback) {
-            if (midiChannel == clipCommand->midiChannel) {
-                for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                    if (!voice->isPlaying) {
-                        voice->setCurrentCommand(clipCommand);
-                        voice->setStartTick(currentTick);
-                        d->synth->startVoiceImpl(voice, sound, clipCommand->midiChannel, clipCommand->midiNote, clipCommand->volume);
-                        break;
-                    }
+            for (SamplerSynthVoice *voice : qAsConst(voices)) {
+                if (!voice->isPlaying) {
+                    voice->setCurrentCommand(clipCommand);
+                    voice->setStartTick(currentTick);
+                    d->synth->startVoiceImpl(voice, sound, clipCommand->midiChannel, clipCommand->midiNote, clipCommand->volume);
+                    break;
                 }
             }
         }
     } else {
-        if (midiChannel == clipCommand->midiChannel) {
-            for (SamplerSynthVoice * voice : qAsConst(voices)) {
-                const ClipCommand *currentVoiceCommand = voice->currentCommand();
-                if (voice->getCurrentlyPlayingSound().get() == sound && currentVoiceCommand->equivalentTo(clipCommand)) {
-                    // Update the voice with the new command
-                    voice->setCurrentCommand(clipCommand);
-                    // We may have more than one thing going for the same sound on the same note, which... shouldn't
-                    // really happen, but it's ugly and we just need to deal with that when stopping, so, update /all/
-                    // the voices where both the sound and the command match.
-                }
+        for (SamplerSynthVoice * voice : qAsConst(voices)) {
+            const ClipCommand *currentVoiceCommand = voice->currentCommand();
+            if (voice->getCurrentlyPlayingSound().get() == sound && currentVoiceCommand->equivalentTo(clipCommand)) {
+                // Update the voice with the new command
+                voice->setCurrentCommand(clipCommand);
+                // We may have more than one thing going for the same sound on the same note, which... shouldn't
+                // really happen, but it's ugly and we just need to deal with that when stopping, so, update /all/
+                // the voices where both the sound and the command match.
             }
         }
     }
@@ -332,10 +330,9 @@ void SamplerSynth::initialize(tracktion_engine::Engine *engine)
         } else {
             channelName = QString("SamplerSynth-channel_%1").arg(QString::number(channelIndex -1));
         }
-        SamplerChannel *channel = new SamplerChannel(channelName);
-        channel->d = d;
         // Funny story, the actual channels have midi channels equivalent to their name, minus one. The others we can cheat with
-        channel->midiChannel = channelIndex - 2;
+        SamplerChannel *channel = new SamplerChannel(channelName, channelIndex - 2);
+        channel->d = d;
         jack_nframes_t sampleRate = jack_get_sample_rate(channel->jackClient);
         d->synth->setCurrentPlaybackSampleRate(sampleRate);
         for (SamplerSynthVoice *voice : qAsConst(channel->voices)) {
