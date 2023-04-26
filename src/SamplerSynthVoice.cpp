@@ -48,6 +48,7 @@ public:
     }
     float read() {
         float data = readHead->data;
+        readHead->processed = true;
         readHead = readHead->next;
         return data;
     }
