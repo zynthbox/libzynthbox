@@ -92,6 +92,7 @@ struct ChannelOutput {
     int zynthianChannels[16];
     QString portName;
     jack_port_t *port{nullptr};
+    void* portBuffer{nullptr};
     jack_nframes_t mostRecentTime{0};
     int inputChannel{-1};
     int externalChannel{-1};
@@ -365,6 +366,11 @@ public:
         jack_midi_clear_buffer(zynthianOutputBuffer);
         jack_midi_clear_buffer(passthroughOutputBuffer);
 #endif
+        for (ChannelOutput *output : qAsConst(outputs)) {
+            output->portBuffer = jack_port_get_buffer(output->port, nframes);
+            output->mostRecentTime = 0;
+            jack_midi_clear_buffer(output->portBuffer);
+        }
         ChannelOutput *output{nullptr};
         jack_midi_event_t event;
         int eventChannel{-1};
@@ -417,6 +423,7 @@ public:
                                         addMessage(internalPassthroughListener, timestamp, event);
                                     }
                                     ++nonEmittedEvents; // if we return the above line, remove this
+                                    writeEventToBuffer(event, output->portBuffer, eventChannel, &output->mostRecentTime, output);
                                     writeEventToBuffer(event, passthroughOutputBuffer, eventChannel, &passthroughOutputMostRecentTime, passthroughOutputPort);
                                     break;
                                 case MidiRouter::ExternalDestination:
@@ -502,7 +509,6 @@ public:
                                 }
                             } else {
                                 // Check whether we've got any message translation to do
-                                eventChannel = 0;
                                 if (event.buffer[0] > 0xAF && event.buffer[0] < 0xC0) {
                                     // Then it's a CC thing, and maybe we want to do a thing?
                                     const jack_midi_event_t &otherEvent = device->device_translations_cc[event.buffer[1]];
@@ -563,6 +569,7 @@ public:
                                             if (isNoteMessage) {
                                                 addMessage(passthroughListener, timestamp, event);
                                             }
+                                            writeEventToBuffer(event, output->portBuffer, adjustedCurrentChannel, &output->mostRecentTime, output);
                                             writeEventToBuffer(event, passthroughOutputBuffer, adjustedCurrentChannel, &passthroughOutputMostRecentTime, passthroughOutputPort);
                                             break;
                                         case MidiRouter::ExternalDestination:
@@ -843,7 +850,7 @@ MidiRouter::MidiRouter(QObject *parent)
                 for (int channel = 0; channel < OUTPUT_CHANNEL_COUNT; ++channel) {
                     ChannelOutput *output = new ChannelOutput(channel);
                     output->portName = QString("Channel%2").arg(QString::number(channel));
-//                     output->port = jack_port_register(d->jackClient, output->portName.toUtf8(), JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+                    output->port = jack_port_register(d->jackClient, output->portName.toUtf8(), JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
                     d->outputs[channel] = output;
                 }
                 // Set up the zynthian output port
@@ -864,9 +871,9 @@ MidiRouter::MidiRouter(QObject *parent)
                 // Activate the client.
                 if (jack_activate(d->jackClient) == 0) {
                     qInfo() << "ZLRouter: Successfully created and set up the ZLRouter's Jack client";
-//                     for (ChannelOutput *output : d->outputs) {
-//                         d->connectPorts(QString("ZLRouter:%1").arg(output->portName), zmrPort);
-//                     }
+                    for (ChannelOutput *output : d->outputs) {
+                        d->connectPorts(QString("ZLRouter:%1").arg(output->portName), zmrPort);
+                    }
                     d->connectPorts(QString("ZLRouter:%1").arg(d->zynthianOutputPort->portName), zmrPort);
                     d->connectPorts(QLatin1String{"SyncTimer:midi_out"}, QLatin1String{"ZLRouter:SyncTimerIn"});
 
