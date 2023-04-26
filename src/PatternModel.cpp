@@ -397,14 +397,14 @@ public:
     /**
      * Writes any ClipCommands which match the midi message passed to the function to the list also passed in
      * @param listToPopulate The command ring that should have commands written to it
-     * @param byte1 The first byte of a midi message
+     * @param byte1 The first byte of a midi message (this is expected to be a channel message)
      * @param byte2 The seconds byte of a midi message
      * @param byte3 The third byte of a midi message
      */
     void midiMessageToClipCommands(ClipCommandRing *listToPopulate, const int &byte1, const int &byte2, const int &byte3) const {
         for (ClipAudioSource *clip : qAsConst(clips)) {
             if (clip && clip->keyZoneStart() <= byte2 && byte2 <= clip->keyZoneEnd()) {
-                ClipCommand *command = ClipCommand::channelCommand(clip, midiChannel);
+                ClipCommand *command = ClipCommand::channelCommand(clip, (byte1 & 0xf));
                 command->startPlayback = byte1 > 0x8F;
                 command->stopPlayback = byte1 < 0x90;
                 if (command->startPlayback) {
@@ -1830,9 +1830,9 @@ void PatternModel::handleMidiMessage(const unsigned char &byte1, const unsigned 
     }
 }
 
-void PatternModel::midiMessageToClipCommands(ClipCommandRing *listToPopulate, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3) const
+void PatternModel::midiMessageToClipCommands(ClipCommandRing *listToPopulate, const int &samplerIndex, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3) const
 {
-    if ((!d->sequence || (d->sequence->shouldMakeSounds() && (d->sequence->soloPatternObject() == this || d->enabled)))
+    if (samplerIndex == d->midiChannel && (!d->sequence || (d->sequence->shouldMakeSounds() && (d->sequence->soloPatternObject() == this || d->enabled)))
         // But also, don't make sounds unless we're sample-triggering or slicing (otherwise the synths will handle it)
         && (d->noteDestination == SampleTriggerDestination || d->noteDestination == SampleSlicedDestination)) {
             d->midiMessageToClipCommands(listToPopulate, byte1, byte2, byte3);
