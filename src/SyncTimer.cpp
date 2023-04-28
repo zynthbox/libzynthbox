@@ -360,6 +360,10 @@ public:
     ClipCommandRing freshClipCommands;
     QTimer objectGarbageHandler;
 
+    bool audibleMetronome{false};
+    ClipAudioSource *metronomeTick{nullptr};
+    ClipAudioSource *metronomeTock{nullptr};
+
     #ifdef DEBUG_SYNCTIMER_TIMING
     frame_clock::time_point lastRound;
     QList<long> intervals;
@@ -378,9 +382,21 @@ public:
                 callbacks[i](beat);
             }
 
-            // Spit out a touch of useful information on beat zero
-            if (beat == 0 && samplerSynth->engine()) {
+            ClipCommand *command{nullptr};
+            if (beat == 0) {
+                // Spit out a touch of useful information on beat zero
                 qDebug() << "Current tracktion/juce CPU usage:" << samplerSynth->engine()->getDeviceManager().getCpuUsage() << "with total jack process call saturation at:" << samplerSynth->cpuLoad();
+                if (audibleMetronome) {
+                    command = ClipCommand::noEffectCommand(metronomeTick);
+                }
+            } else if (audibleMetronome && (beat % BeatSubdivisions == 0)) {
+                command = ClipCommand::noEffectCommand(metronomeTock);
+            }
+            if (command) {
+                command->startPlayback = true;
+                command->changeVolume = true;
+                command->volume = 1.0;
+                q->scheduleClipCommand(command, 0);
             }
 
             // Increase the current beat as we understand it
@@ -788,12 +804,11 @@ void SyncTimer::removeCallback(void (*functionPtr)(int)) {
 
 void SyncTimer::queueClipToStartOnChannel(ClipAudioSource *clip, int midiChannel)
 {
-    ClipCommand *command = getClipCommand();
-    command->clip = clip;
-    command->midiChannel = midiChannel;
+    ClipCommand *command = ClipCommand::channelCommand(clip, midiChannel);
     command->midiNote = 60;
     command->changeVolume = true;
     command->volume = 1.0;
+    command->changeLooping = true;
     command->looping = true;
     // When explicity starting a clip in a looping state, we want to /restart/ the loop, not start multiple loops (to run multiple at the same time, sample-trig can do that for us)
     command->stopPlayback = true;
@@ -823,9 +838,7 @@ void SyncTimer::queueClipToStopOnChannel(ClipAudioSource *clip, int midiChannel)
     }
 
     // Then stop it, now, because it should be now
-    ClipCommand *command = getClipCommand();
-    command->clip = clip;
-    command->midiChannel = midiChannel;
+    ClipCommand *command = ClipCommand::channelCommand(clip, midiChannel);
     command->midiNote = 60;
     command->stopPlayback = true;
     StepData *stepData{d->delayedStep(0)};
@@ -948,6 +961,28 @@ void SyncTimer::setBpm(quint64 bpm)
 quint64 SyncTimer::scheduleAheadAmount() const
 {
     return d->scheduleAheadAmount;
+}
+
+void SyncTimer::setMetronomeTicks(ClipAudioSource* tick, ClipAudioSource* tock)
+{
+    d->metronomeTick = tick;
+    d->metronomeTock = tock;
+    if (d->metronomeTick == nullptr || d->metronomeTock == nullptr) {
+        setAudibleMetronome(false);
+    }
+}
+
+bool SyncTimer::audibleMetronome() const
+{
+    return d->audibleMetronome;
+}
+
+void SyncTimer::setAudibleMetronome(const bool& value)
+{
+    if (d->audibleMetronome != value) {
+        d->audibleMetronome = value;
+        Q_EMIT audibleMetronomeChanged();
+    }
 }
 
 int SyncTimer::beat() const {

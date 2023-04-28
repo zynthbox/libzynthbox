@@ -22,6 +22,7 @@ class SyncTimer : public QObject {
   Q_OBJECT
   Q_PROPERTY(quint64 bpm READ getBpm WRITE setBpm NOTIFY bpmChanged)
   Q_PROPERTY(quint64 scheduleAheadAmount READ scheduleAheadAmount NOTIFY scheduleAheadAmountChanged)
+  Q_PROPERTY(bool audibleMetronome READ audibleMetronome WRITE setAudibleMetronome NOTIFY audibleMetronomeChanged)
 public:
   static SyncTimer* instance() {
     static SyncTimer* instance{nullptr};
@@ -102,6 +103,25 @@ public:
    */
   Q_INVOKABLE quint64 scheduleAheadAmount() const;
   Q_SIGNAL void scheduleAheadAmountChanged();
+
+  /**
+   * \brief Set the CAS instances used for the metronome's click sounds
+   * @note This must be called before the audible metronome can be enabled (and will disable it if this function is called with either of the two set to nullptr)
+   * @param tick The sound used for the 1st beat
+   * @param tock The sound used for the 2nd through 4th beats
+   */
+  Q_INVOKABLE void setMetronomeTicks(ClipAudioSource *tick, ClipAudioSource *tock);
+  /**
+   * \brief Whether or not there is an audible metronome when the timer is running
+   *
+   * The metronome clicks will be on sketchpad channel -2 (the un-effected global channel), and not included
+   * in the recordings made within sketchpad. If you record the system output using other tools, it is just
+   * a part of the audio output signal and consequently you will end up having it in the recording.
+   */
+  bool audibleMetronome() const;
+  void setAudibleMetronome(const bool &value);
+  Q_SIGNAL void audibleMetronomeChanged();
+
   /**
    * \brief The current beat, where that makes useful sense
    * @returns An integer from 0 through 128
