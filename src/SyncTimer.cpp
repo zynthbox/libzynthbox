@@ -853,6 +853,25 @@ void SyncTimer::queueClipToStop(ClipAudioSource *clip) {
     queueClipToStopOnChannel(clip, -1);
 }
 
+void SyncTimer::startWithCountin()
+{
+    ClipCommand *command{nullptr};
+    for (quint64 beat = 0; beat < 4; ++beat) {
+        if (beat == 0) {
+            command = ClipCommand::noEffectCommand(d->metronomeTick);
+        } else {
+            command = ClipCommand::noEffectCommand(d->metronomeTock);
+        }
+        command->startPlayback = true;
+        command->changeVolume = true;
+        command->volume = 1.0;
+        scheduleClipCommand(command, beat * BeatSubdivisions);
+    }
+    TimerCommand *startCommand = getTimerCommand();
+    startCommand->operation = TimerCommand::StartPlaybackOperation;
+    scheduleTimerCommand(4 * BeatSubdivisions - 1, startCommand);
+}
+
 void SyncTimer::start(int bpm) {
     qDebug() << "#### Starting timer with bpm " << bpm << " and interval " << getInterval(bpm);
     setBpm(quint64(bpm));

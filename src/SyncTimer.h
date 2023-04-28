@@ -54,6 +54,11 @@ public:
   void queueClipToStop(ClipAudioSource *clip);
   void queueClipToStartOnChannel(ClipAudioSource *clip, int midiChannel);
   void queueClipToStopOnChannel(ClipAudioSource *clip, int midiChannel);
+  /**
+   * \brief Plays a full bar of metronome ticks (four), and starts playback on the next bar
+   * @note This does not change the audible metronome state, and that will require turning on explicitly
+   */
+  Q_INVOKABLE void startWithCountin();
   void start(int bpm);
   void stop();
   int getInterval(int bpm);
