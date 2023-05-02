@@ -71,3 +71,8 @@ int AudioLevelsChannel::process(jack_nframes_t nframes)
     }
     return 0;
 }
+
+DiskWriter * AudioLevelsChannel::diskRecorder()
+{
+    return m_diskRecorder;
+}
