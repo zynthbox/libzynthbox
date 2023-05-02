@@ -1,5 +1,7 @@
 #include "DiskWriter.h"
 
+#include <QDebug>
+
 DiskWriter::DiskWriter()
 {
     m_backgroundThread.startThread();
@@ -38,7 +40,9 @@ void DiskWriter::startRecording(const QString& fileName, double sampleRate, int 
 void DiskWriter::processBlock(const float** inputChannelData, int numSamples) const {
     const ScopedLock sl (m_writerLock);
     if (m_activeWriter.load() != nullptr) {
-        m_activeWriter.load()->write (inputChannelData, numSamples);
+        if (m_activeWriter.load()->write(inputChannelData, numSamples) == false) {
+            qWarning() << Q_FUNC_INFO << "Attempted to write data, but did not have the space to do so. This will result in a glitchy recording, and means we should be using a larger buffer.";
+        }
     }
 }
 
