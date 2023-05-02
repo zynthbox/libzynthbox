@@ -50,7 +50,6 @@ target_compile_definitions(libzynthbox
 
 target_link_libraries(libzynthbox
     PRIVATE
-        ${RTMIDI_LIBRARIES}
         ${Jack_LIBRARIES}
         tracktion::tracktion_engine
         tracktion::tracktion_graph
@@ -77,7 +76,6 @@ target_link_libraries(libzynthbox
 
 target_include_directories(libzynthbox
     PRIVATE
-        ${RTMIDI_INCLUDE_DIRS}
         ${Jack_INCLUDE_DIRS}
     INTERFACE
         $<TARGET_PROPERTY:libzynthbox,INCLUDE_DIRECTORIES>

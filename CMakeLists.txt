@@ -18,13 +18,16 @@ set(KF5_MIN_VERSION "5.54.0")
 set(ENV{PKG_CONFIG_PATH} "/usr/lib/pkgconfig:/usr/local/lib/pkgconfig")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${ECM_MODULE_PATH} ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
+option(GENERATE_PYTHON_BINDINGS "When on, the python module for libZynthbox will be generated (which requires Shiboken2 to be installed)" ON)
+
 include(FindPkgConfig)
 include(KDEInstallDirs)
 include(ECMInstallIcons)
-include(PySide2Helper)
-include(Shiboken2Helper)
+if(GENERATE_PYTHON_BINDINGS)
+    include(PySide2Helper)
+    include(Shiboken2Helper)
+endif(GENERATE_PYTHON_BINDINGS)
 
-pkg_check_modules(RTMIDI REQUIRED rtmidi)
 pkg_check_modules(Jack REQUIRED jack)
 
 include_directories(tracktion_engine/modules/)
@@ -32,4 +35,7 @@ add_subdirectory(tracktion_engine/modules/juce)
 add_subdirectory(tracktion_engine/modules)
 
 add_subdirectory(src)
-add_subdirectory(pyside_bindings)
+
+if(GENERATE_PYTHON_BINDINGS)
+    add_subdirectory(pyside_bindings)
+endif(GENERATE_PYTHON_BINDINGS)
