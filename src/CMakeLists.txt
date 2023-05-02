@@ -18,6 +18,8 @@ target_sources(libzynthbox
         WaveFormItem.cpp
         JackPassthrough.cpp
         AudioLevels.cpp
+        AudioLevelsChannel.cpp
+        DiskWriter.cpp
         FilterProxy.cpp
         Note.cpp
         NotesModel.cpp

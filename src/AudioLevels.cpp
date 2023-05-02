@@ -10,141 +10,18 @@
 */
 
 #include "AudioLevels.h"
+#include "DiskWriter.h"
 
-#include <cmath>
 #include <QDateTime>
 #include <QDebug>
 #include <QDir>
-#include <QString>
 #include <QVariantList>
-#include <QWaitCondition>
-
-#include <jack/ringbuffer.h>
-
-#include "JUCEHeaders.h"
 
 #define DebugAudioLevels false
 
 struct RecordPort {
     QString portName;
     int channel{-1};
-};
-
-// that is one left and one right channel
-#define CHANNEL_COUNT 2
-class DiskWriter {
-public:
-    explicit DiskWriter() {
-        m_backgroundThread.startThread();
-    }
-    ~DiskWriter() {
-        stop();
-    }
-
-    void startRecording(const QString& fileName, double sampleRate = 44100, int bitRate = 16, int channelCount=CHANNEL_COUNT) {
-        m_file = juce::File(fileName.toStdString());
-        m_sampleRate = sampleRate;
-        if (m_sampleRate > 0) {
-            // In case there's a file there already, get rid of it - at this point, the user should have been made aware, so we can be ruthless
-            m_file.deleteFile();
-            // Create our file stream, so we have somewhere to write data to
-            if (auto fileStream = std::unique_ptr<FileOutputStream>(m_file.createOutputStream())) {
-                // Now create a WAV writer, which will be writing to our output stream
-                WavAudioFormat wavFormat;
-                if (auto writer = wavFormat.createWriterFor(fileStream.get(), sampleRate, quint32(qMin(channelCount, CHANNEL_COUNT)), bitRate, {}, 0)) {
-                    fileStream.release(); // (passes responsibility for deleting the stream to the writer object that is now using it)
-                    // Now we'll create one of these helper objects which will act as a FIFO buffer, and will
-                    // write the data to disk on our background thread.
-                    m_threadedWriter.reset(new AudioFormatWriter::ThreadedWriter(writer, m_backgroundThread, 32768));
-
-                    // And now, swap over our active writer pointer so that the audio callback will start using it..
-                    const ScopedLock sl (m_writerLock);
-                    m_activeWriter = m_threadedWriter.get();
-                    m_isRecording = true;
-                }
-            }
-        }
-    }
-
-    // The input data must be an array with the same number of channels as the writer expects (that is, in our general case CHANNEL_COUNT)
-    void processBlock(const float** inputChannelData, int numSamples) const {
-        const ScopedLock sl (m_writerLock);
-        if (m_activeWriter.load() != nullptr) {
-            m_activeWriter.load()->write (inputChannelData, numSamples);
-        }
-    }
-
-    void stop() {
-        // First, clear this pointer to stop the audio callback from using our writer object..
-        {
-            const ScopedLock sl(m_writerLock);
-            m_activeWriter = nullptr;
-            m_sampleRate = 0;
-            m_isRecording = false;
-        }
-
-        // Now we can delete the writer object. It's done in this order because the deletion could
-        // take a little time while remaining data gets flushed to disk, so it's best to avoid blocking
-        // the audio callback while this happens.
-        m_threadedWriter.reset();
-    }
-
-    const bool &isRecording() const {
-        return m_isRecording;
-    }
-    const QString &filenamePrefix() const {
-        return m_fileNamePrefix;
-    }
-    void setFilenamePrefix(const QString& fileNamePrefix) {
-        m_fileNamePrefix = fileNamePrefix;
-    }
-    const bool &shouldRecord() const {
-        return m_shouldRecord;
-    }
-    void setShouldRecord(bool shouldRecord) {
-        m_shouldRecord = shouldRecord;
-    }
-private:
-    QString m_fileNamePrefix;
-    bool m_shouldRecord{false};
-    bool m_isRecording{false};
-
-    juce::File m_file;
-    juce::TimeSliceThread m_backgroundThread{"AudioLevel Disk Recorder"}; // the thread that will write our audio data to disk
-    std::unique_ptr<AudioFormatWriter::ThreadedWriter> m_threadedWriter; // the FIFO used to buffer the incoming data
-    double m_sampleRate = 0.0;
-
-    CriticalSection m_writerLock;
-    std::atomic<AudioFormatWriter::ThreadedWriter*> m_activeWriter { nullptr };
-};
-
-static const QString portNameLeft{"left_in"};
-static const QString portNameRight{"right_in"};
-class alignas(128) AudioLevelsChannel {
-public:
-    explicit AudioLevelsChannel(const QString &clientName);
-    ~AudioLevelsChannel() {
-        if (jackClient) {
-            jack_client_close(jackClient);
-        }
-        delete diskRecorder;
-    }
-    int process(jack_nframes_t nframes);
-    jack_port_t *leftPort{nullptr};
-    jack_default_audio_sample_t *leftBuffer{nullptr};
-    jack_port_t *rightPort{nullptr};
-    jack_default_audio_sample_t *rightBuffer{nullptr};
-    quint32 bufferReadSize{0};
-    DiskWriter* diskRecorder{new DiskWriter};
-    jack_client_t *jackClient{nullptr};
-    float peakAHoldSignal{0};
-    float peakBHoldSignal{0};
-    int peakA{0};
-    int peakB{0};
-    bool enabled{false};
-    QString clientName;
-private:
-    const float** recordingPassthroughBuffer{new const float* [2]};
 };
 
 class AudioLevelsPrivate {
@@ -159,8 +36,8 @@ public:
         qDeleteAll(audioLevelsChannels);
     }
     QList<AudioLevelsChannel*> audioLevelsChannels;
-    DiskWriter* globalPlaybackWriter{new DiskWriter};
-    DiskWriter* portsRecorder{new DiskWriter};
+    DiskWriter* globalPlaybackWriter{nullptr};
+    DiskWriter* portsRecorder{nullptr};
     QList<RecordPort> recordPorts;
     QList<DiskWriter*> channelWriters{nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
     QVariantList channelsToRecord;
@@ -199,62 +76,6 @@ public:
         jackClient = audioLevelsChannels[0]->jackClient;
     }
 };
-
-static int audioLevelsChannelProcess(jack_nframes_t nframes, void* arg) {
-  return static_cast<AudioLevelsChannel*>(arg)->process(nframes);
-}
-
-AudioLevelsChannel::AudioLevelsChannel(const QString &clientName)
-    : clientName(clientName)
-{
-    jack_status_t real_jack_status{};
-    int result{0};
-    jackClient = jack_client_open(clientName.toUtf8(), JackNullOption, &real_jack_status);
-    if (jackClient) {
-        // Set the process callback.
-        result = jack_set_process_callback(jackClient, audioLevelsChannelProcess, this);
-        if (result == 0) {
-            leftPort = jack_port_register(jackClient, portNameLeft.toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput | JackPortIsTerminal, 0);
-            rightPort = jack_port_register(jackClient, portNameRight.toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput | JackPortIsTerminal, 0);
-            // Activate the client.
-            result = jack_activate(jackClient);
-            if (result == 0) {
-                qInfo() << Q_FUNC_INFO << "Successfully created and set up" << clientName;
-            } else {
-                qWarning() << Q_FUNC_INFO << "Failed to activate Jack client" << clientName << "with the return code" << result;
-            }
-        } else {
-            qWarning() << Q_FUNC_INFO << "Failed to set Jack processing callback for" << clientName << "with the return code" << result;
-        }
-    } else {
-        qWarning() << Q_FUNC_INFO << "Failed to open Jack client" << clientName << "with status" << real_jack_status;
-    }
-}
-
-inline float addFloat(const float& db1, const float &db2) {
-   return 10 * log10f(pow(10, db1/10) + pow(10, db2/10));
-}
-
-int AudioLevelsChannel::process(jack_nframes_t nframes)
-{
-    if (enabled) {
-        leftBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(leftPort, nframes);
-        rightBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(rightPort, nframes);
-        if (!leftBuffer || !rightBuffer) {
-            qWarning() << Q_FUNC_INFO << clientName << "has incorrect ports and things are unhappy - how to fix, though...";
-            enabled = false;
-            bufferReadSize = 0;
-        } else {
-            bufferReadSize = nframes;
-            if (diskRecorder->isRecording()) {
-                recordingPassthroughBuffer[0] = leftBuffer;
-                recordingPassthroughBuffer[1] = rightBuffer;
-                diskRecorder->processBlock(recordingPassthroughBuffer, (int)nframes);
-            }
-        }
-    }
-    return 0;
-}
 
 AudioLevels *AudioLevels::instance()  {
     AudioLevels* sin = singletonInstance.load(std::memory_order_acquire);
@@ -299,9 +120,9 @@ AudioLevels::AudioLevels(QObject *parent)
             d->connectPorts("system:capture_1", "AudioLevels-SystemCapture:left_in");
             d->connectPorts("system:capture_2", "AudioLevels-SystemCapture:right_in");
         } else if (channelIndex == 1) {
-            d->globalPlaybackWriter = channel->diskRecorder;
+            d->globalPlaybackWriter = channel->diskRecorder();
         } else if (channelIndex == 2) {
-            d->portsRecorder = channel->diskRecorder;
+            d->portsRecorder = channel->diskRecorder();
         } else {
           const int sketchpadChannelIndex{channelIndex - 3};
           /**
@@ -312,7 +133,7 @@ AudioLevels::AudioLevels(QObject *parent)
            * Instead of assigning by index, create a qlist with 10 elements having nullptr as value
            * and replace nullptr with DiskWriter pointer when initializing
            */
-          d->channelWriters.replace(sketchpadChannelIndex, channel->diskRecorder);
+          d->channelWriters.replace(sketchpadChannelIndex, channel->diskRecorder());
         }
         d->audioLevelsChannels << channel;
         ++channelIndex;
@@ -338,6 +159,10 @@ inline float AudioLevels::convertTodbFS(float raw) {
     }
 
     return fValue;
+}
+
+inline float addFloat(const float& db1, const float &db2) {
+   return 10 * log10f(pow(10, db1/10) + pow(10, db2/10));
 }
 
 float AudioLevels::add(float db1, float db2) {

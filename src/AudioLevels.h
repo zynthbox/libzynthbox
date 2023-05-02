@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include "AudioLevelsChannel.h"
+
 #include <QObject>
 #include <QTimer>
 #include <QStringList>
@@ -17,8 +19,6 @@
 #include <jack/jack.h>
 #include <atomic>
 #include <mutex>
-
-#define CHANNELS_COUNT 10
 
 class AudioLevelsPrivate;
 /**
