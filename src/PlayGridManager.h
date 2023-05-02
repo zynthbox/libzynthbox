@@ -332,19 +332,19 @@ public:
     Q_SIGNAL void metronomeActiveChanged();
     Q_INVOKABLE void handleMetronomeTick(int beat);
     bool metronomeActive() const;
-    Q_SIGNAL void metronomeTick();
+    Q_SIGNAL void metronomeTick(int beat);
     int metronomeBeat4th() const;
-    Q_SIGNAL void metronomeBeat4thChanged();
+    Q_SIGNAL void metronomeBeat4thChanged(int beat);
     int metronomeBeat8th() const;
-    Q_SIGNAL void metronomeBeat8thChanged();
+    Q_SIGNAL void metronomeBeat8thChanged(int beat);
     int metronomeBeat16th() const;
-    Q_SIGNAL void metronomeBeat16thChanged();
+    Q_SIGNAL void metronomeBeat16thChanged(int beat);
     int metronomeBeat32nd() const;
-    Q_SIGNAL void metronomeBeat32ndChanged();
+    Q_SIGNAL void metronomeBeat32ndChanged(int beat);
     int metronomeBeat64th() const;
-    Q_SIGNAL void metronomeBeat64thChanged();
+    Q_SIGNAL void metronomeBeat64thChanged(int beat);
     int metronomeBeat128th() const;
-    Q_SIGNAL void metronomeBeat128thChanged();
+    Q_SIGNAL void metronomeBeat128thChanged(int beat);
 
     // TODO This is a temporary thing while we get the c++ side integrated properly
     Q_INVOKABLE void sendAMidiNoteMessage(unsigned char midiNote, unsigned char velocity, unsigned char channel, bool setOn);

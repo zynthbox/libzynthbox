@@ -1023,30 +1023,30 @@ void PlayGridManager::handleMetronomeTick(int beat)
         d->segmentHandler = SegmentHandler::instance();
     }
     d->segmentHandler->progressPlayback();
-    Q_EMIT metronomeTick();
+    Q_EMIT metronomeTick(beat);
     if (beat % d->beatSubdivision6 == 0) {
         d->metronomeBeat128th = beat / d->beatSubdivision6;
-        Q_EMIT metronomeBeat128thChanged();
+        Q_EMIT metronomeBeat128thChanged(d->metronomeBeat128th);
     }
     if (beat % d->beatSubdivision5 == 0) {
         d->metronomeBeat64th = beat / d->beatSubdivision5;
-        Q_EMIT metronomeBeat64thChanged();
+        Q_EMIT metronomeBeat64thChanged(d->metronomeBeat64th);
     }
     if (beat % d->beatSubdivision4 == 0) {
         d->metronomeBeat32nd = beat / d->beatSubdivision4;
-        Q_EMIT metronomeBeat32ndChanged();
+        Q_EMIT metronomeBeat32ndChanged(d->metronomeBeat32nd);
     }
     if (beat % d->beatSubdivision3 == 0) {
         d->metronomeBeat16th = beat / d->beatSubdivision3;
-        Q_EMIT metronomeBeat16thChanged();
+        Q_EMIT metronomeBeat16thChanged(d->metronomeBeat16th);
     }
     if (beat % d->beatSubdivision2 == 0) {
         d->metronomeBeat8th = beat / d->beatSubdivision2;
-        Q_EMIT metronomeBeat8thChanged();
+        Q_EMIT metronomeBeat8thChanged(d->metronomeBeat8th);
     }
     if (beat % d->beatSubdivision == 0) {
         d->metronomeBeat4th = beat / d->beatSubdivision;
-        Q_EMIT metronomeBeat4thChanged();
+        Q_EMIT metronomeBeat4thChanged(d->metronomeBeat4th);
     }
 }
 
@@ -1119,12 +1119,12 @@ void PlayGridManager::stopMetronome()
     d->metronomeBeat32nd = 0;
     d->metronomeBeat64th = 0;
     d->metronomeBeat128th = 0;
-    Q_EMIT metronomeBeat4thChanged();
-    Q_EMIT metronomeBeat8thChanged();
-    Q_EMIT metronomeBeat16thChanged();
-    Q_EMIT metronomeBeat32ndChanged();
-    Q_EMIT metronomeBeat64thChanged();
-    Q_EMIT metronomeBeat128thChanged();
+    Q_EMIT metronomeBeat4thChanged(0);
+    Q_EMIT metronomeBeat8thChanged(0);
+    Q_EMIT metronomeBeat16thChanged(0);
+    Q_EMIT metronomeBeat32ndChanged(0);
+    Q_EMIT metronomeBeat64thChanged(0);
+    Q_EMIT metronomeBeat128thChanged(0);
 }
 
 bool PlayGridManager::metronomeActive() const
