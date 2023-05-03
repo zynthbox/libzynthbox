@@ -48,8 +48,8 @@ public:
     SamplerSynthPrivate* d{nullptr};
     int midiChannel{-1};
     float cpuLoad{0.0f};
-    float filterCutoff{1.0f};
-    bool filterHighpass{false};
+    float filterCutoff{0.0f};
+    bool filterHighpass{true};
 
     bool enabled{true};
 

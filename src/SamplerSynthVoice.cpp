@@ -82,8 +82,8 @@ public:
     double sourceSampleLength = 0;
     float lgain = 0, rgain = 0;
 
-    bool filterHighpass{false};
-    float filterCutoff{1.0f};
+    bool filterHighpass{true};
+    float filterCutoff{0.0f};
     float allpassBufferL{0.0f};
     float allpassBufferR{0.0f};
 };
@@ -154,6 +154,7 @@ ClipCommand *SamplerSynthVoice::currentCommand() const
 
 void SamplerSynthVoice::setFilterValues(float cutoff, bool highpass)
 {
+    d->allpassBufferL = d->allpassBufferR = 0.0f;
     d->filterCutoff = cutoff;
     d->filterHighpass = highpass;
 }
@@ -175,7 +176,6 @@ void SamplerSynthVoice::startNote (int midiNoteNumber, float velocity, Synthesis
             d->clip = sound->clip();
             d->sourceSampleLength = d->clip->getDuration() * sound->sourceSampleRate();
             d->sourceSamplePosition = (int) (d->clip->getStartPosition(d->clipCommand->slice) * sound->sourceSampleRate());
-            d->allpassBufferL = d->allpassBufferR = 0.0f;
 
             d->nextLoopTick = d->startTick + d->clip->getLengthInBeats() * d->syncTimer->getMultiplier();
             d->nextLoopUsecs = 0;
@@ -274,7 +274,9 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
             // if we perform highpass filtering, we need to invert the output of the allpass (multiply it by -1)
             double filterSign = d->filterHighpass ? -1.f : 1.f;
             // helper variable
-            const double tan = std::tan(M_PI * d->filterCutoff * sourceSampleRate);
+            // this bit is basically mtof - that is, converts a midi note to its equivalent expected frequency (here given a 440Hz concert tone), and it's going to be somewhere within a reasonable amount along the audible scale
+            const float adjustmentInHz = pow(2, ((127.0f * d->filterCutoff) - 69) / 12) * 440;
+            const double tan = std::tan(M_PI * adjustmentInHz / sourceSampleRate);
             // allpass coefficient is constant while processing  a block of samples
             double allpassCoefficient = (tan - 1.f) / (tan + 1.f);
 
@@ -286,27 +288,37 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
             const float rPan = 0.5 * (1.0 - pan);
             const bool isLooping = d->clipCommand->looping;
             for(jack_nframes_t frame = 0; frame < nframes; ++frame) {
+                bool updateFilter{false};
                 while (d->ccControlRing.readHead->processed == false && d->ccControlRing.readHead->time <= frame) {
                     // Consume the control change values, but... we don't really have anything to properly use them for
                     const float cc = d->ccControlRing.read();
                     const float value = d->ccValueRing.read();
-                    // Brightness control
                     if (cc == 74) {
+                        // Brightness control
+                        d->filterCutoff = value / 127.0f;
+                        d->filterHighpass = false;
+                        updateFilter = true;
+                    } else if (cc == 1) {
+                        // Mod wheel
                         if (value < 63) {
-                            d->filterCutoff = value / 64.0f;
-                            d->filterHighpass = false;
-                        } else if (value > 63) {
-                            d->filterCutoff = 100.0f - ((value - 63.0f) / 64.0f);
+                            d->filterCutoff = 1.0f - (value / 64.0f);
                             d->filterHighpass = true;
-                        } else {
-                            d->filterCutoff = 1.0f;
+                        } else if (value > 63) {
+                            d->filterCutoff = 1.0f - (value - 63.0f) / 64.0f;
                             d->filterHighpass = false;
+                        } else {
+                            d->filterCutoff = 0.0f;
+                            d->filterHighpass = true;
                         }
-                        // Update the coefficient etc
-                        const double tan = std::tan(M_PI * d->filterCutoff * sourceSampleRate);
-                        allpassCoefficient = (tan - 1.f) / (tan + 1.f);
-                        filterSign = d->filterHighpass ? -1.f : 1.f;
+                        updateFilter = true;
                     }
+                }
+                if (updateFilter) {
+                    // Update the coefficient etc (see above for this hz number)
+                    const float adjustmentInHz = pow(2, ((127.0f * d->filterCutoff) - 69) / 12) * 440;
+                    const double tan = std::tan(M_PI * adjustmentInHz / sourceSampleRate);
+                    allpassCoefficient = (tan - 1.f) / (tan + 1.f);
+                    filterSign = d->filterHighpass ? -1.f : 1.f;
                 }
                 while (d->pitchRing.readHead->processed == false && d->pitchRing.readHead->time <= frame) {
                     d->pitchRatio = std::pow(2.0, (std::clamp(d->pitchRing.read() + double(d->clipCommand->midiNote), 0.0, 127.0) - double(playingSound->rootMidiNote())) / 12.0)
@@ -330,14 +342,18 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
                 l = lPan * mSignal + sSignal;
                 r = rPan * mSignal - sSignal;
 
-                // Low/highpass filtering left channel
-                const float allpassFilteredSampleL = l * allpassCoefficient + d->allpassBufferR;
-                d->allpassBufferR = l - allpassCoefficient * d->allpassBufferR;
-                l = 0.5f * (l + filterSign * allpassFilteredSampleL);
-                // Low/highpass filtering right channel
-                const float allpassFilteredSampleR = r * allpassCoefficient + d->allpassBufferR;
-                d->allpassBufferR = l - allpassCoefficient * d->allpassBufferR;
-                r = 0.5f * (r + filterSign * allpassFilteredSampleR);
+                // Apply allpass filter effect
+                // Roughly based on https://thewolfsound.com/lowpass-highpass-filter-plugin-with-juce/
+                if (d->filterCutoff > 0 || d->filterHighpass == false) {
+                    // Low/highpass filtering left channel
+                    const float allpassFilteredSampleL = allpassCoefficient * l + d->allpassBufferL;
+                    d->allpassBufferL = l - allpassCoefficient * allpassFilteredSampleL;
+                    l = 0.5f * (l + filterSign * allpassFilteredSampleL);
+                    // Low/highpass filtering right channel
+                    const float allpassFilteredSampleR = allpassCoefficient * r + d->allpassBufferR;
+                    d->allpassBufferR = r - allpassCoefficient * allpassFilteredSampleR;
+                    r = 0.5f * (r + filterSign * allpassFilteredSampleR);
+                }
 
                 const float newGain{l + r};
                 if (newGain > peakGain) {
