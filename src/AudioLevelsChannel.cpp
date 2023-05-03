@@ -5,11 +5,6 @@
 #include <QDebug>
 #include <QVariantList>
 
-#include <jack/ringbuffer.h>
-
-static const QString portNameLeft{"left_in"};
-static const QString portNameRight{"right_in"};
-
 static int audioLevelsChannelProcess(jack_nframes_t nframes, void* arg) {
   return static_cast<AudioLevelsChannel*>(arg)->process(nframes);
 }
@@ -25,8 +20,8 @@ AudioLevelsChannel::AudioLevelsChannel(const QString &clientName)
         // Set the process callback.
         result = jack_set_process_callback(jackClient, audioLevelsChannelProcess, this);
         if (result == 0) {
-            leftPort = jack_port_register(jackClient, portNameLeft.toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput | JackPortIsTerminal, 0);
-            rightPort = jack_port_register(jackClient, portNameRight.toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput | JackPortIsTerminal, 0);
+            leftPort = jack_port_register(jackClient, "left_in", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput | JackPortIsTerminal, 0);
+            rightPort = jack_port_register(jackClient, "right_in", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput | JackPortIsTerminal, 0);
             // Activate the client.
             result = jack_activate(jackClient);
             if (result == 0) {
