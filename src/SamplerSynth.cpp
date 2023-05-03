@@ -48,6 +48,8 @@ public:
     SamplerSynthPrivate* d{nullptr};
     int midiChannel{-1};
     float cpuLoad{0.0f};
+    float filterCutoff{1.0f};
+    bool filterHighpass{false};
 
     bool enabled{true};
 
@@ -275,6 +277,7 @@ void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick
             for (SamplerSynthVoice *voice : qAsConst(voices)) {
                 if (!voice->isPlaying) {
                     voice->setCurrentCommand(clipCommand);
+                    voice->setFilterValues(filterCutoff, filterHighpass);
                     voice->setStartTick(currentTick);
                     d->synth->startVoiceImpl(voice, sound, clipCommand->midiChannel, clipCommand->midiNote, clipCommand->volume);
                     break;
