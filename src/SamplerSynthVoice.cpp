@@ -6,6 +6,7 @@
 #include "SyncTimer.h"
 
 #include <QDebug>
+#include <QtMath>
 
 static inline float velocityToGain(const float &velocity) {
 //     static const float sensibleMinimum{log10(1.0f/127.0f)};
@@ -80,6 +81,11 @@ public:
     double sourceSamplePosition = 0;
     double sourceSampleLength = 0;
     float lgain = 0, rgain = 0;
+
+    bool filterHighpass{false};
+    float filterCutoff{1.0f};
+    float allpassBufferL{0.0f};
+    float allpassBufferR{0.0f};
 };
 
 SamplerSynthVoice::SamplerSynthVoice()
@@ -146,6 +152,12 @@ ClipCommand *SamplerSynthVoice::currentCommand() const
     return d->clipCommand;
 }
 
+void SamplerSynthVoice::setFilterValues(float cutoff, bool highpass)
+{
+    d->filterCutoff = cutoff;
+    d->filterHighpass = highpass;
+}
+
 void SamplerSynthVoice::setStartTick(quint64 startTick)
 {
     d->startTick = startTick;
@@ -163,6 +175,7 @@ void SamplerSynthVoice::startNote (int midiNoteNumber, float velocity, Synthesis
             d->clip = sound->clip();
             d->sourceSampleLength = d->clip->getDuration() * sound->sourceSampleRate();
             d->sourceSamplePosition = (int) (d->clip->getStartPosition(d->clipCommand->slice) * sound->sourceSampleRate());
+            d->allpassBufferL = d->allpassBufferR = 0.0f;
 
             d->nextLoopTick = d->startTick + d->clip->getLengthInBeats() * d->syncTimer->getMultiplier();
             d->nextLoopUsecs = 0;
@@ -256,6 +269,14 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
             auto& data = *playingSound->audioData();
             const float* const inL = data.getReadPointer (0);
             const float* const inR = data.getNumChannels() > 1 ? data.getReadPointer (1) : nullptr;
+            const double sourceSampleRate = playingSound->sourceSampleRate();
+
+            // if we perform highpass filtering, we need to invert the output of the allpass (multiply it by -1)
+            double filterSign = d->filterHighpass ? -1.f : 1.f;
+            // helper variable
+            const double tan = std::tan(M_PI * d->filterCutoff * sourceSampleRate);
+            // allpass coefficient is constant while processing  a block of samples
+            double allpassCoefficient = (tan - 1.f) / (tan + 1.f);
 
             const float clipVolume = d->clip->volumeAbsolute();
             const int stopPosition = playingSound->stopPosition(d->clipCommand->slice);
@@ -263,13 +284,29 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
             const float pan = (float) d->clip->pan();
             const float lPan = 0.5 * (1.0 + pan);
             const float rPan = 0.5 * (1.0 - pan);
-            const double sourceSampleRate = playingSound->sourceSampleRate();
             const bool isLooping = d->clipCommand->looping;
             for(jack_nframes_t frame = 0; frame < nframes; ++frame) {
                 while (d->ccControlRing.readHead->processed == false && d->ccControlRing.readHead->time <= frame) {
                     // Consume the control change values, but... we don't really have anything to properly use them for
-                    d->ccControlRing.read();
-                    d->ccValueRing.read();
+                    const float cc = d->ccControlRing.read();
+                    const float value = d->ccValueRing.read();
+                    // Brightness control
+                    if (cc == 74) {
+                        if (value < 63) {
+                            d->filterCutoff = value / 64.0f;
+                            d->filterHighpass = false;
+                        } else if (value > 63) {
+                            d->filterCutoff = 100.0f - ((value - 63.0f) / 64.0f);
+                            d->filterHighpass = true;
+                        } else {
+                            d->filterCutoff = 1.0f;
+                            d->filterHighpass = false;
+                        }
+                        // Update the coefficient etc
+                        const double tan = std::tan(M_PI * d->filterCutoff * sourceSampleRate);
+                        allpassCoefficient = (tan - 1.f) / (tan + 1.f);
+                        filterSign = d->filterHighpass ? -1.f : 1.f;
+                    }
                 }
                 while (d->pitchRing.readHead->processed == false && d->pitchRing.readHead->time <= frame) {
                     d->pitchRatio = std::pow(2.0, (std::clamp(d->pitchRing.read() + double(d->clipCommand->midiNote), 0.0, 127.0) - double(playingSound->rootMidiNote())) / 12.0)
@@ -292,6 +329,15 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
                 const float sSignal = l - r;
                 l = lPan * mSignal + sSignal;
                 r = rPan * mSignal - sSignal;
+
+                // Low/highpass filtering left channel
+                const float allpassFilteredSampleL = l * allpassCoefficient + d->allpassBufferR;
+                d->allpassBufferR = l - allpassCoefficient * d->allpassBufferR;
+                l = 0.5f * (l + filterSign * allpassFilteredSampleL);
+                // Low/highpass filtering right channel
+                const float allpassFilteredSampleR = r * allpassCoefficient + d->allpassBufferR;
+                d->allpassBufferR = l - allpassCoefficient * d->allpassBufferR;
+                r = 0.5f * (r + filterSign * allpassFilteredSampleR);
 
                 const float newGain{l + r};
                 if (newGain > peakGain) {
