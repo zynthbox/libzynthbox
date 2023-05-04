@@ -19,7 +19,7 @@ add_custom_command(
                 # --debug-level=full
                 --generator-set=shiboken
                 --enable-parent-ctor-heuristic
-                --enable-return-value-heuristic
+                # --enable-return-value-heuristic
                 --enable-pyside-extensions
                 --use-isnull-as-nb_nonzero
                 --language-level=c++17
