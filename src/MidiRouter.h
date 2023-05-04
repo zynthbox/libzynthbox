@@ -1,5 +1,6 @@
 #pragma once
 
+#include "JackPassthrough.h"
 #include <QObject>
 #include <QCoreApplication>
 #include <QThread>
@@ -29,11 +30,11 @@ class MidiRouter : public QThread
     /**
      * \brief A list of the ten JackPassthrough clients used by each of the logical audio channels
      */
-    Q_PROPERTY(QList<QObject*> channelPassthroughClients READ channelPassthroughClients CONSTANT)
+    Q_PROPERTY(QList<JackPassthrough*> channelPassthroughClients READ channelPassthroughClients CONSTANT)
     /**
      * \brief The JackPassthrough client that sends audio to system playback and the global audiolevels client
      */
-    Q_PROPERTY(QObject* globalPlaybackClient READ globalPlaybackClient CONSTANT)
+    Q_PROPERTY(JackPassthrough* globalPlaybackClient READ globalPlaybackClient CONSTANT)
 public:
     static MidiRouter* instance() {
         static MidiRouter* instance{nullptr};
@@ -99,8 +100,8 @@ public:
      */
     Q_SIGNAL void noteChanged( MidiRouter::ListenerPort port, int midiNote, int midiChannel, int velocity, bool setOn, double timeStamp, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3);
 
-    QList<QObject*> channelPassthroughClients() const;
-    QObject *globalPlaybackClient() const;
+    QList<JackPassthrough*> channelPassthroughClients() const;
+    JackPassthrough* globalPlaybackClient() const;
 private:
     MidiRouterPrivate *d{nullptr};
 };
