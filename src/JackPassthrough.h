@@ -56,3 +56,4 @@ public:
 private:
     JackPassthroughPrivate *d{nullptr};
 };
+Q_DECLARE_METATYPE(JackPassthrough*)

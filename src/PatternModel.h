@@ -595,6 +595,7 @@ private:
     class Private;
     Private *d;
 };
+Q_DECLARE_METATYPE(PatternModel*)
 Q_DECLARE_METATYPE(PatternModel::NoteDestination)
 
 #endif//PATTERNMODEL_H

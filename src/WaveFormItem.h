@@ -70,4 +70,5 @@ private:
     qreal m_start = 0;
     qreal m_end = 0;
 };
+Q_DECLARE_METATYPE(WaveFormItem*)
 

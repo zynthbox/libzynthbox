@@ -106,6 +106,15 @@ void Plugin::initialize()
     auto duration = duration_cast<milliseconds>(high_resolution_clock::now() - start);
     qDebug() << "JUCE initialisation took" << duration.count() << "ms";
 
+    qDebug() << "Registering qml meta types";
+    qRegisterMetaType<AudioLevels*>("AudioLevels");
+    qRegisterMetaType<JackPassthrough*>("JackPassthrough");
+    qRegisterMetaType<PatternModel*>("PatternModel");
+    qRegisterMetaType<PlayGridManager*>("PlayGridManager");
+    qRegisterMetaType<SegmentHandler*>("SegmentHandler");
+    qRegisterMetaType<SyncTimer*>("SyncTimer");
+    qRegisterMetaType<WaveFormItem*>("WaveFormItem");
+
     qDebug() << "Initialising SyncTimer";
     SyncTimer::instance();
 

@@ -357,5 +357,6 @@ private:
     class Private;
     Private *d;
 };
+Q_DECLARE_METATYPE(PlayGridManager*)
 
 #endif//PLAYGRIDMANAGER_H

@@ -225,3 +225,4 @@ private:
     static std::atomic<AudioLevels*> singletonInstance;
     static std::mutex singletonMutex;
 };
+Q_DECLARE_METATYPE(AudioLevels*)

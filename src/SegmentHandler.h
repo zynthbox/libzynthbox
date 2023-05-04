@@ -99,5 +99,6 @@ public:
 private:
     SegmentHandlerPrivate *d{nullptr};
 };
+Q_DECLARE_METATYPE(SegmentHandler*)
 
 #endif//SEGMENTHANDLER_H
