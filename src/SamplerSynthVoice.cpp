@@ -82,6 +82,7 @@ public:
     double sourceSampleLength = 0;
     float lgain = 0, rgain = 0;
 
+    float initialCC74{-1};
     bool filterHighpass{true};
     float filterCutoff{0.0f};
     float allpassBufferL{0.0f};
@@ -154,7 +155,6 @@ ClipCommand *SamplerSynthVoice::currentCommand() const
 
 void SamplerSynthVoice::setFilterValues(float cutoff, bool highpass)
 {
-    d->allpassBufferL = d->allpassBufferR = 0.0f;
     d->filterCutoff = cutoff;
     d->filterHighpass = highpass;
 }
@@ -185,6 +185,8 @@ void SamplerSynthVoice::startNote (int midiNoteNumber, float velocity, Synthesis
             }
             d->clipPositionId = d->clip->playbackPositionsModel()->createPositionID();
 
+            d->initialCC74 = -1;
+            d->allpassBufferL = d->allpassBufferR = 0.0f;
             d->lgain = velocityToGain(velocity);
             d->rgain = velocityToGain(velocity);
 
@@ -291,14 +293,20 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
                 bool updateFilter{false};
                 while (d->ccControlRing.readHead->processed == false && d->ccControlRing.readHead->time <= frame) {
                     // Consume the control change values, but... we don't really have anything to properly use them for
-                    const float cc = d->ccControlRing.read();
-                    const float value = d->ccValueRing.read();
-                    if (cc == 74) {
+                    const float control = d->ccControlRing.read();
+                    float value = d->ccValueRing.read();
+                    bool updateFilterValues = false;
+                    if (control == 74) {
                         // Brightness control
-                        d->filterCutoff = value / 127.0f;
-                        d->filterHighpass = false;
-                        updateFilter = true;
-                    } else if (cc == 1) {
+                        if (d->initialCC74 == -1) {
+                            d->initialCC74 = value;
+                        }
+                        value = std::clamp(63.0f + (d->initialCC74 - value), 0.0f, 127.0f);
+                        updateFilterValues = true;
+                    } else if (control == 1) {
+                        updateFilterValues = true;
+                    }
+                    if (updateFilterValues) {
                         // Mod wheel
                         if (value < 63) {
                             d->filterCutoff = 1.0f - (value / 64.0f);
