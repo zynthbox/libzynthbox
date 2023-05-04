@@ -171,6 +171,19 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                                 voice->handleControlChange(event.time, control, value);
                             }
                         }
+                        if (control == 1) {
+                            // Mod wheel
+                            if (value < 63) {
+                                filterCutoff = 1.0f - (value / 64.0f);
+                                filterHighpass = true;
+                            } else if (value > 63) {
+                                filterCutoff = 1.0f - (value - 63.0f) / 64.0f;
+                                filterHighpass = false;
+                            } else {
+                                filterCutoff = 0.0f;
+                                filterHighpass = true;
+                            }
+                        }
                     } else if (0xBF < byte1 && byte1 < 0xD0) {
                         // Program change
                     } else if (0xCF < byte1 && byte1 < 0xE0) {
