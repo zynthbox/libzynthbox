@@ -2,13 +2,14 @@ set(bindings_library "Zynthbox")
 set(bindings_header ${CMAKE_CURRENT_SOURCE_DIR}/bindings.h)
 set(bindings_typesystem ${CMAKE_CURRENT_SOURCE_DIR}/bindings.xml)
 set(generated_sources
-        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/zynthbox_module_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/audiolevels_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/clipaudiosource_wrapper.cpp
-        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/plugin_wrapper.cpp
-        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/playgridmanager_wrapper.cpp
-        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/synctimer_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/jackpassthrough_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirouter_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/playgridmanager_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/plugin_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/synctimer_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/zynthbox_module_wrapper.cpp
 )
 
 # Add custom target to run shiboken to generate the binding cpp files.

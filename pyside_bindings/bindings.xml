@@ -7,9 +7,7 @@
 
     <object-type name="AudioLevels"></object-type>
     <object-type name="ClipAudioSource"></object-type>
-    <object-type name="Plugin"></object-type>
-    <object-type name="PlayGridManager"></object-type>
-    <object-type name="SyncTimer"></object-type>
+    <object-type name="JackPassthrough"></object-type>
     <object-type name="MidiRouter">
         <!-- Why do we need to inject glue code manually which should be auto injected by typesystem_core? -->
         <!-- This snippet is from glue/qtcore.cpp -->
@@ -30,6 +28,9 @@
             #endif // Q_OS_UNIX
         </inject-code>
     </object-type>
+    <object-type name="PlayGridManager"></object-type>
+    <object-type name="Plugin"></object-type>
+    <object-type name="SyncTimer"></object-type>
 
     <rejection class="SyncTimer" function-name="addCallback" />
     <rejection class="SyncTimer" function-name="removeCallback" />

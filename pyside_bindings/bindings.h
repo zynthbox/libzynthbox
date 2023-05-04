@@ -4,7 +4,8 @@
 
 #include <AudioLevels.h>
 #include <ClipAudioSource.h>
-#include <Plugin.h>
-#include <PlayGridManager.h>
-#include <SyncTimer.h>
+#include <JackPassthrough.h>
 #include <MidiRouter.h>
+#include <PlayGridManager.h>
+#include <Plugin.h>
+#include <SyncTimer.h>
