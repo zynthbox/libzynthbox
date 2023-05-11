@@ -8,17 +8,19 @@
 #include <QTimer>
 
 class SamplerSynthSoundPrivate : public QObject {
-    Q_OBJECT
+Q_OBJECT
 public:
-    SamplerSynthSoundPrivate() {
+    SamplerSynthSoundPrivate(SamplerSynthSound *q)
+        : q(q)
+    {
         soundLoader.moveToThread(qApp->thread());
         soundLoader.setInterval(1);
         soundLoader.setSingleShot(true);
         connect(&soundLoader, &QTimer::timeout, this, &SamplerSynthSoundPrivate::loadSoundData);
     }
 
+    SamplerSynthSound *q{nullptr};
     QTimer soundLoader;
-    bool isValid{false};
     std::unique_ptr<AudioBuffer<float>> data;
     int length{0};
     double sourceSampleRate{0.0f};
@@ -43,9 +45,10 @@ public:
                 if (sourceSampleRate > 0 && format->lengthInSamples > 0)
                 {
                     length = (int) format->lengthInSamples;
-                    data.reset (new AudioBuffer<float> (jmin (2, (int) format->numChannels), length));
-                    format->read (data.get(), 0, length, 0, true, true);
-                    isValid = true;
+                    AudioBuffer<float> *newBuffer = new AudioBuffer<float>(jmin(2, int(format->numChannels)), length);
+                    format->read(newBuffer, 0, length, 0, true, true);
+                    data.reset(newBuffer);
+                    q->isValid = true;
                 }
                 qDebug() << Q_FUNC_INFO << "Loaded data at sample rate" << sourceSampleRate << "from playback file" << clip->getPlaybackFile().getFile().getFullPathName().toRawUTF8();
                 delete format;
@@ -61,11 +64,11 @@ public:
 
 SamplerSynthSound::SamplerSynthSound(ClipAudioSource *clip)
     : juce::SynthesiserSound()
-    , d(new SamplerSynthSoundPrivate)
+    , d(new SamplerSynthSoundPrivate(this))
 {
     d->clip = clip;
     d->loadSoundData();
-    QObject::connect(clip, &ClipAudioSource::playbackFileChanged, &d->soundLoader, [this](){ d->soundLoader.start(1); }, Qt::QueuedConnection);
+    QObject::connect(clip, &ClipAudioSource::playbackFileChanged, &d->soundLoader, [this](){ isValid = false; d->soundLoader.start(1); }, Qt::QueuedConnection);
 }
 
 SamplerSynthSound::~SamplerSynthSound()
@@ -76,11 +79,6 @@ SamplerSynthSound::~SamplerSynthSound()
 ClipAudioSource *SamplerSynthSound::clip() const
 {
     return d->clip;
-}
-
-bool SamplerSynthSound::isValid() const
-{
-    return d->isValid;
 }
 
 AudioBuffer<float> *SamplerSynthSound::audioData() const noexcept
