@@ -132,7 +132,7 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
   d->id = Plugin::instance()->nextClipId();
   Plugin::instance()->addCreatedClipToMap(this);
 
-  IF_DEBUG_CLIP cerr << "Opening file : " << filepath << endl;
+  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Opening file:" << filepath;
 
   Helper::callFunctionOnMessageThread(
       [&]() {
@@ -165,7 +165,7 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
         auto track = Helper::getOrInsertAudioTrackAt(*d->edit, 0);
 
         if (muted) {
-          IF_DEBUG_CLIP cerr << "Clip marked to be muted" << endl;
+          IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Clip marked to be muted";
           setVolume(-100.0f);
         }
 
@@ -194,7 +194,7 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
 }
 
 ClipAudioSource::~ClipAudioSource() {
-  IF_DEBUG_CLIP cerr << "Destroying Clip" << endl;
+  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Destroying Clip";
   stop();
   SamplerSynth::instance()->unregisterClip(this);
   Plugin::instance()->removeCreatedClipFromMap(this);
@@ -241,7 +241,7 @@ bool ClipAudioSource::getLooping() const
 
 void ClipAudioSource::setStartPosition(float startPositionInSeconds) {
   d->startPositionInSeconds = jmax(0.0f, startPositionInSeconds);
-  IF_DEBUG_CLIP cerr << "Setting Start Position to " << d->startPositionInSeconds << endl;
+  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Start Position to" << d->startPositionInSeconds;
   updateTempoAndPitch();
 }
 
@@ -264,7 +264,7 @@ float ClipAudioSource::getStopPosition(int slice) const
 }
 
 void ClipAudioSource::setPitch(float pitchChange, bool immediate) {
-  IF_DEBUG_CLIP cerr << "Setting Pitch to " << pitchChange << endl;
+  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Pitch to" << pitchChange;
   d->pitchChange = pitchChange;
   if (immediate) {
     if (auto clip = d->getClip()) {
@@ -277,7 +277,7 @@ void ClipAudioSource::setPitch(float pitchChange, bool immediate) {
 }
 
 void ClipAudioSource::setSpeedRatio(float speedRatio, bool immediate) {
-  IF_DEBUG_CLIP cerr << "Setting Speed to " << speedRatio << endl;
+  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Speed to" << speedRatio;
   d->speedRatio = speedRatio;
   if (immediate) {
     if (auto clip = d->getClip()) {
@@ -291,15 +291,30 @@ void ClipAudioSource::setSpeedRatio(float speedRatio, bool immediate) {
 
 void ClipAudioSource::setGain(float db) {
   if (auto clip = d->getClip()) {
-    IF_DEBUG_CLIP cerr << "Setting gain : " << db;
+    IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting gain:" << db;
     clip->setGainDB(db);
   }
-  d->isRendering = true;
+}
+
+float ClipAudioSource::getGainDB() const
+{
+  if (auto clip = d->getClip()) {
+    return clip->getGainDB();
+  }
+  return 0;
+}
+
+float ClipAudioSource::getGain() const
+{
+  if (auto clip = d->getClip()) {
+    return clip->getGain();
+  }
+  return 0;
 }
 
 void ClipAudioSource::setVolume(float vol) {
   if (auto clip = d->getClip()) {
-    IF_DEBUG_CLIP cerr << "Setting volume : " << vol << endl;
+    IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting volume:" << vol;
     // Knowing that -40 is our "be quiet now thanks" volume level, but tracktion thinks it should be -100, we'll just adjust that a bit
     // It means the last step is a bigger jump than perhaps desirable, but it'll still be more correct
     if (vol <= -40.0f) {
@@ -315,7 +330,7 @@ void ClipAudioSource::setVolume(float vol) {
 void ClipAudioSource::setVolumeAbsolute(float vol)
 {
   if (auto clip = d->getClip()) {
-    IF_DEBUG_CLIP cerr << "Setting volume absolutely : " << vol << endl;
+    IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting volume absolutely:" << vol;
     clip->edit.setMasterVolumeSliderPos(qMax(0.0f, qMin(vol, 1.0f)));
     d->volumeAbsolute = clip->edit.getMasterVolumePlugin()->getSliderPos();
     Q_EMIT volumeAbsoluteChanged();
@@ -333,10 +348,10 @@ float ClipAudioSource::volumeAbsolute() const
 }
 
 void ClipAudioSource::setLength(float beat, int bpm) {
-  IF_DEBUG_CLIP cerr << "Interval : " << d->syncTimer->getInterval(bpm) << endl;
+  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Interval:" << d->syncTimer->getInterval(bpm);
   float lengthInSeconds = d->syncTimer->subbeatCountToSeconds(
       (quint64)bpm, (quint64)(beat * d->syncTimer->getMultiplier()));
-  IF_DEBUG_CLIP cerr << "Setting Length to " << lengthInSeconds << endl;
+  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Length to" << lengthInSeconds;
   d->lengthInSeconds = lengthInSeconds;
   d->lengthInBeats = beat;
   updateTempoAndPitch();
@@ -368,14 +383,12 @@ void ClipAudioSource::updateTempoAndPitch() {
   if (auto clip = d->getClip()) {
     auto &transport = clip->edit.getTransport();
 
-    IF_DEBUG_CLIP cerr << "Updating speedRatio(" << d->speedRatio << ") and pitch("
-         << d->pitchChange << ")" << endl;
+    IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Updating speedRatio(" << d->speedRatio << ") and pitch(" << d->pitchChange << ")";
 
     clip->setSpeedRatio(d->speedRatio);
     clip->setPitchChange(d->pitchChange);
 
-    IF_DEBUG_CLIP cerr << "Setting loop range : " << d->startPositionInSeconds << " to "
-         << (d->startPositionInSeconds + d->lengthInSeconds) << endl;
+    IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting loop range:" << d->startPositionInSeconds << "to" << (d->startPositionInSeconds + d->lengthInSeconds);
 
     transport.setLoopRange(te::EditTimeRange::withStartAndLength(
         d->startPositionInSeconds, d->lengthInSeconds));
@@ -399,7 +412,7 @@ void ClipAudioSource::Private::timerCallback() {
 
 void ClipAudioSource::play(bool loop, int midiChannel) {
   auto clip = d->getClip();
-  IF_DEBUG_CLIP qDebug() << "libzl : Starting clip " << this << d->filePath << " which is really " << clip.get() << " in a " << (loop ? "looping" : "non-looping") << " manner from " << d->startPositionInSeconds << " and for " << d->lengthInSeconds << " seconds at volume " << (clip  && clip->edit.getMasterVolumePlugin().get() ? clip->edit.getMasterVolumePlugin()->volume : 0);
+  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Starting clip " << this << d->filePath << " which is really " << clip.get() << " in a " << (loop ? "looping" : "non-looping") << " manner from " << d->startPositionInSeconds << " and for " << d->lengthInSeconds << " seconds at volume " << (clip  && clip->edit.getMasterVolumePlugin().get() ? clip->edit.getMasterVolumePlugin()->volume : 0);
 
   ClipCommand *command = ClipCommand::channelCommand(this, midiChannel);
   command->midiNote = 60;
@@ -414,7 +427,7 @@ void ClipAudioSource::play(bool loop, int midiChannel) {
 }
 
 void ClipAudioSource::stop(int midiChannel) {
-  IF_DEBUG_CLIP qDebug() << "libzl : Stopping clip " << this << " on channel" << midiChannel << " path: " << d->filePath;
+  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Stopping clip" << this << "on channel" << midiChannel << "path:" << d->filePath;
   if (midiChannel > -3) {
     ClipCommand *command = ClipCommand::channelCommand(this, midiChannel);
     command->midiNote = 60;

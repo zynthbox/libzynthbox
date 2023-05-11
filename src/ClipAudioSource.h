@@ -123,6 +123,8 @@ public:
   void setPitch(float pitchChange, bool immediate = false);
   void setSpeedRatio(float speedRatio, bool immediate = false);
   void setGain(float db);
+  float getGain() const;
+  float getGainDB() const;
   void setVolume(float vol);
   /**
    * \brief Set the volume by "slider position" (0.0 through 1.0)
