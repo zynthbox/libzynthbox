@@ -62,6 +62,9 @@ class SamplerSynthVoicePrivate {
 public:
     SamplerSynthVoicePrivate() {
         syncTimer = qobject_cast<SyncTimer*>(SyncTimer::instance());
+        for (int i = 0; i < 128; ++i) {
+            initialCC[i] = -1;
+        }
     }
 
     DataRing aftertouchRing;
@@ -81,10 +84,14 @@ public:
     double sourceSamplePosition = 0;
     double sourceSampleLength = 0;
     float lgain = 0, rgain = 0;
+    // Used to make sure the first sample on looped playback is interpolated to an empty previous sample, rather than the previous sample in the loop
+    bool firstRoll{false};
 
-    float initialCC74{-1};
-    bool filterHighpass{true};
-    float filterCutoff{0.0f};
+    float initialCC[128];
+    int ccForHighpass{74};
+    int ccForLowpass{1};
+    float lowpassCutoff{0.0f};
+    float highpassCutoff{0.0f};
     float allpassBufferL{0.0f};
     float allpassBufferR{0.0f};
 };
@@ -153,10 +160,9 @@ ClipCommand *SamplerSynthVoice::currentCommand() const
     return d->clipCommand;
 }
 
-void SamplerSynthVoice::setFilterValues(float cutoff, bool highpass)
+void SamplerSynthVoice::setModwheel(int modwheelValue)
 {
-    d->filterCutoff = cutoff;
-    d->filterHighpass = highpass;
+    d->initialCC[1] = modwheelValue;
 }
 
 void SamplerSynthVoice::setStartTick(quint64 startTick)
@@ -185,10 +191,14 @@ void SamplerSynthVoice::startNote (int midiNoteNumber, float velocity, Synthesis
             }
             d->clipPositionId = d->clip->playbackPositionsModel()->createPositionID();
 
-            d->initialCC74 = -1;
-            d->allpassBufferL = d->allpassBufferR = 0.0f;
             d->lgain = velocityToGain(velocity);
             d->rgain = velocityToGain(velocity);
+            if (d->initialCC[d->ccForLowpass] > -1) {
+                d->lowpassCutoff = (127.0f - d->initialCC[d->ccForLowpass]) / 127.0f;
+            }
+            if (d->initialCC[d->ccForHighpass] > -1) {
+                d->highpassCutoff = d->initialCC[d->ccForHighpass] / 127.0f;
+            }
 
             d->adsr.reset();
             d->adsr.setSampleRate(sound->sourceSampleRate());
@@ -225,11 +235,16 @@ void SamplerSynthVoice::stopNote (float velocity, bool allowTailOff)
         if (d->clipCommand) {
             d->syncTimer->deleteClipCommand(d->clipCommand);
             d->clipCommand = nullptr;
-            isPlaying = false;
         }
+        isPlaying = false;
         d->nextLoopTick = 0;
         d->nextLoopUsecs = 0;
         isTailingOff = false;
+        d->firstRoll = true;
+        d->allpassBufferL = d->allpassBufferR = 0.0f;
+        for (int i = 0; i < 128; ++i) {
+            d->initialCC[i] = -1;
+        }
     }
 }
 
@@ -257,6 +272,17 @@ void SamplerSynthVoice::handlePitchChange(jack_nframes_t time, float pitchValue)
     }
 }
 
+inline float interpolateHermite4pt3oX(float x0, float x1, float x2, float x3, float t)
+{
+    float c0 = x1;
+    float c1 = .5F * (x2 - x0);
+    float c2 = x0 - (2.5F * x1) + (2 * x2) - (.5F * x3);
+    float c3 = (.5F * (x3 - x0)) + (1.5F * (x1 - x2));
+    return (((((c3 * t) + c2) * t) + c1) * t) + c0;
+}
+
+// if we perform highpass filtering, we need to invert the output of the allpass (multiply it by -1)
+static const double highpassSign{-1.f};
 void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_default_audio_sample_t *rightBuffer, jack_nframes_t nframes, jack_nframes_t /*current_frames*/, jack_time_t current_usecs, jack_time_t next_usecs, float /*period_usecs*/)
 {
     if (auto* playingSound = static_cast<SamplerSynthSound*> (getCurrentlyPlayingSound().get()))
@@ -273,16 +299,16 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
             const float* const inR = data.getNumChannels() > 1 ? data.getReadPointer (1) : nullptr;
             const double sourceSampleRate = playingSound->sourceSampleRate();
 
-            // if we perform highpass filtering, we need to invert the output of the allpass (multiply it by -1)
-            double filterSign = d->filterHighpass ? -1.f : 1.f;
-            // helper variable
             // this bit is basically mtof - that is, converts a midi note to its equivalent expected frequency (here given a 440Hz concert tone), and it's going to be somewhere within a reasonable amount along the audible scale
-            const float adjustmentInHz = pow(2, ((127.0f * d->filterCutoff) - 69) / 12) * 440;
-            const double tan = std::tan(M_PI * adjustmentInHz / sourceSampleRate);
-            // allpass coefficient is constant while processing  a block of samples
-            double allpassCoefficient = (tan - 1.f) / (tan + 1.f);
+            const float highpassAdjustmentInHz = pow(2, ((127.0f * d->highpassCutoff) - 69) / 12) * 440;
+            const double highpassTan = std::tan(M_PI * highpassAdjustmentInHz / sourceSampleRate);
+            double highpassCoefficient = (highpassTan - 1.f) / (highpassTan + 1.f);
+            const float lowpassAdjustmentInHz = pow(2, ((127.0f * d->lowpassCutoff) - 69) / 12) * 440;
+            const double lowpassTan = std::tan(M_PI * lowpassAdjustmentInHz / sourceSampleRate);
+            double lowpassCoefficient = (lowpassTan - 1.f) / (lowpassTan + 1.f);
 
             const float clipVolume = d->clip->volumeAbsolute();
+            const int startPosition = (int) (d->clip->getStartPosition(d->clipCommand->slice) * sourceSampleRate);
             const int stopPosition = playingSound->stopPosition(d->clipCommand->slice);
             const int sampleDuration = playingSound->length() - 1;
             const float pan = (float) d->clip->pan();
@@ -290,43 +316,30 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
             const float rPan = 0.5 * (1.0 - pan);
             const bool isLooping = d->clipCommand->looping;
             for(jack_nframes_t frame = 0; frame < nframes; ++frame) {
-                bool updateFilter{false};
                 while (d->ccControlRing.readHead->processed == false && d->ccControlRing.readHead->time <= frame) {
                     // Consume the control change values, but... we don't really have anything to properly use them for
                     const float control = d->ccControlRing.read();
                     float value = d->ccValueRing.read();
-                    bool updateFilterValues = false;
-                    if (control == 74) {
+                    if (d->initialCC[int(control)] == -1) {
+                        d->initialCC[int(control)] = value;
+                    }
+                    if (control == d->ccForLowpass) {
                         // Brightness control
-                        if (d->initialCC74 == -1) {
-                            d->initialCC74 = value;
-                        }
-                        value = std::clamp(63.0f + (d->initialCC74 - value), 0.0f, 127.0f);
-                        updateFilterValues = true;
-                    } else if (control == 1) {
-                        updateFilterValues = true;
+                        value = std::clamp(d->initialCC[d->ccForLowpass] + value, 0.0f, 127.0f);
+                        d->lowpassCutoff = (127.0f - value) / 127.0f;
+                        // Update the coefficient etc (see above for this hz number)
+                        const float adjustmentInHz = pow(2, ((127.0f * d->lowpassCutoff) - 69) / 12) * 440;
+                        const double tan = std::tan(M_PI * adjustmentInHz / sourceSampleRate);
+                        lowpassCoefficient = (tan - 1.f) / (tan + 1.f);
                     }
-                    if (updateFilterValues) {
-                        // Mod wheel
-                        if (value < 63) {
-                            d->filterCutoff = 1.0f - (value / 64.0f);
-                            d->filterHighpass = true;
-                        } else if (value > 63) {
-                            d->filterCutoff = 1.0f - (value - 63.0f) / 64.0f;
-                            d->filterHighpass = false;
-                        } else {
-                            d->filterCutoff = 0.0f;
-                            d->filterHighpass = true;
-                        }
-                        updateFilter = true;
+                    if (control == d->ccForHighpass) {
+                        value = std::clamp(d->initialCC[d->ccForHighpass] + value, 0.0f, 127.0f);
+                        d->highpassCutoff = value / 127.0f;
+                        // Update the coefficient etc (see above for this hz number)
+                        const float adjustmentInHz = pow(2, ((127.0f * d->highpassCutoff) - 69) / 12) * 440;
+                        const double tan = std::tan(M_PI * adjustmentInHz / sourceSampleRate);
+                        highpassCoefficient = (tan - 1.f) / (tan + 1.f);
                     }
-                }
-                if (updateFilter) {
-                    // Update the coefficient etc (see above for this hz number)
-                    const float adjustmentInHz = pow(2, ((127.0f * d->filterCutoff) - 69) / 12) * 440;
-                    const double tan = std::tan(M_PI * adjustmentInHz / sourceSampleRate);
-                    allpassCoefficient = (tan - 1.f) / (tan + 1.f);
-                    filterSign = d->filterHighpass ? -1.f : 1.f;
                 }
                 while (d->pitchRing.readHead->processed == false && d->pitchRing.readHead->time <= frame) {
                     d->pitchRatio = std::pow(2.0, (std::clamp(d->pitchRing.read() + double(d->clipCommand->midiNote), 0.0, 127.0) - double(playingSound->rootMidiNote())) / 12.0)
@@ -335,14 +348,64 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
                 while (d->aftertouchRing.readHead->processed == false && d->aftertouchRing.readHead->time <= frame) {
                     d->lgain = d->rgain = d->clipCommand->volume = (float(d->aftertouchRing.read())/127.0f);
                 }
-                const int pos = (int) d->sourceSamplePosition;
-                const float alpha = (float) (d->sourceSamplePosition - pos);
-                const float invAlpha = 1.0f - alpha;
-                const float envelopeValue = d->adsr.getNextSample();
 
-                // just using a very simple linear interpolation here..
-                float l = sampleDuration > pos ? ((inL[pos] * invAlpha + inL[pos + 1] * alpha) * d->lgain * envelopeValue * clipVolume): 0;
-                float r = (inR != nullptr && sampleDuration > pos) ? ((inR[pos] * invAlpha + inR[pos + 1] * alpha) * d->rgain * envelopeValue * clipVolume) : l;
+                const float envelopeValue = d->adsr.getNextSample();
+                float l{0};
+                float r{0};
+                const int sampleIndex{int(d->sourceSamplePosition)};
+                float modIntegral{0};
+                const float fraction = std::modf(d->sourceSamplePosition, &modIntegral);
+                if (fraction < 0.0001f && d->pitchRatio == 1.0f) {
+                    // If we're just doing un-pitch-shifted playback, don't bother interpolating,
+                    // just grab the sample as given and adjust according to the requests, might
+                    // as well save a bit of processing (it's a very common case, and used for
+                    // e.g. the metronome ticks, and we do want that stuff to be as low impact
+                    // as we can reasonably make it).
+                    l = sampleIndex < stopPosition ? inL[sampleIndex] * d->lgain * envelopeValue * clipVolume: 0;
+                    r = inR != nullptr && sampleIndex < stopPosition ? inR[sampleIndex] * d->rgain * envelopeValue * clipVolume : 0;
+                } else {
+                    // Use Hermite interpolation to ensure out sound data is reasonably on the expected
+                    // curve. We could use linear interpolation, but Hermite is cheap enough that it's
+                    // worth it for the improvements in sound quality. Any more and we'll need to do some
+                    // precalc work and do sample stretching per octave/note/whatnot ahead of time...
+                    // Maybe that's something we could offer an option for, if people really really want it?
+                    int previousSampleIndex{sampleIndex - 1};
+                    int nextSampleIndex{sampleIndex + 1};
+                    int nextNextSampleIndex{sampleIndex + 2};
+                    if (isLooping) {
+                        if (d->firstRoll) {
+                            previousSampleIndex = previousSampleIndex < startPosition ? -1 : previousSampleIndex;
+                            d->firstRoll = false;
+                        } else {
+                            previousSampleIndex = previousSampleIndex < startPosition ? stopPosition - 1 : previousSampleIndex;
+                        }
+                        if (nextSampleIndex > stopPosition) {
+                            nextSampleIndex = startPosition;
+                            nextNextSampleIndex = nextSampleIndex + 1;
+                        } else if (nextNextSampleIndex > stopPosition) {
+                            nextSampleIndex = startPosition;
+                        }
+                    } else {
+                        previousSampleIndex = previousSampleIndex < startPosition ? -1 : previousSampleIndex;
+                        nextSampleIndex = nextSampleIndex > stopPosition ? -1 : nextSampleIndex;
+                        nextNextSampleIndex = nextNextSampleIndex > stopPosition ? -1 : nextNextSampleIndex;
+                    }
+                    // If the various other sample positions are outside the sample area, the sample value is 0 and we should be treating it like there's no sample data
+                    const float l0 = sampleDuration < previousSampleIndex || previousSampleIndex == -1 ? 0 : inL[(int)previousSampleIndex];
+                    const float l1 = sampleDuration < sampleIndex ? 0 : inL[(int)sampleIndex];
+                    const float l2 = sampleDuration < nextSampleIndex || nextSampleIndex == -1 ? 0 : inL[(int)nextSampleIndex];
+                    const float l3 = sampleDuration < nextNextSampleIndex || nextNextSampleIndex == -1 ? 0 : inL[(int)nextNextSampleIndex];
+                    l = interpolateHermite4pt3oX(l0, l1, l2, l3, fraction) * d->lgain * envelopeValue * clipVolume;
+                    if (inR == nullptr) {
+                        r = l;
+                    } else {
+                        const float r0 = sampleDuration < previousSampleIndex || previousSampleIndex == -1 ? 0 : inR[(int)previousSampleIndex];
+                        const float r1 = sampleDuration < sampleIndex ? 0 : inR[(int)sampleIndex];
+                        const float r2 = sampleDuration < nextSampleIndex || nextSampleIndex == -1 ? 0 : inR[(int)nextSampleIndex];
+                        const float r3 = sampleDuration < nextNextSampleIndex || nextNextSampleIndex == -1 ? 0 : inR[(int)nextNextSampleIndex];
+                        r = interpolateHermite4pt3oX(r0, r1, r2, r3, fraction) * d->rgain * envelopeValue * clipVolume;
+                    }
+                }
 
                 // Implement M/S Panning
                 const float mSignal = 0.5 * (l + r);
@@ -352,15 +415,25 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
 
                 // Apply allpass filter effect
                 // Roughly based on https://thewolfsound.com/lowpass-highpass-filter-plugin-with-juce/
-                if (d->filterCutoff > 0 || d->filterHighpass == false) {
-                    // Low/highpass filtering left channel
-                    const float allpassFilteredSampleL = allpassCoefficient * l + d->allpassBufferL;
-                    d->allpassBufferL = l - allpassCoefficient * allpassFilteredSampleL;
-                    l = 0.5f * (l + filterSign * allpassFilteredSampleL);
-                    // Low/highpass filtering right channel
-                    const float allpassFilteredSampleR = allpassCoefficient * r + d->allpassBufferR;
-                    d->allpassBufferR = r - allpassCoefficient * allpassFilteredSampleR;
-                    r = 0.5f * (r + filterSign * allpassFilteredSampleR);
+                if (d->highpassCutoff > 0) {
+                    // highpass filtering left channel
+                    const float allpassFilteredSampleL = highpassCoefficient * l + d->allpassBufferL;
+                    d->allpassBufferL = l - highpassCoefficient * allpassFilteredSampleL;
+                    l = 0.5f * (l + highpassSign * allpassFilteredSampleL);
+                    // highpass filtering right channel
+                    const float allpassFilteredSampleR = highpassCoefficient * r + d->allpassBufferR;
+                    d->allpassBufferR = r - highpassCoefficient * allpassFilteredSampleR;
+                    r = 0.5f * (r + highpassSign * allpassFilteredSampleR);
+                }
+                if (d->lowpassCutoff > 0) {
+                    // lowpass filtering left channel
+                    const float allpassFilteredSampleL = lowpassCoefficient * l + d->allpassBufferL;
+                    d->allpassBufferL = l - lowpassCoefficient * allpassFilteredSampleL;
+                    l = 0.5f * (l + allpassFilteredSampleL);
+                    // lowpass filtering right channel
+                    const float allpassFilteredSampleR = lowpassCoefficient * r + d->allpassBufferR;
+                    d->allpassBufferR = r - lowpassCoefficient * allpassFilteredSampleR;
+                    r = 0.5f * (r + allpassFilteredSampleR);
                 }
 
                 const float newGain{l + r};
@@ -368,10 +441,10 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
                     peakGain = newGain;
                 }
 
-                ++leftBuffer;
                 *leftBuffer += l;
-                ++rightBuffer;
+                ++leftBuffer;
                 *rightBuffer += r;
+                ++rightBuffer;
 
                 d->sourceSamplePosition += d->pitchRatio;
 
@@ -395,12 +468,12 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
 //                             qDebug() << "Resetting - next tick" << d->nextLoopTick << "next usecs" << d->nextLoopUsecs << "difference to playhead" << differenceToPlayhead;
 
                             // Reset the sample playback position back to the start point
-                            d->sourceSamplePosition = (int) (d->clip->getStartPosition(d->clipCommand->slice) * sourceSampleRate);
+                            d->sourceSamplePosition = startPosition;
                         }
                     } else if (d->sourceSamplePosition >= stopPosition) {
                         // If we're not beat-matched, just loop "normally"
                         // TODO Switch start position for the loop position here
-                        d->sourceSamplePosition = (int) (d->clip->getStartPosition(d->clipCommand->slice) * sourceSampleRate);
+                        d->sourceSamplePosition = startPosition;
                     }
                 } else {
                     if (d->sourceSamplePosition >= stopPosition)

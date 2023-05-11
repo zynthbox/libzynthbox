@@ -18,7 +18,7 @@ public:
     void setCurrentCommand(ClipCommand *clipCommand);
     ClipCommand *currentCommand() const;
 
-    void setFilterValues(float cutoff, bool highpass);
+    void setModwheel(int modwheelValue);
 
     void setStartTick(quint64 startTick);
 

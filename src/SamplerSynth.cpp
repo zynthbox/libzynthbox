@@ -48,8 +48,7 @@ public:
     SamplerSynthPrivate* d{nullptr};
     int midiChannel{-1};
     float cpuLoad{0.0f};
-    float filterCutoff{0.0f};
-    bool filterHighpass{true};
+    int modwheelValue{0};
 
     bool enabled{true};
 
@@ -172,17 +171,8 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                             }
                         }
                         if (control == 1) {
-                            // Mod wheel
-                            if (value < 63) {
-                                filterCutoff = 1.0f - (value / 64.0f);
-                                filterHighpass = true;
-                            } else if (value > 63) {
-                                filterCutoff = 1.0f - (value - 63.0f) / 64.0f;
-                                filterHighpass = false;
-                            } else {
-                                filterCutoff = 0.0f;
-                                filterHighpass = true;
-                            }
+                            // Mod wheel - just storing this so we can pass it to new voices when we start them, so initial values make sense
+                            modwheelValue = value;
                         }
                     } else if (0xBF < byte1 && byte1 < 0xD0) {
                         // Program change
@@ -290,7 +280,7 @@ void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick
             for (SamplerSynthVoice *voice : qAsConst(voices)) {
                 if (!voice->isPlaying) {
                     voice->setCurrentCommand(clipCommand);
-                    voice->setFilterValues(filterCutoff, filterHighpass);
+                    voice->setModwheel(modwheelValue);
                     voice->setStartTick(currentTick);
                     d->synth->startVoiceImpl(voice, sound, clipCommand->midiChannel, clipCommand->midiNote, clipCommand->volume);
                     break;
