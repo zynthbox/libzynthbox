@@ -174,7 +174,7 @@ void SamplerSynthVoice::startNote (int midiNoteNumber, float velocity, Synthesis
 {
     if (auto* sound = dynamic_cast<const SamplerSynthSound*> (s))
     {
-        if (sound->isValid() && sound->clip()) {
+        if (sound->isValid && sound->clip()) {
             d->pitchRatio = std::pow (2.0, (midiNoteNumber - sound->rootMidiNote()) / 12.0)
                             * sound->sourceSampleRate() / getSampleRate();
 
@@ -287,7 +287,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
 {
     if (auto* playingSound = static_cast<SamplerSynthSound*> (getCurrentlyPlayingSound().get()))
     {
-        if (playingSound->isValid() && d->clipCommand) {
+        if (playingSound->isValid && d->clipCommand) {
             if (d->nextLoopUsecs == 0) {
                 const quint64 differenceToPlayhead = d->nextLoopTick - d->syncTimer->jackPlayhead();
                 d->nextLoopUsecs = d->syncTimer->jackPlayheadUsecs() + (differenceToPlayhead * d->syncTimer->jackSubbeatLengthInMicroseconds());
@@ -307,7 +307,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
             const double lowpassTan = std::tan(M_PI * lowpassAdjustmentInHz / sourceSampleRate);
             double lowpassCoefficient = (lowpassTan - 1.f) / (lowpassTan + 1.f);
 
-            const float clipVolume = d->clip->volumeAbsolute();
+            const float clipVolume = d->clip->volumeAbsolute() * d->clip->getGain();
             const int startPosition = (int) (d->clip->getStartPosition(d->clipCommand->slice) * sourceSampleRate);
             const int stopPosition = playingSound->stopPosition(d->clipCommand->slice);
             const int sampleDuration = playingSound->length() - 1;
@@ -405,6 +405,13 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
                         const float r3 = sampleDuration < nextNextSampleIndex || nextNextSampleIndex == -1 ? 0 : inR[(int)nextNextSampleIndex];
                         r = interpolateHermite4pt3oX(r0, r1, r2, r3, fraction) * d->rgain * envelopeValue * clipVolume;
                     }
+                }
+                // The sound data might possibly disappear while we're attempting to play,
+                // and if that happens, we really need to not try and use it. If it does
+                // happen, zero out the inputs to avoid terrible noises and an angry jackd
+                // which will just mute the heck out of everything and give up.
+                if (playingSound->isValid == false) {
+                    l = r = 0;
                 }
 
                 // Implement M/S Panning
