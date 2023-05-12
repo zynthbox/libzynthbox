@@ -189,7 +189,7 @@ MidiRouterWatchdog::MidiRouterWatchdog()
 #endif
 }
 
-#define OUTPUT_CHANNEL_COUNT 16
+#define OUTPUT_CHANNEL_COUNT 10
 #define MAX_INPUT_DEVICES 32
 jack_time_t expected_next_usecs{0};
 class MidiRouterPrivate {
@@ -780,22 +780,22 @@ public:
     void disconnectFromOutputs(ChannelOutput *output) {
         const QString portName = QString("ZLRouter:%1").arg(output->portName);
         if (output->destination == MidiRouter::ZynthianDestination) {
-//             disconnectPorts(portName, QLatin1String{"ZynMidiRouter:step_in"});
+            disconnectPorts(portName, QLatin1String{"ZynMidiRouter:step_in"});
         } else if (output->destination == MidiRouter::ExternalDestination) {
-//             for (const QString &externalPort : enabledMidiOutPorts) {
-//                 disconnectPorts(portName, externalPort);
-//             }
+            for (const QString &externalPort : enabledMidiOutPorts) {
+                disconnectPorts(portName, externalPort);
+            }
         }
     }
 
     void connectToOutputs(ChannelOutput *output) {
         const QString portName = QString("ZLRouter:%1").arg(output->portName);
         if (output->destination == MidiRouter::ZynthianDestination) {
-//             connectPorts(portName, QLatin1String{"ZynMidiRouter:step_in"});
+            connectPorts(portName, QLatin1String{"ZynMidiRouter:step_in"});
         } else if (output->destination == MidiRouter::ExternalDestination) {
-//             for (const QString &externalPort : enabledMidiOutPorts) {
-//                 connectPorts(portName, externalPort);
-//             }
+            for (const QString &externalPort : enabledMidiOutPorts) {
+                connectPorts(portName, externalPort);
+            }
         }
     }
 };
@@ -846,7 +846,7 @@ MidiRouter::MidiRouter(QObject *parent)
                 // To ensure we always have the expected channels, ZynMidiRouter wants us to use step_in
                 // (or it'll rewrite to whatever it thinks the current channel is)
                 const QString zmrPort{"ZynMidiRouter:step_in"};
-                // We technically only have ten channels, but there's no reason we can't handle 16... so, let's do it like so
+                // Sketchpad has a concept of 10 channels, and we want an output for each of those
                 for (int channel = 0; channel < OUTPUT_CHANNEL_COUNT; ++channel) {
                     ChannelOutput *output = new ChannelOutput(channel);
                     output->portName = QString("Channel%2").arg(QString::number(channel));
