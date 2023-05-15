@@ -361,8 +361,8 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
                     // as well save a bit of processing (it's a very common case, and used for
                     // e.g. the metronome ticks, and we do want that stuff to be as low impact
                     // as we can reasonably make it).
-                    l = sampleIndex < stopPosition ? inL[sampleIndex] * d->lgain * envelopeValue * clipVolume: 0;
-                    r = inR != nullptr && sampleIndex < stopPosition ? inR[sampleIndex] * d->rgain * envelopeValue * clipVolume : 0;
+                    l = sampleIndex < sampleDuration ? inL[sampleIndex] * d->lgain * envelopeValue * clipVolume : 0;
+                    r = inR != nullptr && sampleIndex < sampleDuration ? inR[sampleIndex] * d->rgain * envelopeValue * clipVolume : l;
                 } else {
                     // Use Hermite interpolation to ensure out sound data is reasonably on the expected
                     // curve. We could use linear interpolation, but Hermite is cheap enough that it's
