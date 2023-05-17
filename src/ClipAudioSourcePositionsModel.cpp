@@ -8,6 +8,7 @@ struct PositionData {
     qint64 id{-1};
     float progress{0.0f};
     float gain{0.0f};
+    float pan{0.0f};
     qint64 lastUpdated{0};
 };
 
@@ -41,6 +42,7 @@ QHash<int, QByteArray> ClipAudioSourcePositionsModel::roleNames() const
         {PositionIDRole, "positionID"},
         {PositionProgressRole, "positionProgress"},
         {PositionGainRole, "positionGain"},
+        {PositionPanRole, "positionPan"},
     };
     return roleNames;
 }
@@ -67,6 +69,9 @@ QVariant ClipAudioSourcePositionsModel::data(const QModelIndex &index, int role)
                 break;
             case PositionGainRole:
                 result.setValue<float>(position->gain);
+                break;
+            case PositionPanRole:
+                result.setValue<float>(position->pan);
                 break;
             default:
                 break;
@@ -123,12 +128,13 @@ void ClipAudioSourcePositionsModel::setPositionGain(qint64 positionID, float gai
     }
 }
 
-void ClipAudioSourcePositionsModel::setPositionGainAndProgress(qint64 positionID, float gain, float progress)
+void ClipAudioSourcePositionsModel::setPositionData(qint64 positionID, float gain, float progress, float pan)
 {
     if (positionID > -1 && positionID < POSITION_COUNT) {
         PositionData *position = d->positions[positionID];
         position->gain = gain;
         position->progress = progress;
+        position->pan = pan;
         position->lastUpdated = QDateTime::currentMSecsSinceEpoch();
         const QModelIndex idx{createIndex(positionID, 0)};
         dataChanged(idx, idx, {PositionGainRole, PositionProgressRole});
@@ -144,6 +150,7 @@ void ClipAudioSourcePositionsModel::removePosition(qint64 positionID)
         position->id = -1;
         position->gain = 0.0f;
         position->progress = 0.0f;
+        position->pan = 0.0f;
         const QModelIndex idx{createIndex(positionID, 0)};
         dataChanged(idx, idx);
         d->updatePeakGain = true;
@@ -198,6 +205,7 @@ void ClipAudioSourcePositionsModel::cleanUpPositions() {
             position->id = -1;
             position->gain = 0.0f;
             position->progress = 0.0f;
+            position->pan = 0.0f;
             ++removedAny;
         }
     }
