@@ -148,6 +148,9 @@ void SamplerSynthVoice::setCurrentCommand(ClipCommand *clipCommand)
                 d->sourceSamplePosition = (int) (d->clip->getStartPosition(d->clipCommand->slice) * playingSound->sourceSampleRate());
             }
         }
+        if (clipCommand->changePan) {
+            d->clipCommand->pan = clipCommand->pan;
+        }
         d->syncTimer->deleteClipCommand(clipCommand);
     } else {
         d->clipCommand = clipCommand;
@@ -181,7 +184,7 @@ void SamplerSynthVoice::startNote (int midiNoteNumber, float velocity, Synthesis
             d->maxSampleDeviation = d->syncTimer->subbeatCountToSeconds(d->syncTimer->getBpm(), 1) * sound->sourceSampleRate();
             d->clip = sound->clip();
             d->sourceSampleLength = d->clip->getDuration() * sound->sourceSampleRate();
-            d->sourceSamplePosition = (int) (d->clip->getStartPosition(d->clipCommand->slice) * sound->sourceSampleRate());
+            d->sourceSamplePosition = (int) ((d->clipCommand->setStartPosition ? d->clipCommand->startPosition : d->clip->getStartPosition(d->clipCommand->slice)) * sound->sourceSampleRate());
 
             d->nextLoopTick = d->startTick + d->clip->getLengthInBeats() * d->syncTimer->getMultiplier();
             d->nextLoopUsecs = 0;
@@ -202,7 +205,7 @@ void SamplerSynthVoice::startNote (int midiNoteNumber, float velocity, Synthesis
 
             d->adsr.reset();
             d->adsr.setSampleRate(sound->sourceSampleRate());
-            d->adsr.setParameters(d->clip->adsrParameters());
+            d->adsr.setParameters(d->clip->granular() ? d->clip->grainADSR().getParameters() : d->clip->adsrParameters());
             isTailingOff = false;
             d->adsr.noteOn();
         }
@@ -308,10 +311,10 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
             double lowpassCoefficient = (lowpassTan - 1.f) / (lowpassTan + 1.f);
 
             const float clipVolume = d->clip->volumeAbsolute() * d->clip->getGain();
-            const int startPosition = (int) (d->clip->getStartPosition(d->clipCommand->slice) * sourceSampleRate);
-            const int stopPosition = playingSound->stopPosition(d->clipCommand->slice);
+            const int startPosition = (int) ((d->clipCommand->setStartPosition ? d->clipCommand->startPosition : d->clip->getStartPosition(d->clipCommand->slice)) * sourceSampleRate);
+            const int stopPosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition : d->clip->getStopPosition(d->clipCommand->slice)) * sourceSampleRate);
             const int sampleDuration = playingSound->length() - 1;
-            const float pan = (float) d->clip->pan();
+            const float pan = std::clamp(float(d->clip->pan()) + d->clipCommand->pan, -1.0f, 1.0f);
             const float lPan = 0.5 * (1.0 + pan);
             const float rPan = 0.5 * (1.0 - pan);
             const bool isLooping = d->clipCommand->looping;
@@ -495,7 +498,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
 
             // Because it might have gone away after being stopped above, so let's try and not crash
             if (d->clip && d->clipPositionId > -1) {
-                d->clip->playbackPositionsModel()->setPositionGainAndProgress(d->clipPositionId, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength);
+                d->clip->playbackPositionsModel()->setPositionData(d->clipPositionId, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, pan);
             }
         }
     }
