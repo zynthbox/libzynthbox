@@ -30,6 +30,12 @@ struct ClipCommand {
     float gainDb{0.0f};
     bool changeVolume{false};
     float volume{0.0f};
+    bool changePan{false};
+    float pan{0.0f};
+    bool setStartPosition{false};
+    float startPosition{0};
+    bool setStopPosition{false};
+    float stopPosition{0};
 
     bool equivalentTo(ClipCommand *other) const {
         return clip == other->clip
@@ -89,6 +95,12 @@ struct ClipCommand {
         command->gainDb = 0.0f;
         command->changeVolume = false;
         command->volume = 0.0f;
+        command->changePan = false;
+        command->pan = 0.0f;
+        command->setStartPosition = false;
+        command->startPosition = 0;
+        command->setStopPosition = false;
+        command->stopPosition = 0;
     }
 };
 
