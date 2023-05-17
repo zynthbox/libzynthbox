@@ -31,7 +31,14 @@ using namespace std;
 
 class ClipAudioSource::Private : public juce::Timer {
 public:
-  Private(ClipAudioSource *qq) : q(qq) {}
+  Private(ClipAudioSource *qq) : q(qq) {
+    juce::ADSR::Parameters parameters = grainADSR.getParameters();
+    parameters.attack = 0.01f;
+    parameters.decay = 0.0f;
+    parameters.sustain = 1.0f;
+    parameters.release = 0.01f;
+    grainADSR.setParameters(parameters);
+  }
   ClipAudioSource *q;
   const te::Engine &getEngine() const { return *engine; };
   te::WaveAudioClip::Ptr getClip() {
@@ -62,6 +69,7 @@ public:
   float pitchChange = 0;
   float speedRatio = 1.0;
   float pan{0.0f};
+  double sampleRate{0.0f};
   double currentLeveldB{-400.0};
   double prevLeveldB{-400.0};
   int id{0};
@@ -75,6 +83,16 @@ public:
   int keyZoneEnd{127};
   int rootNote{60};
   juce::ADSR adsr;
+
+  bool granular{false};
+  int grainInterval{10};
+  int grainIntervalAdditional{10};
+  int grainSize{100};
+  int grainSizeAdditional{50};
+  float grainPanMinimum{-1.0f};
+  float grainPanMaximum{1.0f};
+  juce::ADSR grainADSR;
+
   qint64 nextPositionUpdateTime{0};
   double firstPositionProgress{0};
   qint64 nextGainUpdateTime{0};
@@ -154,7 +172,8 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
           clip->setAutoTempo(false);
           clip->setAutoPitch(false);
           clip->setTimeStretchMode(te::TimeStretcher::defaultMode);
-          d->adsr.setSampleRate(clip->getAudioFile().getSampleRate());
+          d->sampleRate = clip->getAudioFile().getSampleRate();
+          d->adsr.setSampleRate(d->sampleRate);
         }
 
         transport.setLoopRange(te::EditTimeRange::withStartAndLength(
@@ -366,6 +385,11 @@ float ClipAudioSource::getDuration() { return d->edit->getLength(); }
 
 const char *ClipAudioSource::getFileName() const {
   return static_cast<const char *>(d->fileName.toUTF8());
+}
+
+double ClipAudioSource::sampleRate() const
+{
+  return d->sampleRate;
 }
 
 const char *ClipAudioSource::getFilePath() const {
@@ -705,4 +729,113 @@ const juce::ADSR::Parameters & ClipAudioSource::adsrParameters() const
 const juce::ADSR & ClipAudioSource::adsr() const
 {
   return d->adsr;
+}
+
+bool ClipAudioSource::granular() const
+{
+  return d->granular;
+}
+
+void ClipAudioSource::setGranular(const bool& newValue)
+{
+  if (d->granular != newValue) {
+    d->granular = newValue;
+    Q_EMIT granularChanged();
+  }
+}
+
+int ClipAudioSource::grainInterval() const
+{
+  return d->grainInterval;
+}
+
+void ClipAudioSource::setGrainInterval(const int& newValue)
+{
+  const int adjustedValue{qMax(0, newValue)};
+  if (d->grainInterval != adjustedValue) {
+    d->grainInterval = adjustedValue;
+    Q_EMIT grainIntervalChanged();
+  }
+}
+
+int ClipAudioSource::grainIntervalAdditional() const
+{
+  return d->grainIntervalAdditional;
+}
+
+void ClipAudioSource::setGrainIntervalAdditional(const int& newValue)
+{
+  const int adjustedValue{qMax(0, newValue)};
+  if (d->grainIntervalAdditional != adjustedValue) {
+    d->grainIntervalAdditional = adjustedValue;
+    Q_EMIT grainIntervalAdditionalChanged();
+  }
+}
+
+int ClipAudioSource::grainSize() const
+{
+  return d->grainSize;
+}
+
+void ClipAudioSource::setGrainSize(const int& newValue)
+{
+  const int adjustedValue{qMax(1, newValue)};
+  if (d->grainSize != adjustedValue) {
+    d->grainSize = adjustedValue;
+    Q_EMIT grainSizeChanged();
+  }
+}
+
+int ClipAudioSource::grainSizeAdditional() const
+{
+  return d->grainSizeAdditional;
+}
+
+void ClipAudioSource::setGrainSizeAdditional(const int& newValue)
+{
+  if (d->grainSizeAdditional != newValue) {
+    d->grainSizeAdditional = newValue;
+    Q_EMIT grainSizeAdditionalChanged();
+  }
+}
+
+float ClipAudioSource::grainPanMinimum() const
+{
+  return d->grainPanMinimum;
+}
+
+void ClipAudioSource::setGrainPanMinimum(const float& newValue)
+{
+  const float adjustedValue{std::clamp(newValue, -1.0f, 1.0f)};
+  if (d->grainPanMinimum != adjustedValue) {
+    d->grainPanMinimum = adjustedValue;
+    Q_EMIT grainPanMinimumChanged();
+    if (d->grainPanMaximum < adjustedValue) {
+      d->grainPanMaximum = adjustedValue;
+      Q_EMIT grainPanMaximumChanged();
+    }
+  }
+}
+
+float ClipAudioSource::grainPanMaximum() const
+{
+  return d->grainPanMaximum;
+}
+
+void ClipAudioSource::setGrainPanMaximum(const float& newValue)
+{
+  const float adjustedValue{std::clamp(newValue, -1.0f, 1.0f)};
+  if (d->grainPanMaximum != adjustedValue) {
+    d->grainPanMaximum = adjustedValue;
+    Q_EMIT grainPanMaximumChanged();
+    if (d->grainPanMinimum > adjustedValue) {
+      d->grainPanMinimum = adjustedValue;
+      Q_EMIT grainPanMinimumChanged();
+    }
+  }
+}
+
+const juce::ADSR & ClipAudioSource::grainADSR() const
+{
+  return d->grainADSR;
 }

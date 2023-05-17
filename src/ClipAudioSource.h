@@ -104,6 +104,50 @@ class ClipAudioSource : public QObject {
      * \brief The release part of an ADSR envelope (the duration of the release in seconds)
      */
     Q_PROPERTY(float adsrRelease READ adsrRelease WRITE setADSRRelease NOTIFY adsrParametersChanged)
+    /**
+     * \brief Whether or not this clip should be played using a granular synthesis method
+     */
+    Q_PROPERTY(bool granular READ granular WRITE setGranular NOTIFY granularChanged)
+    /**
+     * \brief The minimum interval for grains in milliseconds (default is 0, meaning the sample window duration)
+     * @default 0 meaning the full duration of the sample window
+     * @minimum 0
+     */
+    Q_PROPERTY(int grainInterval READ grainInterval WRITE setGrainInterval NOTIFY grainIntervalChanged)
+    /**
+     * \brief The maximum additional time for grain intervals (in ms, default is 0, meaning no variance)
+     * @default 0 meaning no interval variance
+     * @minimum 0
+     */
+    Q_PROPERTY(int grainIntervalAdditional READ grainIntervalAdditional WRITE setGrainIntervalAdditional NOTIFY grainIntervalAdditionalChanged)
+    /**
+     * \brief The minimum size of the grains in ms (default is 1 ms, minimum is 1ms)
+     * @default 1
+     * @minimum 1
+     */
+    Q_PROPERTY(int grainSize READ grainSize WRITE setGrainSize NOTIFY grainSizeChanged)
+    /**
+     * \brief The maximum additional duration for grains (in ms, default is 0, meaning no variance)
+     * @default 0
+     * @minimum 0
+     */
+    Q_PROPERTY(int grainSizeAdditional READ grainSizeAdditional WRITE setGrainSizeAdditional NOTIFY grainSizeAdditionalChanged)
+    /**
+     * \brief The lower end of the pan allowance for individual grains, relative to the clip's global pan (from -1 (left pan) through 1 (right pan))
+     * @default 0
+     * @minimum -1.0f
+     * @maximum 1.0f
+     * @note If this is set higher than the maximum pan, the maximum pan will be pushed up to match
+     */
+    Q_PROPERTY(float grainPanMinimum READ grainPanMinimum WRITE setGrainPanMinimum NOTIFY grainPanMinimumChanged)
+    /**
+     * \brief The upper end of the pan allowance for individual grains, relative to the clip's global pan (from -1 (left pan) through 1 (right pan))
+     * @default 0
+     * @minimum -1.0f
+     * @maximum 1.0f
+     * @note If this is set lower than the current mimimum pan, the mimimum pan will be pushed down to match
+     */
+    Q_PROPERTY(float grainPanMaximum READ grainPanMaximum WRITE setGrainPanMaximum NOTIFY grainPanMaximumChanged)
 public:
   explicit ClipAudioSource(const char *filepath, bool muted = false, QObject *parent = nullptr);
   ~ClipAudioSource() override;
@@ -145,6 +189,8 @@ public:
   const char *getFileName() const;
   const char *getFilePath() const;
   void updateTempoAndPitch();
+
+  double sampleRate() const;
 
   tracktion_engine::AudioFile getPlaybackFile() const;
   Q_SIGNAL void playbackFileChanged();
@@ -240,6 +286,29 @@ public:
   void setADSRParameters(const juce::ADSR::Parameters &parameters);
   const juce::ADSR &adsr() const;
   Q_SIGNAL void adsrParametersChanged();
+
+  bool granular() const;
+  void setGranular(const bool &newValue);
+  Q_SIGNAL void granularChanged();
+  int grainInterval() const;
+  void setGrainInterval(const int &newValue);
+  Q_SIGNAL void grainIntervalChanged();
+  int grainIntervalAdditional() const;
+  void setGrainIntervalAdditional(const int &newValue);
+  Q_SIGNAL void grainIntervalAdditionalChanged();
+  int grainSize() const;
+  void setGrainSize(const int &newValue);
+  Q_SIGNAL void grainSizeChanged();
+  int grainSizeAdditional() const;
+  void setGrainSizeAdditional(const int &newValue);
+  Q_SIGNAL void grainSizeAdditionalChanged();
+  float grainPanMinimum() const;
+  void setGrainPanMinimum(const float &newValue);
+  Q_SIGNAL void grainPanMinimumChanged();
+  float grainPanMaximum() const;
+  void setGrainPanMaximum(const float &newValue);
+  Q_SIGNAL void grainPanMaximumChanged();
+  const juce::ADSR &grainADSR() const;
 private:
   class Private;
   Private *d;
