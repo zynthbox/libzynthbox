@@ -109,29 +109,57 @@ class ClipAudioSource : public QObject {
      */
     Q_PROPERTY(bool granular READ granular WRITE setGranular NOTIFY granularChanged)
     /**
+     * \brief The position of sample playback as a fraction of the sample window
+     * @default 0.0f
+     * @minimum 0.0f
+     * @maximum 1.0f
+     */
+    Q_PROPERTY(float grainPosition READ grainPosition WRITE setGrainPosition NOTIFY grainPositionChanged)
+    /**
+     * \brief The width of the window from the grain position as a fraction of the sample window that grains will be picked from
+     * This is counted from the position (not centered around it), but will wrap the window. For example, if this is set to 0.3,
+     * and grainPosition is set to 0.9, the grains will be positioned inside either the last 0.1 of the sample window, or the
+     * first 0.2. Note also that grains will not be positioned at the end if they do not have the space to fully complete
+     * playback there.
+     * @default 1.0f
+     * @minimum 0.0f
+     * @maximum 1.0f
+     */
+    Q_PROPERTY(float grainSpray READ grainSpray WRITE setGrainSpray NOTIFY grainSprayChanged)
+    /**
+     * \brief The speed with which the grain position is moved for any playing notes
+     * 1.0 means the position is moved at the speed of the playing note, 0.0 means no movement, 2.0 means
+     * double speed (and so on). Negative numbers means the position moves backwards (with the same speeds
+     * as when moving forwards, just backwards)
+     * @default 0.0f
+     * @minimum -100.0f
+     * @maximum 100.0f
+     */
+    Q_PROPERTY(float grainScan READ grainScan WRITE setGrainScan NOTIFY grainScanChanged)
+    /**
      * \brief The minimum interval for grains in milliseconds (default is 0, meaning the sample window duration)
      * @default 0 meaning the full duration of the sample window
      * @minimum 0
      */
-    Q_PROPERTY(int grainInterval READ grainInterval WRITE setGrainInterval NOTIFY grainIntervalChanged)
+    Q_PROPERTY(float grainInterval READ grainInterval WRITE setGrainInterval NOTIFY grainIntervalChanged)
     /**
      * \brief The maximum additional time for grain intervals (in ms, default is 0, meaning no variance)
      * @default 0 meaning no interval variance
      * @minimum 0
      */
-    Q_PROPERTY(int grainIntervalAdditional READ grainIntervalAdditional WRITE setGrainIntervalAdditional NOTIFY grainIntervalAdditionalChanged)
+    Q_PROPERTY(float grainIntervalAdditional READ grainIntervalAdditional WRITE setGrainIntervalAdditional NOTIFY grainIntervalAdditionalChanged)
     /**
      * \brief The minimum size of the grains in ms (default is 1 ms, minimum is 1ms)
      * @default 1
      * @minimum 1
      */
-    Q_PROPERTY(int grainSize READ grainSize WRITE setGrainSize NOTIFY grainSizeChanged)
+    Q_PROPERTY(float grainSize READ grainSize WRITE setGrainSize NOTIFY grainSizeChanged)
     /**
      * \brief The maximum additional duration for grains (in ms, default is 0, meaning no variance)
      * @default 0
      * @minimum 0
      */
-    Q_PROPERTY(int grainSizeAdditional READ grainSizeAdditional WRITE setGrainSizeAdditional NOTIFY grainSizeAdditionalChanged)
+    Q_PROPERTY(float grainSizeAdditional READ grainSizeAdditional WRITE setGrainSizeAdditional NOTIFY grainSizeAdditionalChanged)
     /**
      * \brief The lower end of the pan allowance for individual grains, relative to the clip's global pan (from -1 (left pan) through 1 (right pan))
      * @default 0
@@ -290,17 +318,26 @@ public:
   bool granular() const;
   void setGranular(const bool &newValue);
   Q_SIGNAL void granularChanged();
-  int grainInterval() const;
-  void setGrainInterval(const int &newValue);
+  float grainPosition() const;
+  void setGrainPosition(const float &newValue);
+  Q_SIGNAL void grainPositionChanged();
+  float grainSpray() const;
+  void setGrainSpray(const float &newValue);
+  Q_SIGNAL void grainSprayChanged();
+  float grainScan() const;
+  void setGrainScan(const float &newValue);
+  Q_SIGNAL void grainScanChanged();
+  float grainInterval() const;
+  void setGrainInterval(const float &newValue);
   Q_SIGNAL void grainIntervalChanged();
-  int grainIntervalAdditional() const;
-  void setGrainIntervalAdditional(const int &newValue);
+  float grainIntervalAdditional() const;
+  void setGrainIntervalAdditional(const float &newValue);
   Q_SIGNAL void grainIntervalAdditionalChanged();
-  int grainSize() const;
-  void setGrainSize(const int &newValue);
+  float grainSize() const;
+  void setGrainSize(const float &newValue);
   Q_SIGNAL void grainSizeChanged();
-  int grainSizeAdditional() const;
-  void setGrainSizeAdditional(const int &newValue);
+  float grainSizeAdditional() const;
+  void setGrainSizeAdditional(const float &newValue);
   Q_SIGNAL void grainSizeAdditionalChanged();
   float grainPanMinimum() const;
   void setGrainPanMinimum(const float &newValue);

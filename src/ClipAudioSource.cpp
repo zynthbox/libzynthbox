@@ -85,10 +85,13 @@ public:
   juce::ADSR adsr;
 
   bool granular{false};
-  int grainInterval{10};
-  int grainIntervalAdditional{10};
-  int grainSize{100};
-  int grainSizeAdditional{50};
+  float grainPosition{0.0f};
+  float grainSpray{1.0f};
+  float grainScan{0.0f};
+  float grainInterval{10};
+  float grainIntervalAdditional{10};
+  float grainSize{100};
+  float grainSizeAdditional{50};
   float grainPanMinimum{-1.0f};
   float grainPanMaximum{1.0f};
   juce::ADSR grainADSR;
@@ -744,54 +747,93 @@ void ClipAudioSource::setGranular(const bool& newValue)
   }
 }
 
-int ClipAudioSource::grainInterval() const
+float ClipAudioSource::grainPosition() const
+{
+  return d->grainPosition;
+}
+
+void ClipAudioSource::setGrainPosition(const float& newValue)
+{
+  if (d->grainPosition != newValue) {
+    d->grainPosition = newValue;
+    Q_EMIT grainPositionChanged();
+  }
+}
+
+float ClipAudioSource::grainSpray() const
+{
+  return d->grainSpray;
+}
+
+void ClipAudioSource::setGrainSpray(const float& newValue)
+{
+  if (d->grainSpray != newValue) {
+    d->grainSpray = newValue;
+    Q_EMIT grainSprayChanged();
+  }
+}
+
+float ClipAudioSource::grainScan() const
+{
+  return d->grainScan;
+}
+
+void ClipAudioSource::setGrainScan(const float& newValue)
+{
+  if (d->grainScan != newValue) {
+    d->grainScan = newValue;
+    Q_EMIT grainScanChanged();
+  }
+}
+
+float ClipAudioSource::grainInterval() const
 {
   return d->grainInterval;
 }
 
-void ClipAudioSource::setGrainInterval(const int& newValue)
+void ClipAudioSource::setGrainInterval(const float& newValue)
 {
-  const int adjustedValue{qMax(0, newValue)};
+  const float adjustedValue{qMax(0.0f, newValue)};
   if (d->grainInterval != adjustedValue) {
     d->grainInterval = adjustedValue;
     Q_EMIT grainIntervalChanged();
   }
 }
 
-int ClipAudioSource::grainIntervalAdditional() const
+float ClipAudioSource::grainIntervalAdditional() const
 {
   return d->grainIntervalAdditional;
 }
 
-void ClipAudioSource::setGrainIntervalAdditional(const int& newValue)
+void ClipAudioSource::setGrainIntervalAdditional(const float& newValue)
 {
-  const int adjustedValue{qMax(0, newValue)};
+  const float adjustedValue{qMax(0.0f, newValue)};
   if (d->grainIntervalAdditional != adjustedValue) {
     d->grainIntervalAdditional = adjustedValue;
     Q_EMIT grainIntervalAdditionalChanged();
   }
 }
 
-int ClipAudioSource::grainSize() const
+float ClipAudioSource::grainSize() const
 {
   return d->grainSize;
 }
 
-void ClipAudioSource::setGrainSize(const int& newValue)
+void ClipAudioSource::setGrainSize(const float& newValue)
 {
-  const int adjustedValue{qMax(1, newValue)};
+  const float adjustedValue{qMax(1.0f, newValue)};
   if (d->grainSize != adjustedValue) {
     d->grainSize = adjustedValue;
     Q_EMIT grainSizeChanged();
   }
 }
 
-int ClipAudioSource::grainSizeAdditional() const
+float ClipAudioSource::grainSizeAdditional() const
 {
   return d->grainSizeAdditional;
 }
 
-void ClipAudioSource::setGrainSizeAdditional(const int& newValue)
+void ClipAudioSource::setGrainSizeAdditional(const float& newValue)
 {
   if (d->grainSizeAdditional != newValue) {
     d->grainSizeAdditional = newValue;
