@@ -32,6 +32,7 @@ public:
     explicit SamplerChannel(const QString &clientName, const int &midiChannel);
     ~SamplerChannel();
     int process(jack_nframes_t nframes);
+    double sampleRate() const;
     inline void handleCommand(ClipCommand *clipCommand, quint64 currentTick);
     ClipCommandRing commandRing;
 
@@ -89,16 +90,28 @@ public:
             aftertouch[i] = 1.0f;
             pitch[i] = 0;
             envelopeValue[i] = 0;
+            position[i] = 0;
         }
     }
     ~Grainerator() {}
+    // TODO handle multi-sample triggers for the same note... woops, forgot we can do that ;)
     void start(ClipCommand *clipCommand, quint64 timestamp) {
-        clipCommands[clipCommand->midiNote] = clipCommand;
-        aftertouch[clipCommand->midiNote] = clipCommand->volume;
-        envelope[clipCommand->midiNote].reset();
-        envelope[clipCommand->midiNote].setSampleRate(clipCommand->clip->sampleRate());
-        envelope[clipCommand->midiNote].setParameters(clipCommand->clip->adsrParameters());
-        framesUntilNextGrain[clipCommand->midiNote] = timestamp;
+        const int midiNote{clipCommand->midiNote};
+        clipCommands[midiNote] = clipCommand;
+        aftertouch[midiNote] = clipCommand->volume;
+        envelope[midiNote].reset();
+        envelope[midiNote].setSampleRate(clipCommand->clip->sampleRate());
+        envelope[midiNote].setParameters(clipCommand->clip->adsrParameters());
+        startPosition[midiNote] = clipCommand->clip->getStartPosition(clipCommand->slice);
+        stopPosition[midiNote] = clipCommand->clip->getStopPosition(clipCommand->slice);
+        windowSize[midiNote] = (stopPosition[midiNote] - startPosition[midiNote]) * clipCommand->clip->grainSpray();
+        position[midiNote] = startPosition[midiNote] + (clipCommand->clip->grainPosition() * (stopPosition[midiNote] - startPosition[midiNote]));
+        if (clipCommand->clip->grainScan() != 0) {
+            scan[midiNote] = (clipCommand->clip->grainScan() / 100.0f) * clipCommand->clip->sampleRate() / channel->sampleRate();
+        } else {
+            scan[midiNote] = 0;
+        }
+        framesUntilNextGrain[midiNote] = timestamp;
     }
     void stop(ClipCommand *clipCommand) {
         envelope[clipCommand->midiNote].noteOff();
@@ -156,6 +169,21 @@ public:
                         } else {
                             framesUntilNextGrain[midiNote] = framesPerMillisecond * (double(command->clip->grainInterval()) + additionalInterval);
                         }
+                        // Only do this if we're actually supposed to be scanning through the playback, otherwise it just gets a little silly
+                        if (scan[midiNote] != 0) {
+                            position[midiNote] += std::clamp(scan[midiNote], -windowSize[midiNote], windowSize[midiNote]);
+                            if (scan[midiNote] < 0) {
+                                // We're moving in reverse, check lower bound
+                                if (position[midiNote] < startPosition[midiNote]) {
+                                    position[midiNote] = stopPosition[midiNote] - (startPosition[midiNote] - position[midiNote]);
+                                }
+                            } else {
+                                // We're playing forward, check upper bound
+                                if (position[midiNote] > stopPosition[midiNote]) {
+                                    position[midiNote] = startPosition[midiNote] + (position[midiNote] - stopPosition[midiNote]);
+                                }
+                            }
+                        }
                     }
                     if (!envelope[midiNote].isActive()) {
                         // Then we've reached the end of the note and need to do all the stopping things
@@ -183,9 +211,18 @@ public:
         newGrain->changePan = true;
         // grain duration (grain size start plus random from 0 through grain size additional, at most the size of the sample window) (times 1000, because start and stop are expected to be in seconds, not milliseconds)
         const double duration = qMin((double(newGrain->clip->grainSize()) + QRandomGenerator::global()->bounded(double(newGrain->clip->grainSizeAdditional()))) / 1000.0f, double(newGrain->clip->getDuration()));
-        // grain start position (from sample window start to at most sample window end minus grain duration)
-        const double startPosition{double(newGrain->clip->getStartPosition(command->slice))};
-        newGrain->startPosition = startPosition + QRandomGenerator::global()->bounded(double(newGrain->clip->getStopPosition(command->slice) - startPosition - duration));
+        // grain start position
+        if (windowSize[midiNote] < duration) {
+            // If the duration is too long to fit inside the window, just start at the start - allow people to do it, since well, it'll work anyway
+            newGrain->startPosition = position[command->midiNote];
+        } else {
+            // Otherwise use the standard logic: from current position, to somewhere within the sample window, minus duration to ensure entire sample playback happens inside window
+            newGrain->startPosition = position[command->midiNote] + QRandomGenerator::global()->bounded(double(windowSize[midiNote] - duration));
+        }
+        // Make sure we stick inside the window
+        if (newGrain->startPosition > stopPosition[command->midiNote]) {
+            newGrain->startPosition = startPosition[command->midiNote] + (newGrain->startPosition - stopPosition[command->midiNote]);
+        }
         // grain stop position (start position plus duration - which has already been bounded by the above)
         newGrain->stopPosition = newGrain->startPosition + duration;
         // pan variance (random between pan minimum and pan maximum)
@@ -200,6 +237,11 @@ private:
     float pitch[128];
     juce::ADSR envelope[128];
     float envelopeValue[128];
+    float startPosition[128];
+    float stopPosition[128];
+    float windowSize[128];
+    float position[128];
+    float scan[128];
 };
 
 static int client_process(jack_nframes_t nframes, void* arg) {
@@ -424,6 +466,11 @@ public:
     }
     SamplerSynthPrivate *d{nullptr};
 };
+
+double SamplerChannel::sampleRate() const
+{
+    return d->synth->getSampleRate();
+}
 
 void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick)
 {
