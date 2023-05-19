@@ -107,7 +107,7 @@ public:
         windowSize[midiNote] = (stopPosition[midiNote] - startPosition[midiNote]) * clipCommand->clip->grainSpray();
         position[midiNote] = startPosition[midiNote] + (clipCommand->clip->grainPosition() * (stopPosition[midiNote] - startPosition[midiNote]));
         if (clipCommand->clip->grainScan() != 0) {
-            scan[midiNote] = (clipCommand->clip->grainScan() / 100.0f) * clipCommand->clip->sampleRate() / channel->sampleRate();
+            scan[midiNote] = 100.0f * clipCommand->clip->sampleRate() / channel->sampleRate();
         } else {
             scan[midiNote] = 0;
         }
@@ -140,21 +140,15 @@ public:
         }
     }
     void process(jack_nframes_t nframes, float framesPerMillisecond) {
-        // As to the order of these two: We want to make sure we're handling our frames
-        // in order, and the array access below is fast enough that we don't have to worry
-        // a great deal (if future benchmarking says otherwise, we can sort it then, and
-        // until then, easier to read is better)
         for (jack_nframes_t frame = 0; frame < nframes; ++frame) {
             for (int midiNote = 0; midiNote < 128; ++midiNote) {
                 ClipCommand *command = clipCommands[midiNote];
                 if (command) {
                     // If the envelope is not yet active, start it
-                    if (envelope[midiNote].isActive()) {
-                        envelopeValue[midiNote] = envelope[midiNote].getNextSample();
-                    } else {
+                    if (!envelope[midiNote].isActive()) {
                         envelope[midiNote].noteOn();
-                        envelopeValue[midiNote] = envelope[midiNote].getNextSample();
                     }
+                    envelopeValue[midiNote] = envelope[midiNote].getNextSample();
                     if (framesUntilNextGrain[midiNote] == 0) {
                         // pick the grain to play and schedule that at position `frame`
                         ClipCommand *command = pickNextGrain(midiNote);
@@ -171,7 +165,7 @@ public:
                         }
                         // Only do this if we're actually supposed to be scanning through the playback, otherwise it just gets a little silly
                         if (scan[midiNote] != 0) {
-                            position[midiNote] += std::clamp(scan[midiNote], -windowSize[midiNote], windowSize[midiNote]);
+                            position[midiNote] += std::clamp((command->clip->grainScan() / scan[midiNote]), -windowSize[midiNote], windowSize[midiNote]);
                             if (scan[midiNote] < 0) {
                                 // We're moving in reverse, check lower bound
                                 if (position[midiNote] < startPosition[midiNote]) {
@@ -205,23 +199,24 @@ public:
         newGrain->startPlayback = true;
         newGrain->midiNote = command->midiNote;
         newGrain->changeVolume = true;
-        newGrain->volume = aftertouch[command->midiNote] * envelopeValue[command->midiNote];
+        newGrain->volume = aftertouch[midiNote] * envelopeValue[midiNote];
         newGrain->setStartPosition = true;
         newGrain->setStopPosition = true;
         newGrain->changePan = true;
-        // grain duration (grain size start plus random from 0 through grain size additional, at most the size of the sample window) (times 1000, because start and stop are expected to be in seconds, not milliseconds)
+        // grain duration (grain size start plus random from 0 through grain size additional, at most the size of the sample window)
+        // (divided by 1000, because start and stop are expected to be in seconds, not milliseconds)
         const double duration = qMin((double(newGrain->clip->grainSize()) + QRandomGenerator::global()->bounded(double(newGrain->clip->grainSizeAdditional()))) / 1000.0f, double(newGrain->clip->getDuration()));
         // grain start position
         if (windowSize[midiNote] < duration) {
             // If the duration is too long to fit inside the window, just start at the start - allow people to do it, since well, it'll work anyway
-            newGrain->startPosition = position[command->midiNote];
+            newGrain->startPosition = position[midiNote];
         } else {
             // Otherwise use the standard logic: from current position, to somewhere within the sample window, minus duration to ensure entire sample playback happens inside window
-            newGrain->startPosition = position[command->midiNote] + QRandomGenerator::global()->bounded(double(windowSize[midiNote] - duration));
+            newGrain->startPosition = position[midiNote] + QRandomGenerator::global()->bounded(double(windowSize[midiNote] - duration));
         }
         // Make sure we stick inside the window
-        if (newGrain->startPosition > stopPosition[command->midiNote]) {
-            newGrain->startPosition = startPosition[command->midiNote] + (newGrain->startPosition - stopPosition[command->midiNote]);
+        if (newGrain->startPosition > stopPosition[midiNote]) {
+            newGrain->startPosition = startPosition[midiNote] + (newGrain->startPosition - stopPosition[midiNote]);
         }
         // grain stop position (start position plus duration - which has already been bounded by the above)
         newGrain->stopPosition = newGrain->startPosition + duration;
