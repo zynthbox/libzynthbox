@@ -97,7 +97,6 @@ public:
     // TODO handle multi-sample triggers for the same note... woops, forgot we can do that ;)
     void start(ClipCommand *clipCommand, quint64 timestamp) {
         const int midiNote{clipCommand->midiNote};
-        clipCommands[midiNote] = clipCommand;
         aftertouch[midiNote] = clipCommand->volume;
         envelope[midiNote].reset();
         envelope[midiNote].setSampleRate(clipCommand->clip->sampleRate());
@@ -112,6 +111,7 @@ public:
             scan[midiNote] = 0;
         }
         framesUntilNextGrain[midiNote] = timestamp;
+        clipCommands[midiNote] = clipCommand;
     }
     void stop(ClipCommand *clipCommand) {
         envelope[clipCommand->midiNote].noteOff();
@@ -165,8 +165,9 @@ public:
                         }
                         // Only do this if we're actually supposed to be scanning through the playback, otherwise it just gets a little silly
                         if (scan[midiNote] != 0) {
-                            position[midiNote] += std::clamp((command->clip->grainScan() / scan[midiNote]), -windowSize[midiNote], windowSize[midiNote]);
-                            if (scan[midiNote] < 0) {
+                            const float grainScan{command->clip->grainScan()};
+                            position[midiNote] += std::clamp((grainScan / scan[midiNote]), -windowSize[midiNote], windowSize[midiNote]);
+                            if (grainScan < 0) {
                                 // We're moving in reverse, check lower bound
                                 if (position[midiNote] < startPosition[midiNote]) {
                                     position[midiNote] = stopPosition[midiNote] - (startPosition[midiNote] - position[midiNote]);
