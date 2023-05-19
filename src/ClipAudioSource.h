@@ -176,6 +176,21 @@ class ClipAudioSource : public QObject {
      * @note If this is set lower than the current mimimum pan, the mimimum pan will be pushed down to match
      */
     Q_PROPERTY(float grainPanMaximum READ grainPanMaximum WRITE setGrainPanMaximum NOTIFY grainPanMaximumChanged)
+    /**
+     * \brief The amount of the grain's minimum size should be given to sustain
+     * The rest of the minimum period will be shared between attack and release (the envelope is an attack/sustain/release with no attack)
+     * @default 0.3f
+     * @minimum 0.0f
+     * @maximum 1.0f
+     */
+    Q_PROPERTY(float grainSustain READ grainSustain WRITE setGrainSustain NOTIFY grainSustainChanged)
+    /**
+     * \brief How much of the grain's mimimum size should be attack and how much should be release (0.0 is all attack no release, 0.5 is even split, 1.0 is all release)
+     * @default 0.5f
+     * @minimum 0.0f
+     * @minimum 1.0f
+     */
+    Q_PROPERTY(float grainTilt READ grainTilt WRITE setGrainTilt NOTIFY grainTiltChanged)
 public:
   explicit ClipAudioSource(const char *filepath, bool muted = false, QObject *parent = nullptr);
   ~ClipAudioSource() override;
@@ -345,6 +360,12 @@ public:
   float grainPanMaximum() const;
   void setGrainPanMaximum(const float &newValue);
   Q_SIGNAL void grainPanMaximumChanged();
+  float grainSustain() const;
+  void setGrainSustain(const float &newValue);
+  Q_SIGNAL void grainSustainChanged();
+  float grainTilt() const;
+  void setGrainTilt(const float &newValue);
+  Q_SIGNAL void grainTiltChanged();
   const juce::ADSR &grainADSR() const;
 private:
   class Private;

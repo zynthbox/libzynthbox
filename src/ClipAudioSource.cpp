@@ -94,7 +94,22 @@ public:
   float grainSizeAdditional{50};
   float grainPanMinimum{-1.0f};
   float grainPanMaximum{1.0f};
+  float grainSustain{0.3f};
+  float grainTilt{0.5f};
   juce::ADSR grainADSR;
+  void updateGrainADSR() {
+    // Sustain is 0.0 through 1.0, defines how much of the base period should be given to sustain
+    // The time as known by the envelope is in seconds, and we're holding milliseconds, so... divide by a thousand
+    const float remainingPeriod = (grainSize * (1.0f - grainSustain)) / 1000.0f;
+    juce::ADSR::Parameters parameters;
+    // Tilt is 0.0 through 1.0, defines how much of the period should be attack and how much should be
+    // release (0.0 is all attack no release, 0.5 is even split, 1.0 is all release)
+    parameters.attack = remainingPeriod * grainTilt;
+    parameters.decay = 0.0f;
+    parameters.sustain = 1.0f;
+    parameters.release = remainingPeriod * (1.0f - grainTilt);
+    grainADSR.setParameters(parameters);
+  }
 
   qint64 nextPositionUpdateTime{0};
   double firstPositionProgress{0};
@@ -152,6 +167,10 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
   d->engine = Plugin::instance()->getTracktionEngine();
   d->id = Plugin::instance()->nextClipId();
   Plugin::instance()->addCreatedClipToMap(this);
+
+  connect(this, &ClipAudioSource::grainSizeChanged, this, [this]() { d->updateGrainADSR(); });
+  connect(this, &ClipAudioSource::grainSustainChanged, this, [this]() { d->updateGrainADSR(); });
+  connect(this, &ClipAudioSource::grainTiltChanged, this, [this]() { d->updateGrainADSR(); });
 
   IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Opening file:" << filepath;
 
@@ -874,6 +893,32 @@ void ClipAudioSource::setGrainPanMaximum(const float& newValue)
       d->grainPanMinimum = adjustedValue;
       Q_EMIT grainPanMinimumChanged();
     }
+  }
+}
+
+float ClipAudioSource::grainSustain() const
+{
+  return d->grainSustain;
+}
+
+void ClipAudioSource::setGrainSustain(const float& newValue)
+{
+  if (d->grainSustain != newValue) {
+    d->grainSustain = newValue;
+    Q_EMIT grainSustainChanged();
+  }
+}
+
+float ClipAudioSource::grainTilt() const
+{
+  return d->grainTilt;
+}
+
+void ClipAudioSource::setGrainTilt(const float& newValue)
+{
+  if (d->grainTilt != newValue) {
+    d->grainTilt = newValue;
+    Q_EMIT grainTiltChanged();
   }
 }
 
