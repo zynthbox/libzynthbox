@@ -61,10 +61,12 @@ public:
   juce::String chosenPath;
   juce::String fileName;
   QString filePath;
-  te::LevelMeasurer::Client levelClient;
   float startPositionInSeconds = 0;
   float lengthInSeconds = -1;
   float lengthInBeats = -1;
+  bool looping{false};
+  float gainDB{-400.0f};
+  float gain{0.0f};
   float volumeAbsolute{-1.0f}; // This is a cached value
   float pitchChange = 0;
   float speedRatio = 1.0;
@@ -120,7 +122,7 @@ public:
     if (nextGainUpdateTime < QDateTime::currentMSecsSinceEpoch()) {
       prevLeveldB = currentLeveldB;
 
-      currentLeveldB = qMax(Decibels::gainToDecibels(positionsModel->peakGain()), levelClient.getAndClearAudioLevel(0).dB);
+      currentLeveldB = Decibels::gainToDecibels(positionsModel->peakGain());
 
       // Now we give the level bar fading charcteristics.
       // And, the below coversions, decibelsToGain and gainToDecibels,
@@ -141,23 +143,6 @@ public:
   }
 private:
   void timerCallback() override;
-};
-
-class ClipProgress : public ValueTree::Listener {
-public:
-  ClipProgress(ClipAudioSource *source)
-      : ValueTree::Listener(), m_source(source) {}
-
-  void valueTreePropertyChanged(ValueTree &,
-                                const juce::Identifier &i) override {
-    if (i != juce::Identifier("position")) {
-      return;
-    }
-    m_source->syncProgress();
-  }
-
-private:
-  ClipAudioSource *m_source = nullptr;
 };
 
 ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *parent)
@@ -182,12 +167,11 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
 
         d->edit = te::createEmptyEdit(*d->engine, editFile);
         auto clip = Helper::loadAudioFileAsClip(*d->edit, d->givenFile);
-        auto &transport = d->edit->getTransport();
-
-        transport.ensureContextAllocated(true);
 
         d->fileName = d->givenFile.getFileName();
         d->filePath = QString::fromUtf8(filepath);
+        // Initially set the length in seconds to the full duration of the sample,
+        // let the user set it to something else later on if they want to
         d->lengthInSeconds = d->edit->getLength();
 
         if (clip) {
@@ -198,20 +182,13 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
           d->adsr.setSampleRate(d->sampleRate);
         }
 
-        transport.setLoopRange(te::EditTimeRange::withStartAndLength(
-            d->startPositionInSeconds, d->lengthInSeconds));
-        transport.looping = true;
-        transport.state.addListener(new ClipProgress(this));
-
-        auto track = Helper::getOrInsertAudioTrackAt(*d->edit, 0);
+        Helper::getOrInsertAudioTrackAt(*d->edit, 0);
 
         if (muted) {
           IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Clip marked to be muted";
           setVolume(-100.0f);
         }
 
-        auto levelMeasurerPlugin = track->getLevelMeterPlugin();
-        levelMeasurerPlugin->measurer.addClient(d->levelClient);
         d->startTimerHz(30);
       }, true);
 
@@ -243,8 +220,6 @@ ClipAudioSource::~ClipAudioSource() {
     [&]() {
       d->stopTimer();
       auto track = Helper::getOrInsertAudioTrackAt(*d->edit, 0);
-      auto levelMeasurerPlugin = track->getLevelMeterPlugin();
-      levelMeasurerPlugin->measurer.removeClient(d->levelClient);
       d->edit.reset();
     }, true);
 }
@@ -268,22 +243,19 @@ void ClipAudioSource::syncProgress() {
 }
 
 void ClipAudioSource::setLooping(bool looping) {
-  auto &transport = d->edit->getTransport();
-  if (transport.looping != looping) {
-    transport.looping = looping;
+  if (d->looping != looping) {
+    d->looping = looping;
   }
 }
 
 bool ClipAudioSource::getLooping() const
 {
-  const auto &transport = d->edit->getTransport();
-  return transport.looping;
+  return d->looping;
 }
 
 void ClipAudioSource::setStartPosition(float startPositionInSeconds) {
   d->startPositionInSeconds = jmax(0.0f, startPositionInSeconds);
   IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Start Position to" << d->startPositionInSeconds;
-  updateTempoAndPitch();
 }
 
 float ClipAudioSource::getStartPosition(int slice) const
@@ -334,23 +306,19 @@ void ClipAudioSource::setGain(float db) {
   if (auto clip = d->getClip()) {
     IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting gain:" << db;
     clip->setGainDB(db);
+    d->gainDB = clip->getGainDB();
+    d->gain = clip->getGain();
   }
 }
 
 float ClipAudioSource::getGainDB() const
 {
-  if (auto clip = d->getClip()) {
-    return clip->getGainDB();
-  }
-  return 0;
+  return d->gainDB;
 }
 
 float ClipAudioSource::getGain() const
 {
-  if (auto clip = d->getClip()) {
-    return clip->getGain();
-  }
-  return 0;
+  return d->gain;
 }
 
 void ClipAudioSource::setVolume(float vol) {
@@ -389,21 +357,20 @@ float ClipAudioSource::volumeAbsolute() const
 }
 
 void ClipAudioSource::setLength(float beat, int bpm) {
-  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Interval:" << d->syncTimer->getInterval(bpm);
-  float lengthInSeconds = d->syncTimer->subbeatCountToSeconds(
-      (quint64)bpm, (quint64)(beat * d->syncTimer->getMultiplier()));
-  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Length to" << lengthInSeconds;
+  // IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Interval:" << d->syncTimer->getInterval(bpm);
+  float lengthInSeconds = d->syncTimer->subbeatCountToSeconds(quint64(bpm), quint64((beat * d->syncTimer->getMultiplier())));
+  // IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Length to" << lengthInSeconds;
   d->lengthInSeconds = lengthInSeconds;
   d->lengthInBeats = beat;
-  updateTempoAndPitch();
 }
 
-float ClipAudioSource::getLengthInBeats() const
-{
+float ClipAudioSource::getLengthInBeats() const {
   return d->lengthInBeats;
 }
 
-float ClipAudioSource::getDuration() { return d->edit->getLength(); }
+float ClipAudioSource::getDuration() {
+  return d->edit->getLength();
+}
 
 const char *ClipAudioSource::getFileName() const {
   return static_cast<const char *>(d->fileName.toUTF8());
@@ -427,19 +394,9 @@ tracktion_engine::AudioFile ClipAudioSource::getPlaybackFile() const {
 
 void ClipAudioSource::updateTempoAndPitch() {
   if (auto clip = d->getClip()) {
-    auto &transport = clip->edit.getTransport();
-
     IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Updating speedRatio(" << d->speedRatio << ") and pitch(" << d->pitchChange << ")";
-
     clip->setSpeedRatio(d->speedRatio);
     clip->setPitchChange(d->pitchChange);
-
-    IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting loop range:" << d->startPositionInSeconds << "to" << (d->startPositionInSeconds + d->lengthInSeconds);
-
-    transport.setLoopRange(te::EditTimeRange::withStartAndLength(
-        d->startPositionInSeconds, d->lengthInSeconds));
-    transport.setCurrentPosition(transport.loopPoint1);
-    syncProgress();
   }
 }
 
