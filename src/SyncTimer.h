@@ -59,7 +59,7 @@ public:
    * @note This does not change the audible metronome state, and that will require turning on explicitly
    */
   Q_INVOKABLE void startWithCountin();
-  void start(int bpm);
+  void start();
   void stop();
   int getInterval(int bpm);
   /**
@@ -93,6 +93,8 @@ public:
    * @param bpm The bpm you wish the timer to operate at
    */
   Q_INVOKABLE void setBpm(quint64 bpm);
+  Q_INVOKABLE void increaseBpm();
+  Q_INVOKABLE void decreaseBpm();
   Q_SIGNAL void bpmChanged();
 
   /**

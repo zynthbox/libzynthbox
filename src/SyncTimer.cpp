@@ -411,6 +411,16 @@ public:
         }
     }
 
+    void setBpm(quint64 bpm) {
+        if (timerThread->getBpm() != bpm) {
+            timerThread->setBPM(bpm);
+            jackSubbeatLengthInMicroseconds = timerThread->subbeatCountToNanoseconds(timerThread->getBpm(), 1) / 1000;
+            updateScheduleAheadAmount();
+            QMetaObject::invokeMethod(q, "bpmChanged", Qt::QueuedConnection);
+        }
+    }
+    quint64 recentlyRequestedBpm{120};
+
     jack_client_t* jackClient{nullptr};
     jack_port_t* jackPort{nullptr};
     quint64 jackPlayhead{0};
@@ -591,7 +601,7 @@ public:
                         case TimerCommand::SetBpmOperation:
                             {
                                 const quint64 newBpm{std::clamp<quint64>(quint64(command->parameter), 50, 200)};
-                                q->setBpm(newBpm);
+                                setBpm(newBpm);
                                 thisStepBpm = newBpm;
                             }
                             break;
@@ -872,9 +882,8 @@ void SyncTimer::startWithCountin()
     scheduleTimerCommand(4 * BeatSubdivisions - 1, startCommand);
 }
 
-void SyncTimer::start(int bpm) {
-    qDebug() << "#### Starting timer with bpm " << bpm << " and interval " << getInterval(bpm);
-    setBpm(quint64(bpm));
+void SyncTimer::start() {
+    qDebug() << "#### Starting timer with previously set BPM" << getBpm();
 #ifdef DEBUG_SYNCTIMER_TIMING
     d->intervals.clear();
     d->lastRound = frame_clock::now();
@@ -957,24 +966,21 @@ quint64 SyncTimer::getBpm() const
 
 void SyncTimer::setBpm(quint64 bpm)
 {
-    if (timerThread->getBpm() != bpm) {
-        timerThread->setBPM(bpm);
-        d->jackSubbeatLengthInMicroseconds = timerThread->subbeatCountToNanoseconds(timerThread->getBpm(), 1) / 1000;
-        d->updateScheduleAheadAmount();
-        QMetaObject::invokeMethod(this, "bpmChanged", Qt::QueuedConnection);
-        // Finally, let's schedule a timer command into the timer - this is to ensure that
-        // the bpm is updated for jack transport calculation purposes as well, at the time
-        // at which it would be expected. While this does involve adding more work, it is
-        // vital that our bpm calculations are correct for syncing reasona, otherwise things
-        // just start drifting out of time and that's not nice at all.
-        // Optimally, we'd do all our bpm setting through the timer, but i'm pretty sure
-        // that'd cause some havoc on the UI side of things... so just not doing that for
-        // now.
-        TimerCommand *timerCommand = getTimerCommand();
-        timerCommand->operation = TimerCommand::SetBpmOperation;
-        timerCommand->parameter = bpm;
-        scheduleTimerCommand(0, timerCommand);
-    }
+    d->recentlyRequestedBpm = bpm;
+    TimerCommand *timerCommand = getTimerCommand();
+    timerCommand->operation = TimerCommand::SetBpmOperation;
+    timerCommand->parameter = bpm;
+    scheduleTimerCommand(0, timerCommand);
+}
+
+void SyncTimer::increaseBpm()
+{
+    setBpm(qMin(d->recentlyRequestedBpm + 1, quint64(BPM_MAXIMUM)));
+}
+
+void SyncTimer::decreaseBpm()
+{
+    setBpm(qMax(d->recentlyRequestedBpm - 1, quint64(BPM_MINIMUM)));
 }
 
 quint64 SyncTimer::scheduleAheadAmount() const

@@ -218,7 +218,7 @@ void MidiRecorder::playRecording()
         midiBuffer.addEvent(holder->message, midiBuffer.getNumEvents());
     }
 //     qDebug() << "Unblocking, lets go!";
-    syncTimer->start(syncTimer->getBpm());
+    syncTimer->start();
     d->isPlaying = true;
     Q_EMIT isPlayingChanged();
     QTimer::singleShot(100 + mostRecentTimestamp / 1000, syncTimer, &SyncTimer::stop);

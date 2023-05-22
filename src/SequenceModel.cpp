@@ -68,10 +68,8 @@ public:
             zlSong = newZlSong;
             if (zlSong) {
                 setZlMetronomeManager(qvariant_cast<QObject *>(zlSong->property("metronomeManager")));
-                connect(zlSong, SIGNAL(bpm_changed()), this, SLOT(bpmChanged()), Qt::QueuedConnection);
                 connect(zlSong, SIGNAL(__scenes_model_changed__()), this, SLOT(scenesModelChanged()), Qt::QueuedConnection);
                 connect(zlSong, SIGNAL(playChannelSoloChanged()), this, SLOT(playChannelSoloChanged()), Qt::QueuedConnection);
-                bpmChanged();
             }
             scenesModelChanged();
             currentMidiChannelChanged();
@@ -116,10 +114,6 @@ public:
         }
     }
 public Q_SLOTS:
-    void bpmChanged() {
-        q->setBpm(zlSong->property("bpm").toInt());
-        SyncTimer::instance()->setBpm(quint64(q->bpm()));
-    }
     void scenesModelChanged() {
         setZlScenesModel(zlSong->property("scenesModel").value<QObject*>());
     }
