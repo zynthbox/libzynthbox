@@ -22,7 +22,7 @@
 
 using namespace juce;
 
-#define SAMPLER_CHANNEL_VOICE_COUNT 16
+#define SAMPLER_CHANNEL_VOICE_COUNT 32
 
 #define CommandQueueSize 256
 class Grainerator;
@@ -79,145 +79,62 @@ public:
 // stop grain generator
 // mark clipcommand for deletion
 
-class Grainerator {
+struct GraineratorVoice {
 public:
-    explicit Grainerator(SamplerChannel *channel)
+    GraineratorVoice(SamplerChannel *channel)
         : channel(channel)
-    {
-        for (int i = 0; i < 128; ++i) {
-            clipCommands[i] = nullptr;
-            framesUntilNextGrain[i] = 0;
-            aftertouch[i] = 1.0f;
-            pitch[i] = 0;
-            envelopeValue[i] = 0;
-            position[i] = 0;
-        }
-    }
-    ~Grainerator() {}
-    // TODO handle multi-sample triggers for the same note... woops, forgot we can do that ;)
+    {}
+    ~GraineratorVoice() {}
     void start(ClipCommand *clipCommand, quint64 timestamp) {
-        const int midiNote{clipCommand->midiNote};
-        aftertouch[midiNote] = clipCommand->volume;
-        envelope[midiNote].reset();
-        envelope[midiNote].setSampleRate(clipCommand->clip->sampleRate());
-        envelope[midiNote].setParameters(clipCommand->clip->adsrParameters());
-        startPosition[midiNote] = clipCommand->clip->getStartPosition(clipCommand->slice);
-        stopPosition[midiNote] = clipCommand->clip->getStopPosition(clipCommand->slice);
-        windowSize[midiNote] = (stopPosition[midiNote] - startPosition[midiNote]) * clipCommand->clip->grainSpray();
-        position[midiNote] = startPosition[midiNote] + (clipCommand->clip->grainPosition() * (stopPosition[midiNote] - startPosition[midiNote]));
+        command = clipCommand;
+        isTailingOff = false;
+        midiNote = clipCommand->midiNote;
+        aftertouch = clipCommand->volume;
+        envelope.reset();
+        envelope.setSampleRate(clipCommand->clip->sampleRate());
+        envelope.setParameters(clipCommand->clip->adsrParameters());
+        startPosition = clipCommand->clip->getStartPosition(clipCommand->slice);
+        stopPosition = clipCommand->clip->getStopPosition(clipCommand->slice);
+        windowSize = (stopPosition - startPosition) * clipCommand->clip->grainSpray();
+        position = startPosition + (clipCommand->clip->grainPosition() * (stopPosition - startPosition));
         if (clipCommand->clip->grainScan() != 0) {
-            scan[midiNote] = 100.0f * clipCommand->clip->sampleRate() / channel->sampleRate();
+            scan = 100.0f * clipCommand->clip->sampleRate() / channel->sampleRate();
         } else {
-            scan[midiNote] = 0;
+            scan = 0;
         }
-        framesUntilNextGrain[midiNote] = timestamp;
-        clipCommands[midiNote] = clipCommand;
+        framesUntilNextGrain = timestamp;
     }
-    void stop(ClipCommand *clipCommand) {
-        envelope[clipCommand->midiNote].noteOff();
+    void stop() {
+        isTailingOff = true;
+        envelope.noteOff();
     }
-    // TODO Handle these changes at event time (schedule into a ring the way voice does it and do actual handling in process)
-    void handlePitchChange(int midiChannel, float value, jack_nframes_t /*eventTime*/) {
-        const int globalChannel{0};
-        for (int midiNote = 0; midiNote < 128; ++midiNote) {
-            if (clipCommands[midiNote] && (clipCommands[midiNote]->midiChannel == midiChannel || globalChannel == midiChannel)) {
-                pitch[midiNote] = value;
-            }
-        }
-    }
-    void handleAftertouch(int midiChannel, int value, jack_nframes_t /*eventTime*/) {
-        const int globalChannel{0};
-        for (int midiNote = 0; midiNote < 128; ++midiNote) {
-            if (clipCommands[midiNote] && (clipCommands[midiNote]->midiChannel == midiChannel || globalChannel == midiChannel)) {
-                aftertouch[midiNote] = float(value) / 127.0f;
-            }
-        }
-    }
-    void handlePolyphonicAftertouch(int midiChannel, int midiNote, int value, jack_nframes_t /*eventTime*/) {
-        const int globalChannel{0};
-        if (clipCommands[midiNote] && (clipCommands[midiNote]->midiChannel == midiChannel || globalChannel == midiChannel)) {
-            aftertouch[midiNote] = float(value) / 127.0f;
-        }
-    }
-    void process(jack_nframes_t nframes, float framesPerMillisecond) {
-        for (jack_nframes_t frame = 0; frame < nframes; ++frame) {
-            for (int midiNote = 0; midiNote < 128; ++midiNote) {
-                ClipCommand *command = clipCommands[midiNote];
-                if (command) {
-                    // If the envelope is not yet active, start it
-                    if (!envelope[midiNote].isActive()) {
-                        envelope[midiNote].noteOn();
-                    }
-                    envelopeValue[midiNote] = envelope[midiNote].getNextSample();
-                    if (framesUntilNextGrain[midiNote] == 0) {
-                        // pick the grain to play and schedule that at position `frame`
-                        ClipCommand *command = pickNextGrain(midiNote);
-                        channel->handleCommand(command, frame);
-                        // work out how many frames we have until the next grain
-                        // (grain interval minimum,
-                        // plus random 0 through grain interval additional,
-                        // multiplied by framesPerMillisecond)
-                        const double additionalInterval = command->clip->grainIntervalAdditional() > 0 ? QRandomGenerator::global()->bounded(double(command->clip->grainIntervalAdditional())) : 0.0f;
-                        if (command->clip->grainInterval() == 0) {
-                            framesUntilNextGrain[midiNote] = framesPerMillisecond * (double(command->clip->getStopPosition(command->slice) - command->clip->getStartPosition(command->slice)) + additionalInterval);
-                        } else {
-                            framesUntilNextGrain[midiNote] = framesPerMillisecond * (double(command->clip->grainInterval()) + additionalInterval);
-                        }
-                        // Only do this if we're actually supposed to be scanning through the playback, otherwise it just gets a little silly
-                        if (scan[midiNote] != 0) {
-                            const float grainScan{command->clip->grainScan()};
-                            position[midiNote] += std::clamp((grainScan / scan[midiNote]), -windowSize[midiNote], windowSize[midiNote]);
-                            if (grainScan < 0) {
-                                // We're moving in reverse, check lower bound
-                                if (position[midiNote] < startPosition[midiNote]) {
-                                    position[midiNote] = stopPosition[midiNote] - (startPosition[midiNote] - position[midiNote]);
-                                }
-                            } else {
-                                // We're playing forward, check upper bound
-                                if (position[midiNote] > stopPosition[midiNote]) {
-                                    position[midiNote] = startPosition[midiNote] + (position[midiNote] - stopPosition[midiNote]);
-                                }
-                            }
-                        }
-                    }
-                    if (!envelope[midiNote].isActive()) {
-                        // Then we've reached the end of the note and need to do all the stopping things
-                        SyncTimer::instance()->deleteClipCommand(command);
-                        SyncTimer::instance()->deleteClipCommand(clipCommands[command->midiNote]);
-                        clipCommands[command->midiNote] = nullptr;
-                        framesUntilNextGrain[command->midiNote] = 0;
-                        aftertouch[command->midiNote] = 0;
-                        pitch[command->midiNote] = 0;
-                    }
-                    framesUntilNextGrain[midiNote]--;
-                }
-            }
-        }
-    }
-    ClipCommand *pickNextGrain(int midiNote) {
-        const ClipCommand *command = clipCommands[midiNote];
+    ClipCommand *pickNextGrain() {
         ClipCommand *newGrain = ClipCommand::channelCommand(command->clip, command->midiChannel);
         newGrain->startPlayback = true;
         newGrain->midiNote = command->midiNote;
         newGrain->changeVolume = true;
-        newGrain->volume = aftertouch[midiNote] * envelopeValue[midiNote];
+        newGrain->volume = aftertouch * envelopeValue;
         newGrain->setStartPosition = true;
         newGrain->setStopPosition = true;
         newGrain->changePan = true;
+        if (pitch != 0) {
+            newGrain->changePitch = true;
+            newGrain->pitchChange = pitch;
+        }
         // grain duration (grain size start plus random from 0 through grain size additional, at most the size of the sample window)
         // (divided by 1000, because start and stop are expected to be in seconds, not milliseconds)
         const double duration = qMin((double(newGrain->clip->grainSize()) + QRandomGenerator::global()->bounded(double(newGrain->clip->grainSizeAdditional()))) / 1000.0f, double(newGrain->clip->getDuration()));
         // grain start position
-        if (windowSize[midiNote] < duration) {
+        if (windowSize < duration) {
             // If the duration is too long to fit inside the window, just start at the start - allow people to do it, since well, it'll work anyway
-            newGrain->startPosition = position[midiNote];
+            newGrain->startPosition = position;
         } else {
             // Otherwise use the standard logic: from current position, to somewhere within the sample window, minus duration to ensure entire sample playback happens inside window
-            newGrain->startPosition = position[midiNote] + QRandomGenerator::global()->bounded(double(windowSize[midiNote] - duration));
+            newGrain->startPosition = position + QRandomGenerator::global()->bounded(double(windowSize - duration));
         }
         // Make sure we stick inside the window
-        if (newGrain->startPosition > stopPosition[midiNote]) {
-            newGrain->startPosition = startPosition[midiNote] + (newGrain->startPosition - stopPosition[midiNote]);
+        if (newGrain->startPosition > stopPosition) {
+            newGrain->startPosition = startPosition + (newGrain->startPosition - stopPosition);
         }
         // grain stop position (start position plus duration - which has already been bounded by the above)
         newGrain->stopPosition = newGrain->startPosition + duration;
@@ -225,19 +142,143 @@ public:
         newGrain->pan = newGrain->clip->grainPanMinimum() + QRandomGenerator::global()->bounded(newGrain->clip->grainPanMaximum() - newGrain->clip->grainPanMinimum());
         return newGrain;
     }
-private:
+    juce::ADSR envelope;
     SamplerChannel *channel{nullptr};
-    ClipCommand *clipCommands[128];
-    jack_nframes_t framesUntilNextGrain[128];
-    float aftertouch[128];
-    float pitch[128];
-    juce::ADSR envelope[128];
-    float envelopeValue[128];
-    float startPosition[128];
-    float stopPosition[128];
-    float windowSize[128];
-    float position[128];
-    float scan[128];
+    ClipCommand *command{nullptr};
+    float aftertouch{0};
+    float pitch{0};
+    float envelopeValue{0};
+    float startPosition{0};
+    float stopPosition{0};
+    float windowSize{0};
+    float position{0};
+    float scan{0};
+    jack_nframes_t framesUntilNextGrain{0};
+    int midiNote{0};
+    bool isActive{false};
+    bool isTailingOff{false};
+};
+
+#define GRAINERATOR_VOICES 16
+class Grainerator {
+public:
+    explicit Grainerator(SamplerChannel *channel)
+        : channel(channel)
+    {
+        for (int i = 0; i < GRAINERATOR_VOICES; ++i) {
+            voices[i] = new GraineratorVoice(channel);
+        }
+    }
+    ~Grainerator() {}
+    void start(ClipCommand *command, quint64 timestamp) {
+        bool voiceFound{false};
+        for (GraineratorVoice *voice : qAsConst(voices)) {
+            if (voice->command == nullptr) {
+                voice->start(command, timestamp);
+                voiceFound = true;
+                break;
+            }
+        }
+        if (!voiceFound) {
+            qWarning() << Q_FUNC_INFO << "Failed to find a free voice - Grainerator has" << GRAINERATOR_VOICES << "voice available, i guess you've used too many, oh no!";
+            SyncTimer::instance()->deleteClipCommand(command);
+        }
+    }
+    void stop(ClipCommand *command) {
+        for (GraineratorVoice *voice : qAsConst(voices)) {
+            if (voice->command && voice->isTailingOff == false && voice->command->equivalentTo(command)) {
+                voice->stop();
+                SyncTimer::instance()->deleteClipCommand(command);
+                break;
+            }
+        }
+    }
+    // TODO Handle these changes at event time (schedule into a ring the way voice does it and do actual handling in process)
+    void handlePitchChange(int midiChannel, float value, jack_nframes_t /*eventTime*/) {
+        const int globalChannel{0};
+        for (GraineratorVoice *voice : qAsConst(voices)) {
+            if (voice->command && (voice->command->midiChannel == midiChannel || globalChannel == midiChannel)) {
+                voice->pitch = value;
+                break;
+            }
+        }
+    }
+    void handleAftertouch(int midiChannel, int value, jack_nframes_t /*eventTime*/) {
+        const int globalChannel{0};
+        for (GraineratorVoice *voice : qAsConst(voices)) {
+            if (voice->command && (voice->command->midiChannel == midiChannel || globalChannel == midiChannel)) {
+                voice->aftertouch = float(value) / 127.0f;
+                break;
+            }
+        }
+    }
+    void handlePolyphonicAftertouch(int midiChannel, int midiNote, int value, jack_nframes_t /*eventTime*/) {
+        const int globalChannel{0};
+        for (GraineratorVoice *voice : qAsConst(voices)) {
+            if (voice->command && voice->midiNote == midiNote && (voice->command->midiChannel == midiChannel || globalChannel == midiChannel)) {
+                voice->aftertouch = float(value) / 127.0f;
+                break;
+            }
+        }
+    }
+    void process(jack_nframes_t nframes, float framesPerMillisecond) {
+        for (jack_nframes_t frame = 0; frame < nframes; ++frame) {
+            for (GraineratorVoice *voice : qAsConst(voices)) {
+                ClipCommand *command = voice->command;
+                if (command) {
+                    if (voice->isActive) {
+                        voice->envelopeValue = voice->envelope.getNextSample();
+                    }
+                    if (voice->framesUntilNextGrain == 0) {
+                        if (voice->isActive == false) {
+                            // If the envelope is not yet active, start it
+                            voice->isActive = true;
+                            voice->envelope.noteOn();
+                            voice->envelopeValue = voice->envelope.getNextSample();
+                        }
+                        // pick the grain to play and schedule that at position `frame`
+                        channel->handleCommand(voice->pickNextGrain(), frame);
+                        // work out how many frames we have until the next grain
+                        // (grain interval minimum,
+                        // plus random 0 through grain interval additional,
+                        // multiplied by framesPerMillisecond)
+                        const double additionalInterval = command->clip->grainIntervalAdditional() > 0 ? QRandomGenerator::global()->bounded(double(command->clip->grainIntervalAdditional())) : 0.0f;
+                        if (command->clip->grainInterval() == 0) {
+                            voice->framesUntilNextGrain = framesPerMillisecond * (double(voice->stopPosition - voice->startPosition) + additionalInterval);
+                        } else {
+                            voice->framesUntilNextGrain = framesPerMillisecond * (double(command->clip->grainInterval()) + additionalInterval);
+                        }
+                        // Only do this if we're actually supposed to be scanning through the playback, otherwise it just gets a little silly
+                        if (voice->scan != 0) {
+                            const float grainScan{command->clip->grainScan()};
+                            voice->position += std::clamp((grainScan / voice->scan), -voice->windowSize, voice->windowSize);
+                            if (grainScan < 0) {
+                                // We're moving in reverse, check lower bound
+                                if (voice->position < voice->startPosition) {
+                                    voice->position = voice->stopPosition - (voice->startPosition - voice->position);
+                                }
+                            } else {
+                                // We're playing forward, check upper bound
+                                if (voice->position > voice->stopPosition) {
+                                    voice->position = voice->startPosition + (voice->position - voice->stopPosition);
+                                }
+                            }
+                        }
+                    }
+                    if (voice->isActive && !voice->envelope.isActive()) {
+                        // Then we've reached the end of the note and need to do all the stopping things
+                        SyncTimer::instance()->deleteClipCommand(command);
+                        voice->command = nullptr;
+                        voice->isActive = false;
+                    }
+                    voice->framesUntilNextGrain--;
+                }
+            }
+        }
+    }
+private:
+    GraineratorVoice *voices[GRAINERATOR_VOICES];
+    SamplerChannel *channel{nullptr};
 };
 
 static int client_process(jack_nframes_t nframes, void* arg) {
