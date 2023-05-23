@@ -65,8 +65,8 @@ public:
   float lengthInSeconds = -1;
   float lengthInBeats = -1;
   bool looping{false};
-  float gainDB{-400.0f};
-  float gain{0.0f};
+  float gainDB{0.0f};
+  float gain{1.0f};
   float volumeAbsolute{-1.0f}; // This is a cached value
   float pitchChange = 0;
   float speedRatio = 1.0;
