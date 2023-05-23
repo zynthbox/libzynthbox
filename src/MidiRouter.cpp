@@ -523,7 +523,7 @@ public:
                                 } else {
                                     eventChannel = -1;
                                 }
-                                if (eventChannel > -1 && eventChannel < OUTPUT_CHANNEL_COUNT) {
+                                if (eventChannel > -1 && eventChannel < 16) {
                                     // Make sure we're using the correct output
                                     // This is done to ensure that if we have any note-on events happen on some
                                     // output, then all the following commands associated with that note should
