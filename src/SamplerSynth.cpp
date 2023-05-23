@@ -329,6 +329,7 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                 const unsigned char &byte1 = event.buffer[0];
                 const int globalChannel{0};
                 if (0x7F < byte1 &&  byte1 < 0xf0) {
+                    // TODO handle all-off message (so we can make the thing shut up when things like e.g. the pewpew app on a roli light block doesn't send out off notes when cleared)
                     // TODO Handle MPE global-channel instructions and upper/lower split...
                     eventChannel = (byte1 & 0xf);
                     if (0x79 < byte1 && byte1 < 0xA0) {
