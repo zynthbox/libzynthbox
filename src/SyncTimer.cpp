@@ -904,18 +904,17 @@ void SyncTimer::stop() {
     d->jackPlayhead = 0;
 
     // A touch of hackery to ensure we end immediately, and leave a clean state
+    juce::MidiBuffer onlyOffs;
+    QList<ClipCommand*> clipCommands;
     for (quint64 step = 0; step < StepRingCount; ++step) {
         StepData *stepData = &d->stepRing[(step + d->stepReadHead->index) % StepRingCount];
         if (!stepData->played) {
-            // First, spit out all the queued midi messages immediately, but in strict order, and only off notes...
-            juce::MidiBuffer onlyOffs;
+            stepData->played = true;
+            // First, collect all the queued midi messages, but in strict order, and only off notes...
             for (const juce::MidiMessageMetadata& message : stepData->midiBuffer) {
                 if (message.getMessage().isNoteOff()) {
                     onlyOffs.addEvent(message.getMessage(), 0);
                 }
-            }
-            if (!onlyOffs.isEmpty()) {
-                sendMidiBufferImmediately(onlyOffs);
             }
             // Now for the clip commands
             for (ClipCommand *clipCommand : qAsConst(stepData->clipCommands)) {
@@ -923,11 +922,17 @@ void SyncTimer::stop() {
                 // set all the volumes to 0 so we don't make the users' ears bleed
                 clipCommand->changeVolume = true;
                 clipCommand->volume = 0;
-                scheduleClipCommand(clipCommand, 0);
-                Q_EMIT clipCommandSent(clipCommand);
+                clipCommands << clipCommand;
             }
-            stepData->played = true;
         }
+    }
+    // And now everything has been marked as sent out, let's re-schedule the things that actually want to go out
+    if (!onlyOffs.isEmpty()) {
+        sendMidiBufferImmediately(onlyOffs);
+    }
+    for (ClipCommand *clipCommand : qAsConst(clipCommands)) {
+        scheduleClipCommand(clipCommand, 0);
+        Q_EMIT clipCommandSent(clipCommand);
     }
 
     // Make sure we're actually informing about any clips that have been sent out, in case we
