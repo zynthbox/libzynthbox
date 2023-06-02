@@ -23,8 +23,8 @@ void zl_set_dsp_thread_affinity(const pthread_t& threadID)
     CPU_ZERO(&cpuset);
     // Our CPU set for the DSP is 0 (where the kernel also lives), 1, and 2. This leaves 4 for the UI application
     CPU_SET(0, &cpuset);
+    CPU_SET(1, &cpuset);
     CPU_SET(2, &cpuset);
-    CPU_SET(3, &cpuset);
     int result = pthread_setaffinity_np(threadID, sizeof(cpuset), &cpuset);
     if (result != 0) {
         errno = result;
