@@ -8,6 +8,7 @@
 #include "SamplerSynthVoice.h"
 #include "ClipCommand.h"
 #include "SyncTimer.h"
+#include "JackThreadAffinitySetter.h"
 
 #include <QDebug>
 #include <QHash>
@@ -322,6 +323,7 @@ SamplerChannel::SamplerChannel(const QString &clientName, const int &midiChannel
                     jackConnect(jackClient, QLatin1String("ZLRouter:Channel%1").arg(QString::number(midiChannel)), QString("%1:midiIn").arg(clientName));
                 }
                 qInfo() << Q_FUNC_INFO << "Successfully created and set up" << clientName;
+                zl_set_jack_client_affinity(jackClient);
             } else {
                 qWarning() << Q_FUNC_INFO << "Failed to activate SamplerSynth Jack client" << clientName;
             }

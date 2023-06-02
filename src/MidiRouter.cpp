@@ -3,6 +3,7 @@
 #include "SyncTimer.h"
 #include "DeviceMessageTranslations.h"
 #include "TransportManager.h"
+#include "JackThreadAffinitySetter.h"
 
 #include <QDebug>
 #include <QProcessEnvironment>
@@ -171,6 +172,7 @@ MidiRouterWatchdog::MidiRouterWatchdog()
                     int result = jack_connect(client, "ZynMidiRouter:midi_out", "ZLRouterWatchdog:ZynMidiRouterIn");
                     if (result == 0 || result == EEXIST) {
                         qDebug() << "ZLRouter Watchdog: Set up the watchdog for ZynMidiRouter, which lets us keep a track of what events are going through";
+                        zl_set_jack_client_affinity(client);
                     } else {
                         qWarning() << "ZLRouter Watchdog: Failed to connect to ZynMidiRouter's midi output port";
                     }
@@ -871,6 +873,7 @@ MidiRouter::MidiRouter(QObject *parent)
                 // Activate the client.
                 if (jack_activate(d->jackClient) == 0) {
                     qInfo() << "ZLRouter: Successfully created and set up the ZLRouter's Jack client";
+                    zl_set_jack_client_affinity(d->jackClient);
                     for (ChannelOutput *output : d->outputs) {
                         d->connectPorts(QString("ZLRouter:%1").arg(output->portName), zmrPort);
                     }

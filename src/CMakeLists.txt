@@ -17,6 +17,7 @@ target_sources(libzynthbox
         QPainterContext.cpp
         WaveFormItem.cpp
         JackPassthrough.cpp
+        JackThreadAffinitySetter.cpp
         AudioLevels.cpp
         AudioLevelsChannel.cpp
         DiskWriter.cpp

@@ -1,6 +1,7 @@
 #include "TransportManager.h"
 #include "SyncTimer.h"
 #include "TimerCommand.h"
+#include "JackThreadAffinitySetter.h"
 
 #include <QDebug>
 
@@ -176,6 +177,7 @@ void TransportManager::initialize()
                     if (jack_activate(d->client) == 0) {
                         qDebug() << Q_FUNC_INFO << "Set up the transport manager, which lets us handle midi sync messages, and function as a Jack timebase master";
                         jack_transport_start(d->client);
+                        zl_set_jack_client_affinity(d->client);
                     } else {
                         qWarning() << Q_FUNC_INFO << "Failed to activate the Jack client";
                     }

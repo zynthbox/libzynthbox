@@ -9,6 +9,7 @@
 */
 
 #include "JackPassthrough.h"
+#include "JackThreadAffinitySetter.h"
 
 #include <QDebug>
 
@@ -137,6 +138,7 @@ JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName)
             if (jack_set_process_callback(client, jackPassthroughProcess, static_cast<void*>(this)) == 0) {
                 if (jack_activate(client) == 0) {
                     // Success! Now we just kind of sit here and do the thing until we're done or whatever
+                    zl_set_jack_client_affinity(client);
                 } else {
                     qWarning() << "JackPasstrough Client: Failed to activate the Jack client for" << clientName;
                 }

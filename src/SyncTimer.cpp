@@ -9,6 +9,7 @@
 #include "SamplerSynth.h"
 #include "TimerCommand.h"
 #include "TransportManager.h"
+#include "JackThreadAffinitySetter.h"
 
 #include <QDebug>
 #include <QHash>
@@ -92,6 +93,18 @@ using frame_clock = std::conditional_t<
 static const jack_midi_data_t jackMidiBeatMessage{0xF8};
 // There's BeatsPerBar * BeatSubdivisions ticks per bar
 #define TicksPerBar 384
+
+template <typename T>
+static typename std::enable_if<std::is_integral_v<T>, T>::type from_HANDLE(Qt::HANDLE id)
+{
+    return static_cast<T>(reinterpret_cast<intptr_t>(id));
+}
+template <typename T>
+static typename std::enable_if<std::is_pointer_v<T>, T>::type from_HANDLE(Qt::HANDLE id)
+{
+    return static_cast<T>(id);
+}
+
 class SyncTimerThread : public QThread {
     Q_OBJECT
 public:
@@ -115,6 +128,8 @@ public:
 
     void run() override {
         startTime = frame_clock::now();
+        pthread_t threadId = from_HANDLE<pthread_t>(currentThreadId());
+        zl_set_dsp_thread_affinity(threadId);
         std::chrono::time_point< std::chrono::_V2::steady_clock, std::chrono::duration< long long unsigned int, std::ratio< 1, NanosecondsPerSecond > > > nextMinute;
         while (true) {
             if (aborted) {
@@ -763,6 +778,7 @@ SyncTimer::SyncTimer(QObject *parent)
                 // Activate the client.
                 if (jack_activate(d->jackClient) == 0) {
                     qInfo() << "Successfully created and set up the SyncTimer's Jack client";
+                    zl_set_jack_client_affinity(d->jackClient);
                     jack_latency_range_t range;
                     jack_port_get_latency_range (d->jackPort, JackPlaybackLatency, &range);
                     jack_nframes_t bufferSize = jack_get_buffer_size(d->jackClient);

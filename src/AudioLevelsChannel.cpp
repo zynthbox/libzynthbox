@@ -1,5 +1,6 @@
 #include "AudioLevelsChannel.h"
 #include "DiskWriter.h"
+#include "JackThreadAffinitySetter.h"
 
 #include <cmath>
 #include <QDebug>
@@ -26,6 +27,7 @@ AudioLevelsChannel::AudioLevelsChannel(const QString &clientName)
             result = jack_activate(jackClient);
             if (result == 0) {
                 qInfo() << Q_FUNC_INFO << "Successfully created and set up" << clientName;
+                zl_set_jack_client_affinity(jackClient);
             } else {
                 qWarning() << Q_FUNC_INFO << "Failed to activate Jack client" << clientName << "with the return code" << result;
             }
