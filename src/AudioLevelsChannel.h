@@ -8,7 +8,7 @@
 class DiskWriter;
 class alignas(128) AudioLevelsChannel {
 public:
-    explicit AudioLevelsChannel(const QString &clientName);
+    explicit AudioLevelsChannel(jack_client_t *client, const QString &clientName);
     ~AudioLevelsChannel();
     int process(jack_nframes_t nframes);
     DiskWriter* diskRecorder();

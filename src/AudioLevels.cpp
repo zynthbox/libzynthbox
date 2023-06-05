@@ -11,6 +11,7 @@
 
 #include "AudioLevels.h"
 #include "DiskWriter.h"
+#include "JackThreadAffinitySetter.h"
 
 #include <QDateTime>
 #include <QDebug>
@@ -33,6 +34,9 @@ public:
         }
     }
     ~AudioLevelsPrivate() {
+        if (jackClient) {
+            jack_client_close(jackClient);
+        }
         qDeleteAll(audioLevelsChannels);
     }
     QList<AudioLevelsChannel*> audioLevelsChannels;
@@ -44,6 +48,7 @@ public:
     QVariantList levels;
     QTimer analysisTimer;
     jack_client_t* jackClient{nullptr};
+    bool initialized{false};
 
     void connectPorts(const QString &from, const QString &to) {
         int result = jack_connect(jackClient, from.toUtf8(), to.toUtf8());
@@ -64,7 +69,7 @@ public:
         }
     }
 
-    const QStringList recorderPortNames{QLatin1String{"AudioLevels-SystemRecorder:left_in"}, QLatin1String{"AudioLevels-SystemRecorder:right_in"}};
+    const QStringList recorderPortNames{QLatin1String{"AudioLevels:SystemRecorder-left_in"}, QLatin1String{"AudioLevels:SystemRecorder-right_in"}};
     void disconnectPort(const QString& portName, int channel) {
         jackClient = audioLevelsChannels[2]->jackClient;
         disconnectPorts(portName, recorderPortNames[channel]);
@@ -93,59 +98,89 @@ AudioLevels *AudioLevels::instance()  {
 std::atomic<AudioLevels*> AudioLevels::singletonInstance;
 std::mutex AudioLevels::singletonMutex;
 
+static int audioLevelsProcess(jack_nframes_t nframes, void* arg) {
+    const AudioLevelsPrivate* d = static_cast<AudioLevelsPrivate*>(arg);
+    if (d->initialized) {
+        for (AudioLevelsChannel *channel : qAsConst(d->audioLevelsChannels)) {
+            channel->process(nframes);
+        }
+    }
+    return 0;
+}
+
 AudioLevels::AudioLevels(QObject *parent)
   : QObject(parent)
   , d(new AudioLevelsPrivate)
 {
     static const QStringList audioLevelClientNames{
-        "AudioLevels-SystemCapture",
-        "AudioLevels-SystemPlayback",
-        "AudioLevels-SystemRecorder",
-        "AudioLevels-Channel1",
-        "AudioLevels-Channel2",
-        "AudioLevels-Channel3",
-        "AudioLevels-Channel4",
-        "AudioLevels-Channel5",
-        "AudioLevels-Channel6",
-        "AudioLevels-Channel7",
-        "AudioLevels-Channel8",
-        "AudioLevels-Channel9",
-        "AudioLevels-Channel10",
+        "SystemCapture",
+        "SystemPlayback",
+        "SystemRecorder",
+        "Channel1",
+        "Channel2",
+        "Channel3",
+        "Channel4",
+        "Channel5",
+        "Channel6",
+        "Channel7",
+        "Channel8",
+        "Channel9",
+        "Channel10",
     };
-    int channelIndex{0};
-    for (const QString &clientName : audioLevelClientNames) {
-        AudioLevelsChannel *channel = new AudioLevelsChannel(clientName);
-        if (channelIndex == 0) {
-            d->jackClient = channel->jackClient;
-            d->connectPorts("system:capture_1", "AudioLevels-SystemCapture:left_in");
-            d->connectPorts("system:capture_2", "AudioLevels-SystemCapture:right_in");
-        } else if (channelIndex == 1) {
-            d->globalPlaybackWriter = channel->diskRecorder();
-        } else if (channelIndex == 2) {
-            d->portsRecorder = channel->diskRecorder();
+    jack_status_t real_jack_status{};
+    int result{0};
+    d->jackClient = jack_client_open("AudioLevels", JackNullOption, &real_jack_status);
+    if (d->jackClient) {
+        // Set the process callback.
+        result = jack_set_process_callback(d->jackClient, audioLevelsProcess, this);
+        if (result == 0) {
+            // Activate the client.
+            result = jack_activate(d->jackClient);
+            if (result == 0) {
+                qInfo() << Q_FUNC_INFO << "Successfully created and set up AudioLevels Jack client";
+                zl_set_jack_client_affinity(d->jackClient);
+                int channelIndex{0};
+                for (const QString &clientName : audioLevelClientNames) {
+                    AudioLevelsChannel *channel = new AudioLevelsChannel(d->jackClient, clientName);
+                    if (channelIndex == 0) {
+                        d->jackClient = channel->jackClient;
+                        d->connectPorts("system:capture_1", "AudioLevels:SystemCapture-left_in");
+                        d->connectPorts("system:capture_2", "AudioLevels:SystemCapture-right_in");
+                    } else if (channelIndex == 1) {
+                        d->globalPlaybackWriter = channel->diskRecorder();
+                    } else if (channelIndex == 2) {
+                        d->portsRecorder = channel->diskRecorder();
+                    } else {
+                    const int sketchpadChannelIndex{channelIndex - 3};
+                    /**
+                    * Do not assign items by index like this : d->channelWriters[sketchpadChannelIndex] = channel->diskRecorder;
+                    * Assigning items by index causes size() to report 0 even though items are added.
+                    * This might be causing a crash sometimes during initialization
+                    *
+                    * Instead of assigning by index, create a qlist with 10 elements having nullptr as value
+                    * and replace nullptr with DiskWriter pointer when initializing
+                    */
+                    d->channelWriters.replace(sketchpadChannelIndex, channel->diskRecorder());
+                    }
+                    d->audioLevelsChannels << channel;
+                    ++channelIndex;
+                }
+                for (AudioLevelsChannel *channel : d->audioLevelsChannels) {
+                    channel->enabled = true;
+                }
+                d->analysisTimer.setInterval(50);
+                connect(&d->analysisTimer, &QTimer::timeout, this, &AudioLevels::timerCallback);
+                d->analysisTimer.start();
+                d->initialized = true;
+            } else {
+                qWarning() << Q_FUNC_INFO << "Failed to activate AudioLevels Jack client with the return code" << result;
+            }
         } else {
-          const int sketchpadChannelIndex{channelIndex - 3};
-          /**
-           * Do not assign items by index like this : d->channelWriters[sketchpadChannelIndex] = channel->diskRecorder;
-           * Assigning items by index causes size() to report 0 even though items are added.
-           * This might be causing a crash sometimes during initialization
-           * 
-           * Instead of assigning by index, create a qlist with 10 elements having nullptr as value
-           * and replace nullptr with DiskWriter pointer when initializing
-           */
-          d->channelWriters.replace(sketchpadChannelIndex, channel->diskRecorder());
+            qWarning() << Q_FUNC_INFO << "Failed to set AudioLevels Jack processing callback for with the return code" << result;
         }
-        d->audioLevelsChannels << channel;
-        ++channelIndex;
+    } else {
+        qWarning() << Q_FUNC_INFO << "Failed to open AudioLevels Jack client with status" << real_jack_status;
     }
-
-    for (AudioLevelsChannel *channel : d->audioLevelsChannels) {
-        channel->enabled = true;
-    }
-
-    d->analysisTimer.setInterval(50);
-    connect(&d->analysisTimer, &QTimer::timeout, this, &AudioLevels::timerCallback);
-    d->analysisTimer.start();
 }
 
 inline float AudioLevels::convertTodbFS(float raw) {

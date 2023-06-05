@@ -1,49 +1,22 @@
 #include "AudioLevelsChannel.h"
 #include "DiskWriter.h"
-#include "JackThreadAffinitySetter.h"
 
 #include <cmath>
 #include <QDebug>
 #include <QVariantList>
 
-static int audioLevelsChannelProcess(jack_nframes_t nframes, void* arg) {
-  return static_cast<AudioLevelsChannel*>(arg)->process(nframes);
-}
-
-AudioLevelsChannel::AudioLevelsChannel(const QString &clientName)
+AudioLevelsChannel::AudioLevelsChannel(jack_client_t *client, const QString &clientName)
     : clientName(clientName)
     , m_diskRecorder(new DiskWriter)
 {
-    jack_status_t real_jack_status{};
-    int result{0};
-    jackClient = jack_client_open(clientName.toUtf8(), JackNullOption, &real_jack_status);
-    if (jackClient) {
-        // Set the process callback.
-        result = jack_set_process_callback(jackClient, audioLevelsChannelProcess, this);
-        if (result == 0) {
-            leftPort = jack_port_register(jackClient, "left_in", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput | JackPortIsTerminal, 0);
-            rightPort = jack_port_register(jackClient, "right_in", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput | JackPortIsTerminal, 0);
-            // Activate the client.
-            result = jack_activate(jackClient);
-            if (result == 0) {
-                qInfo() << Q_FUNC_INFO << "Successfully created and set up" << clientName;
-                zl_set_jack_client_affinity(jackClient);
-            } else {
-                qWarning() << Q_FUNC_INFO << "Failed to activate Jack client" << clientName << "with the return code" << result;
-            }
-        } else {
-            qWarning() << Q_FUNC_INFO << "Failed to set Jack processing callback for" << clientName << "with the return code" << result;
-        }
-    } else {
-        qWarning() << Q_FUNC_INFO << "Failed to open Jack client" << clientName << "with status" << real_jack_status;
-    }
+    jackClient = client;
+    leftPort = jack_port_register(jackClient, QString("%1-left_in").arg(clientName).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput | JackPortIsTerminal, 0);
+    rightPort = jack_port_register(jackClient, QString("%1-right_in").arg(clientName).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput | JackPortIsTerminal, 0);
+    qInfo() << Q_FUNC_INFO << "Successfully created and set up" << clientName;
 }
 
 AudioLevelsChannel::~AudioLevelsChannel()
 {
-    if (jackClient) {
-        jack_client_close(jackClient);
-    }
     delete m_diskRecorder;
 
 }

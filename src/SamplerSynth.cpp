@@ -30,7 +30,7 @@ class Grainerator;
 class SamplerChannel
 {
 public:
-    explicit SamplerChannel(const QString &clientName, const int &midiChannel);
+    explicit SamplerChannel(jack_client_t *client, const QString &clientName, const int &midiChannel);
     ~SamplerChannel();
     int process(jack_nframes_t nframes);
     double sampleRate() const;
@@ -282,10 +282,6 @@ private:
     SamplerChannel *channel{nullptr};
 };
 
-static int client_process(jack_nframes_t nframes, void* arg) {
-    return static_cast<SamplerChannel*>(arg)->process(nframes);
-}
-
 void jackConnect(jack_client_t* jackClient, const QString &from, const QString &to) {
     int result = jack_connect(jackClient, from.toUtf8(), to.toUtf8());
     if (result == 0 || result == EEXIST) {
@@ -296,49 +292,30 @@ void jackConnect(jack_client_t* jackClient, const QString &from, const QString &
     }
 }
 
-SamplerChannel::SamplerChannel(const QString &clientName, const int &midiChannel)
+SamplerChannel::SamplerChannel(jack_client_t *client, const QString &clientName, const int &midiChannel)
     : clientName(clientName)
     , midiChannel(midiChannel)
 {
     grainerator = new Grainerator(this);
-    jack_status_t real_jack_status{};
-    jackClient = jack_client_open(clientName.toUtf8(), JackNullOption, &real_jack_status);
-    if (jackClient) {
-        // Set the process callback.
-        if (jack_set_process_callback(jackClient, client_process, this) == 0) {
-            for (int voiceIndex = 0; voiceIndex < SAMPLER_CHANNEL_VOICE_COUNT; ++voiceIndex) {
-                SamplerSynthVoice *voice = new SamplerSynthVoice();
-                voices[voiceIndex] = voice;
-            }
-            midiInPort = jack_port_register(jackClient, "midiIn", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
-            leftPort = jack_port_register(jackClient, portNameLeft.toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-            rightPort = jack_port_register(jackClient, portNameRight.toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-            // Activate the client.
-            if (jack_activate(jackClient) == 0) {
-                jackConnect(jackClient, QString("%1:%2").arg(clientName).arg(portNameLeft).toUtf8(), QLatin1String{"system:playback_1"});
-                jackConnect(jackClient, QString("%1:%2").arg(clientName).arg(portNameRight).toUtf8(), QLatin1String{"system:playback_2"});
-                if (midiChannel < 0) {
-                    jackConnect(jackClient, QLatin1String("ZLRouter:PassthroughOut"), QString("%1:midiIn").arg(clientName));
-                } else {
-                    jackConnect(jackClient, QLatin1String("ZLRouter:Channel%1").arg(QString::number(midiChannel)), QString("%1:midiIn").arg(clientName));
-                }
-                qInfo() << Q_FUNC_INFO << "Successfully created and set up" << clientName;
-                zl_set_jack_client_affinity(jackClient);
-            } else {
-                qWarning() << Q_FUNC_INFO << "Failed to activate SamplerSynth Jack client" << clientName;
-            }
-        } else {
-            qWarning() << Q_FUNC_INFO << "Failed to set the SamplerSynth Jack processing callback";
-        }
-    } else {
-        qWarning() << Q_FUNC_INFO << "Failed to set up SamplerSynth Jack client" << clientName;
+    jackClient = client;
+    for (int voiceIndex = 0; voiceIndex < SAMPLER_CHANNEL_VOICE_COUNT; ++voiceIndex) {
+        SamplerSynthVoice *voice = new SamplerSynthVoice();
+        voices[voiceIndex] = voice;
     }
+    midiInPort = jack_port_register(jackClient, QString("%1-midiIn").arg(clientName).toUtf8(), JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
+    leftPort = jack_port_register(jackClient, QString("%1-%2").arg(clientName).arg(portNameLeft).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+    rightPort = jack_port_register(jackClient, QString("%1-%2").arg(clientName).arg(portNameRight).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+    jackConnect(jackClient, QString("SamplerSynth:%1-%2").arg(clientName).arg(portNameLeft).toUtf8(), QLatin1String{"system:playback_1"});
+    jackConnect(jackClient, QString("SamplerSynth:%1-%2").arg(clientName).arg(portNameRight).toUtf8(), QLatin1String{"system:playback_2"});
+    if (midiChannel < 0) {
+        jackConnect(jackClient, QLatin1String("ZLRouter:PassthroughOut"), QString("SamplerSynth:%1-midiIn").arg(clientName));
+    } else {
+        jackConnect(jackClient, QLatin1String("ZLRouter:Channel%1").arg(QString::number(midiChannel)), QString("SamplerSynth:%1-midiIn").arg(clientName));
+    }
+    qInfo() << Q_FUNC_INFO << "Successfully created and set up" << clientName;
 }
 
 SamplerChannel::~SamplerChannel() {
-    if (jackClient) {
-        jack_client_close(jackClient);
-    }
     delete grainerator;
 }
 
@@ -478,8 +455,14 @@ public:
     SamplerSynthPrivate() {
     }
     ~SamplerSynthPrivate() {
+        if (jackClient) {
+            jack_client_close(jackClient);
+        }
         qDeleteAll(channels);
     }
+    int process(jack_nframes_t nframes);
+    jack_client_t *jackClient{nullptr};
+    bool initialized{false};
     QMutex synthMutex;
     bool syncLocked{false};
     SamplerSynthImpl *synth{nullptr};
@@ -497,6 +480,20 @@ public:
     // Channel 10 (midi channel 9)
     QList<SamplerChannel *> channels;
 };
+
+int SamplerSynthPrivate::process(jack_nframes_t nframes)
+{
+    if (initialized) {
+        for(SamplerChannel *channel : qAsConst(channels)) {
+            channel->process(nframes);
+        }
+    }
+    return 0;
+}
+
+static int sampler_process(jack_nframes_t nframes, void* arg) {
+    return static_cast<SamplerSynthPrivate*>(arg)->process(nframes);
+}
 
 class SamplerSynthImpl : public juce::Synthesiser {
 public:
@@ -577,25 +574,44 @@ SamplerSynth::~SamplerSynth()
 void SamplerSynth::initialize(tracktion_engine::Engine *engine)
 {
     d->engine = engine;
-    qInfo() << Q_FUNC_INFO << "Registering ten (plus two global) channels, with" << SAMPLER_CHANNEL_VOICE_COUNT << "voices each";
-    for (int channelIndex = 0; channelIndex < 12; ++channelIndex) {
-        QString channelName;
-        if (channelIndex == 0) {
-            channelName = QString("SamplerSynth-global-uneffected");
-        } else if (channelIndex == 1) {
-            channelName = QString("SamplerSynth-global-effected");
+    jack_status_t real_jack_status{};
+    d->jackClient = jack_client_open("SamplerSynth", JackNullOption, &real_jack_status);
+    if (d->jackClient) {
+        // Set the process callback.
+        if (jack_set_process_callback(d->jackClient, sampler_process, d) == 0) {
+            // Activate the client.
+            if (jack_activate(d->jackClient) == 0) {
+                jack_nframes_t sampleRate = jack_get_sample_rate(d->jackClient);
+                d->synth->setCurrentPlaybackSampleRate(sampleRate);
+                qInfo() << Q_FUNC_INFO << "Successfully created and set up SamplerSynth client";
+                zl_set_jack_client_affinity(d->jackClient);
+                qInfo() << Q_FUNC_INFO << "Registering ten (plus two global) channels, with" << SAMPLER_CHANNEL_VOICE_COUNT << "voices each";
+                for (int channelIndex = 0; channelIndex < 12; ++channelIndex) {
+                    QString channelName;
+                    if (channelIndex == 0) {
+                        channelName = QString("global-uneffected");
+                    } else if (channelIndex == 1) {
+                        channelName = QString("global-effected");
+                    } else {
+                        channelName = QString("channel_%1").arg(QString::number(channelIndex -1));
+                    }
+                    // Funny story, the actual channels have midi channels equivalent to their name, minus one. The others we can cheat with
+                    SamplerChannel *channel = new SamplerChannel(d->jackClient, channelName, channelIndex - 2);
+                    channel->d = d;
+                    for (SamplerSynthVoice *voice : qAsConst(channel->voices)) {
+                        d->synth->addVoice(voice);
+                    }
+                    d->channels << channel;
+                }
+                d->initialized = true;
+            } else {
+                qWarning() << Q_FUNC_INFO << "Failed to activate SamplerSynth Jack client";
+            }
         } else {
-            channelName = QString("SamplerSynth-channel_%1").arg(QString::number(channelIndex -1));
+            qWarning() << Q_FUNC_INFO << "Failed to set the SamplerSynth Jack processing callback";
         }
-        // Funny story, the actual channels have midi channels equivalent to their name, minus one. The others we can cheat with
-        SamplerChannel *channel = new SamplerChannel(channelName, channelIndex - 2);
-        channel->d = d;
-        jack_nframes_t sampleRate = jack_get_sample_rate(channel->jackClient);
-        d->synth->setCurrentPlaybackSampleRate(sampleRate);
-        for (SamplerSynthVoice *voice : qAsConst(channel->voices)) {
-            d->synth->addVoice(voice);
-        }
-        d->channels << channel;
+    } else {
+        qWarning() << Q_FUNC_INFO << "Failed to set up SamplerSynth Jack client";
     }
 }
 
