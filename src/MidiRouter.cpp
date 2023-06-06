@@ -903,7 +903,7 @@ MidiRouter::MidiRouter(QObject *parent)
     d->globalPlayback->setWetFx1Amount(0.0f);
     d->globalPlayback->setWetFx2Amount(0.0f);
     for (int i=0; i<10; ++i) {
-        d->channelEffectsPassthroughClients << new JackPassthrough(QString("FXPassthrough-Channel%1").arg(i+1), QCoreApplication::instance());
+        d->channelEffectsPassthroughClients << new JackPassthrough(QString("FXPassthrough:Channel%1").arg(i+1), QCoreApplication::instance());
     }
 
     d->constructing = false;

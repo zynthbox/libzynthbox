@@ -12,19 +12,49 @@
 #include "JackThreadAffinitySetter.h"
 
 #include <QDebug>
+#include <QGlobalStatic>
 
 #include <jack/jack.h>
 #include <jack/midiport.h>
+
+struct JackPassthroughAggregate {
+public:
+    JackPassthroughAggregate(jack_client_t *client)
+        : client(client)
+    {}
+    ~JackPassthroughAggregate() {
+        if (client) {
+            jack_client_close(client);
+        }
+    }
+    jack_client_t *client{nullptr};
+    QList<JackPassthroughPrivate*> passthroughs;
+};
+
+typedef QHash<QString, JackPassthroughAggregate*> JackClientHash;
+Q_GLOBAL_STATIC(JackClientHash, jackPassthroughClients)
 
 class JackPassthroughPrivate {
 public:
     JackPassthroughPrivate(const QString &clientName);
     ~JackPassthroughPrivate() {
-        if (client) {
-            jack_client_close(client);
+        JackPassthroughAggregate *aggregate{nullptr};
+        QString key;
+        for (JackPassthroughAggregate *needle : jackPassthroughClients->values()) {
+            if (needle->passthroughs.contains(this)) {
+                key = jackPassthroughClients->key(needle);
+                aggregate = needle;
+                return;
+            }
+        }
+        if (aggregate) {
+            aggregate->passthroughs.removeAll(this);
+            if (aggregate->passthroughs.count() == 0) {
+                jackPassthroughClients->remove(key);
+                delete aggregate;
+            }
         }
     }
-    QString clientName;
     float dryAmount{1.0f};
     float wetFx1Amount{1.0f};
     float wetFx2Amount{1.0f};
@@ -117,25 +147,34 @@ public:
 };
 
 static int jackPassthroughProcess(jack_nframes_t nframes, void* arg) {
-  return static_cast<JackPassthroughPrivate*>(arg)->process(nframes);
+    JackPassthroughAggregate *aggregate = static_cast<JackPassthroughAggregate*>(arg);
+    for (JackPassthroughPrivate *passthrough : qAsConst(aggregate->passthroughs)) {
+        passthrough->process(nframes);
+    }
+    return 0;
 }
 
 JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName)
 {
     jack_status_t real_jack_status{};
-    client = jack_client_open(clientName.toUtf8(), JackNullOption, &real_jack_status);
-    if (client) {
-        inputLeft = jack_port_register(client, "inputLeft", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-        inputRight = jack_port_register(client, "inputRight", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-        dryOutLeft = jack_port_register(client, "dryOutLeft", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-        dryOutRight = jack_port_register(client, "dryOutRight", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-        wetOutFx1Left = jack_port_register(client, "wetOutFx1Left", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-        wetOutFx1Right = jack_port_register(client, "wetOutFx1Right", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-        wetOutFx2Left = jack_port_register(client, "wetOutFx2Left", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-        wetOutFx2Right = jack_port_register(client, "wetOutFx2Right", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-        if (inputLeft && inputRight && dryOutLeft && dryOutRight && wetOutFx1Left && wetOutFx1Right && wetOutFx2Left && wetOutFx2Right) {
+    QString actualClientName{clientName};
+    QString portPrefix;
+    if (clientName.contains(":")) {
+        const QStringList splitName{clientName.split(":")};
+        actualClientName = splitName[0];
+        portPrefix = QString("%1-").arg(splitName[1]);
+    }
+    JackPassthroughAggregate *aggregate{nullptr};
+    if (jackPassthroughClients->contains(actualClientName)) {
+        aggregate = jackPassthroughClients->value(actualClientName);
+        client = aggregate->client;
+    } else {
+        client = jack_client_open(actualClientName.toUtf8(), JackNullOption, &real_jack_status);
+        if (client) {
+            aggregate = new JackPassthroughAggregate(client);
+            jackPassthroughClients->insert(actualClientName, aggregate);
             // Set the process callback.
-            if (jack_set_process_callback(client, jackPassthroughProcess, static_cast<void*>(this)) == 0) {
+            if (jack_set_process_callback(client, jackPassthroughProcess, aggregate) == 0) {
                 if (jack_activate(client) == 0) {
                     // Success! Now we just kind of sit here and do the thing until we're done or whatever
                     zl_set_jack_client_affinity(client);
@@ -146,10 +185,23 @@ JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName)
                 qWarning() << "JackPasstrough Client: Failed to set Jack processing callback for" << clientName;
             }
         } else {
+            qWarning() << "JackPasstrough Client: Failed to create Jack client for" << clientName;
+        }
+    }
+    if (aggregate) {
+        inputLeft = jack_port_register(client, QString("%1inputLeft").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+        inputRight = jack_port_register(client, QString("%1inputRight").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+        dryOutLeft = jack_port_register(client, QString("%1dryOutLeft").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+        dryOutRight = jack_port_register(client, QString("%1dryOutRight").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+        wetOutFx1Left = jack_port_register(client, QString("%1wetOutFx1Left").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+        wetOutFx1Right = jack_port_register(client, QString("%1wetOutFx1Right").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+        wetOutFx2Left = jack_port_register(client, QString("%1wetOutFx2Left").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+        wetOutFx2Right = jack_port_register(client, QString("%1wetOutFx2Right").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+        if (inputLeft && inputRight && dryOutLeft && dryOutRight && wetOutFx1Left && wetOutFx1Right && wetOutFx2Left && wetOutFx2Right) {
+            aggregate->passthroughs << this;
+        } else {
             qWarning() << "JackPasstrough Client: Failed to register ports for" << clientName;
         }
-    } else {
-        qWarning() << "JackPasstrough Client: Failed to create Jack client for" << clientName;
     }
 }
 
