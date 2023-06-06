@@ -132,7 +132,7 @@ AudioLevels::AudioLevels(QObject *parent)
     d->jackClient = jack_client_open("AudioLevels", JackNullOption, &real_jack_status);
     if (d->jackClient) {
         // Set the process callback.
-        result = jack_set_process_callback(d->jackClient, audioLevelsProcess, this);
+        result = jack_set_process_callback(d->jackClient, audioLevelsProcess, d);
         if (result == 0) {
             // Activate the client.
             result = jack_activate(d->jackClient);
