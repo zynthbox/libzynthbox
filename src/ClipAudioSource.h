@@ -177,6 +177,49 @@ class ClipAudioSource : public QObject {
      */
     Q_PROPERTY(float grainPanMaximum READ grainPanMaximum WRITE setGrainPanMaximum NOTIFY grainPanMaximumChanged)
     /**
+     * \brief The lower bound of the first set of the potential pitch adjustments for an individual grain, relative to the note's pitch (from -2 (reverse playback at double speed) through 2 (forward playback at double speed)
+     * The concept here is to allow people the ability to send grain playback both forward and backward through, at a speed relative
+     * to the note they are spawned from. If you want to limit it to one direction, just set the two pairs to the same values.
+     * @default 1
+     * @minimum -2.0f
+     * @maximum 2.0f
+     */
+    Q_PROPERTY(float grainPitchMinimum1 READ grainPitchMinimum1 WRITE setGrainPitchMinimum1 NOTIFY grainPitchMinimum1Changed)
+    /**
+     * \brief The upper bound of the first set of the potential pitch adjustments for an individual grain, relative to the note's pitch (from -2 (reverse playback at double speed) through 2 (forward playback at double speed)
+     * The concept here is to allow people the ability to send grain playback both forward and backward through, at a speed relative
+     * to the note they are spawned from. If you want to limit it to one direction, just set the two pairs to the same values.
+     * @default 1
+     * @minimum -2.0f
+     * @maximum 2.0f
+     */
+    Q_PROPERTY(float grainPitchMaximum1 READ grainPitchMaximum1 WRITE setGrainPitchMaximum1 NOTIFY grainPitchMaximum1Changed)
+    /**
+     * \brief The lower bound of the second set of the potential pitch adjustments for an individual grain, relative to the note's pitch (from -2 (reverse playback at double speed) through 2 (forward playback at double speed)
+     * The concept here is to allow people the ability to send grain playback both forward and backward through, at a speed relative
+     * to the note they are spawned from. If you want to limit it to one direction, just set the two pairs to the same values.
+     * @default 1
+     * @minimum -2.0f
+     * @maximum 2.0f
+     */
+    Q_PROPERTY(float grainPitchMinimum2 READ grainPitchMinimum2 WRITE setGrainPitchMinimum2 NOTIFY grainPitchMinimum2Changed)
+    /**
+     * \brief The upper bound of the second set of the potential pitch adjustments for an individual grain, relative to the note's pitch (from -2 (reverse playback at double speed) through 2 (forward playback at double speed)
+     * The concept here is to allow people the ability to send grain playback both forward and backward through, at a speed relative
+     * to the note they are spawned from. If you want to limit it to one direction, just set the two pairs to the same values.
+     * @default 1
+     * @minimum -2.0f
+     * @maximum 2.0f
+     */
+    Q_PROPERTY(float grainPitchMaximum2 READ grainPitchMaximum2 WRITE setGrainPitchMaximum2 NOTIFY grainPitchMaximum2Changed)
+    /**
+     * \brief The priority of one grain pitch value set over the other (0 only picks from the first, 1 only picks from the second, 0.5 is an even split)
+     * @default 0.5f
+     * @minimum 0.0f
+     * @maximum 1.0f
+     */
+    Q_PROPERTY(float grainPitchPriority READ grainPitchPriority WRITE setGrainPitchPriority NOTIFY grainPitchPriorityChanged)
+    /**
      * \brief The amount of the grain's minimum size should be given to sustain
      * The rest of the minimum period will be shared between attack and release (the envelope is an attack/sustain/release with no attack)
      * @default 0.3f
@@ -228,7 +271,7 @@ public:
   void play(bool loop = true, int midiChannel = -2);
   // Midi channel logic as play(), except defaulting to stop all the things everywhere
   void stop(int midiChannel = -3);
-  float getDuration();
+  float getDuration() const;
   const char *getFileName() const;
   const char *getFilePath() const;
   void updateTempoAndPitch();
@@ -360,6 +403,21 @@ public:
   float grainPanMaximum() const;
   void setGrainPanMaximum(const float &newValue);
   Q_SIGNAL void grainPanMaximumChanged();
+  float grainPitchMinimum1() const;
+  void setGrainPitchMinimum1(const float &newValue);
+  Q_SIGNAL void grainPitchMinimum1Changed();
+  float grainPitchMaximum1() const;
+  void setGrainPitchMaximum1(const float &newValue);
+  Q_SIGNAL void grainPitchMaximum1Changed();
+  float grainPitchMinimum2() const;
+  void setGrainPitchMinimum2(const float &newValue);
+  Q_SIGNAL void grainPitchMinimum2Changed();
+  float grainPitchMaximum2() const;
+  void setGrainPitchMaximum2(const float &newValue);
+  Q_SIGNAL void grainPitchMaximum2Changed();
+  float grainPitchPriority() const;
+  void setGrainPitchPriority(const float &newValue);
+  Q_SIGNAL void grainPitchPriorityChanged();
   float grainSustain() const;
   void setGrainSustain(const float &newValue);
   Q_SIGNAL void grainSustainChanged();

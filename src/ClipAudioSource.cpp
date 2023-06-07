@@ -96,6 +96,11 @@ public:
   float grainSizeAdditional{50};
   float grainPanMinimum{-1.0f};
   float grainPanMaximum{1.0f};
+  float grainPitchMinimum1{1.0};
+  float grainPitchMaximum1{1.0};
+  float grainPitchMinimum2{1.0};
+  float grainPitchMaximum2{1.0};
+  float grainPitchPriority{0.5};
   float grainSustain{0.3f};
   float grainTilt{0.5f};
   juce::ADSR grainADSR;
@@ -368,7 +373,7 @@ float ClipAudioSource::getLengthInBeats() const {
   return d->lengthInBeats;
 }
 
-float ClipAudioSource::getDuration() {
+float ClipAudioSource::getDuration() const {
   return d->edit->getLength();
 }
 
@@ -850,6 +855,92 @@ void ClipAudioSource::setGrainPanMaximum(const float& newValue)
       d->grainPanMinimum = adjustedValue;
       Q_EMIT grainPanMinimumChanged();
     }
+  }
+}
+
+float ClipAudioSource::grainPitchMinimum1() const
+{
+  return d->grainPitchMinimum1;
+}
+
+void ClipAudioSource::setGrainPitchMinimum1(const float& newValue)
+{
+  const float adjustedValue{std::clamp(newValue, -2.0f, 2.0f)};
+  if (d->grainPitchMinimum1 != adjustedValue) {
+    d->grainPitchMinimum1 = adjustedValue;
+    Q_EMIT grainPitchMinimum1Changed();
+    if (d->grainPitchMaximum1 < adjustedValue) {
+      d->grainPitchMaximum1 = adjustedValue;
+      Q_EMIT grainPitchMaximum1Changed();
+    }
+  }
+}
+
+float ClipAudioSource::grainPitchMaximum1() const
+{
+  return d->grainPitchMaximum1;
+}
+
+void ClipAudioSource::setGrainPitchMaximum1(const float& newValue)
+{
+  const float adjustedValue{std::clamp(newValue, -2.0f, 2.0f)};
+  if (d->grainPitchMaximum1 != adjustedValue) {
+    d->grainPitchMaximum1 = adjustedValue;
+    Q_EMIT grainPitchMaximum1Changed();
+    if (d->grainPitchMinimum1 > adjustedValue) {
+      d->grainPitchMinimum1 = adjustedValue;
+      Q_EMIT grainPitchMinimum1Changed();
+    }
+  }
+}
+
+float ClipAudioSource::grainPitchMinimum2() const
+{
+  return d->grainPitchMinimum2;
+}
+
+void ClipAudioSource::setGrainPitchMinimum2(const float& newValue)
+{
+  const float adjustedValue{std::clamp(newValue, -2.0f, 2.0f)};
+  if (d->grainPitchMinimum2 != adjustedValue) {
+    d->grainPitchMinimum2 = adjustedValue;
+    Q_EMIT grainPitchMinimum2Changed();
+    if (d->grainPitchMaximum2 < adjustedValue) {
+      d->grainPitchMaximum2 = adjustedValue;
+      Q_EMIT grainPitchMaximum2Changed();
+    }
+  }
+}
+
+float ClipAudioSource::grainPitchMaximum2() const
+{
+  return d->grainPitchMaximum2;
+}
+
+void ClipAudioSource::setGrainPitchMaximum2(const float& newValue)
+{
+  const float adjustedValue{std::clamp(newValue, -2.0f, 2.0f)};
+  if (d->grainPitchMaximum2 != adjustedValue) {
+    d->grainPitchMaximum2 = adjustedValue;
+    Q_EMIT grainPitchMaximum2Changed();
+    if (d->grainPitchMinimum2 > adjustedValue) {
+      d->grainPitchMinimum2 = adjustedValue;
+      Q_EMIT grainPitchMinimum2Changed();
+    }
+  }
+}
+
+float ClipAudioSource::grainPitchPriority() const
+{
+  return d->grainPitchPriority;
+}
+
+void ClipAudioSource::setGrainPitchPriority(const float& newValue)
+{
+  const float adjustedValue{std::clamp(newValue, 0.0f, 1.0f)};
+  if (d->grainPitchPriority != adjustedValue) {
+    d->grainPitchPriority = adjustedValue;
+    Q_EMIT grainPitchPriorityChanged();
   }
 }
 
