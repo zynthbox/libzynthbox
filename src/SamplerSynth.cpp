@@ -110,6 +110,7 @@ public:
         envelope.noteOff();
     }
     ClipCommand *pickNextGrain() {
+        const ClipAudioSource *clip = command->clip;
         ClipCommand *newGrain = ClipCommand::channelCommand(command->clip, command->midiChannel);
         newGrain->startPlayback = true;
         newGrain->midiNote = command->midiNote;
@@ -118,13 +119,30 @@ public:
         newGrain->setStartPosition = true;
         newGrain->setStopPosition = true;
         newGrain->changePan = true;
-        if (pitch != 0) {
+
+        // We have two potential pitch ranges, with a weight that says which one of them to use more regularly
+        // This might for example be used to make the majority of grains play at standard forward speed, and a
+        // few occasional grains playing some variant of backward. To make that happen, you would use the settings
+        // min1 = 1.0, max1 = 1.0, priority = 0.9, min2 = -1.2, max2 = -0.8
+        // which then will result in the forward grains playing at normal pitch, backwards grains playing backward
+        // at between 1.2 and 0.8 speed, and 90% of the generated grains being from the first set.
+        if (clip->grainPitchMinimum1() == 1.0 && clip->grainPitchMaximum1() == 1.0 && clip->grainPitchMinimum2() == 1.0 && clip->grainPitchMaximum2() == 1.0) {
+            // If all the pitch ranges are set to just play at normal pitch, don't do the random generation stuff below
+            newGrain->changePitch = false;
+        } else {
             newGrain->changePitch = true;
-            newGrain->pitchChange = pitch;
+            if (QRandomGenerator::global()->generateDouble() < clip->grainPitchPriority()) {
+                // Lower range, use the first pitch range pair
+                newGrain->pitchChange = clip->grainPitchMinimum1() + QRandomGenerator::global()->bounded(clip->grainPitchMaximum1() - clip->grainPitchMinimum1()) + pitch;
+            } else {
+                // Upper range, use the second pitch range pair
+                newGrain->pitchChange = clip->grainPitchMinimum2() + QRandomGenerator::global()->bounded(clip->grainPitchMaximum2() - clip->grainPitchMinimum2()) + pitch;
+            }
         }
+
         // grain duration (grain size start plus random from 0 through grain size additional, at most the size of the sample window)
         // (divided by 1000, because start and stop are expected to be in seconds, not milliseconds)
-        const double duration = qMin((double(newGrain->clip->grainSize()) + QRandomGenerator::global()->bounded(double(newGrain->clip->grainSizeAdditional()))) / 1000.0f, double(newGrain->clip->getDuration()));
+        const double duration = qMin((double(clip->grainSize()) + QRandomGenerator::global()->bounded(double(clip->grainSizeAdditional()))) / 1000.0f, double(clip->getDuration()));
         // grain start position
         if (windowSize < duration) {
             // If the duration is too long to fit inside the window, just start at the start - allow people to do it, since well, it'll work anyway
@@ -140,7 +158,7 @@ public:
         // grain stop position (start position plus duration - which has already been bounded by the above)
         newGrain->stopPosition = newGrain->startPosition + duration;
         // pan variance (random between pan minimum and pan maximum)
-        newGrain->pan = newGrain->clip->grainPanMinimum() + QRandomGenerator::global()->bounded(newGrain->clip->grainPanMaximum() - newGrain->clip->grainPanMinimum());
+        newGrain->pan = clip->grainPanMinimum() + QRandomGenerator::global()->bounded(clip->grainPanMaximum() - clip->grainPanMinimum());
         return newGrain;
     }
     juce::ADSR envelope;
