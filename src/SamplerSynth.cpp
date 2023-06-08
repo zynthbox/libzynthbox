@@ -129,6 +129,7 @@ public:
         if (clip->grainPitchMinimum1() == 1.0 && clip->grainPitchMaximum1() == 1.0 && clip->grainPitchMinimum2() == 1.0 && clip->grainPitchMaximum2() == 1.0) {
             // If all the pitch ranges are set to just play at normal pitch, don't do the random generation stuff below
             newGrain->changePitch = false;
+            newGrain->pitchChange = 1.0f;
         } else {
             newGrain->changePitch = true;
             if (QRandomGenerator::global()->generateDouble() < clip->grainPitchPriority()) {
@@ -142,7 +143,7 @@ public:
 
         // grain duration (grain size start plus random from 0 through grain size additional, at most the size of the sample window)
         // (divided by 1000, because start and stop are expected to be in seconds, not milliseconds)
-        const double duration = qMin((double(clip->grainSize()) + QRandomGenerator::global()->bounded(double(clip->grainSizeAdditional()))) / 1000.0f, double(clip->getDuration()));
+        const double duration = qMin((double(clip->grainSize()) + QRandomGenerator::global()->bounded(double(clip->grainSizeAdditional()))) / (abs(newGrain->pitchChange) * 1000.0f), double(clip->getDuration()));
         // grain start position
         if (windowSize < duration) {
             // If the duration is too long to fit inside the window, just start at the start - allow people to do it, since well, it'll work anyway
