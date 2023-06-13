@@ -112,6 +112,7 @@ public:
         Entry *previous{nullptr};
         ClipCommand *clipCommand{nullptr};
         quint64 timestamp;
+        bool processed{true};
     };
     explicit ClipCommandRing() {
         Entry* entryPrevious{&ringData[ClipCommandRingSize - 1]};
@@ -126,19 +127,24 @@ public:
     }
 
     void write(ClipCommand *command, quint64 timestamp) {
-        if (writeHead->clipCommand) {
-            qWarning() << Q_FUNC_INFO << "There is already a clip command stored at the write location:" << writeHead->clipCommand << "This likely means the buffer size is too small, which will require attention at the api level.";
-        }
-        writeHead->clipCommand = command;
-        writeHead->timestamp = timestamp;
+        Entry *entry = writeHead;
         writeHead = writeHead->next;
+        if (entry->processed == false) {
+            qWarning() << Q_FUNC_INFO << "There is unprocessed data at the write location:" << entry->clipCommand << "This likely means the buffer size is too small, which will require attention at the api level.";
+        }
+        entry->clipCommand = command;
+        entry->timestamp = timestamp;
+        entry->processed = false;
     }
     ClipCommand *read(quint64 *timestamp = nullptr) {
-        if (timestamp) {
-            *timestamp = readHead->timestamp;
-        }
-        ClipCommand *command = readHead->clipCommand;
+        Entry *entry = readHead;
         readHead = readHead->next;
+        if (timestamp) {
+            *timestamp = entry->timestamp;
+        }
+        ClipCommand *command = entry->clipCommand;
+        entry->clipCommand = nullptr;
+        entry->processed = true;
         return command;
     }
 

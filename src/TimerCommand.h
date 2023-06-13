@@ -71,6 +71,7 @@ public:
         Entry *previous{nullptr};
         TimerCommand *timerCommand{nullptr};
         quint64 timestamp;
+        bool processed{true};
     };
     explicit TimerCommandRing() {
         Entry* entryPrevious{&ringData[TimerCommandRingSize - 1]};
@@ -85,11 +86,12 @@ public:
     }
 
     void write(TimerCommand *command, quint64 timestamp) {
-        if (writeHead->timerCommand) {
-            qWarning() << Q_FUNC_INFO << "There is already a clip command stored at the write location:" << writeHead->timerCommand << "This likely means the buffer size is too small, which will require attention at the api level.";
+        if (writeHead->processed == false) {
+            qWarning() << Q_FUNC_INFO << "There is unprocessed data at the write location:" << writeHead->timerCommand << "This likely means the buffer size is too small, which will require attention at the api level.";
         }
         writeHead->timerCommand = command;
         writeHead->timestamp = timestamp;
+        writeHead->processed = false;
         writeHead = writeHead->next;
     }
     TimerCommand *read(quint64 *timestamp = nullptr) {
@@ -97,6 +99,8 @@ public:
             *timestamp = readHead->timestamp;
         }
         TimerCommand *command = readHead->timerCommand;
+        readHead->processed = true;
+        readHead->timerCommand = nullptr;
         readHead = readHead->next;
         return command;
     }
