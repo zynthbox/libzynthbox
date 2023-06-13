@@ -7,6 +7,7 @@
 struct ClipCommand;
 class ClipAudioSource;
 class SamplerSynthPrivate;
+class SamplerSynthSound;
 class SyncTimerPrivate;
 namespace tracktion_engine {
     class Engine;
@@ -26,14 +27,7 @@ public:
 
     void registerClip(ClipAudioSource *clip);
     void unregisterClip(ClipAudioSource *clip);
-
-    /**
-     * \brief This function will act on the given command (play, stop, set clip settings, etc)
-     * @note This will take ownership of the command and handle its deletion once the command has been completed
-     * @note You should likely not be using this - schedule commands into SyncTimer unless you have a reason
-     * @param clipCommand The command you wish to act on
-     */
-    void handleClipCommand(ClipCommand *clipCommand);
+    SamplerSynthSound *clipToSound(ClipAudioSource *clip) const;
 
     /**
      * \brief SamplerSynth's CPU load as estimated by JackD

@@ -1,7 +1,6 @@
 
 #include "SamplerSynth.h"
 
-#include "JUCEHeaders.h"
 #include "Helper.h"
 #include "PlayGridManager.h"
 #include "SamplerSynthSound.h"
@@ -30,10 +29,15 @@ class Grainerator;
 class SamplerChannel
 {
 public:
-    explicit SamplerChannel(jack_client_t *client, const QString &clientName, const int &midiChannel);
+    explicit SamplerChannel(SamplerSynth *samplerSynth, jack_client_t *client, const QString &clientName, const int &midiChannel);
     ~SamplerChannel();
     int process(jack_nframes_t nframes);
     double sampleRate() const;
+    /**
+     * \brief Actually handle the command
+     * @param clipCommand The command to be handled
+     * @param currentTick The absolute time position that this should be handled at (if this is in the past, it will be handled as soon as possible)
+     */
     inline void handleCommand(ClipCommand *clipCommand, quint64 currentTick);
     ClipCommandRing commandRing;
 
@@ -88,7 +92,6 @@ public:
     ~GraineratorVoice() {}
     void start(ClipCommand *clipCommand, quint64 timestamp) {
         command = clipCommand;
-        isTailingOff = false;
         midiNote = clipCommand->midiNote;
         aftertouch = clipCommand->volume;
         envelope.reset();
@@ -112,8 +115,11 @@ public:
     ClipCommand *pickNextGrain() {
         const ClipAudioSource *clip = command->clip;
         ClipCommand *newGrain = ClipCommand::channelCommand(command->clip, command->midiChannel);
-        newGrain->startPlayback = true;
+        if (newGrain == nullptr) {
+            qWarning() << Q_FUNC_INFO << "Could not get a new grain, for some reason!";
+        }
         newGrain->midiNote = command->midiNote;
+        newGrain->startPlayback = true;
         newGrain->changeVolume = true;
         newGrain->volume = aftertouch * envelopeValue;
         newGrain->setStartPosition = true;
@@ -241,7 +247,7 @@ public:
             }
         }
     }
-    void process(jack_nframes_t nframes, float framesPerMillisecond) {
+    void process(jack_nframes_t nframes, float framesPerMillisecond, jack_nframes_t current_frames) {
         for (jack_nframes_t frame = 0; frame < nframes; ++frame) {
             for (GraineratorVoice *voice : qAsConst(voices)) {
                 ClipCommand *command = voice->command;
@@ -257,7 +263,7 @@ public:
                             voice->envelopeValue = voice->envelope.getNextSample();
                         }
                         // pick the grain to play and schedule that at position `frame`
-                        channel->handleCommand(voice->pickNextGrain(), frame);
+                        channel->handleCommand(voice->pickNextGrain(), current_frames + frame);
                         // work out how many frames we have until the next grain
                         // (grain interval minimum,
                         // plus random 0 through grain interval additional,
@@ -290,6 +296,7 @@ public:
                         SyncTimer::instance()->deleteClipCommand(command);
                         voice->command = nullptr;
                         voice->isActive = false;
+                        voice->isTailingOff = false;
                     }
                     voice->framesUntilNextGrain--;
                 }
@@ -311,14 +318,14 @@ void jackConnect(jack_client_t* jackClient, const QString &from, const QString &
     }
 }
 
-SamplerChannel::SamplerChannel(jack_client_t *client, const QString &clientName, const int &midiChannel)
+SamplerChannel::SamplerChannel(SamplerSynth *samplerSynth, jack_client_t *client, const QString &clientName, const int &midiChannel)
     : clientName(clientName)
     , midiChannel(midiChannel)
 {
     grainerator = new Grainerator(this);
     jackClient = client;
     for (int voiceIndex = 0; voiceIndex < SAMPLER_CHANNEL_VOICE_COUNT; ++voiceIndex) {
-        SamplerSynthVoice *voice = new SamplerSynthVoice();
+        SamplerSynthVoice *voice = new SamplerSynthVoice(samplerSynth);
         voices[voiceIndex] = voice;
     }
     midiInPort = jack_port_register(jackClient, QString("%1-midiIn").arg(clientName).toUtf8(), JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
@@ -386,7 +393,7 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                                     grainerator->start(command, event.time);
                                 }
                             } else {
-                                handleCommand(command, event.time);
+                                handleCommand(command, current_frames + event.time);
                             }
                         }
                     } else if (0x9F < byte1 && byte1 < 0xB0) {
@@ -394,7 +401,7 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                         const int note{event.buffer[1]};
                         const int pressure{event.buffer[2]};
                         for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                            if (voice->isPlaying && voice->currentCommand()->midiNote == note && (voice->currentCommand()->midiChannel == eventChannel || eventChannel == globalChannel)) {
+                            if (voice->mostRecentStartCommand && voice->mostRecentStartCommand->midiNote == note && (voice->mostRecentStartCommand->midiChannel == eventChannel || eventChannel == globalChannel)) {
                                 voice->handleAftertouch(event.time, pressure);
                             }
                         }
@@ -404,7 +411,7 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                         const int control{event.buffer[1]};
                         const int value{event.buffer[2]};
                         for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                            if (voice->isPlaying && voice->currentCommand()->midiChannel == eventChannel) {
+                            if (voice->mostRecentStartCommand && voice->mostRecentStartCommand->midiChannel == eventChannel) {
                                 voice->handleControlChange(event.time, control, value);
                             }
                         }
@@ -418,7 +425,7 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                         // Non-polyphonic aftertouch
                         const int pressure{event.buffer[1]};
                         for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                            if (voice->isPlaying && voice->currentCommand()->midiChannel == eventChannel) {
+                            if (voice->mostRecentStartCommand && voice->mostRecentStartCommand->midiChannel == eventChannel) {
                                 voice->handleAftertouch(event.time, pressure);
                             }
                         }
@@ -434,7 +441,7 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                         const float bendMax{2.0};
                         const float pitchValue = bendMax * (float((event.buffer[2] * 128) + event.buffer[1]) - 8192) / 16383.0;
                         for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                            if (voice->isPlaying && voice->currentCommand()->midiChannel == eventChannel) {
+                            if (voice->mostRecentStartCommand && voice->mostRecentStartCommand->midiChannel == eventChannel) {
                                 voice->handlePitchChange(event.time, pitchValue);
                             }
                         }
@@ -445,7 +452,7 @@ int SamplerChannel::process(jack_nframes_t nframes) {
             ++eventIndex;
         }
         const double framesPerMicrosecond = double(nframes) / double(next_usecs - current_usecs);
-        grainerator->process(nframes, framesPerMicrosecond * 1000.0f);
+        grainerator->process(nframes, framesPerMicrosecond * 1000.0f, current_frames);
 
         // Then, if we've actually got our ports set up, let's play whatever voices are active
         jack_default_audio_sample_t *leftBuffer{nullptr}, *rightBuffer{nullptr};
@@ -455,9 +462,7 @@ int SamplerChannel::process(jack_nframes_t nframes) {
             memset(leftBuffer, 0, nframes * sizeof (jack_default_audio_sample_t));
             memset(rightBuffer, 0, nframes * sizeof (jack_default_audio_sample_t));
             for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                if (voice->isPlaying) {
-                    voice->process(leftBuffer, rightBuffer, nframes, current_frames, current_usecs, next_usecs, period_usecs);
-                }
+                voice->process(leftBuffer, rightBuffer, nframes, current_frames, current_usecs, next_usecs, period_usecs);
             }
         }
         // Micro-hackery - -2 is the first item in the list of channels, so might as well just go with that
@@ -468,7 +473,6 @@ int SamplerChannel::process(jack_nframes_t nframes) {
     return 0;
 }
 
-class SamplerSynthImpl;
 class SamplerSynthPrivate {
 public:
     SamplerSynthPrivate() {
@@ -484,8 +488,8 @@ public:
     bool initialized{false};
     QMutex synthMutex;
     bool syncLocked{false};
-    SamplerSynthImpl *synth{nullptr};
     static const int numVoices{128};
+    jack_nframes_t sampleRate{0};
 
     QHash<ClipAudioSource*, SamplerSynthSound*> clipSounds;
     te::Engine *engine{nullptr};
@@ -514,18 +518,9 @@ static int sampler_process(jack_nframes_t nframes, void* arg) {
     return static_cast<SamplerSynthPrivate*>(arg)->process(nframes);
 }
 
-class SamplerSynthImpl : public juce::Synthesiser {
-public:
-    void startVoiceImpl(juce::SynthesiserVoice* voice, juce::SynthesiserSound* sound, int midiChannel, int midiNoteNumber, float velocity)
-    {
-        startVoice(voice, sound, midiChannel, midiNoteNumber, velocity);
-    }
-    SamplerSynthPrivate *d{nullptr};
-};
-
 double SamplerChannel::sampleRate() const
 {
-    return d->synth->getSampleRate();
+    return d->sampleRate;
 }
 
 void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick)
@@ -534,10 +529,9 @@ void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick
     if (clipCommand->stopPlayback || clipCommand->startPlayback) {
         if (clipCommand->stopPlayback) {
             for (SamplerSynthVoice * voice : qAsConst(voices)) {
-                const ClipCommand *currentVoiceCommand = voice->currentCommand();
-                if (voice->isTailingOff == false && voice->getCurrentlyPlayingSound().get() == sound && currentVoiceCommand->equivalentTo(clipCommand)) {
-                    voice->setCurrentCommand(clipCommand);
-                    voice->stopNote(clipCommand->volume, true);
+                const ClipCommand *currentVoiceCommand = voice->mostRecentStartCommand;
+                if (voice->isTailingOff == false && currentVoiceCommand && currentVoiceCommand->equivalentTo(clipCommand)) {
+                    voice->handleCommand(clipCommand, currentTick);
                     // Since we may have more than one going at the same time (since we allow long releases), just stop the first one
                     break;
                 }
@@ -545,24 +539,18 @@ void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick
         }
         if (clipCommand->startPlayback) {
             for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                if (!voice->isPlaying) {
-                    voice->setCurrentCommand(clipCommand);
-                    voice->setModwheel(modwheelValue);
-                    voice->setStartTick(currentTick);
-                    d->synth->startVoiceImpl(voice, sound, clipCommand->midiChannel, clipCommand->midiNote, clipCommand->volume);
+                if (voice->availableAfter < currentTick) {
+                    voice->handleCommand(clipCommand, currentTick);
                     break;
                 }
             }
         }
     } else {
         for (SamplerSynthVoice * voice : qAsConst(voices)) {
-            const ClipCommand *currentVoiceCommand = voice->currentCommand();
-            if (voice->getCurrentlyPlayingSound().get() == sound && currentVoiceCommand->equivalentTo(clipCommand)) {
+            const ClipCommand *currentVoiceCommand = voice->mostRecentStartCommand;
+            if (currentVoiceCommand && currentVoiceCommand->equivalentTo(clipCommand)) {
                 // Update the voice with the new command
-                voice->setCurrentCommand(clipCommand);
-                // We may have more than one thing going for the same sound on the same note, which... shouldn't
-                // really happen, but it's ugly and we just need to deal with that when stopping, so, update /all/
-                // the voices where both the sound and the command match.
+                voice->handleCommand(clipCommand, currentTick);
             }
         }
     }
@@ -580,13 +568,10 @@ SamplerSynth::SamplerSynth(QObject *parent)
     : QObject(parent)
     , d(new SamplerSynthPrivate)
 {
-    d->synth = new SamplerSynthImpl();
-    d->synth->d = d;
 }
 
 SamplerSynth::~SamplerSynth()
 {
-    delete d->synth;
     delete d;
 }
 
@@ -600,8 +585,7 @@ void SamplerSynth::initialize(tracktion_engine::Engine *engine)
         if (jack_set_process_callback(d->jackClient, sampler_process, d) == 0) {
             // Activate the client.
             if (jack_activate(d->jackClient) == 0) {
-                jack_nframes_t sampleRate = jack_get_sample_rate(d->jackClient);
-                d->synth->setCurrentPlaybackSampleRate(sampleRate);
+                d->sampleRate = jack_get_sample_rate(d->jackClient);
                 qInfo() << Q_FUNC_INFO << "Successfully created and set up SamplerSynth client";
                 zl_set_jack_client_affinity(d->jackClient);
                 qInfo() << Q_FUNC_INFO << "Registering ten (plus two global) channels, with" << SAMPLER_CHANNEL_VOICE_COUNT << "voices each";
@@ -615,11 +599,8 @@ void SamplerSynth::initialize(tracktion_engine::Engine *engine)
                         channelName = QString("channel_%1").arg(QString::number(channelIndex -1));
                     }
                     // Funny story, the actual channels have midi channels equivalent to their name, minus one. The others we can cheat with
-                    SamplerChannel *channel = new SamplerChannel(d->jackClient, channelName, channelIndex - 2);
+                    SamplerChannel *channel = new SamplerChannel(this, d->jackClient, channelName, channelIndex - 2);
                     channel->d = d;
-                    for (SamplerSynthVoice *voice : qAsConst(channel->voices)) {
-                        d->synth->addVoice(voice);
-                    }
                     d->channels << channel;
                 }
                 d->initialized = true;
@@ -645,7 +626,6 @@ void SamplerSynth::registerClip(ClipAudioSource *clip)
     if (!d->clipSounds.contains(clip)) {
         SamplerSynthSound *sound = new SamplerSynthSound(clip);
         d->clipSounds[clip] = sound;
-        d->synth->addSound(sound);
     } else {
         qDebug() << "Clip list already contains the clip up for registration" << clip << clip->getFilePath();
     }
@@ -656,22 +636,12 @@ void SamplerSynth::unregisterClip(ClipAudioSource *clip)
     QMutexLocker locker(&d->synthMutex);
     if (d->clipSounds.contains(clip)) {
         d->clipSounds.remove(clip);
-        for (int i = 0; i < d->synth->getNumSounds(); ++i) {
-            SynthesiserSound::Ptr sound = d->synth->getSound(i);
-            if (auto *samplerSound = static_cast<SamplerSynthSound*> (sound.get())) {
-                if (samplerSound->clip() == clip) {
-                    d->synth->removeSound(i);
-                    break;
-                }
-            }
-        }
     }
 }
 
-void SamplerSynth::handleClipCommand(ClipCommand *clipCommand)
+SamplerSynthSound * SamplerSynth::clipToSound(ClipAudioSource* clip) const
 {
-    qWarning() << Q_FUNC_INFO << "This function is not sufficiently safe - schedule notes using SyncTimer::scheduleClipCommand instead!";
-    handleClipCommand(clipCommand, SyncTimer::instance()->jackPlayhead());
+    return d->clipSounds[clip];
 }
 
 float SamplerSynth::cpuLoad() const
