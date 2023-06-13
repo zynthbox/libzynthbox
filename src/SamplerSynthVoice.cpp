@@ -2,6 +2,7 @@
 
 #include "ClipAudioSourcePositionsModel.h"
 #include "ClipCommand.h"
+#include "SamplerSynth.h"
 #include "SamplerSynthSound.h"
 #include "SyncTimer.h"
 
@@ -20,16 +21,16 @@ static inline float velocityToGain(const float &velocity) {
 #define DataRingSize 128
 class DataRing {
 public:
-    struct alignas(32) DataRingEntry {
-        DataRingEntry *previous{nullptr};
-        DataRingEntry *next{nullptr};
+    struct alignas(32) Entry {
+        Entry *previous{nullptr};
+        Entry *next{nullptr};
         jack_nframes_t time{0};
         float data{-1};
         bool processed{true};
     };
 
     DataRing () {
-        DataRingEntry* entryPrevious{&ringData[DataRingSize - 1]};
+        Entry* entryPrevious{&ringData[DataRingSize - 1]};
         for (quint64 i = 0; i < DataRingSize; ++i) {
             entryPrevious->next = &ringData[i];
             ringData[i].previous = entryPrevious;
@@ -39,23 +40,45 @@ public:
     }
     ~DataRing() {}
     void write(jack_nframes_t time, float data) {
-        if (writeHead->processed == false) {
-            qWarning() << Q_FUNC_INFO << "There is already data stored at the write location, which likely means the buffer size is too small, which will require attention at the api level.";
-        }
-        writeHead->time = time;
-        writeHead->data = data;
-        writeHead->processed = false;
+        Entry *entry = writeHead;
         writeHead = writeHead->next;
+        if (entry->processed == false) {
+            qWarning() << Q_FUNC_INFO << "There is unprocessed data stored at the write location:" << writeHead->data << "for time" << writeHead->time << "This likely means the buffer size is too small, which will require attention at the api level.";
+        }
+        entry->time = time;
+        entry->data = data;
+        entry->processed = false;
     }
     float read() {
-        float data = readHead->data;
-        readHead->processed = true;
+        Entry *entry = readHead;
         readHead = readHead->next;
+        float data = entry->data;
+        entry->processed = true;
         return data;
     }
-    DataRingEntry ringData[DataRingSize];
-    DataRingEntry *readHead{nullptr};
-    DataRingEntry *writeHead{nullptr};
+    Entry ringData[DataRingSize];
+    Entry *readHead{nullptr};
+    Entry *writeHead{nullptr};
+    QString name;
+};
+
+struct PlaybackData {
+public:
+    PlaybackData() {}
+    juce::AudioBuffer<float>* data{nullptr};
+    const float *inL{nullptr};
+    const float *inR{nullptr};
+    double sourceSampleRate{0};
+    double highpassCoefficient{0};
+    double lowpassCoefficient{0};
+    bool isLooping{false};
+    bool snappedToBeat{false};
+    float pan{0};
+    int sampleDuration{0};
+    int startPosition{0};
+    int stopPosition{0};
+    double forwardTailingOffPosition{0};
+    double backwardTailingOffPosition{0};
 };
 
 class SamplerSynthVoicePrivate {
@@ -65,16 +88,26 @@ public:
         for (int i = 0; i < 128; ++i) {
             initialCC[i] = -1;
         }
+        aftertouchRing.name = "aftertouchRing";
+        pitchRing.name = "pitchRing";
+        ccControlRing.name = "ccControlRing";
+        ccValueRing.name = "ccValueRing";
     }
 
+    // This is perhaps a little over-much, but it means we can handle
+    // start/stop cycles so short that it fits inside a single process
+    // run, as is needed for the granular playback mode
+    ClipCommandRing commandRing;
     DataRing aftertouchRing;
     DataRing pitchRing;
     DataRing ccControlRing;
     DataRing ccValueRing;
-    ADSR adsr;
+    juce::ADSR adsr;
     SyncTimer *syncTimer{nullptr};
+    SamplerSynth *samplerSynth{nullptr};
     ClipCommand *clipCommand{nullptr};
     ClipAudioSource *clip{nullptr};
+    SamplerSynthSound* sound{nullptr};
     qint64 clipPositionId{-1};
     quint64 startTick{0};
     quint64 nextLoopTick{0};
@@ -94,13 +127,14 @@ public:
     float highpassCutoff{0.0f};
     float allpassBufferL{0.0f};
     float allpassBufferR{0.0f};
+
+    PlaybackData playbackData;
 };
 
-SamplerSynthVoice::SamplerSynthVoice()
-    : QObject()
-    , juce::SamplerVoice()
-    , d(new SamplerSynthVoicePrivate)
+SamplerSynthVoice::SamplerSynthVoice(SamplerSynth *samplerSynth)
+    : d(new SamplerSynthVoicePrivate)
 {
+    d->samplerSynth = samplerSynth;
 }
 
 SamplerSynthVoice::~SamplerSynthVoice()
@@ -108,9 +142,30 @@ SamplerSynthVoice::~SamplerSynthVoice()
     delete d;
 }
 
-bool SamplerSynthVoice::canPlaySound (SynthesiserSound* sound)
+// Instead of checking voice has a command, set an available-after timestamp when setting a clip
+// - When adding a start command, set to INT_MAX
+// - When adding a stop command, set to the given timestamp
+// - Handle stop-all condition
+// - When testing if a voice is available, check the voice's availableAfter against timestamp: if (timestamp > voice->availableAfter) { voice->handleCommand(clipCommand, timestamp); }
+void SamplerSynthVoice::handleCommand(ClipCommand* clipCommand, jack_nframes_t timestamp)
 {
-    return dynamic_cast<const SamplerSynthSound*> (sound) != nullptr;
+    d->commandRing.write(clipCommand, timestamp);
+    if (clipCommand->stopPlayback == true) {
+        availableAfter = timestamp - 1; // We'll be available /on/ this timestamp location as well
+        mostRecentStartCommand = nullptr;
+    }
+    // Not an else if, because we might both stop and start with the same command
+    if (clipCommand->startPlayback == true) {
+        if (clipCommand->looping == true) {
+            availableAfter = INT_MAX;
+        } else {
+            const double sourceSampleRate{clipCommand->clip->sampleRate()};
+            const double startPosition = (int) ((clipCommand->setStartPosition ? clipCommand->startPosition : clipCommand->clip->getStartPosition(clipCommand->slice)) * sourceSampleRate);
+            const double stopPosition = (int) ((clipCommand->setStopPosition ? clipCommand->stopPosition : clipCommand->clip->getStopPosition(clipCommand->slice)) * sourceSampleRate);
+            availableAfter = timestamp + (stopPosition - startPosition);
+        }
+        mostRecentStartCommand = clipCommand;
+    }
 }
 
 void SamplerSynthVoice::setCurrentCommand(ClipCommand *clipCommand)
@@ -144,9 +199,7 @@ void SamplerSynthVoice::setCurrentCommand(ClipCommand *clipCommand)
         }
         if (clipCommand->startPlayback) {
             // This should be interpreted as "restart playback" in this case, so... reset the current position
-            if (auto* playingSound = static_cast<SamplerSynthSound*> (getCurrentlyPlayingSound().get())) {
-                d->sourceSamplePosition = (int) (d->clip->getStartPosition(d->clipCommand->slice) * playingSound->sourceSampleRate());
-            }
+            d->sourceSamplePosition = (int) (d->clip->getStartPosition(d->clipCommand->slice) * d->clip->sampleRate());
         }
         if (clipCommand->changePan) {
             d->clipCommand->pan = clipCommand->pan;
@@ -156,11 +209,6 @@ void SamplerSynthVoice::setCurrentCommand(ClipCommand *clipCommand)
         d->clipCommand = clipCommand;
     }
     isPlaying = d->clipCommand;
-}
-
-ClipCommand *SamplerSynthVoice::currentCommand() const
-{
-    return d->clipCommand;
 }
 
 void SamplerSynthVoice::setModwheel(int modwheelValue)
@@ -173,49 +221,68 @@ void SamplerSynthVoice::setStartTick(quint64 startTick)
     d->startTick = startTick;
 }
 
-void SamplerSynthVoice::startNote (int midiNoteNumber, float velocity, SynthesiserSound* s, int /*currentPitchWheelPosition*/)
+void SamplerSynthVoice::startNote (ClipCommand *clipCommand)
 {
-    if (auto* sound = dynamic_cast<const SamplerSynthSound*> (s))
-    {
-        if (sound->isValid && sound->clip()) {
-            d->pitchRatio = std::pow (2.0, (midiNoteNumber - sound->rootMidiNote()) / 12.0)
-                            * sound->sourceSampleRate() / getSampleRate();
+    if (auto sound = d->samplerSynth->clipToSound(clipCommand->clip)) {
+        d->sound = sound;
+        d->clip = sound->clip();
 
-            d->maxSampleDeviation = d->syncTimer->subbeatCountToSeconds(d->syncTimer->getBpm(), 1) * sound->sourceSampleRate();
-            d->clip = sound->clip();
-            d->sourceSampleLength = d->clip->getDuration() * sound->sourceSampleRate();
-            if (d->clipCommand->changePitch && d->clipCommand->pitchChange < 0) {
-                d->sourceSamplePosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition : d->clip->getStopPosition(d->clipCommand->slice)) * sound->sourceSampleRate());
-            } else {
-                d->sourceSamplePosition = (int) ((d->clipCommand->setStartPosition ? d->clipCommand->startPosition : d->clip->getStartPosition(d->clipCommand->slice)) * sound->sourceSampleRate());
-            }
+        d->pitchRatio = std::pow (2.0, (clipCommand->midiNote - sound->rootMidiNote()) / 12.0) * sound->sourceSampleRate() / d->clip->sampleRate();
 
-            d->nextLoopTick = d->startTick + d->clip->getLengthInBeats() * d->syncTimer->getMultiplier();
-            d->nextLoopUsecs = 0;
-
-            if (d->clipPositionId > -1) {
-                d->clip->playbackPositionsModel()->removePosition(d->clipPositionId);
-            }
-            d->clipPositionId = d->clip->playbackPositionsModel()->createPositionID();
-
-            d->lgain = velocityToGain(velocity);
-            d->rgain = velocityToGain(velocity);
-            if (d->initialCC[d->ccForLowpass] > -1) {
-                d->lowpassCutoff = (127.0f - d->initialCC[d->ccForLowpass]) / 127.0f;
-            }
-            if (d->initialCC[d->ccForHighpass] > -1) {
-                d->highpassCutoff = d->initialCC[d->ccForHighpass] / 127.0f;
-            }
-
-            d->adsr.reset();
-            d->adsr.setSampleRate(sound->sourceSampleRate());
-            d->adsr.setParameters(d->clip->granular() ? d->clip->grainADSR().getParameters() : d->clip->adsrParameters());
-            isTailingOff = false;
-            d->adsr.noteOn();
+        d->maxSampleDeviation = d->syncTimer->subbeatCountToSeconds(d->syncTimer->getBpm(), 1) * sound->sourceSampleRate();
+        d->sourceSampleLength = d->clip->getDuration() * sound->sourceSampleRate();
+        if (d->clipCommand->changePitch && d->clipCommand->pitchChange < 0) {
+            d->sourceSamplePosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition : d->clip->getStopPosition(d->clipCommand->slice)) * sound->sourceSampleRate());
+        } else {
+            d->sourceSamplePosition = (int) ((d->clipCommand->setStartPosition ? d->clipCommand->startPosition : d->clip->getStartPosition(d->clipCommand->slice)) * sound->sourceSampleRate());
         }
-    }
-    else
-    {
+
+        d->playbackData.snappedToBeat = (trunc(d->clip->getLengthInBeats()) == d->clip->getLengthInBeats());
+        d->playbackData.isLooping = d->clipCommand->looping;
+        d->nextLoopTick = d->startTick + d->clip->getLengthInBeats() * d->syncTimer->getMultiplier();
+        d->nextLoopUsecs = 0;
+
+        if (d->clipPositionId > -1) {
+            d->clip->playbackPositionsModel()->removePosition(d->clipPositionId);
+        }
+        d->clipPositionId = d->clip->playbackPositionsModel()->createPositionID();
+
+        d->lgain = velocityToGain(clipCommand->volume);
+        d->rgain = velocityToGain(clipCommand->volume);
+        if (d->initialCC[d->ccForLowpass] > -1) {
+            d->lowpassCutoff = (127.0f - d->initialCC[d->ccForLowpass]) / 127.0f;
+        }
+        if (d->initialCC[d->ccForHighpass] > -1) {
+            d->highpassCutoff = d->initialCC[d->ccForHighpass] / 127.0f;
+        }
+
+        d->adsr.reset();
+        d->adsr.setSampleRate(sound->sourceSampleRate());
+        d->adsr.setParameters(d->clip->granular() ? d->clip->grainADSR().getParameters() : d->clip->adsrParameters());
+        isTailingOff = false;
+        d->adsr.noteOn();
+
+        d->playbackData.data = d->sound->audioData();
+        d->playbackData.inL = d->playbackData.data->getReadPointer(0);
+        d->playbackData.inR = d->playbackData.data->getNumChannels() > 1 ? d->playbackData.data->getReadPointer(1) : nullptr;
+        d->playbackData.sourceSampleRate = d->sound->sourceSampleRate();
+
+        // this bit is basically mtof - that is, converts a midi note to its equivalent expected frequency (here given a 440Hz concert tone), and it's going to be somewhere within a reasonable amount along the audible scale
+        const float highpassAdjustmentInHz = pow(2, ((127.0f * d->highpassCutoff) - 69) / 12) * 440;
+        const double highpassTan = std::tan(M_PI * highpassAdjustmentInHz / d->playbackData.sourceSampleRate);
+        d->playbackData.highpassCoefficient = (highpassTan - 1.f) / (highpassTan + 1.f);
+        const float lowpassAdjustmentInHz = pow(2, ((127.0f * d->lowpassCutoff) - 69) / 12) * 440;
+        const double lowpassTan = std::tan(M_PI * lowpassAdjustmentInHz / d->playbackData.sourceSampleRate);
+        d->playbackData.lowpassCoefficient = (lowpassTan - 1.f) / (lowpassTan + 1.f);
+
+        d->playbackData.pan = std::clamp(float(d->clip->pan()) + d->clipCommand->pan, -1.0f, 1.0f);
+        d->playbackData.sampleDuration = sound->length() - 1;
+
+        d->playbackData.startPosition = (int) ((d->clipCommand->setStartPosition ? d->clipCommand->startPosition : d->clip->getStartPosition(d->clipCommand->slice)) * d->playbackData.sourceSampleRate);
+        d->playbackData.stopPosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition : d->clip->getStopPosition(d->clipCommand->slice)) * d->playbackData.sourceSampleRate);
+        d->playbackData.forwardTailingOffPosition = (d->playbackData.stopPosition - (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
+        d->playbackData.backwardTailingOffPosition = (d->playbackData.startPosition + (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
+    } else {
         jassertfalse; // this object can only play SamplerSynthSounds!
     }
 }
@@ -232,7 +299,6 @@ void SamplerSynthVoice::stopNote (float velocity, bool allowTailOff)
     }
     else
     {
-        clearCurrentNote();
         d->adsr.reset();
         if (d->clip) {
             d->clip->playbackPositionsModel()->removePosition(d->clipPositionId);
@@ -254,9 +320,6 @@ void SamplerSynthVoice::stopNote (float velocity, bool allowTailOff)
         }
     }
 }
-
-void SamplerSynthVoice::pitchWheelMoved (int /*newValue*/) {}
-void SamplerSynthVoice::controllerMoved (int /*controllerNumber*/, int /*newValue*/) {}
 
 void SamplerSynthVoice::handleControlChange(jack_nframes_t time, int control, int value)
 {
@@ -290,260 +353,277 @@ inline float interpolateHermite4pt3oX(float x0, float x1, float x2, float x3, fl
 
 // if we perform highpass filtering, we need to invert the output of the allpass (multiply it by -1)
 static const double highpassSign{-1.f};
-void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_default_audio_sample_t *rightBuffer, jack_nframes_t nframes, jack_nframes_t /*current_frames*/, jack_time_t current_usecs, jack_time_t next_usecs, float /*period_usecs*/)
+void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_default_audio_sample_t *rightBuffer, jack_nframes_t nframes, jack_nframes_t current_frames, jack_time_t current_usecs, jack_time_t next_usecs, float /*period_usecs*/)
 {
-    if (auto* playingSound = static_cast<SamplerSynthSound*> (getCurrentlyPlayingSound().get()))
-    {
-        if (playingSound->isValid && d->clipCommand) {
-            if (d->nextLoopUsecs == 0) {
-                const quint64 differenceToPlayhead = d->nextLoopTick - d->syncTimer->jackPlayhead();
-                d->nextLoopUsecs = d->syncTimer->jackPlayheadUsecs() + (differenceToPlayhead * d->syncTimer->jackSubbeatLengthInMicroseconds());
+    if (d->nextLoopUsecs == 0) {
+        const quint64 differenceToPlayhead = d->nextLoopTick - d->syncTimer->jackPlayhead();
+        d->nextLoopUsecs = d->syncTimer->jackPlayheadUsecs() + (differenceToPlayhead * d->syncTimer->jackSubbeatLengthInMicroseconds());
+    }
+    const double microsecondsPerFrame = (next_usecs - current_usecs) / nframes;
+    float peakGain{0.0f};
+
+    for(jack_nframes_t frame = 0; frame < nframes; ++frame) {
+        // Check if we've got any commands that need handling for this frame
+        const jack_nframes_t currentFrame{current_frames + frame};
+        while (d->commandRing.readHead->processed == false && d->commandRing.readHead->timestamp <= currentFrame) {
+            ClipCommand *newCommand = d->commandRing.read();
+            // We only want to delete the command if it's only a stop command, since then nothing else will be handling it
+            bool shouldDelete{false};
+            if (newCommand->stopPlayback) {
+                stopNote(newCommand->volume, true);
+                shouldDelete = true;
             }
-            const double microsecondsPerFrame = (next_usecs - current_usecs) / nframes;
-            float peakGain{0.0f};
-            auto& data = *playingSound->audioData();
-            const float* const inL = data.getReadPointer (0);
-            const float* const inR = data.getNumChannels() > 1 ? data.getReadPointer (1) : nullptr;
-            const double sourceSampleRate = playingSound->sourceSampleRate();
-
-            // this bit is basically mtof - that is, converts a midi note to its equivalent expected frequency (here given a 440Hz concert tone), and it's going to be somewhere within a reasonable amount along the audible scale
-            const float highpassAdjustmentInHz = pow(2, ((127.0f * d->highpassCutoff) - 69) / 12) * 440;
-            const double highpassTan = std::tan(M_PI * highpassAdjustmentInHz / sourceSampleRate);
-            double highpassCoefficient = (highpassTan - 1.f) / (highpassTan + 1.f);
-            const float lowpassAdjustmentInHz = pow(2, ((127.0f * d->lowpassCutoff) - 69) / 12) * 440;
-            const double lowpassTan = std::tan(M_PI * lowpassAdjustmentInHz / sourceSampleRate);
-            double lowpassCoefficient = (lowpassTan - 1.f) / (lowpassTan + 1.f);
-
-            const float clipPitchChange = d->clipCommand->changePitch ? d->clipCommand->pitchChange : 1.0f;
-            const float clipVolume = d->clip->volumeAbsolute() * d->clip->getGain();
-            const int startPosition = (int) ((d->clipCommand->setStartPosition ? d->clipCommand->startPosition : d->clip->getStartPosition(d->clipCommand->slice)) * sourceSampleRate);
-            const int stopPosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition : d->clip->getStopPosition(d->clipCommand->slice)) * sourceSampleRate);
-            const int sampleDuration = playingSound->length() - 1;
-            const float pan = std::clamp(float(d->clip->pan()) + d->clipCommand->pan, -1.0f, 1.0f);
-            const float lPan = 0.5 * (1.0 + pan);
-            const float rPan = 0.5 * (1.0 - pan);
-            const bool isLooping = d->clipCommand->looping;
-            for(jack_nframes_t frame = 0; frame < nframes; ++frame) {
-                while (d->ccControlRing.readHead->processed == false && d->ccControlRing.readHead->time <= frame) {
-                    // Consume the control change values, but... we don't really have anything to properly use them for
-                    const float control = d->ccControlRing.read();
-                    float value = d->ccValueRing.read();
-                    if (d->initialCC[int(control)] == -1) {
-                        d->initialCC[int(control)] = value;
-                    }
-                    if (control == d->ccForLowpass) {
-                        // Brightness control
-                        value = std::clamp(d->initialCC[d->ccForLowpass] + value, 0.0f, 127.0f);
-                        d->lowpassCutoff = (127.0f - value) / 127.0f;
-                        // Update the coefficient etc (see above for this hz number)
-                        const float adjustmentInHz = pow(2, ((127.0f * d->lowpassCutoff) - 69) / 12) * 440;
-                        const double tan = std::tan(M_PI * adjustmentInHz / sourceSampleRate);
-                        lowpassCoefficient = (tan - 1.f) / (tan + 1.f);
-                    }
-                    if (control == d->ccForHighpass) {
-                        value = std::clamp(d->initialCC[d->ccForHighpass] + value, 0.0f, 127.0f);
-                        d->highpassCutoff = value / 127.0f;
-                        // Update the coefficient etc (see above for this hz number)
-                        const float adjustmentInHz = pow(2, ((127.0f * d->highpassCutoff) - 69) / 12) * 440;
-                        const double tan = std::tan(M_PI * adjustmentInHz / sourceSampleRate);
-                        highpassCoefficient = (tan - 1.f) / (tan + 1.f);
-                    }
-                }
-                while (d->pitchRing.readHead->processed == false && d->pitchRing.readHead->time <= frame) {
-                    d->pitchRatio = std::pow(2.0, (std::clamp(d->pitchRing.read() + double(d->clipCommand->midiNote), 0.0, 127.0) - double(playingSound->rootMidiNote())) / 12.0)
-                            * playingSound->sourceSampleRate() / getSampleRate();
-                }
-                while (d->aftertouchRing.readHead->processed == false && d->aftertouchRing.readHead->time <= frame) {
-                    d->lgain = d->rgain = d->clipCommand->volume = (float(d->aftertouchRing.read())/127.0f);
-                }
-
-                const float envelopeValue = d->adsr.getNextSample();
-                float l{0};
-                float r{0};
-                const int sampleIndex{int(d->sourceSamplePosition)};
-                float modIntegral{0};
-                const float fraction = std::modf(d->sourceSamplePosition, &modIntegral);
-                if (fraction < 0.0001f && d->pitchRatio == 1.0f) {
-                    // If we're just doing un-pitch-shifted playback, don't bother interpolating,
-                    // just grab the sample as given and adjust according to the requests, might
-                    // as well save a bit of processing (it's a very common case, and used for
-                    // e.g. the metronome ticks, and we do want that stuff to be as low impact
-                    // as we can reasonably make it).
-                    l = sampleIndex < sampleDuration ? inL[sampleIndex] * d->lgain * envelopeValue * clipVolume : 0;
-                    r = inR != nullptr && sampleIndex < sampleDuration ? inR[sampleIndex] * d->rgain * envelopeValue * clipVolume : l;
-                } else {
-                    // Use Hermite interpolation to ensure out sound data is reasonably on the expected
-                    // curve. We could use linear interpolation, but Hermite is cheap enough that it's
-                    // worth it for the improvements in sound quality. Any more and we'll need to do some
-                    // precalc work and do sample stretching per octave/note/whatnot ahead of time...
-                    // Maybe that's something we could offer an option for, if people really really want it?
-                    int previousSampleIndex{sampleIndex - 1};
-                    int nextSampleIndex{sampleIndex + 1};
-                    int nextNextSampleIndex{sampleIndex + 2};
-                    if (isLooping) {
-                        if (d->firstRoll) {
-                            previousSampleIndex = previousSampleIndex < startPosition ? -1 : previousSampleIndex;
-                            d->firstRoll = false;
-                        } else {
-                            previousSampleIndex = previousSampleIndex < startPosition ? stopPosition - 1 : previousSampleIndex;
-                        }
-                        if (nextSampleIndex > stopPosition) {
-                            nextSampleIndex = startPosition;
-                            nextNextSampleIndex = nextSampleIndex + 1;
-                        } else if (nextNextSampleIndex > stopPosition) {
-                            nextSampleIndex = startPosition;
-                        }
-                    } else {
-                        previousSampleIndex = previousSampleIndex < startPosition ? -1 : previousSampleIndex;
-                        nextSampleIndex = nextSampleIndex > stopPosition ? -1 : nextSampleIndex;
-                        nextNextSampleIndex = nextNextSampleIndex > stopPosition ? -1 : nextNextSampleIndex;
-                    }
-                    // If the various other sample positions are outside the sample area, the sample value is 0 and we should be treating it like there's no sample data
-                    const float l0 = sampleDuration < previousSampleIndex || previousSampleIndex == -1 ? 0 : inL[(int)previousSampleIndex];
-                    const float l1 = sampleDuration < sampleIndex ? 0 : inL[(int)sampleIndex];
-                    const float l2 = sampleDuration < nextSampleIndex || nextSampleIndex == -1 ? 0 : inL[(int)nextSampleIndex];
-                    const float l3 = sampleDuration < nextNextSampleIndex || nextNextSampleIndex == -1 ? 0 : inL[(int)nextNextSampleIndex];
-                    l = interpolateHermite4pt3oX(l0, l1, l2, l3, fraction) * d->lgain * envelopeValue * clipVolume;
-                    if (inR == nullptr) {
-                        r = l;
-                    } else {
-                        const float r0 = sampleDuration < previousSampleIndex || previousSampleIndex == -1 ? 0 : inR[(int)previousSampleIndex];
-                        const float r1 = sampleDuration < sampleIndex ? 0 : inR[(int)sampleIndex];
-                        const float r2 = sampleDuration < nextSampleIndex || nextSampleIndex == -1 ? 0 : inR[(int)nextSampleIndex];
-                        const float r3 = sampleDuration < nextNextSampleIndex || nextNextSampleIndex == -1 ? 0 : inR[(int)nextNextSampleIndex];
-                        r = interpolateHermite4pt3oX(r0, r1, r2, r3, fraction) * d->rgain * envelopeValue * clipVolume;
-                    }
-                }
-                // The sound data might possibly disappear while we're attempting to play,
-                // and if that happens, we really need to not try and use it. If it does
-                // happen, zero out the inputs to avoid terrible noises and an angry jackd
-                // which will just mute the heck out of everything and give up.
-                if (playingSound->isValid == false) {
-                    l = r = 0;
-                }
-
-                // Implement M/S Panning
-                const float mSignal = 0.5 * (l + r);
-                const float sSignal = l - r;
-                l = lPan * mSignal + sSignal;
-                r = rPan * mSignal - sSignal;
-
-                // Apply allpass filter effect
-                // Roughly based on https://thewolfsound.com/lowpass-highpass-filter-plugin-with-juce/
-                if (d->highpassCutoff > 0) {
-                    // highpass filtering left channel
-                    const float allpassFilteredSampleL = highpassCoefficient * l + d->allpassBufferL;
-                    d->allpassBufferL = l - highpassCoefficient * allpassFilteredSampleL;
-                    l = 0.5f * (l + highpassSign * allpassFilteredSampleL);
-                    // highpass filtering right channel
-                    const float allpassFilteredSampleR = highpassCoefficient * r + d->allpassBufferR;
-                    d->allpassBufferR = r - highpassCoefficient * allpassFilteredSampleR;
-                    r = 0.5f * (r + highpassSign * allpassFilteredSampleR);
-                }
-                if (d->lowpassCutoff > 0) {
-                    // lowpass filtering left channel
-                    const float allpassFilteredSampleL = lowpassCoefficient * l + d->allpassBufferL;
-                    d->allpassBufferL = l - lowpassCoefficient * allpassFilteredSampleL;
-                    l = 0.5f * (l + allpassFilteredSampleL);
-                    // lowpass filtering right channel
-                    const float allpassFilteredSampleR = lowpassCoefficient * r + d->allpassBufferR;
-                    d->allpassBufferR = r - lowpassCoefficient * allpassFilteredSampleR;
-                    r = 0.5f * (r + allpassFilteredSampleR);
-                }
-
-                const float newGain{l + r};
-                if (newGain > peakGain) {
-                    peakGain = newGain;
-                }
-
-                *leftBuffer += l;
-                ++leftBuffer;
-                *rightBuffer += r;
-                ++rightBuffer;
-
-                const double pitchRatio{d->pitchRatio * clipPitchChange};
-                d->sourceSamplePosition += pitchRatio;
-
-                if (!d->adsr.isActive()) {
-                    stopNote(d->clipCommand->volume, false);
-                    break;
-                }
-                if (pitchRatio > 0) {
-                    // We're playing the sample forwards, so let's handle things with that direction in mind
-                    if (isLooping) {
-                        // beat align samples by reading clip duration in beats from clip, saving synctimer's jack playback positions in voice on startNote, and adjust in if (looping) section of process, and make sure the loop is restarted on that beat if deviation is sufficiently large (like... one timer tick is too much maybe?)
-                        if (trunc(d->clip->getLengthInBeats()) == d->clip->getLengthInBeats()) {
-                            // If the clip is actually a clean multiple of a number of beats, let's make sure it loops matching that beat position
-                            // Work out next loop start point in usecs
-                            // Once we hit the frame for that number of usecs after the most recent start, reset playback position to match.
-                            // nb: Don't try and be clever, actually make sure to play the first sample in the sound - play past the end rather than before the start
-                            if (current_usecs + jack_time_t(frame * microsecondsPerFrame) >= d->nextLoopUsecs) {
-                                // Work out the position of the next loop, based on the most recent beat tick position, not the current position, as that might be slightly incorrect
-                                const quint64 lengthInTicks = d->clip->getLengthInBeats() * d->syncTimer->getMultiplier();
-                                d->nextLoopTick = d->nextLoopTick + lengthInTicks;
-                                const quint64 differenceToPlayhead = d->nextLoopTick - d->syncTimer->jackPlayhead();
-                                d->nextLoopUsecs = d->syncTimer->jackPlayheadUsecs() + (differenceToPlayhead * d->syncTimer->jackSubbeatLengthInMicroseconds());
-    //                             qDebug() << "Resetting - next tick" << d->nextLoopTick << "next usecs" << d->nextLoopUsecs << "difference to playhead" << differenceToPlayhead;
-
-                                // Reset the sample playback position back to the start point
-                                d->sourceSamplePosition = startPosition;
-                            }
-                        } else if (d->sourceSamplePosition >= stopPosition) {
-                            // If we're not beat-matched, just loop "normally"
-                            // TODO Switch start position for the loop position here
-                            d->sourceSamplePosition = startPosition;
-                        }
-                    } else {
-                        if (d->sourceSamplePosition >= stopPosition)
-                        {
-                            stopNote(d->clipCommand->volume, false);
-                            break;
-                        } else if (isTailingOff == false && d->sourceSamplePosition >= (stopPosition - (d->adsr.getParameters().release * sourceSampleRate))) {
-                            stopNote(d->clipCommand->volume, true);
-                        }
-                    }
-                } else {
-                    // WWe're playing the sample backwards, so let's handle things with that direction in mind
-                    // That is, start position is used for the stop location and vice versa
-                    if (isLooping) {
-                        // beat align samples by reading clip duration in beats from clip, saving synctimer's jack playback positions in voice on startNote, and adjust in if (looping) section of process, and make sure the loop is restarted on that beat if deviation is sufficiently large (like... one timer tick is too much maybe?)
-                        if (trunc(d->clip->getLengthInBeats()) == d->clip->getLengthInBeats()) {
-                            // If the clip is actually a clean multiple of a number of beats, let's make sure it loops matching that beat position
-                            // Work out next loop start point in usecs
-                            // Once we hit the frame for that number of usecs after the most recent start, reset playback position to match.
-                            // nb: Don't try and be clever, actually make sure to play the first sample in the sound - play past the end rather than before the start
-                            if (current_usecs + jack_time_t(frame * microsecondsPerFrame) >= d->nextLoopUsecs) {
-                                // Work out the position of the next loop, based on the most recent beat tick position, not the current position, as that might be slightly incorrect
-                                const quint64 lengthInTicks = d->clip->getLengthInBeats() * d->syncTimer->getMultiplier();
-                                d->nextLoopTick = d->nextLoopTick + lengthInTicks;
-                                const quint64 differenceToPlayhead = d->nextLoopTick - d->syncTimer->jackPlayhead();
-                                d->nextLoopUsecs = d->syncTimer->jackPlayheadUsecs() + (differenceToPlayhead * d->syncTimer->jackSubbeatLengthInMicroseconds());
-    //                             qDebug() << "Resetting - next tick" << d->nextLoopTick << "next usecs" << d->nextLoopUsecs << "difference to playhead" << differenceToPlayhead;
-
-                                // Reset the sample playback position back to the start point
-                                d->sourceSamplePosition = stopPosition;
-                            }
-                        } else if (d->sourceSamplePosition <= stopPosition) {
-                            // If we're not beat-matched, just loop "normally"
-                            // TODO Switch start position for the loop position here
-                            d->sourceSamplePosition = stopPosition;
-                        }
-                    } else {
-                        if (d->sourceSamplePosition <= startPosition)
-                        {
-                            stopNote(d->clipCommand->volume, false);
-                            break;
-                        } else if (isTailingOff == false && d->sourceSamplePosition <= (startPosition + (d->adsr.getParameters().release * sourceSampleRate))) {
-                            stopNote(d->clipCommand->volume, true);
-                        }
-                    }
-                }
+            if (newCommand->startPlayback) {
+                setCurrentCommand(newCommand);
+                setStartTick(currentFrame);
+                startNote(newCommand);
+                shouldDelete = false;
             }
-
-            // Because it might have gone away after being stopped above, so let's try and not crash
-            if (d->clip && d->clipPositionId > -1) {
-                d->clip->playbackPositionsModel()->setPositionData(d->clipPositionId, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, pan);
+            if (shouldDelete) {
+                d->syncTimer->deleteClipCommand(newCommand);
             }
         }
+
+        while (d->ccControlRing.readHead->processed == false && d->ccControlRing.readHead->time == frame) {
+            // Consume the control change values, but... we don't really have anything to properly use them for
+            const float control = d->ccControlRing.read();
+            float value = d->ccValueRing.read();
+            if (d->initialCC[int(control)] == -1) {
+                d->initialCC[int(control)] = value;
+            }
+            if (control == d->ccForLowpass) {
+                // Brightness control
+                value = std::clamp(d->initialCC[d->ccForLowpass] + value, 0.0f, 127.0f);
+                d->lowpassCutoff = (127.0f - value) / 127.0f;
+                // Update the coefficient etc (see above for this hz number)
+                const float adjustmentInHz = pow(2, ((127.0f * d->lowpassCutoff) - 69) / 12) * 440;
+                const double tan = std::tan(M_PI * adjustmentInHz / d->playbackData.sourceSampleRate);
+                d->playbackData.lowpassCoefficient = (tan - 1.f) / (tan + 1.f);
+            }
+            if (control == d->ccForHighpass) {
+                value = std::clamp(d->initialCC[d->ccForHighpass] + value, 0.0f, 127.0f);
+                d->highpassCutoff = value / 127.0f;
+                // Update the coefficient etc (see above for this hz number)
+                const float adjustmentInHz = pow(2, ((127.0f * d->highpassCutoff) - 69) / 12) * 440;
+                const double tan = std::tan(M_PI * adjustmentInHz / d->playbackData.sourceSampleRate);
+                d->playbackData.highpassCoefficient = (tan - 1.f) / (tan + 1.f);
+            }
+        }
+        while (d->pitchRing.readHead->processed == false && d->pitchRing.readHead->time == frame) {
+            const float pitch = d->pitchRing.read();
+            if (d->clipCommand) {
+                d->pitchRatio = std::pow(2.0, (std::clamp(pitch + double(d->clipCommand->midiNote), 0.0, 127.0) - double(d->sound->rootMidiNote())) / 12.0)
+                    * d->playbackData.sourceSampleRate / d->clip->sampleRate();
+            }
+        }
+        while (d->aftertouchRing.readHead->processed == false && d->aftertouchRing.readHead->time == frame) {
+            const float aftertouch = d->aftertouchRing.read();
+            if (d->clipCommand) {
+                d->lgain = d->rgain = d->clipCommand->volume = (aftertouch/127.0f);
+            }
+        }
+        // Don't actually perform playback operations unless we've got something to play
+        if (d->clip) {
+            const float clipPitchChange = d->clipCommand->changePitch ? d->clipCommand->pitchChange : 1.0f;
+            const float clipVolume = d->clip->volumeAbsolute() * d->clip->getGain();
+            const float lPan = 0.5 * (1.0 + d->playbackData.pan);
+            const float rPan = 0.5 * (1.0 - d->playbackData.pan);
+
+            const float envelopeValue = d->adsr.getNextSample();
+            float l{0};
+            float r{0};
+            const int sampleIndex{int(d->sourceSamplePosition)};
+            float modIntegral{0};
+            const float fraction = std::modf(d->sourceSamplePosition, &modIntegral);
+            if (fraction < 0.0001f && d->pitchRatio == 1.0f) {
+                // If we're just doing un-pitch-shifted playback, don't bother interpolating,
+                // just grab the sample as given and adjust according to the requests, might
+                // as well save a bit of processing (it's a very common case, and used for
+                // e.g. the metronome ticks, and we do want that stuff to be as low impact
+                // as we can reasonably make it).
+                l = sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inL[sampleIndex] * d->lgain * envelopeValue * clipVolume : 0;
+                r = d->playbackData.inR != nullptr && sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inR[sampleIndex] * d->rgain * envelopeValue * clipVolume : l;
+            } else {
+                // Use Hermite interpolation to ensure out sound data is reasonably on the expected
+                // curve. We could use linear interpolation, but Hermite is cheap enough that it's
+                // worth it for the improvements in sound quality. Any more and we'll need to do some
+                // precalc work and do sample stretching per octave/note/whatnot ahead of time...
+                // Maybe that's something we could offer an option for, if people really really want it?
+                int previousSampleIndex{sampleIndex - 1};
+                int nextSampleIndex{sampleIndex + 1};
+                int nextNextSampleIndex{sampleIndex + 2};
+                if (d->playbackData.isLooping) {
+                    if (d->firstRoll) {
+                        previousSampleIndex = previousSampleIndex < d->playbackData.startPosition ? -1 : previousSampleIndex;
+                        d->firstRoll = false;
+                    } else {
+                        previousSampleIndex = previousSampleIndex < d->playbackData.startPosition ? d->playbackData.stopPosition - 1 : previousSampleIndex;
+                    }
+                    if (nextSampleIndex > d->playbackData.stopPosition) {
+                        nextSampleIndex = d->playbackData.startPosition;
+                        nextNextSampleIndex = nextSampleIndex + 1;
+                    } else if (nextNextSampleIndex > d->playbackData.stopPosition) {
+                        nextSampleIndex = d->playbackData.startPosition;
+                    }
+                } else {
+                    previousSampleIndex = previousSampleIndex < d->playbackData.startPosition ? -1 : previousSampleIndex;
+                    nextSampleIndex = nextSampleIndex > d->playbackData.stopPosition ? -1 : nextSampleIndex;
+                    nextNextSampleIndex = nextNextSampleIndex > d->playbackData.stopPosition ? -1 : nextNextSampleIndex;
+                }
+                // If the various other sample positions are outside the sample area, the sample value is 0 and we should be treating it like there's no sample data
+                const float l0 = d->playbackData.sampleDuration < previousSampleIndex || previousSampleIndex == -1 ? 0 : d->playbackData.inL[(int)previousSampleIndex];
+                const float l1 = d->playbackData.sampleDuration < sampleIndex ? 0 : d->playbackData.inL[(int)sampleIndex];
+                const float l2 = d->playbackData.sampleDuration < nextSampleIndex || nextSampleIndex == -1 ? 0 : d->playbackData.inL[(int)nextSampleIndex];
+                const float l3 = d->playbackData.sampleDuration < nextNextSampleIndex || nextNextSampleIndex == -1 ? 0 : d->playbackData.inL[(int)nextNextSampleIndex];
+                l = interpolateHermite4pt3oX(l0, l1, l2, l3, fraction) * d->lgain * envelopeValue * clipVolume;
+                if (d->playbackData.inR == nullptr) {
+                    r = l;
+                } else {
+                    const float r0 = d->playbackData.sampleDuration < previousSampleIndex || previousSampleIndex == -1 ? 0 : d->playbackData.inR[(int)previousSampleIndex];
+                    const float r1 = d->playbackData.sampleDuration < sampleIndex ? 0 : d->playbackData.inR[(int)sampleIndex];
+                    const float r2 = d->playbackData.sampleDuration < nextSampleIndex || nextSampleIndex == -1 ? 0 : d->playbackData.inR[(int)nextSampleIndex];
+                    const float r3 = d->playbackData.sampleDuration < nextNextSampleIndex || nextNextSampleIndex == -1 ? 0 : d->playbackData.inR[(int)nextNextSampleIndex];
+                    r = interpolateHermite4pt3oX(r0, r1, r2, r3, fraction) * d->rgain * envelopeValue * clipVolume;
+                }
+            }
+            // The sound data might possibly disappear while we're attempting to play,
+            // and if that happens, we really need to not try and use it. If it does
+            // happen, zero out the inputs to avoid terrible noises and an angry jackd
+            // which will just mute the heck out of everything and give up.
+            if (d->sound->isValid == false) {
+                l = r = 0;
+            }
+
+            // Implement M/S Panning
+            const float mSignal = 0.5 * (l + r);
+            const float sSignal = l - r;
+            l = lPan * mSignal + sSignal;
+            r = rPan * mSignal - sSignal;
+
+            // Apply allpass filter effect
+            // Roughly based on https://thewolfsound.com/lowpass-highpass-filter-plugin-with-juce/
+            if (d->highpassCutoff > 0) {
+                // highpass filtering left channel
+                const float allpassFilteredSampleL = d->playbackData.highpassCoefficient * l + d->allpassBufferL;
+                d->allpassBufferL = l - d->playbackData.highpassCoefficient * allpassFilteredSampleL;
+                l = 0.5f * (l + highpassSign * allpassFilteredSampleL);
+                // highpass filtering right channel
+                const float allpassFilteredSampleR = d->playbackData.highpassCoefficient * r + d->allpassBufferR;
+                d->allpassBufferR = r - d->playbackData.highpassCoefficient * allpassFilteredSampleR;
+                r = 0.5f * (r + highpassSign * allpassFilteredSampleR);
+            }
+            if (d->lowpassCutoff > 0) {
+                // lowpass filtering left channel
+                const float allpassFilteredSampleL = d->playbackData.lowpassCoefficient * l + d->allpassBufferL;
+                d->allpassBufferL = l - d->playbackData.lowpassCoefficient * allpassFilteredSampleL;
+                l = 0.5f * (l + allpassFilteredSampleL);
+                // lowpass filtering right channel
+                const float allpassFilteredSampleR = d->playbackData.lowpassCoefficient * r + d->allpassBufferR;
+                d->allpassBufferR = r - d->playbackData.lowpassCoefficient * allpassFilteredSampleR;
+                r = 0.5f * (r + allpassFilteredSampleR);
+            }
+
+            const float newGain{l + r};
+            if (newGain > peakGain) {
+                peakGain = newGain;
+            }
+
+            *leftBuffer += l;
+            ++leftBuffer;
+            *rightBuffer += r;
+            ++rightBuffer;
+
+            const double pitchRatio{d->pitchRatio * clipPitchChange};
+            d->sourceSamplePosition += pitchRatio;
+
+            if (!d->adsr.isActive()) {
+                stopNote(d->clipCommand->volume, false);
+                break;
+            }
+            if (pitchRatio > 0) {
+                // We're playing the sample forwards, so let's handle things with that direction in mind
+                if (d->playbackData.isLooping) {
+                    // beat align samples by reading clip duration in beats from clip, saving synctimer's jack playback positions in voice on startNote, and adjust in if (looping) section of process, and make sure the loop is restarted on that beat if deviation is sufficiently large (like... one timer tick is too much maybe?)
+                    if (d->playbackData.snappedToBeat) {
+                        // If the clip is actually a clean multiple of a number of beats, let's make sure it loops matching that beat position
+                        // Work out next loop start point in usecs
+                        // Once we hit the frame for that number of usecs after the most recent start, reset playback position to match.
+                        // nb: Don't try and be clever, actually make sure to play the first sample in the sound - play past the end rather than before the start
+                        if (current_usecs + jack_time_t(frame * microsecondsPerFrame) >= d->nextLoopUsecs) {
+                            // Work out the position of the next loop, based on the most recent beat tick position, not the current position, as that might be slightly incorrect
+                            const quint64 lengthInTicks = d->clip->getLengthInBeats() * d->syncTimer->getMultiplier();
+                            d->nextLoopTick = d->nextLoopTick + lengthInTicks;
+                            const quint64 differenceToPlayhead = d->nextLoopTick - d->syncTimer->jackPlayhead();
+                            d->nextLoopUsecs = d->syncTimer->jackPlayheadUsecs() + (differenceToPlayhead * d->syncTimer->jackSubbeatLengthInMicroseconds());
+    //                             qDebug() << "Resetting - next tick" << d->nextLoopTick << "next usecs" << d->nextLoopUsecs << "difference to playhead" << differenceToPlayhead;
+
+                            // Reset the sample playback position back to the start point
+                            d->sourceSamplePosition = d->playbackData.startPosition;
+                        }
+                    } else if (d->sourceSamplePosition >= d->playbackData.stopPosition) {
+                        // If we're not beat-matched, just loop "normally"
+                        // TODO Switch start position for the loop position here
+                        d->sourceSamplePosition = d->playbackData.startPosition;
+                    }
+                } else {
+                    if (d->sourceSamplePosition >= d->playbackData.stopPosition)
+                    {
+                        stopNote(d->clipCommand->volume, false);
+                        // Before we stop, send out one last update for this command
+                        if (d->clip && d->clipPositionId > -1) {
+                            d->clip->playbackPositionsModel()->setPositionData(d->clipPositionId, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
+                        }
+                    } else if (isTailingOff == false && d->sourceSamplePosition >= d->playbackData.forwardTailingOffPosition) {
+                        stopNote(d->clipCommand->volume, true);
+                    }
+                }
+            } else {
+                // WWe're playing the sample backwards, so let's handle things with that direction in mind
+                // That is, start position is used for the stop location and vice versa
+                if (d->playbackData.isLooping) {
+                    // beat align samples by reading clip duration in beats from clip, saving synctimer's jack playback positions in voice on startNote, and adjust in if (looping) section of process, and make sure the loop is restarted on that beat if deviation is sufficiently large (like... one timer tick is too much maybe?)
+                    if (d->playbackData.snappedToBeat) {
+                        // If the clip is actually a clean multiple of a number of beats, let's make sure it loops matching that beat position
+                        // Work out next loop start point in usecs
+                        // Once we hit the frame for that number of usecs after the most recent start, reset playback position to match.
+                        // nb: Don't try and be clever, actually make sure to play the first sample in the sound - play past the end rather than before the start
+                        if (current_usecs + jack_time_t(frame * microsecondsPerFrame) >= d->nextLoopUsecs) {
+                            // Work out the position of the next loop, based on the most recent beat tick position, not the current position, as that might be slightly incorrect
+                            const quint64 lengthInTicks = d->clip->getLengthInBeats() * d->syncTimer->getMultiplier();
+                            d->nextLoopTick = d->nextLoopTick + lengthInTicks;
+                            const quint64 differenceToPlayhead = d->nextLoopTick - d->syncTimer->jackPlayhead();
+                            d->nextLoopUsecs = d->syncTimer->jackPlayheadUsecs() + (differenceToPlayhead * d->syncTimer->jackSubbeatLengthInMicroseconds());
+    //                             qDebug() << "Resetting - next tick" << d->nextLoopTick << "next usecs" << d->nextLoopUsecs << "difference to playhead" << differenceToPlayhead;
+
+                            // Reset the sample playback position back to the start point
+                            d->sourceSamplePosition = d->playbackData.stopPosition;
+                        }
+                    } else if (d->sourceSamplePosition <= d->playbackData.stopPosition) {
+                        // If we're not beat-matched, just loop "normally"
+                        // TODO Switch start position for the loop position here
+                        d->sourceSamplePosition = d->playbackData.stopPosition;
+                    }
+                } else {
+                    if (d->sourceSamplePosition <= d->playbackData.startPosition)
+                    {
+                        stopNote(d->clipCommand->volume, false);
+                        // Before we stop, send out one last update for this command
+                        if (d->clip && d->clipPositionId > -1) {
+                            d->clip->playbackPositionsModel()->setPositionData(d->clipPositionId, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
+                        }
+                    } else if (isTailingOff == false && d->sourceSamplePosition <= d->playbackData.backwardTailingOffPosition) {
+                        stopNote(d->clipCommand->volume, true);
+                    }
+                }
+            }
+        }
+    }
+
+    // TODO setPositionData should be more of a call and forget thing (so, update on end of run, and only remove automatically, use a ring to store the data to be interpreted in the model, interpret that data (very) regularly, and update it there, so that lifting is in the ui...)
+    // - Send clipCommand (don't actually read, just use the address of it as an ID), along with peakGian, position, and pan
+    // - Read ring in UI thread, update all data entries, and... we probably need a lot more potential positions (like maybe 32 voices times about ten? Call it 256 for no particular reason?)
+    // Because it might have gone away after being stopped above, so let's try and not crash
+    if (d->clip && d->clipPositionId > -1) {
+        d->clip->playbackPositionsModel()->setPositionData(d->clipPositionId, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
     }
 }
