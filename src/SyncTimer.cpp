@@ -308,22 +308,6 @@ public:
         QObject::connect(timerThread, &QThread::finished, q, [q](){ Q_EMIT q->timerRunningChanged(); });
         QObject::connect(timerThread, &SyncTimerThread::pausedChanged, q, [q](){ q->timerRunningChanged(); });
         timerThread->start();
-
-        objectGarbageHandler.setInterval(50);
-        objectGarbageHandler.setSingleShot(true);
-        QObject::connect(&objectGarbageHandler, &QTimer::timeout, q, [this](){
-            // Stuff any commands we've been asked to delete back into the list, at a reasonable location, and cleaned up
-            while (freshTimerCommands.writeHead->timerCommand == nullptr && timerCommandsToDelete.readHead->timerCommand) {
-                TimerCommand* refreshedCommand = timerCommandsToDelete.read();
-                TimerCommand::clear(refreshedCommand);
-                freshTimerCommands.write(refreshedCommand, 0);
-            }
-            while (freshClipCommands.writeHead->clipCommand == nullptr && clipCommandsToDelete.readHead->clipCommand) {
-                ClipCommand *refreshedCommand = clipCommandsToDelete.read();
-                ClipCommand::clear(refreshedCommand);
-                freshClipCommands.write(refreshedCommand, 0);
-            }
-        });
     }
     ~SyncTimerPrivate() {
         timerThread->requestAbort();
@@ -373,7 +357,6 @@ public:
     TimerCommandRing freshTimerCommands;
     ClipCommandRing clipCommandsToDelete;
     ClipCommandRing freshClipCommands;
-    QTimer objectGarbageHandler;
 
     bool audibleMetronome{false};
     ClipAudioSource *metronomeTick{nullptr};
@@ -421,7 +404,7 @@ public:
 
         // Finally, notify any listeners that commands have been sent out
         // You must not delete the commands themselves here, as SamplerSynth takes ownership of them
-        while (sentOutClipsRing.readHead->clipCommand) {
+        while (sentOutClipsRing.readHead->processed == false) {
             Q_EMIT q->clipCommandSent(sentOutClipsRing.read());
         }
     }
@@ -456,6 +439,8 @@ public:
     quint64 jackLatency{0};
     bool isPaused{true};
 
+    jack_time_t current_usecs{0};
+    jack_time_t refreshThingsAfter{0};
     quint64 jackPlayheadReturn{0};
     quint64 jackSubbeatLengthInMicrosecondsReturn{0};
 
@@ -481,10 +466,11 @@ public:
 #endif
 
         jack_nframes_t current_frames;
-        jack_time_t current_usecs;
         jack_time_t next_usecs;
         float period_usecs;
         jack_get_cycle_times(jackClient, &current_frames, &current_usecs, &next_usecs, &period_usecs);
+        // Things get refreshed 50ms after they've been marked for refreshing
+        refreshThingsAfter = current_usecs + 5000;
         const quint64 microsecondsPerFrame = (next_usecs - current_usecs) / nframes;
 
         double thisStepBpm{jackPlayheadBpm};
@@ -569,7 +555,7 @@ public:
                 // Then do direct-control samplersynth things
                 for (ClipCommand *clipCommand : qAsConst(stepData->clipCommands)) {
                     // Using the protected function, which only we (and SamplerSynth) can use, to ensure less locking
-                    samplerSynth->handleClipCommand(clipCommand, jackPlayhead);
+                    samplerSynth->handleClipCommand(clipCommand, firstAvailableFrame + current_frames);
                     sentOutClipsRing.write(clipCommand, 0);
                 }
 
@@ -590,7 +576,7 @@ public:
                             {
                                 ClipCommand *clipCommand = static_cast<ClipCommand *>(command->variantParameter.value<void*>());
                                 if (clipCommand) {
-                                    samplerSynth->handleClipCommand(clipCommand, jackPlayhead);
+                                    samplerSynth->handleClipCommand(clipCommand, firstAvailableFrame + current_frames);
                                     sentOutClipsRing.write(clipCommand, 0);
                                 } else {
                                     qWarning() << Q_FUNC_INFO << "Failed to retrieve clip command from clip based timer command";
@@ -605,7 +591,7 @@ public:
                             {
                                 ClipCommand *clipCommand = static_cast<ClipCommand *>(command->dataParameter);
                                 if (clipCommand) {
-                                    samplerSynth->handleClipCommand(clipCommand, jackPlayhead);
+                                    samplerSynth->handleClipCommand(clipCommand, firstAvailableFrame + current_frames);
                                     sentOutClipsRing.write(clipCommand, 0);
                                 } else {
                                     qWarning() << Q_FUNC_INFO << "Failed to retrieve clip command from clip based timer command";
@@ -953,7 +939,7 @@ void SyncTimer::stop() {
 
     // Make sure we're actually informing about any clips that have been sent out, in case we
     // hit somewhere between a jack roll and a synctimer tick
-    while (d->sentOutClipsRing.readHead->clipCommand) {
+    while (d->sentOutClipsRing.readHead->processed == false) {
         Q_EMIT clipCommandSent(d->sentOutClipsRing.read());
     }
 #ifdef DEBUG_SYNCTIMER_TIMING
@@ -1165,36 +1151,53 @@ bool SyncTimer::timerRunning() {
     return !timerThread->isPaused();
 }
 
+static int returnedCommands{0};
 ClipCommand * SyncTimer::getClipCommand()
 {
+    // Before fetching commands, check whether there's anything that needs refreshing and do that first
+    // Might seem a little heavy to put that here, but it's the most central location, and in reality
+    // it is a fairly low-impact operation, so it's not really particularly bad.
+    while (d->freshClipCommands.writeHead->processed == true && d->clipCommandsToDelete.readHead->processed == false && d->clipCommandsToDelete.readHead->timestamp < d->current_usecs) {
+        ClipCommand *refreshedCommand = d->clipCommandsToDelete.read();
+        ClipCommand::clear(refreshedCommand);
+        d->freshClipCommands.write(refreshedCommand, 0);
+    }
     ClipCommand *command{nullptr};
-    if (d->freshClipCommands.readHead->clipCommand) {
+    if (d->freshClipCommands.readHead->processed == false) {
         command = d->freshClipCommands.read();
-        QMetaObject::invokeMethod(&d->objectGarbageHandler,"start", Qt::QueuedConnection);
+    }
+    ++returnedCommands;
+    if (command == nullptr) {
+        qDebug() << Q_FUNC_INFO << "We're returning a null command here somehow... During our full runtime, this is attempt number:" << returnedCommands;
     }
     return command;
 }
 
 void SyncTimer::deleteClipCommand(ClipCommand* command)
 {
-    d->clipCommandsToDelete.write(command, 0);
-    QMetaObject::invokeMethod(&d->objectGarbageHandler,"start", Qt::QueuedConnection);
+    d->clipCommandsToDelete.write(command, d->refreshThingsAfter);
 }
 
 TimerCommand * SyncTimer::getTimerCommand()
 {
+    // Before fetching commands, check whether there's anything that needs refreshing and do that first
+    // Might seem a little heavy to put that here, but it's the most central location, and in reality
+    // it is a fairly low-impact operation, so it's not really particularly bad.
+    while (d->freshTimerCommands.writeHead->processed == true  && d->timerCommandsToDelete.readHead->processed == false && d->timerCommandsToDelete.readHead->timestamp < d->current_usecs) {
+        TimerCommand* refreshedCommand = d->timerCommandsToDelete.read();
+        TimerCommand::clear(refreshedCommand);
+        d->freshTimerCommands.write(refreshedCommand, 0);
+    }
     TimerCommand *command{nullptr};
-    if (d->freshTimerCommands.writeHead->timerCommand) {
+    if (d->freshTimerCommands.readHead->processed == false) {
         command = d->freshTimerCommands.read();
-        QMetaObject::invokeMethod(&d->objectGarbageHandler,"start", Qt::QueuedConnection);
     }
     return command;
 }
 
 void SyncTimer::deleteTimerCommand(TimerCommand* command)
 {
-    d->timerCommandsToDelete.write(command, 0);
-    QMetaObject::invokeMethod(&d->objectGarbageHandler,"start", Qt::QueuedConnection);
+    d->timerCommandsToDelete.write(command, d->refreshThingsAfter);
 }
 
 void SyncTimer::process(jack_nframes_t /*nframes*/, void */*buffer*/, quint64 *jackPlayhead, quint64 *jackSubbeatLengthInMicroseconds)
