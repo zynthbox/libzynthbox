@@ -1,5 +1,6 @@
 
 #include "SamplerSynthSound.h"
+#include "JUCEHeaders.h"
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -21,7 +22,7 @@ public:
 
     SamplerSynthSound *q{nullptr};
     QTimer soundLoader;
-    std::unique_ptr<AudioBuffer<float>> data;
+    std::unique_ptr<juce::AudioBuffer<float>> data;
     int length{0};
     double sourceSampleRate{0.0f};
 
@@ -45,7 +46,7 @@ public:
                 if (sourceSampleRate > 0 && format->lengthInSamples > 0)
                 {
                     length = (int) format->lengthInSamples;
-                    AudioBuffer<float> *newBuffer = new AudioBuffer<float>(jmin(2, int(format->numChannels)), length);
+                    juce::AudioBuffer<float> *newBuffer = new juce::AudioBuffer<float>(jmin(2, int(format->numChannels)), length);
                     format->read(newBuffer, 0, length, 0, true, true);
                     data.reset(newBuffer);
                     q->isValid = true;
@@ -63,8 +64,7 @@ public:
 };
 
 SamplerSynthSound::SamplerSynthSound(ClipAudioSource *clip)
-    : juce::SynthesiserSound()
-    , d(new SamplerSynthSoundPrivate(this))
+    : d(new SamplerSynthSoundPrivate(this))
 {
     d->clip = clip;
     d->loadSoundData();
@@ -81,7 +81,7 @@ ClipAudioSource *SamplerSynthSound::clip() const
     return d->clip;
 }
 
-AudioBuffer<float> *SamplerSynthSound::audioData() const noexcept
+juce::AudioBuffer<float> *SamplerSynthSound::audioData() const noexcept
 {
     return d->data.get();
 }
