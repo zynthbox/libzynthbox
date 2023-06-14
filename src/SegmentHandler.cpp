@@ -246,11 +246,9 @@ public:
             }
             zlSketchesModel = newZLSketchesModel;
             if (zlSketchesModel) {
-                connect(zlSketchesModel, SIGNAL(songModeChanged()), this, SLOT(songModeChanged()), Qt::QueuedConnection);
                 connect(zlSketchesModel, SIGNAL(selectedSketchIndexChanged()), this, SLOT(selectedSketchIndexChanged()), Qt::QueuedConnection);
                 connect(zlSketchesModel, SIGNAL(clipAdded(int, int, QObject*)), &segmentUpdater, SLOT(start()), Qt::QueuedConnection);
                 connect(zlSketchesModel, SIGNAL(clipRemoved(int, int, QObject*)), &segmentUpdater, SLOT(start()), Qt::QueuedConnection);
-                songModeChanged();
                 selectedSketchIndexChanged();
             }
         }
@@ -303,12 +301,6 @@ public:
         }
     }
 public Q_SLOTS:
-    void songModeChanged() {
-        d->songMode = zlSketchesModel->property("songMode").toBool();
-        // Since song mode playback is changed when we start and end playback, update the segments immediately, to ensure we're actually synced, otherwise we... won't be.
-        updateSegments();
-        Q_EMIT q->songModeChanged();
-    }
     void selectedSketchIndexChanged() {
         int sketchIndex = zlSketchesModel->property("selectedSketchIndex").toInt();
         QObject *sketch{nullptr};
@@ -501,6 +493,9 @@ void SegmentHandler::startPlayback(qint64 startOffset, quint64 duration)
         delete d->playfieldState;
     }
     d->playfieldState = new PlayfieldState();
+    d->songMode = true;
+    Q_EMIT songModeChanged();
+    d->zlSyncManager->updateSegments();
     // If we're starting with a new playfield anyway, playhead's logically at 0, but also we need to handle the first position before we start playing (specifically so the sequences know what to do)
     d->playhead = 1;
     d->movePlayhead(0, true);
@@ -530,6 +525,8 @@ void SegmentHandler::stopPlayback()
     }
     d->playGridManager->stopMetronome();
     d->movePlayhead(0, true);
+    d->songMode = false;
+    Q_EMIT songModeChanged();
 }
 
 bool SegmentHandler::playfieldState(int channel, int track, int part) const
