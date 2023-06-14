@@ -451,13 +451,13 @@ PatternModel::PatternModel(SequenceModel* parent)
             Q_EMIT isPlayingChanged();
         }
     };
-    connect(d->segmentHandler, &SegmentHandler::songModeChanged, this, updateIsPlaying);
-    connect(d->segmentHandler, &SegmentHandler::playfieldInformationChanged, this, updateIsPlaying);
+    connect(d->segmentHandler, &SegmentHandler::songModeChanged, this, updateIsPlaying, Qt::DirectConnection);
+    connect(d->segmentHandler, &SegmentHandler::playfieldInformationChanged, this, updateIsPlaying, Qt::DirectConnection);
     connect(d->segmentHandler, &SegmentHandler::playfieldInformationChanged, this, [this,updateIsPlaying](int channel, int track, int part){
         if (d->sequence && channel == d->channelIndex && part == d->partIndex && track == d->sequence->sceneIndex()) {
             updateIsPlaying();
         }
-    });
+    }, Qt::DirectConnection);
     connect(this, &PatternModel::enabledChanged, this, updateIsPlaying);
 
     // We need to make sure that we support orphaned patterns (that is, a pattern that is not contained within a sequence)
