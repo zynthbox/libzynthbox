@@ -485,7 +485,11 @@ void SegmentHandler::startPlayback(qint64 startOffset, quint64 duration)
     d->songMode = true;
     Q_EMIT songModeChanged();
     d->startOffset = startOffset;
-    d->zlSyncManager->updateSegments(startOffset + qint64(duration));
+    if (duration == 0) {
+        d->zlSyncManager->updateSegments(0);
+    } else {
+        d->zlSyncManager->updateSegments(startOffset + qint64(duration));
+    }
     // If we're starting with a new playfield anyway, playhead's logically at 0, but also we need to handle the first position before we start playing (specifically so the sequences know what to do)
     d->playhead = 1;
     d->movePlayhead(0, true);
