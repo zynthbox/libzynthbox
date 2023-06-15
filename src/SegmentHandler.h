@@ -74,6 +74,10 @@ public:
      */
     Q_INVOKABLE void startPlayback(qint64 startOffset = 0, quint64 duration = 0);
     /**
+     * \brief The offset position which was passed to startPlayback
+     */
+    Q_INVOKABLE qint64 startOffset() const;
+    /**
      * \brief Stops playback
      */
     Q_INVOKABLE void stopPlayback();

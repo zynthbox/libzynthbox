@@ -92,6 +92,7 @@ public:
     ZLSegmentHandlerSynchronisationManager *zlSyncManager{nullptr};
     QList<SequenceModel*> sequenceModels;
     bool songMode{false};
+    qint64 startOffset{0};
 
     PlayfieldState *playfieldState{nullptr};
     qint64 playhead{0};
@@ -206,11 +207,7 @@ public:
         : QObject(parent)
         , q(parent)
         , d(d)
-    {
-        segmentUpdater.setInterval(100);
-        segmentUpdater.setSingleShot(true);
-        connect(&segmentUpdater, &QTimer::timeout, q, [this](){ updateSegments(); });
-    };
+    { };
     SegmentHandler *q{nullptr};
     SegmentHandlerPrivate* d{nullptr};
     QObject *zlSong{nullptr};
@@ -218,7 +215,6 @@ public:
     QObject *zLSelectedSketch{nullptr};
     QObject *zLSegmentsModel{nullptr};
     QList<QObject*> zlChannels;
-    QTimer segmentUpdater;
 
     void setZlSong(QObject *newZlSong) {
 //         qDebug() << "Setting new song" << newZlSong;
@@ -230,7 +226,6 @@ public:
             zlSong = newZlSong;
             if (zlSong) {
                 setZLSketchesModel(zlSong->property("sketchesModel").value<QObject*>());
-                connect(zlSong, SIGNAL(isLoadingChanged()), &segmentUpdater, SLOT(start()), Qt::QueuedConnection);
                 fetchSequenceModels();
             }
             updateChannels();
@@ -242,13 +237,10 @@ public:
         if (zlSketchesModel != newZLSketchesModel) {
             if (zlSketchesModel) {
                 zlSketchesModel->disconnect(this);
-                zlSketchesModel->disconnect(&segmentUpdater);
             }
             zlSketchesModel = newZLSketchesModel;
             if (zlSketchesModel) {
                 connect(zlSketchesModel, SIGNAL(selectedSketchIndexChanged()), this, SLOT(selectedSketchIndexChanged()), Qt::QueuedConnection);
-                connect(zlSketchesModel, SIGNAL(clipAdded(int, int, QObject*)), &segmentUpdater, SLOT(start()), Qt::QueuedConnection);
-                connect(zlSketchesModel, SIGNAL(clipRemoved(int, int, QObject*)), &segmentUpdater, SLOT(start()), Qt::QueuedConnection);
                 selectedSketchIndexChanged();
             }
         }
@@ -273,17 +265,11 @@ public:
             }
             zLSegmentsModel = newSegmentsModel;
             if (zLSegmentsModel) {
-                connect(zLSegmentsModel, SIGNAL(countChanged()), &segmentUpdater, SLOT(start()), Qt::QueuedConnection);
-                connect(zLSegmentsModel, SIGNAL(totalBeatDurationChanged()), &segmentUpdater, SLOT(start()), Qt::QueuedConnection);
-                segmentUpdater.start();
             }
         }
     }
     void updateChannels() {
         if (zlChannels.count() > 0) {
-            for (QObject* channel : zlChannels) {
-                channel->disconnect(&segmentUpdater);
-            }
             zlChannels.clear();
         }
         if (zlSong) {
@@ -293,11 +279,9 @@ public:
                 QMetaObject::invokeMethod(channelsModel, "getChannel", Q_RETURN_ARG(QObject*, channel), Q_ARG(int, channelIndex));
                 if (channel) {
                     zlChannels << channel;
-                    connect(channel, SIGNAL(channel_audio_type_changed()), &segmentUpdater, SLOT(start()), Qt::QueuedConnection);
                 }
             }
 //             qDebug() << Q_FUNC_INFO << "Updated channels, we now keep a hold of" << zlChannels.count();
-            segmentUpdater.start();
         }
     }
 public Q_SLOTS:
@@ -317,7 +301,7 @@ public Q_SLOTS:
             }
         }
     }
-    void updateSegments() {
+    void updateSegments(qint64 stopAfter) {
         static const QLatin1String sampleLoopedType{"sample-loop"};
         QHash<qint64, QList<TimerCommand*> > playlist;
         if (d->songMode && zLSegmentsModel && zlChannels.count() > 0) {
@@ -330,6 +314,7 @@ public Q_SLOTS:
                 QObject *segment{nullptr};
                 QMetaObject::invokeMethod(zLSegmentsModel, "get_segment", Q_RETURN_ARG(QObject*, segment), Q_ARG(int, segmentIndex));
                 if (segment) {
+                    qDebug() << Q_FUNC_INFO <<  "Working on segment at index" << segmentIndex;
                     QList<TimerCommand*> commands;
                     QVariantList clips = segment->property("clips").toList();
                     QList<QObject*> includedClips;
@@ -388,6 +373,10 @@ public Q_SLOTS:
                     segmentPosition += segmentDuration;
                 } else {
                     qWarning() << Q_FUNC_INFO << "Failed to get segment" << segmentIndex;
+                }
+                if (stopAfter > 0 && segmentPosition >= stopAfter) {
+                    qDebug() << Q_FUNC_INFO <<  "Stopping after the segment at index" << segmentIndex << "as we'll be stopping playback after" << stopAfter;
+                    break;
                 }
             }
             qDebug() << Q_FUNC_INFO << "Done processing segments, adding the final stops for any ongoing clips, and the timer stop command";
@@ -495,7 +484,8 @@ void SegmentHandler::startPlayback(qint64 startOffset, quint64 duration)
     d->playfieldState = new PlayfieldState();
     d->songMode = true;
     Q_EMIT songModeChanged();
-    d->zlSyncManager->updateSegments();
+    d->startOffset = startOffset;
+    d->zlSyncManager->updateSegments(startOffset + qint64(duration));
     // If we're starting with a new playfield anyway, playhead's logically at 0, but also we need to handle the first position before we start playing (specifically so the sequences know what to do)
     d->playhead = 1;
     d->movePlayhead(0, true);
@@ -515,6 +505,11 @@ void SegmentHandler::startPlayback(qint64 startOffset, quint64 duration)
         }
     }
     d->playGridManager->startMetronome();
+}
+
+qint64 SegmentHandler::startOffset() const
+{
+    return d->startOffset;
 }
 
 void SegmentHandler::stopPlayback()
