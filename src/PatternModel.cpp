@@ -1638,7 +1638,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
         )
     ) {
         const int overrideChannel{(d->midiChannel == 15) ? d->playGridManager->currentMidiChannel() : -1};
-        const qint64 playbackOffset{d->segmentHandler->songMode() ? d->segmentHandler->playfieldOffset(d->channelIndex, d->sequence->sceneIndex(), d->partIndex) : 0};
+        const qint64 playbackOffset{d->segmentHandler->songMode() ? d->segmentHandler->playfieldOffset(d->channelIndex, d->sequence->sceneIndex(), d->partIndex) - d->segmentHandler->startOffset() : 0};
         qint64 noteDuration{0};
         bool relevantToUs{false};
         // Since this happens at the /end/ of the cycle in a beat, this should be used to schedule beats for the next
