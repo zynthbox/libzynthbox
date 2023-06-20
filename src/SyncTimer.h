@@ -238,6 +238,15 @@ public:
   void sendNoteImmediately(unsigned char midiNote, unsigned char midiChannel, bool setOn, unsigned char velocity);
 
   /**
+   * \brief Send a raw midi message with the given values at the next possible opportunity
+   * @param size How many of the given values should be sent (between 1 and 3)
+   * @param byte0 The first byte of the message
+   * @param byte1 The second byte of the message
+   * @param byte2 The third byte of the message
+   */
+  Q_INVOKABLE void sendMidiMessageImmediately(int size, int byte0, int byte1 = 0, int byte2 = 0);
+
+  /**
    * \brief Send a set of midi messages out immediately (ensuring they go through the step sequencer output)
    * @param buffer The buffer that you wish to send out immediately
    */

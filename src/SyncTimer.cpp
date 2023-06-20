@@ -1141,6 +1141,20 @@ void SyncTimer::sendNoteImmediately(unsigned char midiNote, unsigned char midiCh
     }
 }
 
+void SyncTimer::sendMidiMessageImmediately(int size, int byte0, int byte1, int byte2)
+{
+    StepData *stepData{d->delayedStep(0)};
+    if (size ==1) {
+        stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage(byte0)));
+    } else if (size == 2) {
+        stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage(byte0, byte2)));
+    } else if (size == 3) {
+        stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage(byte0, byte1, byte2)));
+    } else {
+        qWarning() << Q_FUNC_INFO << "Midi event is outside of bounds" << size;
+    }
+}
+
 void SyncTimer::sendMidiBufferImmediately(const juce::MidiBuffer& buffer)
 {
     StepData *stepData{d->delayedStep(0)};
