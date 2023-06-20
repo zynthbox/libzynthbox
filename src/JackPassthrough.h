@@ -31,7 +31,7 @@ class JackPassthrough : public QObject {
     Q_PROPERTY(float panAmount READ panAmount WRITE setPanAmount NOTIFY panAmountChanged)
     Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY mutedChanged)
 public:
-    explicit JackPassthrough(const QString &clientName, QObject *parent = nullptr);
+    explicit JackPassthrough(const QString &clientName, QObject *parent = nullptr, bool dryOutPortsEnabled = true, bool wetOutFx1PortsEnabled = true, bool wetOutFx2PortsEnabled = true);
     ~JackPassthrough() override;
 
     float dryAmount() const;

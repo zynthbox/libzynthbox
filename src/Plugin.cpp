@@ -108,7 +108,7 @@ void Plugin::initialize()
 
     qDebug() << "Creating SynthPassthroughClient";
     for (int i = 0; i < 15; i++) {
-        synthPassthroughClients << new JackPassthrough(QString("SynthPassthrough:Synth%1").arg(i+1), QCoreApplication::instance());
+        synthPassthroughClients << new JackPassthrough(QString("SynthPassthrough:Synth%1").arg(i+1), QCoreApplication::instance(), true, false, false);
     }
 
     qDebug() << "Registering qml meta types";
