@@ -106,6 +106,11 @@ void Plugin::initialize()
     auto duration = duration_cast<milliseconds>(high_resolution_clock::now() - start);
     qDebug() << "JUCE initialisation took" << duration.count() << "ms";
 
+    qDebug() << "Creating SynthPassthroughClient";
+    for (int i = 0; i < 15; i++) {
+        synthPassthroughClients << new JackPassthrough(QString("SynthPassthrough:Synth%1").arg(i+1), QCoreApplication::instance());
+    }
+
     qDebug() << "Registering qml meta types";
     qRegisterMetaType<AudioLevels*>("AudioLevels");
     qRegisterMetaType<JackPassthrough*>("JackPassthrough");
@@ -114,6 +119,7 @@ void Plugin::initialize()
     qRegisterMetaType<SegmentHandler*>("SegmentHandler");
     qRegisterMetaType<SyncTimer*>("SyncTimer");
     qRegisterMetaType<WaveFormItem*>("WaveFormItem");
+    qRegisterMetaType<Plugin*>("Plugin");
 
     qDebug() << "Initialising SyncTimer";
     SyncTimer::instance();
@@ -202,6 +208,12 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
     qmlRegisterSingletonType<AudioLevels>(uri, 1, 0, "AudioLevels", [](QQmlEngine */*engine*/, QJSEngine *scriptEngine) -> QObject * {
         Q_UNUSED(scriptEngine)
         return AudioLevels::instance();
+    });
+    qmlRegisterSingletonType<Plugin>(uri, 1, 0, "Plugin", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
+        Q_UNUSED(scriptEngine)
+        Plugin *plugin = instance();
+        QQmlEngine::setObjectOwnership(plugin, QQmlEngine::CppOwnership);
+        return plugin;
     });
     qmlRegisterType<WaveFormItem>(uri, 1, 0, "WaveFormItem");
 }

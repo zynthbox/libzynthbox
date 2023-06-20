@@ -34,9 +34,14 @@
 #include "ClipAudioSource.h"
 #include "JUCEHeaders.h"
 #include "JuceEventLoop.h"
+#include "JackPassthrough.h"
 
 class Plugin : public QObject {
     Q_OBJECT
+    /**
+     * \brief A list of the 16 JackPassthrough clients used by each of the synth engines
+     */
+    Q_PROPERTY(QList<JackPassthrough*> synthPassthroughClients MEMBER synthPassthroughClients CONSTANT)
 
 public:
     static Plugin* instance();
@@ -64,6 +69,7 @@ private:
     JuceEventLoop juceEventLoop;
     QHash<int, ClipAudioSource *> createdClipsMap;
     int lastCreatedClipId{-1};
+    QList<JackPassthrough*> synthPassthroughClients;
 
     static std::atomic<Plugin*> singletonInstance;
     static std::mutex singletonMutex;
