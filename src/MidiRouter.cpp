@@ -917,7 +917,7 @@ MidiRouter::MidiRouter(QObject *parent)
         qWarning() << "ZLRouter: Could not create the ZLRouter Jack client.";
     }
 
-    d->globalPlayback = new JackPassthrough("GlobalPlayback", QCoreApplication::instance());
+    d->globalPlayback = new JackPassthrough("GlobalPlayback", QCoreApplication::instance(), true, false, false);
     // Global playback doesnt need wetOut* ports, so set respective wet amounts to 0
     // TODO : Maybe allow disabling ports when creating passthrough clients?
     d->globalPlayback->setWetFx1Amount(0.0f);
