@@ -107,7 +107,7 @@ void Plugin::initialize()
     qDebug() << "JUCE initialisation took" << duration.count() << "ms";
 
     qDebug() << "Creating SynthPassthroughClient";
-    for (int i = 0; i < 15; i++) {
+    for (int i = 0; i <= 15; i++) {
         synthPassthroughClients << new JackPassthrough(QString("SynthPassthrough:Synth%1").arg(i+1), QCoreApplication::instance(), true, false, false);
     }
 
