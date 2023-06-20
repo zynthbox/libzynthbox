@@ -23,6 +23,18 @@
 
 #define MAX_LISTENER_MESSAGES 1024
 
+struct ZynthianOutput {
+public:
+    ZynthianOutput() {
+        for (int midiNote = 0; midiNote < 128; ++midiNote) {
+            acceptsNote[midiNote] = true;
+        }
+    };
+    bool acceptsNote[128];
+    jack_port_t *jackPort{nullptr};
+    void *buffer{nullptr};
+};
+
 class OutputDevice {
 public:
     OutputDevice(const QString &jackPortName)
@@ -255,6 +267,7 @@ public:
     QList<InputDevice*> hardwareInputs;
     InputDevice* enabledInputs[MAX_INPUT_DEVICES];
     int enabledInputsCount{0};
+    ZynthianOutput zynthianOutputs[16];
     ChannelOutput * outputs[OUTPUT_CHANNEL_COUNT];
     ChannelOutput *zynthianOutputPort{nullptr};
     ChannelOutput *externalOutputPort{nullptr};
@@ -373,6 +386,10 @@ public:
             output->mostRecentTime = 0;
             jack_midi_clear_buffer(output->portBuffer);
         }
+        for (int channel = 0; channel < 16; ++channel) {
+            zynthianOutputs[channel].buffer = jack_port_get_buffer(zynthianOutputs[channel].jackPort, nframes);
+            jack_midi_clear_buffer(zynthianOutputs[channel].buffer);
+        }
         ChannelOutput *output{nullptr};
         jack_midi_event_t event;
         int eventChannel{-1};
@@ -415,7 +432,9 @@ public:
                                         if (zynthianChannel == -1) {
                                             break;
                                         }
-                                        writeEventToBuffer(event, zynthianOutputBuffer, eventChannel, &zynthianMostRecentTime, zynthianOutputPort, zynthianChannel);
+                                        if (isNoteMessage == false || zynthianOutputs[zynthianChannel].acceptsNote[event.buffer[1]]) {
+                                            writeEventToBuffer(event, zynthianOutputs[zynthianChannel].buffer, eventChannel, &zynthianMostRecentTime, zynthianOutputPort);
+                                        }
                                     }
                                     writeEventToBuffer(event, passthroughOutputBuffer, eventChannel, &passthroughOutputMostRecentTime, passthroughOutputPort);
                                     break;
@@ -563,7 +582,9 @@ public:
                                                 if (zynthianChannel == -1) {
                                                     break;
                                                 }
-                                                writeEventToBuffer(event, zynthianOutputBuffer, adjustedCurrentChannel, &zynthianMostRecentTime, zynthianOutputPort, zynthianChannel);
+                                                if (isNoteMessage == false || zynthianOutputs[zynthianChannel].acceptsNote[event.buffer[1]]) {
+                                                    writeEventToBuffer(event, zynthianOutputs[zynthianChannel].buffer, adjustedCurrentChannel, &zynthianMostRecentTime, zynthianOutputPort);
+                                                }
                                             }
                                             writeEventToBuffer(event, passthroughOutputBuffer, adjustedCurrentChannel, &passthroughOutputMostRecentTime, passthroughOutputPort);
                                             break;
@@ -855,6 +876,10 @@ MidiRouter::MidiRouter(QObject *parent)
                     output->port = jack_port_register(d->jackClient, output->portName.toUtf8(), JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
                     d->outputs[channel] = output;
                 }
+                // Set up the 16 channels for Zynthian-controlled synths
+                for (int channel = 0; channel < 16; ++channel) {
+                    d->zynthianOutputs[channel].jackPort = jack_port_register(d->jackClient, QString("Zynthian-Channel%1").arg(QString::number(channel)).toUtf8(), JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+                }
                 // Set up the zynthian output port
                 d->zynthianOutputPort = new ChannelOutput(0);
                 d->zynthianOutputPort->portName = QString("ZynthianOut");
@@ -874,12 +899,7 @@ MidiRouter::MidiRouter(QObject *parent)
                 if (jack_activate(d->jackClient) == 0) {
                     qInfo() << "ZLRouter: Successfully created and set up the ZLRouter's Jack client";
                     zl_set_jack_client_affinity(d->jackClient);
-                    for (ChannelOutput *output : d->outputs) {
-                        d->connectPorts(QString("ZLRouter:%1").arg(output->portName), zmrPort);
-                    }
-                    d->connectPorts(QString("ZLRouter:%1").arg(d->zynthianOutputPort->portName), zmrPort);
                     d->connectPorts(QLatin1String{"SyncTimer:midi_out"}, QLatin1String{"ZLRouter:SyncTimerIn"});
-
                     d->connectPorts(QLatin1String{"ZLRouter:PassthroughOut"}, QLatin1String{"TransportManager:midi_in"});
                     d->connectPorts(QLatin1String{"TransportManager:midi_out"}, QLatin1String{"ZLRouter:SyncTimerIn"});
                     // Now hook up the hardware inputs
@@ -1031,6 +1051,9 @@ void MidiRouter::reloadConfiguration()
             qWarning() << "ZLRouter: Malformed option in the midi ports variable - we expected a single = in the following string, and encountered two:" << portOptions;
         }
     }
+
+    // TODO Implement layer keyzone splitting for the zynthian outputs
+
     if (DebugZLRouter) {
         qDebug() << "ZLRouter: Loaded settings, which are now:";
         qDebug() << "Filter midi out?" << d->filterMidiOut;
