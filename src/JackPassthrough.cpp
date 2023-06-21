@@ -11,6 +11,8 @@
 #include "JackPassthrough.h"
 #include "JackThreadAffinitySetter.h"
 
+#include "JUCEHeaders.h"
+
 #include <QDebug>
 #include <QGlobalStatic>
 
@@ -152,29 +154,23 @@ public:
                 }
             }
             if (panAmount != 0 || outputDry || outputWetFx1 || outputWetFx2) {
-                for (jack_nframes_t frame=0; frame<nframes; ++frame) {
-                    channelSampleLeft = *(inputLeftBuffer + frame);
-                    channelSampleRight = *(inputRightBuffer + frame);
-                    // Implement Linear panning : https://forum.juce.com/t/how-do-stereo-panning-knobs-work/25773/9
-                    // Implementing M/S panning is not producing intended result. For our case Linear(Simple) Panning seems to do the job
-                    if (dryOutPortsEnabled) {
-                        if (panAmount != 0 || outputDry) {
-                            *(dryOutLeftBuffer + frame) = dryAmount * channelSampleLeft * std::min(1 - panAmount, 1.0f);
-                            *(dryOutRightBuffer + frame) = dryAmount * channelSampleRight * std::min(1 + panAmount, 1.0f);
-                        }
-                    }
-                    if (wetOutFx1PortsEnabled) {
-                        if (panAmount != 0 || outputWetFx1) {
-                            *(wetOutFx1LeftBuffer + frame) = wetFx1Amount * channelSampleLeft * std::min(1 - panAmount, 1.0f);
-                            *(wetOutFx1RightBuffer + frame) = wetFx1Amount * channelSampleRight * std::min(1 + panAmount, 1.0f);
-                        }
-                    }
-                    if (wetOutFx2PortsEnabled) {
-                        if (panAmount != 0 || outputWetFx2) {
-                            *(wetOutFx2LeftBuffer + frame) = wetFx2Amount * channelSampleLeft * std::min(1 - panAmount, 1.0f);
-                            *(wetOutFx2RightBuffer + frame) = wetFx2Amount * channelSampleRight * std::min(1 + panAmount, 1.0f);
-                        }
-                    }
+                if (dryOutPortsEnabled) {
+                    const float dryAmountLeft{dryAmount * std::min(1 - panAmount, 1.0f)};
+                    const float dryAmountRight{dryAmount * std::min(1 + panAmount, 1.0f)};
+                    juce::FloatVectorOperations::multiply(dryOutLeftBuffer, inputLeftBuffer, dryAmountLeft, int(nframes));
+                    juce::FloatVectorOperations::multiply(dryOutRightBuffer, inputRightBuffer, dryAmountRight, int(nframes));
+                }
+                if (wetOutFx1PortsEnabled) {
+                    const float wetFx1AmountLeft{wetFx1Amount * std::min(1 - panAmount, 1.0f)};
+                    const float wetFx1AmountRight{wetFx1Amount * std::min(1 + panAmount, 1.0f)};
+                    juce::FloatVectorOperations::multiply(wetOutFx1LeftBuffer, inputLeftBuffer, wetFx1AmountLeft, int(nframes));
+                    juce::FloatVectorOperations::multiply(wetOutFx1RightBuffer, inputRightBuffer, wetFx1AmountRight, int(nframes));
+                }
+                if (wetOutFx2PortsEnabled) {
+                    const float wetFx2AmountLeft{wetFx2Amount * std::min(1 - panAmount, 1.0f)};
+                    const float wetFx2AmountRight{wetFx2Amount * std::min(1 + panAmount, 1.0f)};
+                    juce::FloatVectorOperations::multiply(wetOutFx2LeftBuffer, inputLeftBuffer, wetFx2AmountLeft, int(nframes));
+                    juce::FloatVectorOperations::multiply(wetOutFx2RightBuffer, inputRightBuffer, wetFx2AmountRight, int(nframes));
                 }
             }
         }
