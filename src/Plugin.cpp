@@ -106,9 +106,15 @@ void Plugin::initialize()
     auto duration = duration_cast<milliseconds>(high_resolution_clock::now() - start);
     qDebug() << "JUCE initialisation took" << duration.count() << "ms";
 
+    qDebug() << "Creating GlobalPlayback Passthrough Client";
+    m_globalPlaybackClient = new JackPassthrough("GlobalPlayback", QCoreApplication::instance(), true, false, false);
     qDebug() << "Creating SynthPassthroughClient";
     for (int i = 0; i <= 15; i++) {
-        synthPassthroughClients << new JackPassthrough(QString("SynthPassthrough:Synth%1").arg(i+1), QCoreApplication::instance(), true, false, false);
+        m_synthPassthroughClients << new JackPassthrough(QString("SynthPassthrough:Synth%1").arg(i+1), QCoreApplication::instance(), true, false, false);
+    }
+    qDebug() << "Creating Channel Passthrough Client";
+    for (int i=0; i<10; ++i) {
+        m_channelPassthroughClients << new JackPassthrough(QString("ChannelPassthrough:Channel%1").arg(i+1), QCoreApplication::instance());
     }
 
     qDebug() << "Registering qml meta types";
@@ -236,6 +242,21 @@ ClipAudioSource* Plugin::getClipById(int id)
 int Plugin::nextClipId()
 {
     return ++lastCreatedClipId;
+}
+
+JackPassthrough *Plugin::globalPlaybackClient() const
+{
+    return m_globalPlaybackClient;
+}
+
+QList<JackPassthrough *> Plugin::synthPassthroughClients() const
+{
+    return m_synthPassthroughClients;
+}
+
+QList<JackPassthrough *> Plugin::channelPassthroughClients() const
+{
+    return m_channelPassthroughClients;
 }
 
 std::atomic<Plugin*> Plugin::singletonInstance;

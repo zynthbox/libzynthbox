@@ -39,9 +39,17 @@
 class Plugin : public QObject {
     Q_OBJECT
     /**
+     * \brief A JackPassthrough clients used as a global playback client
+     */
+    Q_PROPERTY(JackPassthrough* globalPlaybackClient READ globalPlaybackClient CONSTANT)
+    /**
      * \brief A list of the 16 JackPassthrough clients used by each of the synth engines
      */
-    Q_PROPERTY(QList<JackPassthrough*> synthPassthroughClients MEMBER synthPassthroughClients CONSTANT)
+    Q_PROPERTY(QList<JackPassthrough*> synthPassthroughClients READ synthPassthroughClients CONSTANT)
+    /**
+     * \brief A list of the 10 JackPassthrough clients used by each of the channels
+     */
+    Q_PROPERTY(QList<JackPassthrough*> channelPassthroughClients READ channelPassthroughClients CONSTANT)
 
 public:
     static Plugin* instance();
@@ -61,6 +69,9 @@ public:
     Q_INVOKABLE void removeCreatedClipFromMap(ClipAudioSource *clip);
     Q_INVOKABLE ClipAudioSource* getClipById(int id);
     Q_INVOKABLE int nextClipId();
+    JackPassthrough* globalPlaybackClient() const;
+    QList<JackPassthrough*> synthPassthroughClients() const;
+    QList<JackPassthrough*> channelPassthroughClients() const;
 
 private:
     explicit Plugin(QObject *parent = nullptr);
@@ -69,7 +80,9 @@ private:
     JuceEventLoop juceEventLoop;
     QHash<int, ClipAudioSource *> createdClipsMap;
     int lastCreatedClipId{-1};
-    QList<JackPassthrough*> synthPassthroughClients;
+    JackPassthrough* m_globalPlaybackClient;
+    QList<JackPassthrough*> m_synthPassthroughClients;
+    QList<JackPassthrough*> m_channelPassthroughClients;
 
     static std::atomic<Plugin*> singletonInstance;
     static std::mutex singletonMutex;

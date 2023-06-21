@@ -253,8 +253,6 @@ public:
     MidiRouter *q;
     MidiRouterWatchdog *watchdog{new MidiRouterWatchdog};
     SyncTimer *syncTimer{nullptr};
-    JackPassthrough *globalPlayback{nullptr};
-    QList<JackPassthrough*> channelEffectsPassthroughClients;
     bool done{false};
     bool constructing{true};
     bool filterMidiOut{false};
@@ -919,15 +917,6 @@ MidiRouter::MidiRouter(QObject *parent)
         qWarning() << "ZLRouter: Could not create the ZLRouter Jack client.";
     }
 
-    d->globalPlayback = new JackPassthrough("GlobalPlayback", QCoreApplication::instance(), true, false, false);
-    // Global playback doesnt need wetOut* ports, so set respective wet amounts to 0
-    // TODO : Maybe allow disabling ports when creating passthrough clients?
-    d->globalPlayback->setWetFx1Amount(0.0f);
-    d->globalPlayback->setWetFx2Amount(0.0f);
-    for (int i=0; i<10; ++i) {
-        d->channelEffectsPassthroughClients << new JackPassthrough(QString("FXPassthrough:Channel%1").arg(i+1), QCoreApplication::instance());
-    }
-
     d->constructing = false;
     start();
 }
@@ -1073,14 +1062,4 @@ void MidiRouter::reloadConfiguration()
             }
         }
     }
-}
-
-QList<JackPassthrough*> MidiRouter::channelPassthroughClients() const
-{
-    return d->channelEffectsPassthroughClients;
-}
-
-JackPassthrough* MidiRouter::globalPlaybackClient() const
-{
-    return d->globalPlayback;
 }
