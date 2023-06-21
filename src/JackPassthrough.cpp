@@ -198,6 +198,16 @@ JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName, bool d
     this->dryOutPortsEnabled = dryOutPortsEnabled;
     this->wetOutFx1PortsEnabled = wetOutFx1PortsEnabled;
     this->wetOutFx2PortsEnabled = wetOutFx2PortsEnabled;
+    // Set respective output amount to 0 if ports are not enabled
+    if (!dryOutPortsEnabled) {
+        dryAmount = 0.0f;
+    }
+    if (!wetOutFx1PortsEnabled) {
+        wetFx1Amount = 0.0f;
+    }
+    if (!wetOutFx2PortsEnabled) {
+        wetFx2Amount = 0.0f;
+    }
     if (clientName.contains(":")) {
         const QStringList splitName{clientName.split(":")};
         actualClientName = splitName[0];
