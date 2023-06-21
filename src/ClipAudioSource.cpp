@@ -406,6 +406,7 @@ void ClipAudioSource::updateTempoAndPitch() {
 }
 
 void ClipAudioSource::Private::timerCallback() {
+  positionsModel->updatePositions();
   syncAudioLevel();
 
   if (auto clip = getClip()) {

@@ -6,6 +6,7 @@
 #include "SamplerSynthSound.h"
 #include "SamplerSynthVoice.h"
 #include "ClipCommand.h"
+#include "ClipAudioSourcePositionsModel.h"
 #include "SyncTimer.h"
 #include "JackThreadAffinitySetter.h"
 
@@ -492,6 +493,7 @@ public:
     jack_nframes_t sampleRate{0};
 
     QHash<ClipAudioSource*, SamplerSynthSound*> clipSounds;
+    QList<ClipAudioSourcePositionsModel*> positionModels;
     te::Engine *engine{nullptr};
 
     // An ordered list of Jack clients, one each for...
@@ -510,6 +512,14 @@ int SamplerSynthPrivate::process(jack_nframes_t nframes)
         for(SamplerChannel *channel : qAsConst(channels)) {
             channel->process(nframes);
         }
+        jack_nframes_t current_frames;
+        jack_time_t current_usecs;
+        jack_time_t next_usecs;
+        float period_usecs;
+        jack_get_cycle_times(jackClient, &current_frames, &current_usecs, &next_usecs, &period_usecs);
+        for (ClipAudioSourcePositionsModel *model : qAsConst(positionModels)) {
+            model->setMostRecentPositionUpdate(current_frames + nframes);
+        }
     }
     return 0;
 }
@@ -525,7 +535,6 @@ double SamplerChannel::sampleRate() const
 
 void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick)
 {
-    SamplerSynthSound *sound = d->clipSounds[clipCommand->clip];
     if (clipCommand->stopPlayback || clipCommand->startPlayback) {
         if (clipCommand->stopPlayback) {
             for (SamplerSynthVoice * voice : qAsConst(voices)) {
@@ -626,6 +635,7 @@ void SamplerSynth::registerClip(ClipAudioSource *clip)
     if (!d->clipSounds.contains(clip)) {
         SamplerSynthSound *sound = new SamplerSynthSound(clip);
         d->clipSounds[clip] = sound;
+        d->positionModels << clip->playbackPositionsModel();
     } else {
         qDebug() << "Clip list already contains the clip up for registration" << clip << clip->getFilePath();
     }
@@ -636,6 +646,7 @@ void SamplerSynth::unregisterClip(ClipAudioSource *clip)
     QMutexLocker locker(&d->synthMutex);
     if (d->clipSounds.contains(clip)) {
         d->clipSounds.remove(clip);
+        d->positionModels.removeAll(clip->playbackPositionsModel());
     }
 }
 

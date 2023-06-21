@@ -108,7 +108,6 @@ public:
     ClipCommand *clipCommand{nullptr};
     ClipAudioSource *clip{nullptr};
     SamplerSynthSound* sound{nullptr};
-    qint64 clipPositionId{-1};
     quint64 startTick{0};
     quint64 nextLoopTick{0};
     quint64 nextLoopUsecs{0};
@@ -242,11 +241,6 @@ void SamplerSynthVoice::startNote (ClipCommand *clipCommand)
         d->nextLoopTick = d->startTick + d->clip->getLengthInBeats() * d->syncTimer->getMultiplier();
         d->nextLoopUsecs = 0;
 
-        if (d->clipPositionId > -1) {
-            d->clip->playbackPositionsModel()->removePosition(d->clipPositionId);
-        }
-        d->clipPositionId = d->clip->playbackPositionsModel()->createPositionID();
-
         d->lgain = velocityToGain(clipCommand->volume);
         d->rgain = velocityToGain(clipCommand->volume);
         if (d->initialCC[d->ccForLowpass] > -1) {
@@ -301,9 +295,7 @@ void SamplerSynthVoice::stopNote (float velocity, bool allowTailOff)
     {
         d->adsr.reset();
         if (d->clip) {
-            d->clip->playbackPositionsModel()->removePosition(d->clipPositionId);
             d->clip = nullptr;
-            d->clipPositionId = -1;
         }
         if (d->clipCommand) {
             d->syncTimer->deleteClipCommand(d->clipCommand);
@@ -570,15 +562,15 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
                     {
                         stopNote(d->clipCommand->volume, false);
                         // Before we stop, send out one last update for this command
-                        if (d->clip && d->clipPositionId > -1) {
-                            d->clip->playbackPositionsModel()->setPositionData(d->clipPositionId, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
+                        if (d->clip) {
+                            d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
                         }
                     } else if (isTailingOff == false && d->sourceSamplePosition >= d->playbackData.forwardTailingOffPosition) {
                         stopNote(d->clipCommand->volume, true);
                     }
                 }
             } else {
-                // WWe're playing the sample backwards, so let's handle things with that direction in mind
+                // We're playing the sample backwards, so let's handle things with that direction in mind
                 // That is, start position is used for the stop location and vice versa
                 if (d->playbackData.isLooping) {
                     // beat align samples by reading clip duration in beats from clip, saving synctimer's jack playback positions in voice on startNote, and adjust in if (looping) section of process, and make sure the loop is restarted on that beat if deviation is sufficiently large (like... one timer tick is too much maybe?)
@@ -608,8 +600,8 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
                     {
                         stopNote(d->clipCommand->volume, false);
                         // Before we stop, send out one last update for this command
-                        if (d->clip && d->clipPositionId > -1) {
-                            d->clip->playbackPositionsModel()->setPositionData(d->clipPositionId, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
+                        if (d->clip) {
+                           d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
                         }
                     } else if (isTailingOff == false && d->sourceSamplePosition <= d->playbackData.backwardTailingOffPosition) {
                         stopNote(d->clipCommand->volume, true);
@@ -623,7 +615,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
     // - Send clipCommand (don't actually read, just use the address of it as an ID), along with peakGian, position, and pan
     // - Read ring in UI thread, update all data entries, and... we probably need a lot more potential positions (like maybe 32 voices times about ten? Call it 256 for no particular reason?)
     // Because it might have gone away after being stopped above, so let's try and not crash
-    if (d->clip && d->clipPositionId > -1) {
-        d->clip->playbackPositionsModel()->setPositionData(d->clipPositionId, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
+    if (d->clip) {
+        d->clip->playbackPositionsModel()->setPositionData(current_frames + nframes, d->clipCommand, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
     }
 }
