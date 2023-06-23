@@ -21,11 +21,13 @@ static inline float velocityToGain(const float &velocity) {
 #define DataRingSize 128
 class DataRing {
 public:
-    struct alignas(32) Entry {
+    struct alignas(64) Entry {
         Entry *previous{nullptr};
         Entry *next{nullptr};
         jack_nframes_t time{0};
         float data{-1};
+        int channel{-1};
+        int note{-1};
         bool processed{true};
     };
 
@@ -39,7 +41,7 @@ public:
         readHead = writeHead = ringData;
     }
     ~DataRing() {}
-    void write(jack_nframes_t time, float data) {
+    void write(jack_nframes_t time, float data, int midiChannel = -1, int midiNote = -1) {
         Entry *entry = writeHead;
         writeHead = writeHead->next;
         if (entry->processed == false) {
@@ -47,12 +49,20 @@ public:
         }
         entry->time = time;
         entry->data = data;
+        entry->channel = midiChannel;
+        entry->note = midiNote;
         entry->processed = false;
     }
-    float read() {
+    float read(int *midiChannel, int *midiNote) {
         Entry *entry = readHead;
         readHead = readHead->next;
         float data = entry->data;
+        if (midiChannel) {
+            *midiChannel = entry->channel;
+        }
+        if (midiNote) {
+            *midiNote = entry->note;
+        }
         entry->processed = true;
         return data;
     }
@@ -86,7 +96,7 @@ public:
     SamplerSynthVoicePrivate() {
         syncTimer = qobject_cast<SyncTimer*>(SyncTimer::instance());
         for (int i = 0; i < 128; ++i) {
-            initialCC[i] = -1;
+            initialCC[i] = 0;
         }
         aftertouchRing.name = "aftertouchRing";
         pitchRing.name = "pitchRing";
@@ -243,12 +253,6 @@ void SamplerSynthVoice::startNote (ClipCommand *clipCommand)
 
         d->lgain = velocityToGain(clipCommand->volume);
         d->rgain = velocityToGain(clipCommand->volume);
-        if (d->initialCC[d->ccForLowpass] > -1) {
-            d->lowpassCutoff = (127.0f - d->initialCC[d->ccForLowpass]) / 127.0f;
-        }
-        if (d->initialCC[d->ccForHighpass] > -1) {
-            d->highpassCutoff = d->initialCC[d->ccForHighpass] / 127.0f;
-        }
 
         d->adsr.reset();
         d->adsr.setSampleRate(sound->sourceSampleRate());
@@ -307,31 +311,22 @@ void SamplerSynthVoice::stopNote (float velocity, bool allowTailOff)
         isTailingOff = false;
         d->firstRoll = true;
         d->allpassBufferL = d->allpassBufferR = 0.0f;
-        for (int i = 0; i < 128; ++i) {
-            d->initialCC[i] = -1;
-        }
     }
 }
 
-void SamplerSynthVoice::handleControlChange(jack_nframes_t time, int control, int value)
+void SamplerSynthVoice::handleControlChange(jack_nframes_t time, int channel, int control, int value)
 {
-    if (d->clipCommand && !isTailingOff) {
-        d->ccControlRing.write(time, control);
-        d->ccValueRing.write(time, value);
-    }
+    d->ccControlRing.write(time, control, channel);
+    d->ccValueRing.write(time, value, channel);
 }
 
-void SamplerSynthVoice::handleAftertouch(jack_nframes_t time, int pressure)
+void SamplerSynthVoice::handleAftertouch(jack_nframes_t time, int channel, int note, int pressure)
 {
-    if (d->clipCommand && !isTailingOff) {
-        d->aftertouchRing.write(time, pressure);
-    }
+    d->aftertouchRing.write(time, pressure, channel, note);
 }
 
-void SamplerSynthVoice::handlePitchChange(jack_nframes_t time, float pitchValue) {
-    if (d->clipCommand && !isTailingOff) {
-        d->pitchRing.write(time, pitchValue);
-    }
+void SamplerSynthVoice::handlePitchChange(jack_nframes_t time, int channel, int note, float pitchValue) {
+    d->pitchRing.write(time, pitchValue, channel, note);
 }
 
 inline float interpolateHermite4pt3oX(float x0, float x1, float x2, float x3, float t)
@@ -353,6 +348,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
     }
     const double microsecondsPerFrame = (next_usecs - current_usecs) / nframes;
     float peakGain{0.0f};
+    int dataChannel{0}, dataNote{0};
 
     for(jack_nframes_t frame = 0; frame < nframes; ++frame) {
         // Check if we've got any commands that need handling for this frame
@@ -378,39 +374,38 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
 
         while (d->ccControlRing.readHead->processed == false && d->ccControlRing.readHead->time == frame) {
             // Consume the control change values, but... we don't really have anything to properly use them for
-            const float control = d->ccControlRing.read();
-            float value = d->ccValueRing.read();
-            if (d->initialCC[int(control)] == -1) {
-                d->initialCC[int(control)] = value;
-            }
-            if (control == d->ccForLowpass) {
-                // Brightness control
-                value = std::clamp(d->initialCC[d->ccForLowpass] + value, 0.0f, 127.0f);
-                d->lowpassCutoff = (127.0f - value) / 127.0f;
-                // Update the coefficient etc (see above for this hz number)
-                const float adjustmentInHz = pow(2, ((127.0f * d->lowpassCutoff) - 69) / 12) * 440;
-                const double tan = std::tan(M_PI * adjustmentInHz / d->playbackData.sourceSampleRate);
-                d->playbackData.lowpassCoefficient = (tan - 1.f) / (tan + 1.f);
-            }
-            if (control == d->ccForHighpass) {
-                value = std::clamp(d->initialCC[d->ccForHighpass] + value, 0.0f, 127.0f);
-                d->highpassCutoff = value / 127.0f;
-                // Update the coefficient etc (see above for this hz number)
-                const float adjustmentInHz = pow(2, ((127.0f * d->highpassCutoff) - 69) / 12) * 440;
-                const double tan = std::tan(M_PI * adjustmentInHz / d->playbackData.sourceSampleRate);
-                d->playbackData.highpassCoefficient = (tan - 1.f) / (tan + 1.f);
+            const float control = d->ccControlRing.read(&dataChannel, &dataNote);
+            float value = d->ccValueRing.read(&dataChannel, &dataNote);
+            if (dataChannel == -1 || (d->clipCommand && dataChannel == d->clipCommand->midiChannel)) {
+                if (control == d->ccForLowpass) {
+                    // Brightness control
+                    value = std::clamp(value, 0.0f, 127.0f);
+                    d->lowpassCutoff = (127.0f - value) / 127.0f;
+                    // Update the coefficient etc (see above for this hz number)
+                    const float adjustmentInHz = pow(2, ((127.0f * d->lowpassCutoff) - 69) / 12) * 440;
+                    const double tan = std::tan(M_PI * adjustmentInHz / d->playbackData.sourceSampleRate);
+                    d->playbackData.lowpassCoefficient = (tan - 1.f) / (tan + 1.f);
+                }
+                if (control == d->ccForHighpass) {
+                    value = std::clamp(value, 0.0f, 127.0f);
+                    d->highpassCutoff = value / 127.0f;
+                    // Update the coefficient etc (see above for this hz number)
+                    const float adjustmentInHz = pow(2, ((127.0f * d->highpassCutoff) - 69) / 12) * 440;
+                    const double tan = std::tan(M_PI * adjustmentInHz / d->playbackData.sourceSampleRate);
+                    d->playbackData.highpassCoefficient = (tan - 1.f) / (tan + 1.f);
+                }
             }
         }
         while (d->pitchRing.readHead->processed == false && d->pitchRing.readHead->time == frame) {
-            const float pitch = d->pitchRing.read();
-            if (d->clipCommand) {
+            const float pitch = d->pitchRing.read(&dataChannel, &dataNote);
+            if (d->clipCommand && (dataChannel == -1 || (d->clipCommand && dataChannel == d->clipCommand->midiChannel))) {
                 d->pitchRatio = std::pow(2.0, (std::clamp(pitch + double(d->clipCommand->midiNote), 0.0, 127.0) - double(d->sound->rootMidiNote())) / 12.0)
                     * d->playbackData.sourceSampleRate / d->clip->sampleRate();
             }
         }
         while (d->aftertouchRing.readHead->processed == false && d->aftertouchRing.readHead->time == frame) {
-            const float aftertouch = d->aftertouchRing.read();
-            if (d->clipCommand) {
+            const float aftertouch = d->aftertouchRing.read(&dataChannel, &dataNote);
+            if (d->clipCommand && (dataChannel == -1 || (d->clipCommand && dataChannel == d->clipCommand->midiChannel)) && (dataNote == -1 || (d->clipCommand && dataNote == d->clipCommand->midiNote))) {
                 d->lgain = d->rgain = d->clipCommand->volume = (aftertouch/127.0f);
             }
         }

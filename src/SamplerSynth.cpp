@@ -374,11 +374,14 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                 break;
             } else {
                 const unsigned char &byte1 = event.buffer[0];
-                const int globalChannel{0};
+                const int globalChannel{15};
                 if (0x7F < byte1 &&  byte1 < 0xf0) {
                     // TODO handle all-off message (so we can make the thing shut up when things like e.g. the pewpew app on a roli light block doesn't send out off notes when cleared)
                     // TODO Handle MPE global-channel instructions and upper/lower split...
                     eventChannel = (byte1 & 0xf);
+                    if (eventChannel == globalChannel) {
+                        eventChannel = -1;
+                    }
                     if (0x79 < byte1 && byte1 < 0xA0) {
                         // Note Off or On message
                         const int note{event.buffer[1]};
@@ -402,9 +405,7 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                         const int note{event.buffer[1]};
                         const int pressure{event.buffer[2]};
                         for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                            if (voice->mostRecentStartCommand && voice->mostRecentStartCommand->midiNote == note && (voice->mostRecentStartCommand->midiChannel == eventChannel || eventChannel == globalChannel)) {
-                                voice->handleAftertouch(event.time, pressure);
-                            }
+                            voice->handleAftertouch(event.time, pressure, eventChannel, note);
                         }
                         grainerator->handlePolyphonicAftertouch(eventChannel, note, pressure, event.time);
                     } else if (0xAF < byte1 && byte1 < 0xC0) {
@@ -412,9 +413,7 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                         const int control{event.buffer[1]};
                         const int value{event.buffer[2]};
                         for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                            if (voice->mostRecentStartCommand && voice->mostRecentStartCommand->midiChannel == eventChannel) {
-                                voice->handleControlChange(event.time, control, value);
-                            }
+                            voice->handleControlChange(event.time, eventChannel, control, value);
                         }
                         if (control == 1) {
                             // Mod wheel - just storing this so we can pass it to new voices when we start them, so initial values make sense
@@ -426,9 +425,7 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                         // Non-polyphonic aftertouch
                         const int pressure{event.buffer[1]};
                         for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                            if (voice->mostRecentStartCommand && voice->mostRecentStartCommand->midiChannel == eventChannel) {
-                                voice->handleAftertouch(event.time, pressure);
-                            }
+                            voice->handleAftertouch(event.time, eventChannel, -1, pressure);
                         }
                         grainerator->handleAftertouch(eventChannel, pressure, event.time);
                     } else if (0xDF < byte1 && byte1 < 0xF0) {
@@ -439,12 +436,13 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                         // Per-note pitch bend should be +/- 48 semitones by default
                         // Master-channel pitch bend should be +/- 2 semitones by default
                         // Change either to +/- 96 using Registered Parameter Number 0
-                        const float bendMax{2.0};
+                        float bendMax{48.0};
+                        if (eventChannel == -1) {
+                            bendMax = 2.0;
+                        }
                         const float pitchValue = bendMax * (float((event.buffer[2] * 128) + event.buffer[1]) - 8192) / 16383.0;
                         for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                            if (voice->mostRecentStartCommand && voice->mostRecentStartCommand->midiChannel == eventChannel) {
-                                voice->handlePitchChange(event.time, pitchValue);
-                            }
+                            voice->handlePitchChange(event.time, eventChannel, -1, pitchValue);
                         }
                         grainerator->handlePitchChange(eventChannel, pitchValue, event.time);
                     }
