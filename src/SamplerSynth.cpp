@@ -55,7 +55,7 @@ public:
     float cpuLoad{0.0f};
     int modwheelValue{0};
 
-    bool enabled{true};
+    bool enabled{false};
 
     inline PlayGridManager* playGridManager() {
         if (!m_playGridManager) {

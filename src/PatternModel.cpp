@@ -269,7 +269,7 @@ struct alignas(32) NoteDataPoolEntry {
 
 class PatternModel::Private {
 public:
-    Private() {
+    Private(PatternModel *q) : q(q) {
         playGridManager = PlayGridManager::instance();
         syncTimer = qobject_cast<SyncTimer*>(playGridManager->syncTimer());
 
@@ -293,6 +293,7 @@ public:
             delete noteDataPool[i].object;
         }
     }
+    PatternModel *q{nullptr};
     ZLPatternSynchronisationManager *zlSyncManager{nullptr};
     SegmentHandler *segmentHandler{nullptr};
     QHash<QString, qint64> lastSavedTimes;
@@ -312,6 +313,7 @@ public:
     int playingRow{0};
     int playingColumn{0};
     int previouslyUpdatedMidiChannel{-1};
+    bool oneToOnePlayback{false}; // Whether sample picking should be done equal to the clip position of the pattern (so pattern for clip a only plays samples in slot 1, and patterns for clip c only plays samples in slot 3)
 
     juce::MidiBuffer &getOrCreateBuffer(QHash<int, juce::MidiBuffer> &collection, int position);
     void noteLengthDetails(int noteLength, qint64 &nextPosition, bool &relevantToUs, qint64 &noteDuration);
@@ -377,6 +379,7 @@ public:
     NotesModel *gridModel{nullptr};
     NotesModel *clipSliceNotes{nullptr};
     QList<ClipAudioSource*> clips;
+    ClipCommandRing commandRing;
     /**
      * This function will return all clip sin the list which has a
      * keyZoneStart higher or equal to the given midi note and a keyZoneEnd
@@ -402,8 +405,10 @@ public:
      * @param byte3 The third byte of a midi message
      */
     void midiMessageToClipCommands(ClipCommandRing *listToPopulate, const int &byte1, const int &byte2, const int &byte3) const {
+        int clipIndex{0};
         for (ClipAudioSource *clip : qAsConst(clips)) {
-            if (clip && clip->keyZoneStart() <= byte2 && byte2 <= clip->keyZoneEnd()) {
+            // There must be a clip or it just doesn't matter, and then the note must fit inside the clip's keyzone
+            if (clip && clip->keyZoneStart() <= byte2 && byte2 <= clip->keyZoneEnd() && (oneToOnePlayback == false || clipIndex == partIndex)) {
                 ClipCommand *command = ClipCommand::channelCommand(clip, (byte1 & 0xf));
                 command->startPlayback = byte1 > 0x8F;
                 command->stopPlayback = byte1 < 0x90;
@@ -425,12 +430,13 @@ public:
                 listToPopulate->write(command, 0);
             }
         }
+        ++clipIndex;
     }
 };
 
 PatternModel::PatternModel(SequenceModel* parent)
     : NotesModel(parent ? parent->playGridManager() : nullptr)
-    , d(new Private)
+    , d(new Private(this))
 {
     d->zlSyncManager = new ZLPatternSynchronisationManager(this);
     d->segmentHandler = SegmentHandler::instance();
@@ -1737,8 +1743,19 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                         break;
                     case PatternModel::SampleTriggerDestination:
                     case PatternModel::SampleSlicedDestination:
-                        // Both sample-trig and sample-slice send midi information through, and those notes then get fired by
-                        // SyncTimer as usual, and caught in handleMidiMessage() below
+                    {
+                        const QHash<int, juce::MidiBuffer> &positionBuffers = d->positionBuffers[nextPosition + (d->bankOffset * d->width)];
+                        QHash<int, juce::MidiBuffer>::const_iterator position;
+                        for (position = positionBuffers.constBegin(); position != positionBuffers.constEnd(); ++position) {
+                            for (const juce::MidiMessageMetadata &juceMessage : qAsConst(position.value())) {
+                                d->midiMessageToClipCommands(&d->commandRing, juceMessage.data[0], juceMessage.data[1], juceMessage.data[2]);
+                                while (d->commandRing.readHead->processed == false) {
+                                    d->syncTimer->scheduleClipCommand(d->commandRing.read(), quint64(qMax(0, progressionIncrement + position.key())));
+                                }
+                            }
+                        }
+                        break;
+                    }
                     case PatternModel::ExternalDestination:
                         // While external destination /is/ somewhere else, libzl's MidiRouter does the actual work of the somewhere-else-ness
                         // We set this up in the midiChannelUpdater timeout handler (see PatternModel's ctor)

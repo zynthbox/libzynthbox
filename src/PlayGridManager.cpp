@@ -977,7 +977,7 @@ void PlayGridManager::updateNoteState(QVariantMap metadata)
 
 void PlayGridManager::midiMessageToClipCommands(ClipCommandRing *listToPopulate, const int &samplerIndex, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3) const
 {
-    for (const PatternModel *patternModel : qAsConst(d->patternModels)) {
+     for (const PatternModel *patternModel : qAsConst(d->patternModels)) {
         patternModel->midiMessageToClipCommands(listToPopulate, samplerIndex, byte1, byte2, byte3);
     }
 }
