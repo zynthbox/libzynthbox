@@ -23,14 +23,20 @@
 
 using namespace juce;
 
-#define SAMPLER_CHANNEL_VOICE_COUNT 32
-
-#define CommandQueueSize 256
+#define SubChannelCount 5
 class Grainerator;
+struct SubChannel {
+public:
+    SubChannel() {};
+    jack_port_t *leftPort{nullptr};
+    jack_port_t *rightPort{nullptr};
+    SamplerSynthVoice *firstActiveVoice;
+};
+
 class SamplerChannel
 {
 public:
-    explicit SamplerChannel(SamplerSynth *samplerSynth, jack_client_t *client, const QString &clientName, const int &midiChannel);
+    explicit SamplerChannel(SamplerVoicePoolRing *voicePool, jack_client_t *client, const QString &clientName, const int &midiChannel);
     ~SamplerChannel();
     int process(jack_nframes_t nframes);
     double sampleRate() const;
@@ -44,12 +50,9 @@ public:
 
     QString clientName;
     jack_client_t *jackClient{nullptr};
-    jack_port_t *leftPort{nullptr};
-    QString portNameLeft{"left_out"};
-    jack_port_t *rightPort{nullptr};
-    QString portNameRight{"right_out"};
     jack_port_t *midiInPort{nullptr};
-    SamplerSynthVoice* voices[SAMPLER_CHANNEL_VOICE_COUNT];
+    SubChannel subChannels[SubChannelCount];
+    SamplerVoicePoolRing *voicePool{nullptr};
     SamplerSynthPrivate* d{nullptr};
     int midiChannel{-1};
     float cpuLoad{0.0f};
@@ -319,21 +322,18 @@ void jackConnect(jack_client_t* jackClient, const QString &from, const QString &
     }
 }
 
-SamplerChannel::SamplerChannel(SamplerSynth *samplerSynth, jack_client_t *client, const QString &clientName, const int &midiChannel)
+SamplerChannel::SamplerChannel(SamplerVoicePoolRing *voicePool, jack_client_t *client, const QString &clientName, const int &midiChannel)
     : clientName(clientName)
+    , voicePool(voicePool)
     , midiChannel(midiChannel)
 {
     grainerator = new Grainerator(this);
     jackClient = client;
-    for (int voiceIndex = 0; voiceIndex < SAMPLER_CHANNEL_VOICE_COUNT; ++voiceIndex) {
-        SamplerSynthVoice *voice = new SamplerSynthVoice(samplerSynth);
-        voices[voiceIndex] = voice;
-    }
     midiInPort = jack_port_register(jackClient, QString("%1-midiIn").arg(clientName).toUtf8(), JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
-    leftPort = jack_port_register(jackClient, QString("%1-%2").arg(clientName).arg(portNameLeft).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-    rightPort = jack_port_register(jackClient, QString("%1-%2").arg(clientName).arg(portNameRight).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-    jackConnect(jackClient, QString("SamplerSynth:%1-%2").arg(clientName).arg(portNameLeft).toUtf8(), QLatin1String{"system:playback_1"});
-    jackConnect(jackClient, QString("SamplerSynth:%1-%2").arg(clientName).arg(portNameRight).toUtf8(), QLatin1String{"system:playback_2"});
+    for (int subChannelIndex = 0; subChannelIndex < SubChannelCount; ++subChannelIndex) {
+        subChannels[subChannelIndex].leftPort = jack_port_register(jackClient, QString("%1-lane%2-left").arg(clientName).arg(QString::number(subChannelIndex + 1)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+        subChannels[subChannelIndex].rightPort = jack_port_register(jackClient, QString("%1-lane%2-right").arg(clientName).arg(QString::number(subChannelIndex + 1)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+    }
     if (midiChannel < 0) {
         jackConnect(jackClient, QLatin1String("ZLRouter:PassthroughOut"), QString("SamplerSynth:%1-midiIn").arg(clientName));
     } else {
@@ -404,16 +404,24 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                         // Polyphonic Aftertouch
                         const int note{event.buffer[1]};
                         const int pressure{event.buffer[2]};
-                        for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                            voice->handleAftertouch(event.time, pressure, eventChannel, note);
+                        for (const SubChannel &subChannel : subChannels) {
+                            SamplerSynthVoice *voice = subChannel.firstActiveVoice;
+                            while (voice) {
+                                voice->handleAftertouch(event.time, pressure, eventChannel, note);
+                                voice = voice->next;
+                            }
                         }
                         grainerator->handlePolyphonicAftertouch(eventChannel, note, pressure, event.time);
                     } else if (0xAF < byte1 && byte1 < 0xC0) {
                         // Control/mode change
                         const int control{event.buffer[1]};
                         const int value{event.buffer[2]};
-                        for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                            voice->handleControlChange(event.time, eventChannel, control, value);
+                        for (const SubChannel &subChannel : subChannels) {
+                            SamplerSynthVoice *voice = subChannel.firstActiveVoice;
+                            while (voice) {
+                                voice->handleControlChange(event.time, eventChannel, control, value);
+                                voice = voice->next;
+                            }
                         }
                         if (control == 1) {
                             // Mod wheel - just storing this so we can pass it to new voices when we start them, so initial values make sense
@@ -424,8 +432,12 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                     } else if (0xCF < byte1 && byte1 < 0xE0) {
                         // Non-polyphonic aftertouch
                         const int pressure{event.buffer[1]};
-                        for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                            voice->handleAftertouch(event.time, eventChannel, -1, pressure);
+                        for (const SubChannel &subChannel : subChannels) {
+                            SamplerSynthVoice *voice = subChannel.firstActiveVoice;
+                            while (voice) {
+                                voice->handleAftertouch(event.time, eventChannel, -1, pressure);
+                                voice = voice->next;
+                            }
                         }
                         grainerator->handleAftertouch(eventChannel, pressure, event.time);
                     } else if (0xDF < byte1 && byte1 < 0xF0) {
@@ -441,8 +453,12 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                             bendMax = 2.0;
                         }
                         const float pitchValue = bendMax * (float((event.buffer[2] * 128) + event.buffer[1]) - 8192) / 16383.0;
-                        for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                            voice->handlePitchChange(event.time, eventChannel, -1, pitchValue);
+                        for (const SubChannel &subChannel : subChannels) {
+                            SamplerSynthVoice *voice = subChannel.firstActiveVoice;
+                            while (voice) {
+                                voice->handlePitchChange(event.time, eventChannel, -1, pitchValue);
+                                voice = voice->next;
+                            }
                         }
                         grainerator->handlePitchChange(eventChannel, pitchValue, event.time);
                     }
@@ -455,13 +471,33 @@ int SamplerChannel::process(jack_nframes_t nframes) {
 
         // Then, if we've actually got our ports set up, let's play whatever voices are active
         jack_default_audio_sample_t *leftBuffer{nullptr}, *rightBuffer{nullptr};
-        if (leftPort && rightPort) {
-            leftBuffer = (jack_default_audio_sample_t*)jack_port_get_buffer(leftPort, nframes);
-            rightBuffer = (jack_default_audio_sample_t*)jack_port_get_buffer(rightPort, nframes);
-            memset(leftBuffer, 0, nframes * sizeof (jack_default_audio_sample_t));
-            memset(rightBuffer, 0, nframes * sizeof (jack_default_audio_sample_t));
-            for (SamplerSynthVoice *voice : qAsConst(voices)) {
-                voice->process(leftBuffer, rightBuffer, nframes, current_frames, current_usecs, next_usecs, period_usecs);
+        for (SubChannel &subChannel : subChannels) {
+            if (subChannel.leftPort && subChannel.rightPort) {
+                leftBuffer = (jack_default_audio_sample_t*)jack_port_get_buffer(subChannel.leftPort, nframes);
+                rightBuffer = (jack_default_audio_sample_t*)jack_port_get_buffer(subChannel.rightPort, nframes);
+                memset(leftBuffer, 0, nframes * sizeof (jack_default_audio_sample_t));
+                memset(rightBuffer, 0, nframes * sizeof (jack_default_audio_sample_t));
+                SamplerSynthVoice *voice = subChannel.firstActiveVoice;
+                while (voice) {
+                    voice->process(leftBuffer, rightBuffer, nframes, current_frames, current_usecs, next_usecs, period_usecs);
+                    if (voice->isPlaying == false) {
+                        // Then it has stopped playing for us, and we should return it to the pool
+                        if (voice->previous) {
+                            // We're not the first, so the previous voice needs to be told its next voice is now our next voice, whatever that is
+                            voice->previous->next = voice->next;
+                        } else  {
+                            // This is the first voice and we need to reset the first voice to whatever is next in line
+                            subChannel.firstActiveVoice = voice->next;
+                        }
+                        if (voice->next) {
+                            // This is somewhere in the middle, and there's a next voice, so it needs to be told that its previous voice is our previous one
+                            voice->next->previous = voice->previous;
+                        }
+                        // Now we've nipped the voice out of the list, put it back in the pool
+                        voicePool->write(voice);
+                    }
+                    voice = voice->next;
+                }
             }
         }
         // Micro-hackery - -2 is the first item in the list of channels, so might as well just go with that
@@ -489,6 +525,7 @@ public:
     bool syncLocked{false};
     static const int numVoices{128};
     jack_nframes_t sampleRate{0};
+    SamplerVoicePoolRing voicePool;
 
     QHash<ClipAudioSource*, SamplerSynthSound*> clipSounds;
     QList<ClipAudioSourcePositionsModel*> positionModels;
@@ -535,29 +572,55 @@ void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick
 {
     if (clipCommand->stopPlayback || clipCommand->startPlayback) {
         if (clipCommand->stopPlayback) {
-            for (SamplerSynthVoice * voice : qAsConst(voices)) {
+            SamplerSynthVoice *voice = subChannels[clipCommand->clip->laneAffinity()].firstActiveVoice;
+            while (voice) {
                 const ClipCommand *currentVoiceCommand = voice->mostRecentStartCommand;
                 if (voice->isTailingOff == false && currentVoiceCommand && currentVoiceCommand->equivalentTo(clipCommand)) {
                     voice->handleCommand(clipCommand, currentTick);
                     // Since we may have more than one going at the same time (since we allow long releases), just stop the first one
                     break;
                 }
+                voice = voice->next;
             }
         }
         if (clipCommand->startPlayback) {
-            for (SamplerSynthVoice *voice : qAsConst(voices)) {
+            bool needNewVoice{true};
+            const int laneAffinity{clipCommand->clip->laneAffinity()};
+            SamplerSynthVoice *voice = subChannels[laneAffinity].firstActiveVoice;
+            while (voice) {
                 if (voice->availableAfter < currentTick) {
                     voice->handleCommand(clipCommand, currentTick);
+                    needNewVoice = false;
                     break;
+                }
+                voice = voice->next;
+            }
+            if (needNewVoice) {
+                SamplerSynthVoice *voice{nullptr};
+                if (voicePool->read(&voice)) {
+                    // Insert at the start of the list - it makes no functional difference whether it's at the start or end, they're always iterated fully for processing anyway
+                    voice->previous = nullptr;
+                    voice->next = subChannels[laneAffinity].firstActiveVoice;
+                    if (subChannels[laneAffinity].firstActiveVoice) {
+                        subChannels[laneAffinity].firstActiveVoice->previous = voice;
+                    }
+                    subChannels[laneAffinity].firstActiveVoice = voice;
+                    voice->handleCommand(clipCommand, currentTick);
+                } else {
+                    qWarning() << Q_FUNC_INFO << "Failed to get a new voice - apparently we've used up all" << SamplerVoicePoolSize;
                 }
             }
         }
     } else {
-        for (SamplerSynthVoice * voice : qAsConst(voices)) {
-            const ClipCommand *currentVoiceCommand = voice->mostRecentStartCommand;
-            if (currentVoiceCommand && currentVoiceCommand->equivalentTo(clipCommand)) {
-                // Update the voice with the new command
-                voice->handleCommand(clipCommand, currentTick);
+        for (const SubChannel &subChannel : subChannels) {
+            SamplerSynthVoice *voice = subChannel.firstActiveVoice;
+            while (voice) {
+                const ClipCommand *currentVoiceCommand = voice->mostRecentStartCommand;
+                if (currentVoiceCommand && currentVoiceCommand->equivalentTo(clipCommand)) {
+                    // Update the voice with the new command
+                    voice->handleCommand(clipCommand, currentTick);
+                }
+                voice = voice->next;
             }
         }
     }
@@ -584,6 +647,9 @@ SamplerSynth::~SamplerSynth()
 
 void SamplerSynth::initialize(tracktion_engine::Engine *engine)
 {
+    while (d->voicePool.writeHead->processed) {
+        d->voicePool.write(new SamplerSynthVoice(this));
+    }
     d->engine = engine;
     jack_status_t real_jack_status{};
     d->jackClient = jack_client_open("SamplerSynth", JackNullOption, &real_jack_status);
@@ -595,7 +661,7 @@ void SamplerSynth::initialize(tracktion_engine::Engine *engine)
                 d->sampleRate = jack_get_sample_rate(d->jackClient);
                 qInfo() << Q_FUNC_INFO << "Successfully created and set up SamplerSynth client";
                 zl_set_jack_client_affinity(d->jackClient);
-                qInfo() << Q_FUNC_INFO << "Registering ten (plus two global) channels, with" << SAMPLER_CHANNEL_VOICE_COUNT << "voices each";
+                qInfo() << Q_FUNC_INFO << "Registering ten (plus two global) channels";
                 for (int channelIndex = 0; channelIndex < 12; ++channelIndex) {
                     QString channelName;
                     if (channelIndex == 0) {
@@ -603,10 +669,10 @@ void SamplerSynth::initialize(tracktion_engine::Engine *engine)
                     } else if (channelIndex == 1) {
                         channelName = QString("global-effected");
                     } else {
-                        channelName = QString("channel_%1").arg(QString::number(channelIndex -1));
+                        channelName = QString("channel_%1").arg(QString::number(channelIndex - 1));
                     }
                     // Funny story, the actual channels have midi channels equivalent to their name, minus one. The others we can cheat with
-                    SamplerChannel *channel = new SamplerChannel(this, d->jackClient, channelName, channelIndex - 2);
+                    SamplerChannel *channel = new SamplerChannel(&d->voicePool, d->jackClient, channelName, channelIndex - 2);
                     channel->d = d;
                     d->channels << channel;
                 }
