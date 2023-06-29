@@ -30,6 +30,13 @@ class ClipAudioSource : public QObject {
     Q_OBJECT
     Q_PROPERTY(int id READ id WRITE setId NOTIFY idChanged)
     /**
+     * \brief The lane the clip should be played one (equivalent to the sample slot in SketchPad)
+     * @default 0
+     * @minimum 0
+     * @maximum 4
+     */
+    Q_PROPERTY(int laneAffinity READ laneAffinity WRITE setLaneAffinity NOTIFY laneAffinityChanged)
+    /**
      * \brief The volume of the clip in an absolute style (from 0.0 through 1.0)
      */
     Q_PROPERTY(float volumeAbsolute READ volumeAbsolute WRITE setVolumeAbsolute NOTIFY volumeAbsoluteChanged)
@@ -284,6 +291,10 @@ public:
   int id() const;
   void setId(int id);
   Q_SIGNAL void idChanged();
+
+  int laneAffinity() const;
+  void setLaneAffinity(const int& newValue);
+  Q_SIGNAL void laneAffinityChanged();
 
   float audioLevel() const;
   Q_SIGNAL void audioLevelChanged();

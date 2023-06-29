@@ -75,6 +75,7 @@ public:
   double currentLeveldB{-400.0};
   double prevLeveldB{-400.0};
   int id{0};
+  int laneAffinity{0};
   ClipAudioSourcePositionsModel *positionsModel{nullptr};
   // Default is 16, but we also need to generate the positions, so that is set up in the ClipAudioSource ctor
   int slices{0};
@@ -472,6 +473,20 @@ void ClipAudioSource::setId(int id)
         d->id = id;
         Q_EMIT idChanged();
     }
+}
+
+int ClipAudioSource::laneAffinity() const
+{
+  return d->laneAffinity;
+}
+
+void ClipAudioSource::setLaneAffinity(const int& newValue)
+{
+  const int adjusted{std::clamp(newValue, 0, 4)};
+  if (d->laneAffinity != adjusted) {
+    d->laneAffinity = adjusted;
+    Q_EMIT laneAffinityChanged();
+  }
 }
 
 float ClipAudioSource::audioLevel() const
