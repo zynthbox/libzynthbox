@@ -365,6 +365,8 @@ int SamplerChannel::process(jack_nframes_t nframes) {
         jack_midi_event_t event;
         int eventChannel{-1};
         uint32_t eventIndex = 0;
+        const double framesPerMicrosecond = double(nframes) / double(next_usecs - current_usecs);
+        jack_nframes_t lastMidiEventFrame{current_frames};
         while (true) {
             if (int err = jack_midi_event_get(&event, inputBuffer, eventIndex)) {
                 if (err != -ENOBUFS) {
@@ -373,6 +375,7 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                 // Otherwise we can be reasonably certain that it's just the end of the buffer
                 break;
             } else {
+                jack_nframes_t thisEventFrame = current_frames + event.time;
                 const unsigned char &byte1 = event.buffer[0];
                 const int globalChannel{15};
                 if (0x7F < byte1 &&  byte1 < 0xf0) {
@@ -397,10 +400,18 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                                     grainerator->start(command, event.time);
                                 }
                             } else {
-                                handleCommand(command, current_frames + event.time);
+                                handleCommand(command, thisEventFrame);
                             }
                         }
-                    } else if (0x9F < byte1 && byte1 < 0xB0) {
+                    }
+                    if (thisEventFrame != lastMidiEventFrame) {
+                        // Handle grainerator events up until this point, so we don't end up missing pitch changes and the like for grains
+                        // That is, optimally after any new notes (which spawn grains immediately), but before any of the control changes,
+                        // hence the slightly odd looking split in the if statement chain above and below this block
+                        grainerator->process(thisEventFrame - lastMidiEventFrame, framesPerMicrosecond * 1000.0f, lastMidiEventFrame);
+                        lastMidiEventFrame = thisEventFrame;
+                    }
+                    if (0x9F < byte1 && byte1 < 0xB0) {
                         // Polyphonic Aftertouch
                         const int note{event.buffer[1]};
                         const int pressure{event.buffer[2]};
@@ -466,8 +477,10 @@ int SamplerChannel::process(jack_nframes_t nframes) {
             }
             ++eventIndex;
         }
-        const double framesPerMicrosecond = double(nframes) / double(next_usecs - current_usecs);
-        grainerator->process(nframes, framesPerMicrosecond * 1000.0f, current_frames);
+        if (nframes > (lastMidiEventFrame - current_frames)) {
+            // And now handle the remaining events if the most recent midi event was before the last frame
+            grainerator->process((current_frames + nframes) - lastMidiEventFrame, framesPerMicrosecond * 1000.0f, lastMidiEventFrame);
+        }
 
         // Then, if we've actually got our ports set up, let's play whatever voices are active
         jack_default_audio_sample_t *leftBuffer{nullptr}, *rightBuffer{nullptr};
