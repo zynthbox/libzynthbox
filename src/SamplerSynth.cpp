@@ -513,8 +513,8 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                 }
             }
         }
-        // Micro-hackery - -2 is the first item in the list of channels, so might as well just go with that
-        if (midiChannel == -2) {
+        // Micro-hackery - -1 is the first item in the list of channels, so might as well just go with that
+        if (midiChannel == -1) {
             cpuLoad = jack_cpu_load(jackClient);
         }
     }
@@ -545,8 +545,7 @@ public:
     te::Engine *engine{nullptr};
 
     // An ordered list of Jack clients, one each for...
-    // Global audio (midi "channel" -2, for e.g. the metronome and sample previews)
-    // Global effects targeted audio (midi "channel" -1)
+    // Global audio (midi "channel" -1, for e.g. the metronome and sample previews on lane 0, and effects targeted audio on lane 1
     // Channel 1 (midi channel 0, and the logical music channel called Channel 1 in a sketchpad)
     // Channel 2 (midi channel 1)
     // ...
@@ -674,18 +673,16 @@ void SamplerSynth::initialize(tracktion_engine::Engine *engine)
                 d->sampleRate = jack_get_sample_rate(d->jackClient);
                 qInfo() << Q_FUNC_INFO << "Successfully created and set up SamplerSynth client";
                 zl_set_jack_client_affinity(d->jackClient);
-                qInfo() << Q_FUNC_INFO << "Registering ten (plus two global) channels";
-                for (int channelIndex = 0; channelIndex < 12; ++channelIndex) {
+                qInfo() << Q_FUNC_INFO << "Registering ten (plus one global) channels";
+                for (int channelIndex = 0; channelIndex < 11; ++channelIndex) {
                     QString channelName;
                     if (channelIndex == 0) {
-                        channelName = QString("global-uneffected");
-                    } else if (channelIndex == 1) {
-                        channelName = QString("global-effected");
+                        channelName = QString("global");
                     } else {
-                        channelName = QString("channel_%1").arg(QString::number(channelIndex - 1));
+                        channelName = QString("channel_%1").arg(QString::number(channelIndex));
                     }
                     // Funny story, the actual channels have midi channels equivalent to their name, minus one. The others we can cheat with
-                    SamplerChannel *channel = new SamplerChannel(&d->voicePool, d->jackClient, channelName, channelIndex - 2);
+                    SamplerChannel *channel = new SamplerChannel(&d->voicePool, d->jackClient, channelName, channelIndex - 1);
                     channel->d = d;
                     d->channels << channel;
                 }
@@ -742,8 +739,8 @@ float SamplerSynth::cpuLoad() const
 
 void SamplerSynth::handleClipCommand(ClipCommand *clipCommand, quint64 currentTick)
 {
-    if (d->clipSounds.contains(clipCommand->clip) && clipCommand->midiChannel + 2 < d->channels.count()) {
-        SamplerChannel *channel = d->channels[clipCommand->midiChannel + 2];
+    if (d->clipSounds.contains(clipCommand->clip) && clipCommand->midiChannel + 1 < d->channels.count()) {
+        SamplerChannel *channel = d->channels[clipCommand->midiChannel + 1];
         if (channel->commandRing.writeHead->clipCommand) {
             qWarning() << Q_FUNC_INFO << "Big problem! Attempted to add a clip command to the queue, but we've not handled the one that's already in the queue.";
         } else {
@@ -754,10 +751,10 @@ void SamplerSynth::handleClipCommand(ClipCommand *clipCommand, quint64 currentTi
 
 void SamplerSynth::setChannelEnabled(const int &channel, const bool &enabled) const
 {
-    if (channel > -3 && channel < 10) {
-        if (d->channels[channel + 2]->enabled != enabled) {
+    if (channel > -2 && channel < 10) {
+        if (d->channels[channel + 1]->enabled != enabled) {
             qDebug() << "Setting SamplerSynth channel" << channel << "to" << enabled;
-            d->channels[channel + 2]->enabled = enabled;
+            d->channels[channel + 1]->enabled = enabled;
         }
     }
 }

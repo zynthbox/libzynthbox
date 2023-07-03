@@ -46,20 +46,11 @@ struct ClipCommand {
     }
 
     /**
-     * \brief Create a command on the no-effects global channel, defaulted to midi note 60
+     * \brief Create a command on the global channel, defaulted to midi note 60
+     * @note To decide whether the clip should be played through effects or not, set it's lane affinity (0 for no effects, 1 for effects)
+     * @see ClipAudioSource::laneAffinity
      */
-    static ClipCommand* noEffectCommand(ClipAudioSource *clip)
-    {
-        ClipCommand *command = SyncTimer::instance()->getClipCommand();
-        command->clip = clip;
-        command->midiChannel = -2;
-        command->midiNote = 60;
-        return command;
-    }
-    /**
-     * \brief Create a command on the effects-enabled global channel, defaulted to midi note 60
-     */
-    static ClipCommand* effectedCommand(ClipAudioSource *clip)
+    static ClipCommand* globalCommand(ClipAudioSource *clip)
     {
         ClipCommand *command = SyncTimer::instance()->getClipCommand();
         command->clip = clip;

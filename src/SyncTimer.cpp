@@ -385,10 +385,10 @@ public:
                 // Spit out a touch of useful information on beat zero
                 qDebug() << "Current tracktion/juce CPU usage:" << samplerSynth->engine()->getDeviceManager().getCpuUsage() << "with total jack process call saturation at:" << samplerSynth->cpuLoad();
                 if (audibleMetronome) {
-                    command = ClipCommand::noEffectCommand(metronomeTick);
+                    command = ClipCommand::globalCommand(metronomeTick);
                 }
             } else if (audibleMetronome && (beat % BeatSubdivisions == 0)) {
-                command = ClipCommand::noEffectCommand(metronomeTock);
+                command = ClipCommand::globalCommand(metronomeTock);
             }
             if (command) {
                 command->startPlayback = true;
@@ -870,9 +870,9 @@ void SyncTimer::startWithCountin()
     ClipCommand *command{nullptr};
     for (quint64 beat = 0; beat < 4; ++beat) {
         if (beat == 0) {
-            command = ClipCommand::noEffectCommand(d->metronomeTick);
+            command = ClipCommand::globalCommand(d->metronomeTick);
         } else {
-            command = ClipCommand::noEffectCommand(d->metronomeTock);
+            command = ClipCommand::globalCommand(d->metronomeTock);
         }
         command->startPlayback = true;
         command->changeVolume = true;

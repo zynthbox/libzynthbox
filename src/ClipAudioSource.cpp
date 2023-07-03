@@ -444,13 +444,10 @@ void ClipAudioSource::stop(int midiChannel) {
     command->stopPlayback = true;
     d->syncTimer->scheduleClipCommand(command, 0);
   } else {
-    ClipCommand *command = ClipCommand::noEffectCommand(this);
-    command->stopPlayback = true;
-    d->syncTimer->scheduleClipCommand(command, 0);
     // Less than the best thing - having to do this to ensure we stop the ones looper
     // queued for starting as well, otherwise they'll get missed for stopping... We'll
     // want to handle this more precisely later, but for now this should do the trick.
-    command = ClipCommand::effectedCommand(this);
+    ClipCommand *command = ClipCommand::globalCommand(this);
     command->stopPlayback = true;
     d->syncTimer->scheduleClipCommand(command, 0);
     for (int i = 0; i < 10; ++i) {
