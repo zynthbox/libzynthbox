@@ -37,6 +37,10 @@ class ClipAudioSource : public QObject {
      */
     Q_PROPERTY(int laneAffinity READ laneAffinity WRITE setLaneAffinity NOTIFY laneAffinityChanged)
     /**
+     * \brief The gain of the clip in absolute style (from 0.0 through 1.0, equivalent to dB -100 through 24)
+     */
+    Q_PROPERTY(float gainAbsolute READ gainAbsolute WRITE setGainAbsolute NOTIFY gainAbsoluteChanged)
+    /**
      * \brief The volume of the clip in an absolute style (from 0.0 through 1.0)
      */
     Q_PROPERTY(float volumeAbsolute READ volumeAbsolute WRITE setVolumeAbsolute NOTIFY volumeAbsoluteChanged)
@@ -262,6 +266,10 @@ public:
   void setGain(float db);
   float getGain() const;
   float getGainDB() const;
+  float gainAbsolute() const;
+  void setGainAbsolute(const float &gainAbsolute);
+  Q_SIGNAL void gainAbsoluteChanged();
+
   void setVolume(float vol);
   /**
    * \brief Set the volume by "slider position" (0.0 through 1.0)

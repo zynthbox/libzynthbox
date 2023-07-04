@@ -67,6 +67,7 @@ public:
   bool looping{false};
   float gainDB{0.0f};
   float gain{1.0f};
+  float gainAbsolute{0.5};
   float volumeAbsolute{-1.0f}; // This is a cached value
   float pitchChange = 0;
   float speedRatio = 1.0;
@@ -314,6 +315,7 @@ void ClipAudioSource::setGain(float db) {
     clip->setGainDB(db);
     d->gainDB = clip->getGainDB();
     d->gain = clip->getGain();
+    setGainAbsolute(std::pow(2, (d->gainDB - 24) / 24));
   }
 }
 
@@ -325,6 +327,24 @@ float ClipAudioSource::getGainDB() const
 float ClipAudioSource::getGain() const
 {
   return d->gain;
+}
+
+float ClipAudioSource::gainAbsolute() const
+{
+  return d->gainAbsolute;
+}
+
+// The logic here is that we want it to almost linearly assign dB values from 0 through 24,
+// and also on the negative side, however we want it to also suddenly and precipitously fall
+// off towards -100, while having 0.5 be 0dB. This allows us to do that.
+void ClipAudioSource::setGainAbsolute(const float& gainAbsolute)
+{
+  const float adjusted{std::clamp(gainAbsolute, 0.0f, 1.0f)};
+  if (abs(d->gainAbsolute - adjusted) > 0.0001) {
+    d->gainAbsolute = adjusted;
+    Q_EMIT gainAbsoluteChanged();
+    setGain((std::log2(adjusted) * 24) + 24);
+  }
 }
 
 void ClipAudioSource::setVolume(float vol) {
