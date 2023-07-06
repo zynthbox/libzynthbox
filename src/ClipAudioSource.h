@@ -37,6 +37,13 @@ class ClipAudioSource : public QObject {
      */
     Q_PROPERTY(bool looping READ looping WRITE setLooping NOTIFY loopingChanged)
     /**
+     * \brief The position of the loop point where looping playback will start from after the first run (in seconds, delta from playback start)
+     * This will not be clamped for interaction purposes, but for playback the value will be blocked at the stop position
+     * @minimum 0.0
+     * @default 0.0
+     */
+    Q_PROPERTY(float loopDelta READ loopDelta WRITE setLoopDelta NOTIFY loopDeltaChanged)
+    /**
      * \brief The lane the clip should be played one (equivalent to the sample slot in SketchPad)
      * @default 0
      * @minimum 0
@@ -263,6 +270,9 @@ public:
   void setLooping(bool looping);
   bool looping() const;
   Q_SIGNAL void loopingChanged();
+  float loopDelta() const;
+  void setLoopDelta(const float &newLoopDelta);
+  Q_SIGNAL void loopDeltaChanged();
   void setLength(float beat, int bpm);
   /**
    * \brief The length of the clip in beats

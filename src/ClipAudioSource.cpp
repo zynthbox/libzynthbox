@@ -65,6 +65,7 @@ public:
   float lengthInSeconds = -1;
   float lengthInBeats = -1;
   bool looping{false};
+  float loopDelta{0.0f};
   float gainDB{0.0f};
   float gain{1.0f};
   float gainAbsolute{0.5};
@@ -259,6 +260,19 @@ void ClipAudioSource::setLooping(bool looping) {
 bool ClipAudioSource::looping() const
 {
   return d->looping;
+}
+
+float ClipAudioSource::loopDelta() const
+{
+  return d->loopDelta;
+}
+
+void ClipAudioSource::setLoopDelta(const float& newLoopDelta)
+{
+  if (d->loopDelta != newLoopDelta) {
+    d->loopDelta = newLoopDelta;
+    Q_EMIT loopDeltaChanged();
+  }
 }
 
 void ClipAudioSource::setStartPosition(float startPositionInSeconds) {
