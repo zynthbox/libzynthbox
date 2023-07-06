@@ -86,6 +86,7 @@ public:
     float pan{0};
     int sampleDuration{0};
     int startPosition{0};
+    int loopPosition{0};
     int stopPosition{0};
     double forwardTailingOffPosition{0};
     double backwardTailingOffPosition{0};
@@ -278,6 +279,10 @@ void SamplerSynthVoice::startNote (ClipCommand *clipCommand)
 
         d->playbackData.startPosition = (int) ((d->clipCommand->setStartPosition ? d->clipCommand->startPosition : d->clip->getStartPosition(d->clipCommand->slice)) * d->playbackData.sourceSampleRate);
         d->playbackData.stopPosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition : d->clip->getStopPosition(d->clipCommand->slice)) * d->playbackData.sourceSampleRate);
+        d->playbackData.loopPosition = int((d->clip->getStartPosition(d->clipCommand->slice) + d->clip->loopDelta()) * d->playbackData.sourceSampleRate);
+        if (d->playbackData.loopPosition >= d->playbackData.stopPosition) {
+            d->playbackData.loopPosition = d->playbackData.startPosition;
+        }
         d->playbackData.forwardTailingOffPosition = (d->playbackData.stopPosition - (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
         d->playbackData.backwardTailingOffPosition = (d->playbackData.startPosition + (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
     } else {
@@ -533,27 +538,8 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
             if (pitchRatio > 0) {
                 // We're playing the sample forwards, so let's handle things with that direction in mind
                 if (d->playbackData.isLooping) {
-                    // beat align samples by reading clip duration in beats from clip, saving synctimer's jack playback positions in voice on startNote, and adjust in if (looping) section of process, and make sure the loop is restarted on that beat if deviation is sufficiently large (like... one timer tick is too much maybe?)
-                    if (d->playbackData.snappedToBeat) {
-                        // If the clip is actually a clean multiple of a number of beats, let's make sure it loops matching that beat position
-                        // Work out next loop start point in usecs
-                        // Once we hit the frame for that number of usecs after the most recent start, reset playback position to match.
-                        // nb: Don't try and be clever, actually make sure to play the first sample in the sound - play past the end rather than before the start
-                        if (current_usecs + jack_time_t(frame * microsecondsPerFrame) >= d->nextLoopUsecs) {
-                            // Work out the position of the next loop, based on the most recent beat tick position, not the current position, as that might be slightly incorrect
-                            const quint64 lengthInTicks = d->clip->getLengthInBeats() * d->syncTimer->getMultiplier();
-                            d->nextLoopTick = d->nextLoopTick + lengthInTicks;
-                            const quint64 differenceToPlayhead = d->nextLoopTick - d->syncTimer->jackPlayhead();
-                            d->nextLoopUsecs = d->syncTimer->jackPlayheadUsecs() + (differenceToPlayhead * d->syncTimer->jackSubbeatLengthInMicroseconds());
-    //                             qDebug() << "Resetting - next tick" << d->nextLoopTick << "next usecs" << d->nextLoopUsecs << "difference to playhead" << differenceToPlayhead;
-
-                            // Reset the sample playback position back to the start point
-                            d->sourceSamplePosition = d->playbackData.startPosition;
-                        }
-                    } else if (d->sourceSamplePosition >= d->playbackData.stopPosition) {
-                        // If we're not beat-matched, just loop "normally"
-                        // TODO Switch start position for the loop position here
-                        d->sourceSamplePosition = d->playbackData.startPosition;
+                    if (d->sourceSamplePosition >= d->playbackData.stopPosition) {
+                        d->sourceSamplePosition = d->playbackData.loopPosition;
                     }
                 } else {
                     if (d->sourceSamplePosition >= d->playbackData.stopPosition)
@@ -571,26 +557,8 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
                 // We're playing the sample backwards, so let's handle things with that direction in mind
                 // That is, start position is used for the stop location and vice versa
                 if (d->playbackData.isLooping) {
-                    // beat align samples by reading clip duration in beats from clip, saving synctimer's jack playback positions in voice on startNote, and adjust in if (looping) section of process, and make sure the loop is restarted on that beat if deviation is sufficiently large (like... one timer tick is too much maybe?)
-                    if (d->playbackData.snappedToBeat) {
-                        // If the clip is actually a clean multiple of a number of beats, let's make sure it loops matching that beat position
-                        // Work out next loop start point in usecs
-                        // Once we hit the frame for that number of usecs after the most recent start, reset playback position to match.
-                        // nb: Don't try and be clever, actually make sure to play the first sample in the sound - play past the end rather than before the start
-                        if (current_usecs + jack_time_t(frame * microsecondsPerFrame) >= d->nextLoopUsecs) {
-                            // Work out the position of the next loop, based on the most recent beat tick position, not the current position, as that might be slightly incorrect
-                            const quint64 lengthInTicks = d->clip->getLengthInBeats() * d->syncTimer->getMultiplier();
-                            d->nextLoopTick = d->nextLoopTick + lengthInTicks;
-                            const quint64 differenceToPlayhead = d->nextLoopTick - d->syncTimer->jackPlayhead();
-                            d->nextLoopUsecs = d->syncTimer->jackPlayheadUsecs() + (differenceToPlayhead * d->syncTimer->jackSubbeatLengthInMicroseconds());
-    //                             qDebug() << "Resetting - next tick" << d->nextLoopTick << "next usecs" << d->nextLoopUsecs << "difference to playhead" << differenceToPlayhead;
-
-                            // Reset the sample playback position back to the start point
-                            d->sourceSamplePosition = d->playbackData.stopPosition;
-                        }
-                    } else if (d->sourceSamplePosition <= d->playbackData.stopPosition) {
-                        // If we're not beat-matched, just loop "normally"
-                        // TODO Switch start position for the loop position here
+                    if (d->sourceSamplePosition <= d->playbackData.stopPosition) {
+                        // TODO Switch start position for the loop position here - this'll likely need that second loop position to make sense... or will it?! thought needed at any rate.
                         d->sourceSamplePosition = d->playbackData.stopPosition;
                     }
                 } else {
