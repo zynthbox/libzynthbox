@@ -803,7 +803,7 @@ public:
     void disconnectFromOutputs(ChannelOutput *output) {
         const QString portName = QString("ZLRouter:%1").arg(output->portName);
         if (output->destination == MidiRouter::ZynthianDestination) {
-            disconnectPorts(portName, QLatin1String{"ZynMidiRouter:step_in"});
+            // Nothing to be done to unhook things here
         } else if (output->destination == MidiRouter::ExternalDestination) {
             for (const QString &externalPort : enabledMidiOutPorts) {
                 disconnectPorts(portName, externalPort);
@@ -814,7 +814,7 @@ public:
     void connectToOutputs(ChannelOutput *output) {
         const QString portName = QString("ZLRouter:%1").arg(output->portName);
         if (output->destination == MidiRouter::ZynthianDestination) {
-            connectPorts(portName, QLatin1String{"ZynMidiRouter:step_in"});
+            // Nothing to be done to hook things up here
         } else if (output->destination == MidiRouter::ExternalDestination) {
             for (const QString &externalPort : enabledMidiOutPorts) {
                 connectPorts(portName, externalPort);
