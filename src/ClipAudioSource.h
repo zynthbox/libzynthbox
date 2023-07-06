@@ -30,6 +30,13 @@ class ClipAudioSource : public QObject {
     Q_OBJECT
     Q_PROPERTY(int id READ id WRITE setId NOTIFY idChanged)
     /**
+     * \brief Whether or not this sample should be looped for playback (or single-shot so it auto-stops)
+     * This can be overridden by the play function, where looping can be forced
+     * @see ClipAudioSource::play(bool, int)
+     * @default false
+     */
+    Q_PROPERTY(bool looping READ looping WRITE setLooping NOTIFY loopingChanged)
+    /**
      * \brief The lane the clip should be played one (equivalent to the sample slot in SketchPad)
      * @default 0
      * @minimum 0
@@ -254,7 +261,8 @@ public:
   float getStartPosition(int slice = -1) const;
   float getStopPosition(int slice = -1) const;
   void setLooping(bool looping);
-  bool getLooping() const;
+  bool looping() const;
+  Q_SIGNAL void loopingChanged();
   void setLength(float beat, int bpm);
   /**
    * \brief The length of the clip in beats
@@ -282,8 +290,15 @@ public:
    */
   float volumeAbsolute() const;
   Q_SIGNAL void volumeAbsoluteChanged();
-  // Using the channel logic from SamplerSynth, -2 is no-effect global sounds, -1 is the effected global channel, and 0-9 are channels 1 through 10 inclusive
-  void play(bool loop = true, int midiChannel = -2);
+  /**
+   * \brief Starts playing, by default by forcing looping and on the global channel
+   * Using the channel logic from SamplerSynth, -1 is the global channel (set lane
+   * affinity to 1 for effected, and 0 for no effects), and 0-9 are channels 1
+   * through 10 inclusive
+   * @param forceLooping Plays with looping, and also force stops playback on the same lane/channel. This will override the sample's loop setting
+   * @param midiChannel Pick the SketchPad track to play on
+   */
+  void play(bool forceLooping = true, int midiChannel = -1);
   // Midi channel logic as play(), except defaulting to stop all the things everywhere
   void stop(int midiChannel = -3);
   float getDuration() const;

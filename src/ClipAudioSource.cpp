@@ -252,10 +252,11 @@ void ClipAudioSource::syncProgress() {
 void ClipAudioSource::setLooping(bool looping) {
   if (d->looping != looping) {
     d->looping = looping;
+    Q_EMIT loopingChanged();
   }
 }
 
-bool ClipAudioSource::getLooping() const
+bool ClipAudioSource::looping() const
 {
   return d->looping;
 }
@@ -440,17 +441,20 @@ void ClipAudioSource::Private::timerCallback() {
   }
 }
 
-void ClipAudioSource::play(bool loop, int midiChannel) {
+void ClipAudioSource::play(bool forceLooping, int midiChannel) {
   auto clip = d->getClip();
-  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Starting clip " << this << d->filePath << " which is really " << clip.get() << " in a " << (loop ? "looping" : "non-looping") << " manner from " << d->startPositionInSeconds << " and for " << d->lengthInSeconds << " seconds at volume " << (clip  && clip->edit.getMasterVolumePlugin().get() ? clip->edit.getMasterVolumePlugin()->volume : 0);
+  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Starting clip " << this << d->filePath << " which is really " << clip.get() << " in a " << (forceLooping ? "looping" : "non-looping") << " manner from " << d->startPositionInSeconds << " and for " << d->lengthInSeconds << " seconds at volume " << (clip  && clip->edit.getMasterVolumePlugin().get() ? clip->edit.getMasterVolumePlugin()->volume : 0);
 
   ClipCommand *command = ClipCommand::channelCommand(this, midiChannel);
   command->midiNote = 60;
   command->changeVolume = true;
   command->volume = 1.0f;
-  command->looping = loop;
-  if (loop) {
+  command->changeLooping = true;
+  if (forceLooping) {
+    command->looping = true;
     command->stopPlayback = true; // this stops any current loop plays, and immediately starts a new one
+  } else {
+    command->looping = d->looping;
   }
   command->startPlayback = true;
   d->syncTimer->scheduleClipCommand(command, 0);
