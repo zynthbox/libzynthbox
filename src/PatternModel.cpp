@@ -426,6 +426,8 @@ public:
                     command->slice = clip->sliceForMidiNote(byte2);
                 } else {
                     command->midiNote = byte2;
+                    command->changeLooping = true;
+                    command->looping = clip->looping();
                 }
                 listToPopulate->write(command, 0);
             }
