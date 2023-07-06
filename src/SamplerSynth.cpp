@@ -594,8 +594,7 @@ void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick
                 }
                 voice = voice->next;
             }
-        }
-        if (clipCommand->startPlayback) {
+        } else if (clipCommand->startPlayback) {
             bool needNewVoice{true};
             const int laneAffinity{clipCommand->clip->laneAffinity()};
             SamplerSynthVoice *voice = subChannels[laneAffinity].firstActiveVoice;
