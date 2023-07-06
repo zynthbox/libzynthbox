@@ -358,7 +358,10 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
             // We only want to delete the command if it's only a stop command, since then nothing else will be handling it
             bool shouldDelete{false};
             if (newCommand->stopPlayback) {
-                stopNote(newCommand->volume, true);
+                // If the command is also requesting that we start playback, then we're
+                // actually wanting to restart playback and should stop the current playback
+                // first, with no tailoff
+                stopNote(newCommand->volume, newCommand->startPlayback == false);
                 shouldDelete = true;
             }
             if (newCommand->startPlayback) {
