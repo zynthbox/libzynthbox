@@ -20,10 +20,8 @@ public:
 
     void setModwheel(int modwheelValue);
 
-    void setStartTick(quint64 startTick);
-
-    void startNote (ClipCommand *clipCommand);
-    void stopNote (float velocity, bool allowTailOff);
+    void startNote (ClipCommand *clipCommand, jack_nframes_t timestamp);
+    void stopNote (float velocity, bool allowTailOff, jack_nframes_t timestamp);
 
     void handleControlChange(jack_nframes_t time, int channel, int control, int value);
     void handleAftertouch(jack_nframes_t time, int channel, int note, int pressure);

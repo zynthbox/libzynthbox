@@ -119,9 +119,6 @@ public:
     ClipCommand *clipCommand{nullptr};
     ClipAudioSource *clip{nullptr};
     SamplerSynthSound* sound{nullptr};
-    quint64 startTick{0};
-    quint64 nextLoopTick{0};
-    quint64 nextLoopUsecs{0};
     double maxSampleDeviation{0.0};
     double pitchRatio = 0;
     double sourceSamplePosition = 0;
@@ -161,13 +158,16 @@ void SamplerSynthVoice::handleCommand(ClipCommand* clipCommand, jack_nframes_t t
 {
     d->commandRing.write(clipCommand, timestamp);
     if (clipCommand->stopPlayback == true) {
-        availableAfter = timestamp - 1; // We'll be available /on/ this timestamp location as well
+        // Available after the tailoff period
+        const double sourceSampleRate{clipCommand->clip->sampleRate()};
+        const double release{clipCommand->clip->adsrRelease() * sourceSampleRate};
+        availableAfter = timestamp + release;
         mostRecentStartCommand = nullptr;
     }
     // Not an else if, because we might both stop and start with the same command
     if (clipCommand->startPlayback == true) {
         if (clipCommand->looping == true) {
-            availableAfter = INT_MAX;
+            availableAfter = UINT_MAX;
         } else {
             const double sourceSampleRate{clipCommand->clip->sampleRate()};
             const double startPosition = (int) ((clipCommand->setStartPosition ? clipCommand->startPosition : clipCommand->clip->getStartPosition(clipCommand->slice)) * sourceSampleRate);
@@ -226,12 +226,7 @@ void SamplerSynthVoice::setModwheel(int modwheelValue)
     d->initialCC[1] = modwheelValue;
 }
 
-void SamplerSynthVoice::setStartTick(quint64 startTick)
-{
-    d->startTick = startTick;
-}
-
-void SamplerSynthVoice::startNote (ClipCommand *clipCommand)
+void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t timestamp)
 {
     if (auto sound = d->samplerSynth->clipToSound(clipCommand->clip)) {
         d->sound = sound;
@@ -249,8 +244,6 @@ void SamplerSynthVoice::startNote (ClipCommand *clipCommand)
 
         d->playbackData.snappedToBeat = (trunc(d->clip->getLengthInBeats()) == d->clip->getLengthInBeats());
         d->playbackData.isLooping = d->clipCommand->looping;
-        d->nextLoopTick = d->startTick + d->clip->getLengthInBeats() * d->syncTimer->getMultiplier();
-        d->nextLoopUsecs = 0;
 
         d->lgain = velocityToGain(clipCommand->volume);
         d->rgain = velocityToGain(clipCommand->volume);
@@ -285,12 +278,18 @@ void SamplerSynthVoice::startNote (ClipCommand *clipCommand)
         }
         d->playbackData.forwardTailingOffPosition = (d->playbackData.stopPosition - (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
         d->playbackData.backwardTailingOffPosition = (d->playbackData.startPosition + (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
+
+        if (clipCommand->looping == true) {
+            availableAfter = UINT_MAX;
+        } else {
+            availableAfter = timestamp + jack_nframes_t(d->playbackData.stopPosition - d->playbackData.startPosition);
+        }
     } else {
         jassertfalse; // this object can only play SamplerSynthSounds!
     }
 }
 
-void SamplerSynthVoice::stopNote (float velocity, bool allowTailOff)
+void SamplerSynthVoice::stopNote(float velocity, bool allowTailOff, jack_nframes_t timestamp)
 {
     if (velocity > 0) {
         // Note off velocity (aka "lift" for mpe) is going to need thought...
@@ -311,11 +310,10 @@ void SamplerSynthVoice::stopNote (float velocity, bool allowTailOff)
             d->clipCommand = nullptr;
         }
         isPlaying = false;
-        d->nextLoopTick = 0;
-        d->nextLoopUsecs = 0;
         isTailingOff = false;
         d->firstRoll = true;
         d->allpassBufferL = d->allpassBufferR = 0.0f;
+        availableAfter = timestamp;
     }
 }
 
@@ -345,13 +343,8 @@ inline float interpolateHermite4pt3oX(float x0, float x1, float x2, float x3, fl
 
 // if we perform highpass filtering, we need to invert the output of the allpass (multiply it by -1)
 static const double highpassSign{-1.f};
-void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_default_audio_sample_t *rightBuffer, jack_nframes_t nframes, jack_nframes_t current_frames, jack_time_t current_usecs, jack_time_t next_usecs, float /*period_usecs*/)
+void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_default_audio_sample_t *rightBuffer, jack_nframes_t nframes, jack_nframes_t current_frames, jack_time_t /*current_usecs*/, jack_time_t /*next_usecs*/, float /*period_usecs*/)
 {
-    if (d->nextLoopUsecs == 0) {
-        const quint64 differenceToPlayhead = d->nextLoopTick - d->syncTimer->jackPlayhead();
-        d->nextLoopUsecs = d->syncTimer->jackPlayheadUsecs() + (differenceToPlayhead * d->syncTimer->jackSubbeatLengthInMicroseconds());
-    }
-    const double microsecondsPerFrame = (next_usecs - current_usecs) / nframes;
     float peakGain{0.0f};
     int dataChannel{0}, dataNote{0};
 
@@ -366,13 +359,12 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
                 // If the command is also requesting that we start playback, then we're
                 // actually wanting to restart playback and should stop the current playback
                 // first, with no tailoff
-                stopNote(newCommand->volume, newCommand->startPlayback == false);
+                stopNote(newCommand->volume, newCommand->startPlayback == false, currentFrame);
                 shouldDelete = true;
             }
             if (newCommand->startPlayback) {
                 setCurrentCommand(newCommand);
-                setStartTick(currentFrame);
-                startNote(newCommand);
+                startNote(newCommand, currentFrame);
                 shouldDelete = false;
             }
             if (shouldDelete) {
@@ -531,48 +523,48 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
             const double pitchRatio{d->pitchRatio * clipPitchChange};
             d->sourceSamplePosition += pitchRatio;
 
-            if (!d->adsr.isActive()) {
-                stopNote(d->clipCommand->volume, false);
-                break;
-            }
-            if (pitchRatio > 0) {
-                // We're playing the sample forwards, so let's handle things with that direction in mind
-                if (d->playbackData.isLooping) {
-                    if (d->sourceSamplePosition >= d->playbackData.stopPosition) {
-                        d->sourceSamplePosition = d->playbackData.loopPosition;
+            if (d->adsr.isActive()) {
+                if (pitchRatio > 0) {
+                    // We're playing the sample forwards, so let's handle things with that direction in mind
+                    if (d->playbackData.isLooping) {
+                        if (d->sourceSamplePosition >= d->playbackData.stopPosition) {
+                            d->sourceSamplePosition = d->playbackData.loopPosition;
+                        }
+                    } else {
+                        if (d->sourceSamplePosition >= d->playbackData.stopPosition)
+                        {
+                            stopNote(d->clipCommand->volume, false, currentFrame);
+                            // Before we stop, send out one last update for this command
+                            if (d->clip) {
+                                d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
+                            }
+                        } else if (isTailingOff == false && d->sourceSamplePosition >= d->playbackData.forwardTailingOffPosition) {
+                            stopNote(d->clipCommand->volume, true, currentFrame);
+                        }
                     }
                 } else {
-                    if (d->sourceSamplePosition >= d->playbackData.stopPosition)
-                    {
-                        stopNote(d->clipCommand->volume, false);
-                        // Before we stop, send out one last update for this command
-                        if (d->clip) {
-                            d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
+                    // We're playing the sample backwards, so let's handle things with that direction in mind
+                    // That is, start position is used for the stop location and vice versa
+                    if (d->playbackData.isLooping) {
+                        if (d->sourceSamplePosition <= d->playbackData.stopPosition) {
+                            // TODO Switch start position for the loop position here - this'll likely need that second loop position to make sense... or will it?! thought needed at any rate.
+                            d->sourceSamplePosition = d->playbackData.stopPosition;
                         }
-                    } else if (isTailingOff == false && d->sourceSamplePosition >= d->playbackData.forwardTailingOffPosition) {
-                        stopNote(d->clipCommand->volume, true);
+                    } else {
+                        if (d->sourceSamplePosition <= d->playbackData.startPosition)
+                        {
+                            stopNote(d->clipCommand->volume, false, currentFrame);
+                            // Before we stop, send out one last update for this command
+                            if (d->clip) {
+                            d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
+                            }
+                        } else if (isTailingOff == false && d->sourceSamplePosition <= d->playbackData.backwardTailingOffPosition) {
+                            stopNote(d->clipCommand->volume, true, currentFrame);
+                        }
                     }
                 }
             } else {
-                // We're playing the sample backwards, so let's handle things with that direction in mind
-                // That is, start position is used for the stop location and vice versa
-                if (d->playbackData.isLooping) {
-                    if (d->sourceSamplePosition <= d->playbackData.stopPosition) {
-                        // TODO Switch start position for the loop position here - this'll likely need that second loop position to make sense... or will it?! thought needed at any rate.
-                        d->sourceSamplePosition = d->playbackData.stopPosition;
-                    }
-                } else {
-                    if (d->sourceSamplePosition <= d->playbackData.startPosition)
-                    {
-                        stopNote(d->clipCommand->volume, false);
-                        // Before we stop, send out one last update for this command
-                        if (d->clip) {
-                           d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
-                        }
-                    } else if (isTailingOff == false && d->sourceSamplePosition <= d->playbackData.backwardTailingOffPosition) {
-                        stopNote(d->clipCommand->volume, true);
-                    }
-                }
+                stopNote(d->clipCommand->volume, false, currentFrame);
             }
         }
     }
