@@ -349,7 +349,7 @@ SamplerChannel::~SamplerChannel() {
 int SamplerChannel::process(jack_nframes_t nframes) {
     // First handle any queued up commands (starting, stopping, changes to voice state, that sort of stuff)
     quint64 timestamp{0};
-    while (commandRing.readHead->clipCommand) {
+    while (commandRing.readHead->processed == false) {
         ClipCommand *command = commandRing.read(&timestamp);
         handleCommand(command, timestamp);
     }
@@ -390,7 +390,7 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                         const int note{event.buffer[1]};
                         const int velocity{event.buffer[2]};
                         playGridManager()->midiMessageToClipCommands(&commandRing, midiChannel, byte1, note, velocity);
-                        while (commandRing.readHead->clipCommand) {
+                        while (commandRing.readHead->processed == false) {
                             ClipCommand *command = commandRing.read();
                             if (command->clip->granular()) {
                                 if (command->stopPlayback) {
@@ -583,18 +583,22 @@ double SamplerChannel::sampleRate() const
 void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick)
 {
     if (clipCommand->stopPlayback || clipCommand->startPlayback) {
+        // If the clip had nothing to stop for restarting, we still need to start it, so let's handle that
+        bool needsHandling{true};
         if (clipCommand->stopPlayback) {
             SamplerSynthVoice *voice = subChannels[clipCommand->clip->laneAffinity()].firstActiveVoice;
             while (voice) {
                 const ClipCommand *currentVoiceCommand = voice->mostRecentStartCommand;
                 if (voice->isTailingOff == false && currentVoiceCommand && currentVoiceCommand->equivalentTo(clipCommand)) {
                     voice->handleCommand(clipCommand, currentTick);
+                    needsHandling = false;
                     // Since we may have more than one going at the same time (since we allow long releases), just stop the first one
                     break;
                 }
                 voice = voice->next;
             }
-        } else if (clipCommand->startPlayback) {
+        }
+        if (needsHandling && clipCommand->startPlayback) {
             bool needNewVoice{true};
             const int laneAffinity{clipCommand->clip->laneAffinity()};
             SamplerSynthVoice *voice = subChannels[laneAffinity].firstActiveVoice;
@@ -686,6 +690,8 @@ void SamplerSynth::initialize(tracktion_engine::Engine *engine)
                     d->channels << channel;
                 }
                 d->initialized = true;
+                // The global channel should always be enabled, so let's do that here
+                setChannelEnabled(-1, true);
             } else {
                 qWarning() << Q_FUNC_INFO << "Failed to activate SamplerSynth Jack client";
             }
@@ -740,11 +746,14 @@ void SamplerSynth::handleClipCommand(ClipCommand *clipCommand, quint64 currentTi
 {
     if (d->clipSounds.contains(clipCommand->clip) && clipCommand->midiChannel + 1 < d->channels.count()) {
         SamplerChannel *channel = d->channels[clipCommand->midiChannel + 1];
-        if (channel->commandRing.writeHead->clipCommand) {
-            qWarning() << Q_FUNC_INFO << "Big problem! Attempted to add a clip command to the queue, but we've not handled the one that's already in the queue.";
-        } else {
+        if (channel->commandRing.writeHead->processed) {
+            // qDebug() << Q_FUNC_INFO << "Wrote clip command" << clipCommand << "at tick" << currentTick << "on channel" << channel;
             channel->commandRing.write(clipCommand, currentTick);
+        } else {
+            qWarning() << Q_FUNC_INFO << "Big problem! Attempted to add a clip command to the queue, but we've not handled the one that's already in the queue.";
         }
+    } else {
+        qWarning() << Q_FUNC_INFO << "Unknown clip" << clipCommand->clip << "or unacceptable midi channel" << clipCommand->midiChannel;
     }
 }
 
@@ -752,7 +761,7 @@ void SamplerSynth::setChannelEnabled(const int &channel, const bool &enabled) co
 {
     if (channel > -2 && channel < 10) {
         if (d->channels[channel + 1]->enabled != enabled) {
-            qDebug() << "Setting SamplerSynth channel" << channel << "to" << enabled;
+            qDebug() << "Setting SamplerSynth channel" << channel << "to" << (enabled ? "enabled" : "disabled");
             d->channels[channel + 1]->enabled = enabled;
         }
     }
