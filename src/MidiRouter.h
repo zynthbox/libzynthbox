@@ -90,7 +90,7 @@ public:
     /**
      * \brief Fired whenever a note has changed
      */
-    Q_SIGNAL void noteChanged( MidiRouter::ListenerPort port, int midiNote, int midiChannel, int velocity, bool setOn, double timeStamp, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3);
+    Q_SIGNAL void noteChanged( MidiRouter::ListenerPort port, int midiNote, int midiChannel, int velocity, bool setOn, double timeStamp, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const int &sketchpadTrack);
 
 private:
     MidiRouterPrivate *d{nullptr};

@@ -116,6 +116,7 @@ struct NoteMessage {
     unsigned char byte0{0};
     unsigned char byte1{0};
     unsigned char byte2{0};
+    int sketchpadTrack{0};
     double timeStamp{0};
     NoteMessage *next{nullptr};
     NoteMessage *previous{nullptr};
@@ -279,7 +280,8 @@ public:
     MidiListenerPort externalOutListener;
     MidiListenerPort* listenerPorts[4];
     // FIXME The consumers of this currently functionally assume a note message, and... we will need to handle other things as well, but for now we only call this for note messages
-    static inline void addMessage(MidiListenerPort &port, const double &timeStamp, const jack_midi_event_t &event, const int rewriteChannel)
+    static inline void addMessage(MidiListenerPort &port, const double &timeStamp, const jack_midi_event_t &event, const int rewriteChannel, const int sketchpadTrack
+    )
     {
         NoteMessage &message = port.getNextAvailableWriteMessage();
         message.timeStamp = timeStamp;
@@ -287,6 +289,7 @@ public:
         message.byte0 = event.buffer[0] - eventChannel + rewriteChannel;
         message.byte1 = event.size > 1 ? event.buffer[1] : 0;
         message.byte2 = event.size > 2 ? event.buffer[2] : 0;
+        message.sketchpadTrack = sketchpadTrack;
         message.submitted = false;
     }
 
@@ -428,8 +431,8 @@ public:
                             switch (output->destination) {
                                 case MidiRouter::ZynthianDestination:
                                     if (isNoteMessage) {
-                                        addMessage(passthroughListener, timestamp, event, eventChannel);
-                                        addMessage(internalPassthroughListener, timestamp, event, eventChannel);
+                                        addMessage(passthroughListener, timestamp, event, eventChannel, eventChannel);
+                                        addMessage(internalPassthroughListener, timestamp, event, eventChannel, eventChannel);
                                     }
                                     for (const int &zynthianChannel : output->zynthianChannels) {
                                         if (zynthianChannel == -1) {
@@ -443,8 +446,8 @@ public:
                                     break;
                                 case MidiRouter::SamplerDestination:
                                     if (isNoteMessage) {
-                                        addMessage(passthroughListener, timestamp, event, eventChannel);
-                                        addMessage(internalPassthroughListener, timestamp, event, eventChannel);
+                                        addMessage(passthroughListener, timestamp, event, eventChannel, eventChannel);
+                                        addMessage(internalPassthroughListener, timestamp, event, eventChannel, eventChannel);
                                     }
                                     ++nonEmittedEvents; // if we return the above line, remove this
                                     writeEventToBuffer(event, output->portBuffer, eventChannel, &output->mostRecentTime, output);
@@ -454,9 +457,9 @@ public:
                                 {
                                     int externalChannel = (output->externalChannel == -1) ? output->inputChannel : output->externalChannel;
                                     if (isNoteMessage) {
-                                        addMessage(passthroughListener, timestamp, event, eventChannel);
+                                        addMessage(passthroughListener, timestamp, event, eventChannel, eventChannel);
                                         // Not writing to internal passthrough, as this is heading to an external device
-                                        addMessage(externalOutListener, timestamp, event, eventChannel);
+                                        addMessage(externalOutListener, timestamp, event, eventChannel, eventChannel);
                                     }
                                     writeEventToBuffer(event, externalOutputBuffer, eventChannel, &externalMostRecentTime, externalOutputPort, externalChannel);
                                     writeEventToBuffer(event, passthroughOutputBuffer, eventChannel, &passthroughOutputMostRecentTime, passthroughOutputPort);
@@ -464,7 +467,7 @@ public:
                                 case MidiRouter::NoDestination:
                                 default:
                                     if (isNoteMessage) {
-                                        addMessage(internalPassthroughListener, timestamp, event, eventChannel);
+                                        addMessage(internalPassthroughListener, timestamp, event, eventChannel, eventChannel);
                                     }
                                     ++nonEmittedEvents;
                                     break;
@@ -576,7 +579,7 @@ public:
                                     switch (currentOutput->destination) {
                                         case MidiRouter::ZynthianDestination:
                                             if (isNoteMessage) {
-                                                addMessage(passthroughListener, timestamp, event, adjustedCurrentChannel);
+                                                addMessage(passthroughListener, timestamp, event, adjustedCurrentChannel, currentChannel);
                                             }
                                             for (const int &zynthianChannel : currentOutput->zynthianChannels) {
                                                 if (zynthianChannel == -1) {
@@ -590,7 +593,7 @@ public:
                                             break;
                                         case MidiRouter::SamplerDestination:
                                             if (isNoteMessage) {
-                                                addMessage(passthroughListener, timestamp, event, adjustedCurrentChannel);
+                                                addMessage(passthroughListener, timestamp, event, adjustedCurrentChannel, currentChannel);
                                             }
                                             writeEventToBuffer(event, output->portBuffer, adjustedCurrentChannel, &output->mostRecentTime, output);
                                             writeEventToBuffer(event, passthroughOutputBuffer, adjustedCurrentChannel, &passthroughOutputMostRecentTime, passthroughOutputPort);
@@ -599,8 +602,8 @@ public:
                                         {
                                             int externalChannel = (currentOutput->externalChannel == -1) ? currentOutput->inputChannel : currentOutput->externalChannel;
                                             if (isNoteMessage) {
-                                                addMessage(passthroughListener, timestamp, event, adjustedCurrentChannel);
-                                                addMessage(externalOutListener, timestamp, event, adjustedCurrentChannel);
+                                                addMessage(passthroughListener, timestamp, event, adjustedCurrentChannel, currentChannel);
+                                                addMessage(externalOutListener, timestamp, event, adjustedCurrentChannel, currentChannel);
                                             }
                                             writeEventToBuffer(event, externalOutputBuffer, adjustedCurrentChannel, &externalMostRecentTime, externalOutputPort, externalChannel);
                                             writeEventToBuffer(event, passthroughOutputBuffer, adjustedCurrentChannel, &passthroughOutputMostRecentTime, passthroughOutputPort);
@@ -611,7 +614,7 @@ public:
                                             break;
                                     }
                                     if (isNoteMessage) {
-                                        addMessage(hardwareInListener, timestamp, event, adjustedCurrentChannel);
+                                        addMessage(hardwareInListener, timestamp, event, adjustedCurrentChannel, currentChannel);
                                     }
                                 } else if (event.size == 1 || event.size == 2) {
                                     writeEventToBuffer(event, externalOutputBuffer, eventChannel, &externalMostRecentTime, externalOutputPort);
@@ -939,7 +942,7 @@ void MidiRouter::run() {
                 const int midiChannel = (message->byte0 & 0xf);
                 const int &midiNote = message->byte1;
                 const int &velocity = message->byte2;
-                Q_EMIT noteChanged(listenerPort->identifier, midiNote, midiChannel, velocity, setOn, message->timeStamp, message->byte0, message->byte1, message->byte2);
+                Q_EMIT noteChanged(listenerPort->identifier, midiNote, midiChannel, velocity, setOn, message->timeStamp, message->byte0, message->byte1, message->byte2, message->sketchpadTrack);
                 message->submitted = true;
                 listenerPort->readHead = listenerPort->readHead->next;
                 message = listenerPort->readHead;

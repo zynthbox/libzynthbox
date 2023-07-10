@@ -40,19 +40,20 @@ public:
     MidiRecorderPrivate() {}
     bool isRecording{false};
     bool isPlaying{false};
-    bool channels[16];
-    juce::MidiMessageSequence midiMessageSequence;
+    bool trackEnabled[10];
+    // One for each of the sketchpad tracks
+    juce::MidiMessageSequence globalMidiMessageSequence;
+    juce::MidiMessageSequence midiMessageSequence[10];
     frame_clock::time_point recordingStartTime;
-    void handleMidiMessage(const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3) {
+    void handleMidiMessage(const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const int &sketchpadTrack) {
         if (isRecording) {
             if (0x7F < byte1 && byte1 < 0xA0) {
                 // Using microseconds for timestamps (midi is commonly that anyway)
                 // and juce expects ongoing timestamps, not intervals (it will create those when saving)
                 const std::chrono::duration<double, std::micro> timestamp = frame_clock::now() - recordingStartTime;
-                const int eventChannel = byte1 & 0xf;
-                if (channels[eventChannel]) {
-                    midiMessageSequence.addEvent(juce::MidiMessage(byte1, byte2, byte3, timestamp.count()));
-                }
+                juce::MidiMessage message{byte1, byte2, byte3, timestamp.count()};
+                midiMessageSequence[sketchpadTrack].addEvent(message);
+                globalMidiMessageSequence.addEvent(message);
             }
         }
     }
@@ -78,22 +79,22 @@ MidiRecorder::MidiRecorder(QObject *parent)
             }
     );
     connect(PlayGridManager::instance(), &PlayGridManager::midiMessage,
-            this, [this](const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3)
+            this, [this](const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const int &sketchpadTrack)
             {
-                d->handleMidiMessage(byte1, byte2, byte3);
+                d->handleMidiMessage(byte1, byte2, byte3, sketchpadTrack);
             }
     );
 }
 
 MidiRecorder::~MidiRecorder() = default;
 
-void MidiRecorder::startRecording(int channel, bool clear)
+void MidiRecorder::startRecording(int sketchpadTrack, bool clear)
 {
     if (clear) {
         clearRecording();
     }
-    for (int i = 0; i < 16; ++i) {
-        d->channels[i] = false;
+    if (sketchpadTrack > 0) {
+        d->trackEnabled[sketchpadTrack] = true;
     }
     if (!d->isRecording) {
         d->recordingStartTime = frame_clock::now();
@@ -102,18 +103,18 @@ void MidiRecorder::startRecording(int channel, bool clear)
     }
 }
 
-void MidiRecorder::stopRecording(int channel)
+void MidiRecorder::stopRecording(int sketchpadTrack)
 {
-    if (channel == -1) {
-        for (int i = 0; i < 16; ++i) {
-            d->channels[i] = false;
+    if (sketchpadTrack == -1) {
+        for (int i = 0; i < 10; ++i) {
+            d->trackEnabled[i] = false;
         }
     } else {
-        d->channels[channel] = false;
+        d->trackEnabled[sketchpadTrack] = false;
     }
     bool isEmpty{true};
-    for (int i = 0; i < 16; ++i) {
-        if (d->channels[i]) {
+    for (int i = 0; i < 10; ++i) {
+        if (d->trackEnabled[i]) {
             isEmpty = false;
             break;
         }
@@ -126,10 +127,18 @@ void MidiRecorder::stopRecording(int channel)
 
 void MidiRecorder::clearRecording()
 {
-    d->midiMessageSequence.clear();
+    d->globalMidiMessageSequence.clear();
+    for (int i = 0; i < 10; ++i) {
+        d->midiMessageSequence[i].clear();
+    }
 }
 
 bool MidiRecorder::loadFromMidi(const QByteArray &midiData)
+{
+    return loadTrackFromMidi(midiData, -1);
+}
+
+bool MidiRecorder::loadTrackFromMidi(const QByteArray& midiData, const int& sketchpadTrack)
 {
     bool success{false};
 
@@ -138,11 +147,15 @@ bool MidiRecorder::loadFromMidi(const QByteArray &midiData)
     juce::MidiFile file;
     if (file.readFrom(in, true)) {
         if (file.getNumTracks() > 0) {
-            d->midiMessageSequence = juce::MidiMessageSequence(*file.getTrack(0));
+            if (sketchpadTrack == -1) {
+                d->globalMidiMessageSequence = juce::MidiMessageSequence(*file.getTrack(0));
+            } else {
+                d->midiMessageSequence[sketchpadTrack] = juce::MidiMessageSequence(*file.getTrack(0));
+            }
             success = true;
         }
     } else {
-        qDebug() << "Failed to read midi from data " << midiData << "of size" << block.getSize();
+        qDebug() << Q_FUNC_INFO << "Failed to read midi from data" << midiData << "of size" << block.getSize();
     }
 
     return success;
@@ -150,10 +163,19 @@ bool MidiRecorder::loadFromMidi(const QByteArray &midiData)
 
 QByteArray MidiRecorder::midi() const
 {
+    return trackMidi(-1);
+}
+
+QByteArray MidiRecorder::trackMidi(int sketchpadTrack) const
+{
     QByteArray data;
 
     juce::MidiFile file;
-    file.addTrack(d->midiMessageSequence);
+    if (sketchpadTrack == -1) {
+        file.addTrack(d->globalMidiMessageSequence);
+    } else {
+        file.addTrack(d->midiMessageSequence[sketchpadTrack]);
+    }
 
     juce::MemoryOutputStream out;
     if (file.writeTo(out)) {
@@ -162,7 +184,7 @@ QByteArray MidiRecorder::midi() const
         juce::MemoryBlock block = out.getMemoryBlock();
         data.append((char*)block.getData(), block.getSize());
     } else {
-        qWarning() << "Failed to write midi to memory output stream";
+        qWarning() << Q_FUNC_INFO << "Failed to write midi to memory output stream";
     }
     return data;
 }
@@ -172,9 +194,19 @@ bool MidiRecorder::loadFromBase64Midi(const QString &data)
     return loadFromMidi(QByteArray::fromBase64(data.toLatin1()));
 }
 
+bool MidiRecorder::loadTrackFromBase64Midi(const QString& data, const int& sketchpadTrack)
+{
+    return loadTrackFromMidi(QByteArray::fromBase64(data.toLatin1()), sketchpadTrack);
+}
+
 QString MidiRecorder::base64Midi() const
 {
     return midi().toBase64();
+}
+
+QString MidiRecorder::base64TrackMidi(int sketchpadTrack) const
+{
+    return trackMidi(sketchpadTrack).toBase64();
 }
 
 bool MidiRecorder::loadFromAscii(const QString &/*asciiRepresentation*/)
@@ -193,7 +225,7 @@ QString MidiRecorder::ascii() const
 
 void MidiRecorder::forceToChannel(int channel)
 {
-    for (juce::MidiMessageSequence::MidiEventHolder *holder : d->midiMessageSequence) {
+    for (juce::MidiMessageSequence::MidiEventHolder *holder : d->globalMidiMessageSequence) {
         holder->message.setChannel(channel + 1);
     }
 }
@@ -204,7 +236,7 @@ void MidiRecorder::playRecording()
     SyncTimer *syncTimer = SyncTimer::instance();
     juce::MidiBuffer midiBuffer;
     double mostRecentTimestamp{-1};
-    for (const juce::MidiMessageSequence::MidiEventHolder *holder : d->midiMessageSequence) {
+    for (const juce::MidiMessageSequence::MidiEventHolder *holder : d->globalMidiMessageSequence) {
 //         qDebug() << "Investimagating" << QString::fromStdString(holder->message.getDescription().toStdString());
         if (holder->message.getTimeStamp() != mostRecentTimestamp) {
             if (midiBuffer.getNumEvents() > 0) {
@@ -320,14 +352,17 @@ bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorde
 
     // Update the matching on/off pairs in the sequence (just to make sure they're there, and logically
     // matched, as we depend on that below, but also kind of just want things ready before we use the data
-    d->midiMessageSequence.updateMatchedPairs();
+    d->globalMidiMessageSequence.updateMatchedPairs();
+    for(int i = 0; i < 10; ++i) {
+        d->midiMessageSequence[i].updateMatchedPairs();
+    }
 
     // find out what the last "on" message is, and use that to determine what the last step would be in the current sequence
     int lastStep{-1};
-    if (d->midiMessageSequence.getNumEvents() > 0) {
+    if (d->globalMidiMessageSequence.getNumEvents() > 0) {
         qDebug() << Q_FUNC_INFO << "We've got more than one event recorded, let's find the last on note...";
-        for (int messageIndex = d->midiMessageSequence.getNumEvents() - 1; messageIndex > -1; --messageIndex) {
-            juce::MidiMessageSequence::MidiEventHolder *message = d->midiMessageSequence.getEventPointer(messageIndex);
+        for (int messageIndex = d->globalMidiMessageSequence.getNumEvents() - 1; messageIndex > -1; --messageIndex) {
+            juce::MidiMessageSequence::MidiEventHolder *message = d->globalMidiMessageSequence.getEventPointer(messageIndex);
             if (message->message.isNoteOn()) {
                 // use the position of that message to work out how many steps we need
                 lastStep = message->message.getTimeStamp() / microsecondsPerStep;
@@ -347,8 +382,8 @@ bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorde
         // fetch the messages in order until the step position is "next step" and then forward the step, find the matching off note (if none is found, set duration 0) and insert them on the current step (if the message's channel is in the accepted list, remembering juce's 1-indexing)
         int step{0}, midiChannel{0}, midiNote{0}, timestamp{0}, duration{0}, velocity{0}, delay{0}, row{0}, column{0}, subnoteIndex{0};
         Note* note{nullptr};
-        for (int messageIndex = 0; messageIndex < d->midiMessageSequence.getNumEvents(); ++messageIndex) {
-            juce::MidiMessageSequence::MidiEventHolder *message = d->midiMessageSequence.getEventPointer(messageIndex);
+        for (int messageIndex = 0; messageIndex < d->globalMidiMessageSequence.getNumEvents(); ++messageIndex) {
+            juce::MidiMessageSequence::MidiEventHolder *message = d->globalMidiMessageSequence.getEventPointer(messageIndex);
             if (!message) {
                 qDebug() << "Apparently got an incorrect message, this is bad";
             }

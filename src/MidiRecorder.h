@@ -50,15 +50,15 @@ public:
 
     /**
      * \brief Start recording
-     * @param channel The midi channel to start recording on
+     * @param sketchpadTrack The sketchpad track to start recording on (-1 if you only want global)
      * @param clear Whether or not to clear the current recording before starting the recording (the same as stopping, clearing, and starting)
      */
-    Q_INVOKABLE void startRecording(int channel, bool clear = false);
+    Q_INVOKABLE void startRecording(int sketchpadTrack, bool clear = false);
     /**
      * \brief Stop recording
-     * @param channel The midi channel you want to stop recording from (if -1, all recording is stopped)
+     * @param sketchpadTrack The sketchpad track channel you want to stop recording (if -1, all recording is stopped)
      */
-    Q_INVOKABLE void stopRecording(int channel = -1);
+    Q_INVOKABLE void stopRecording(int sketchpadTrack = -1);
     /**
      * \brief Clears any previously recorded data
      * Clearing will also reset the timestamp. Any events recorded during the next recording session will be started at time 0
@@ -67,29 +67,60 @@ public:
 
     /**
      * \brief Clears the current recording and replaces it with track 0 from the midi file contained in the given data
+     * @note This will be loaded into the global recorder, and will leave the individual sketchpad tracks alone
+     * @see loadTrackFromMidi(QByteArray, int)
      * @param midiData The binary contents of a midi file
      * @return True if successfully loaded, false if not
      */
     Q_INVOKABLE bool loadFromMidi(const QByteArray &midiData);
     /**
+     * \brief Clears the current recording in the given track and replaces it with track 0 from the midi file contained in the given data
+     * @note This will leave the global recording alone
+     * @see loadFromMidi(QByteArray)
+     * @param midiData The binary contents of a midi file
+     * @param sketchpadTrack The sketchpad track index this should be loaded into
+     * @return True if successfully loaded, false if not
+     */
+    Q_INVOKABLE bool loadTrackFromMidi(const QByteArray &midiData, const int &sketchpadTrack);
+    /**
      * \brief A midi file containing the currently recorded midi data in a single track of a type 1 midi file
+     * @note This is all recorded midi, for all channels (conceptually the "global" recording)
+     * @see trackMidi(int)
      * @return The rendered midi file (or empty if the process failed)
      */
     Q_INVOKABLE QByteArray midi() const;
+    /**
+     * \brief A midi file containing the currently recorded midi data in a single track of a type 1 midi file for the given sketchpad track
+     * @param sketchpadTrack The index of the sketchpad track to get midi data for
+     * @return The rendered midi file (or empty if the process failed)
+     */
+    Q_INVOKABLE QByteArray trackMidi(int sketchpadTrack) const;
     /**
      * \brief Convenience function to return a base64 encoded version of the data retrieved by the midi() function
      * @return The base64 data, or an empty string if unsuccessful
      */
     Q_INVOKABLE QString base64Midi() const;
     /**
+     * \brief Convenience function to return a base64 encoded version of the data retrieved by the trackMidi(int) function
+     * @return the base64 data, or an empty string if unsuccessful
+     */
+    Q_INVOKABLE QString base64TrackMidi(int sketchpadTrack) const;
+    /**
      * \brief Convenience function to load from a base64 encoded version of a midi file using the loadFromMidi() function
      * @param data The base64 representation of the midi file you wish to load
      * @return True if successfully loaded, false if not
      */
     Q_INVOKABLE bool loadFromBase64Midi (const QString& data);
+    /**
+     * \brief Convenience function to load from a base64 encoded version of a midi file using the loadTrackFromMidi(int) function)
+     * @param data the base64 representation of the midi file you wish to load
+     * @param sketchpadTrack The index of the sketchpad track to load the recording to
+     * @return True if successfully loaded, false if not
+     */
+    Q_INVOKABLE bool loadTrackFromBase64Midi (const QString&data, const int& sketchpadTrack);
 
     /**
-     * \brief Force all recorded notes onto the given channel
+     * \brief Force all recorded notes in the global recording onto the given channel
      * Prior to playing a recording, you may need to move the notes onto a different channel,
      * so they play on the correct instrument
      * @param channel The channel all notes should be forced onto
