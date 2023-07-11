@@ -74,6 +74,11 @@ void DiskWriter::setFilenamePrefix(const QString& fileNamePrefix) {
     m_fileNamePrefix = fileNamePrefix;
 }
 
+QString DiskWriter::fileName() const
+{
+    return m_fileName;
+}
+
 const bool &DiskWriter::shouldRecord() const {
     return m_shouldRecord;
 }
