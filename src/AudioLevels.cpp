@@ -428,6 +428,17 @@ void AudioLevels::stopRecording()
     }
 }
 
+QStringList AudioLevels::recordingFilenames() const
+{
+    QStringList filenames;
+    filenames << (d->globalPlaybackWriter->shouldRecord() ? d->globalPlaybackWriter->fileName() : QString{});
+    filenames << (d->portsRecorder->shouldRecord() ? d->portsRecorder->fileName() : QString{});
+    for (DiskWriter *channelWriter : d->channelWriters) {
+        filenames << (channelWriter->shouldRecord() ? channelWriter->fileName() : QString{});
+    }
+    return filenames;
+}
+
 bool AudioLevels::isRecording() const
 {
     bool channelIsRecording{false};

@@ -22,6 +22,7 @@ public:
     const bool &isRecording() const;
     const QString &filenamePrefix() const;
     void setFilenamePrefix(const QString& fileNamePrefix);
+    QString fileName() const;
     const bool &shouldRecord() const;
     void setShouldRecord(bool shouldRecord);
 private:
@@ -29,6 +30,7 @@ private:
     bool m_shouldRecord{false};
     bool m_isRecording{false};
 
+    QString m_fileName;
     juce::File m_file;
     juce::TimeSliceThread m_backgroundThread{"AudioLevel Disk Recorder"}; // the thread that will write our audio data to disk
     std::unique_ptr<AudioFormatWriter::ThreadedWriter> m_threadedWriter; // the FIFO used to buffer the incoming data

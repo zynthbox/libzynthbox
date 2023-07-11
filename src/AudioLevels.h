@@ -194,6 +194,14 @@ public:
     Q_INVOKABLE void stopRecording();
 
     /**
+     * \brief Returns a list of filenames for all the recordings (index 0 is global, 1 is the ports recording, 2 through 11 are sketchpad tracks 0 through 9)
+     * If a recorder was unused, its position will exist in the list but contain an empty string
+     * @note This will be cleared the next time startRecording is called
+     * @return The list of filenames used for the most recently started recording session
+     */
+    Q_INVOKABLE QStringList recordingFilenames() const;
+
+    /**
      * @brief Check if a recording is in progress
      * @return Whether a recording is currently in progress
      */

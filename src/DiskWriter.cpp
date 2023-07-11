@@ -12,6 +12,7 @@ DiskWriter::~DiskWriter() {
 }
 
 void DiskWriter::startRecording(const QString& fileName, double sampleRate, int bitRate, int channelCount) {
+    m_fileName = fileName;
     m_file = juce::File(fileName.toStdString());
     m_sampleRate = sampleRate;
     if (m_sampleRate > 0) {
