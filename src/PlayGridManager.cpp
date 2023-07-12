@@ -379,6 +379,10 @@ PlayGridManager::PlayGridManager(QObject* parent)
     connect(d->syncTimer, &SyncTimer::timerTick, this, &timer_callback, Qt::DirectConnection);
     connect(d->syncTimer, &SyncTimer::timerRunningChanged, this, &PlayGridManager::metronomeActiveChanged);
 
+    QDir defaultSequenceLocation{QString("%1/sequences/default-sequences").arg(QString(qgetenv("ZYNTHIAN_MY_DATA_DIR")))};
+    if (!defaultSequenceLocation.exists()) {
+        defaultSequenceLocation.mkpath(defaultSequenceLocation.path());
+    }
     QDir mySequenceLocation{QString("%1/sequences/my-sequences").arg(QString(qgetenv("ZYNTHIAN_MY_DATA_DIR")))};
     if (!mySequenceLocation.exists()) {
         mySequenceLocation.mkpath(mySequenceLocation.path());
