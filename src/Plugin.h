@@ -50,6 +50,10 @@ class Plugin : public QObject {
      * \brief A list of the 10 JackPassthrough clients used by each of the channels
      */
     Q_PROPERTY(QList<JackPassthrough*> channelPassthroughClients READ channelPassthroughClients CONSTANT)
+    /**
+     * \brief A list of the 10 lists. Each list contains 5 JackPasstrough clients to be used by each fx lane of a channel
+     */
+    Q_PROPERTY(QList<QList<JackPassthrough*>> fxPassthroughClients READ fxPassthroughClients CONSTANT)
 
 public:
     static Plugin* instance();
@@ -72,6 +76,7 @@ public:
     JackPassthrough* globalPlaybackClient() const;
     QList<JackPassthrough*> synthPassthroughClients() const;
     QList<JackPassthrough*> channelPassthroughClients() const;
+    QList<QList<JackPassthrough*>> fxPassthroughClients() const;
 
 private:
     explicit Plugin(QObject *parent = nullptr);
@@ -83,6 +88,7 @@ private:
     JackPassthrough* m_globalPlaybackClient;
     QList<JackPassthrough*> m_synthPassthroughClients;
     QList<JackPassthrough*> m_channelPassthroughClients;
+    QList<QList<JackPassthrough*>> m_fxPassthroughClients;
 
     static std::atomic<Plugin*> singletonInstance;
     static std::mutex singletonMutex;
