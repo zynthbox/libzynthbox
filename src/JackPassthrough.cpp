@@ -60,6 +60,7 @@ public:
     float dryAmount{1.0f};
     float wetFx1Amount{1.0f};
     float wetFx2Amount{1.0f};
+    float dryWetMixAmount{-1.0f};
     float panAmount{0.0f};
     bool muted{false};
     bool dryOutPortsEnabled{true};
@@ -278,10 +279,13 @@ float JackPassthrough::dryAmount() const
     return d->dryAmount;
 }
 
-void JackPassthrough::setDryAmount(const float &newValue)
+void JackPassthrough::setDryAmount(const float &newValue, bool resetDryWetMixAmount)
 {
     if (d->dryAmount != newValue) {
         d->dryAmount = newValue;
+        if (resetDryWetMixAmount) {
+            d->dryWetMixAmount = -1.0f;
+        }
         Q_EMIT dryAmountChanged();
     }
 }
@@ -291,10 +295,13 @@ float JackPassthrough::wetFx1Amount() const
     return d->wetFx1Amount;
 }
 
-void JackPassthrough::setWetFx1Amount(const float &newValue)
+void JackPassthrough::setWetFx1Amount(const float &newValue, bool resetDryWetMixAmount)
 {
     if (d->wetFx1Amount != newValue) {
         d->wetFx1Amount = newValue;
+        if (resetDryWetMixAmount) {
+            d->dryWetMixAmount = -1.0f;
+        }
         Q_EMIT wetFx1AmountChanged();
     }
 }
@@ -304,11 +311,32 @@ float JackPassthrough::wetFx2Amount() const
     return d->wetFx2Amount;
 }
 
-void JackPassthrough::setWetFx2Amount(const float &newValue)
+void JackPassthrough::setWetFx2Amount(const float &newValue, bool resetDryWetMixAmount)
 {
     if (d->wetFx2Amount != newValue) {
         d->wetFx2Amount = newValue;
+        if (resetDryWetMixAmount) {
+            d->dryWetMixAmount = -1.0f;
+        }
         Q_EMIT wetFx2AmountChanged();
+    }
+}
+
+float JackPassthrough::dryWetMixAmount() const
+{
+    return d->dryWetMixAmount;
+}
+
+void JackPassthrough::setDryWetMixAmount(const float &newValue)
+{
+    if (d->dryWetMixAmount != newValue) {
+        d->dryWetMixAmount = newValue;
+        if (newValue >= 0.0f && newValue <= 1.0f) {
+            setDryAmount(1.0f - newValue, false);
+            setWetFx1Amount(newValue, false);
+            setWetFx2Amount(newValue, false);
+        }
+        Q_EMIT dryWetMixAmountChanged();
     }
 }
 

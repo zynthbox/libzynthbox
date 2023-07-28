@@ -28,6 +28,20 @@ class JackPassthrough : public QObject {
     Q_PROPERTY(float dryAmount READ dryAmount WRITE setDryAmount NOTIFY dryAmountChanged)
     Q_PROPERTY(float wetFx1Amount READ wetFx1Amount WRITE setWetFx1Amount NOTIFY wetFx1AmountChanged)
     Q_PROPERTY(float wetFx2Amount READ wetFx2Amount WRITE setWetFx2Amount NOTIFY wetFx2AmountChanged)
+    /**
+     * \brief Control dry/wet output mixture
+     *
+     * dryWetMixAmount allows you to redirect what percentage of dry and what percent of wet data is put out.
+     * If say X amount of dryWetMixAmount is set then it will output X amount of wet data and 1-X amount of dry data so that dry and wet data
+     *
+     * Initially -1 is store as dryWetMixAmount as it is unused for all passthrough clients by default. Setting dryWetMixAmount will actualyl set dry and wet amounts individually.
+     * Setting dry amount or wet amount individually for any client will uninitialize dryWetMixAmount by setting it to -1
+     *
+     * @default -1.0f Unused by default
+     * @minimum 0.0f Sets output to be fully dry
+     * @maximum 1.0f Sets output to be fully wet
+     */
+    Q_PROPERTY(float dryWetMixAmount READ dryWetMixAmount WRITE setDryWetMixAmount NOTIFY dryWetMixAmountChanged)
     Q_PROPERTY(float panAmount READ panAmount WRITE setPanAmount NOTIFY panAmountChanged)
     Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY mutedChanged)
 public:
@@ -35,16 +49,20 @@ public:
     ~JackPassthrough() override;
 
     float dryAmount() const;
-    void setDryAmount(const float& newValue);
+    void setDryAmount(const float& newValue, bool resetDryWetMixAmount=true);
     Q_SIGNAL void dryAmountChanged();
 
     float wetFx1Amount() const;
-    void setWetFx1Amount(const float& newValue);
+    void setWetFx1Amount(const float& newValue, bool resetDryWetMixAmount=true);
     Q_SIGNAL void wetFx1AmountChanged();
 
     float wetFx2Amount() const;
-    void setWetFx2Amount(const float& newValue);
+    void setWetFx2Amount(const float& newValue, bool resetDryWetMixAmount=true);
     Q_SIGNAL void wetFx2AmountChanged();
+
+    float dryWetMixAmount() const;
+    void setDryWetMixAmount(const float& newValue);
+    Q_SIGNAL void dryWetMixAmountChanged();
 
     float panAmount() const;
     void setPanAmount(const float& newValue);
