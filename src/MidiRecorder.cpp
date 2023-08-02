@@ -79,7 +79,7 @@ MidiRecorder::MidiRecorder(QObject *parent)
             }
     );
     connect(PlayGridManager::instance(), &PlayGridManager::midiMessage,
-            this, [this](const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const int &sketchpadTrack)
+            this, [this](const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const double& /*timeStamp*/, const int &sketchpadTrack)
             {
                 d->handleMidiMessage(byte1, byte2, byte3, sketchpadTrack);
             }
@@ -182,7 +182,7 @@ QByteArray MidiRecorder::trackMidi(int sketchpadTrack) const
         out.flush();
 
         juce::MemoryBlock block = out.getMemoryBlock();
-        data.append((char*)block.getData(), block.getSize());
+        data.append((char*)block.getData(), int(block.getSize()));
     } else {
         qWarning() << Q_FUNC_INFO << "Failed to write midi to memory output stream";
     }
