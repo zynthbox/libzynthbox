@@ -221,7 +221,6 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
 
 ClipAudioSource::~ClipAudioSource() {
   IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Destroying Clip";
-  stop();
   SamplerSynth::instance()->unregisterClip(this);
   Plugin::instance()->removeCreatedClipFromMap(this);
   Helper::callFunctionOnMessageThread(
