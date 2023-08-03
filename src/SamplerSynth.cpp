@@ -731,7 +731,10 @@ void SamplerSynth::unregisterClip(ClipAudioSource *clip)
 
 SamplerSynthSound * SamplerSynth::clipToSound(ClipAudioSource* clip) const
 {
-    return d->clipSounds[clip];
+    if (d->clipSounds.contains(clip)) {
+        return d->clipSounds[clip];
+    }
+    return nullptr;
 }
 
 float SamplerSynth::cpuLoad() const
