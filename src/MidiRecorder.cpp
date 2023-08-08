@@ -378,7 +378,7 @@ bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorde
             lastStep = patternModel->width() * patternModel->bankLength();
         }
         // resize the pattern to the right number of bars (number of steps divided by the pattern's width)
-        patternModel->setAvailableBars(lastStep / patternModel->width());
+        patternModel->setAvailableBars((lastStep / patternModel->width()) + 1);
         // fetch the messages in order until the step position is "next step" and then forward the step, find the matching off note (if none is found, set duration 0) and insert them on the current step (if the message's channel is in the accepted list, remembering juce's 1-indexing)
         int step{0}, midiChannel{0}, midiNote{0}, timestamp{0}, duration{0}, velocity{0}, delay{0}, row{0}, column{0}, subnoteIndex{0};
         Note* note{nullptr};
@@ -413,11 +413,6 @@ bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorde
                 }
                 continue;
             }
-            // If we're now past the last step, break out
-            if (step > lastStep) {
-                qDebug() << Q_FUNC_INFO << "We're past the final step, break out";
-                break;
-            }
             // Actually insert the message's note data into the step
             note = qobject_cast<Note*>(patternModel->playGridManager()->getNote(midiNote, midiChannel));
             row = patternModel->bankOffset() + (step / patternModel->width());
@@ -430,6 +425,11 @@ bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorde
             }
             if (delay > 0) {
                 patternModel->setSubnoteMetadata(row, column, subnoteIndex, "delay", delay);
+            }
+            // If we're now past the last step, break out
+            if (step > lastStep) {
+                qDebug() << Q_FUNC_INFO << "We're past the final step, break out";
+                break;
             }
         }
         success = true;
