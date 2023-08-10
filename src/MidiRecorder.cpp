@@ -44,14 +44,14 @@ public:
     // One for each of the sketchpad tracks
     juce::MidiMessageSequence globalMidiMessageSequence;
     juce::MidiMessageSequence midiMessageSequence[10];
-    frame_clock::time_point recordingStartTime;
-    void handleMidiMessage(const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const int &sketchpadTrack) {
+    double recordingStartTime;
+    void handleMidiMessage(const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const double& timestamp, const int &sketchpadTrack) {
         if (isRecording) {
             if (0x7F < byte1 && byte1 < 0xA0) {
                 // Using microseconds for timestamps (midi is commonly that anyway)
                 // and juce expects ongoing timestamps, not intervals (it will create those when saving)
-                const std::chrono::duration<double, std::micro> timestamp = frame_clock::now() - recordingStartTime;
-                juce::MidiMessage message{byte1, byte2, byte3, timestamp.count()};
+                double ourTimestamp = qMax(timestamp - recordingStartTime, 0.0);
+                juce::MidiMessage message{byte1, byte2, byte3, ourTimestamp};
                 midiMessageSequence[sketchpadTrack].addEvent(message);
                 globalMidiMessageSequence.addEvent(message);
             }
@@ -79,9 +79,9 @@ MidiRecorder::MidiRecorder(QObject *parent)
             }
     );
     connect(PlayGridManager::instance(), &PlayGridManager::midiMessage,
-            this, [this](const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const double& /*timeStamp*/, const int &sketchpadTrack)
+            this, [this](const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const double& timeStamp, const int &sketchpadTrack)
             {
-                d->handleMidiMessage(byte1, byte2, byte3, sketchpadTrack);
+                d->handleMidiMessage(byte1, byte2, byte3, timeStamp, sketchpadTrack);
             }
     );
 }
@@ -97,7 +97,7 @@ void MidiRecorder::startRecording(int sketchpadTrack, bool clear)
         d->trackEnabled[sketchpadTrack] = true;
     }
     if (!d->isRecording) {
-        d->recordingStartTime = frame_clock::now();
+        d->recordingStartTime = SyncTimer::instance()->jackPlayheadUsecs();
         d->isRecording = true;
         Q_EMIT isRecordingChanged();
     }
@@ -323,7 +323,7 @@ bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorde
     }
 
     // work out how many microseconds we've got per step in the given pattern
-    SyncTimer *syncTimer{qobject_cast<SyncTimer*>(patternModel->playGridManager()->syncTimer())};
+    SyncTimer *syncTimer = SyncTimer::instance();
     quint64 subbeatsPerStep{0};
     switch (patternModel->noteLength()) {
     case 1:
@@ -347,7 +347,7 @@ bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorde
     default:
         break;
     }
-    int microsecondsPerStep = syncTimer->subbeatCountToSeconds(syncTimer->getBpm(), subbeatsPerStep) * 1000000;
+    int microsecondsPerStep = syncTimer->subbeatCountToSeconds(syncTimer->getBpm(), subbeatsPerStep * quint64(syncTimer->getMultiplier() / 64)) * 1000000;
     int microsecondsPerSubbeat = syncTimer->subbeatCountToSeconds(syncTimer->getBpm(), 1) * 1000000;
 
     // Update the matching on/off pairs in the sequence (just to make sure they're there, and logically
@@ -360,6 +360,7 @@ bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorde
     // find out what the last "on" message is, and use that to determine what the last step would be in the current sequence
     int lastStep{-1};
     if (d->globalMidiMessageSequence.getNumEvents() > 0) {
+        qDebug() << Q_FUNC_INFO << "Operating on" << d->globalMidiMessageSequence.getNumEvents() << "events, for a pattern with note length" << patternModel->noteLength() << "meaning" << subbeatsPerStep << "subbeats per step" << "µs per step" << microsecondsPerStep << "µs per subbeat" << microsecondsPerSubbeat;
         qDebug() << Q_FUNC_INFO << "We've got more than one event recorded, let's find the last on note...";
         for (int messageIndex = d->globalMidiMessageSequence.getNumEvents() - 1; messageIndex > -1; --messageIndex) {
             juce::MidiMessageSequence::MidiEventHolder *message = d->globalMidiMessageSequence.getEventPointer(messageIndex);
@@ -395,9 +396,9 @@ bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorde
                 timestamp = message->message.getTimeStamp();
                 qDebug() << Q_FUNC_INFO << "Found an on message, for channel, note, velocity, and timestamp" << midiChannel << midiNote << velocity << timestamp;
                 while (timestamp > (step * microsecondsPerStep)) {
-                    qDebug() << Q_FUNC_INFO << "Increasing step position, now operating on step" << step;
                     ++step;
                 }
+                qDebug() << Q_FUNC_INFO << "Increased step position to match" << double(timestamp) / 1000000.0 << "seconds, now operating on step" << step;
                 delay = ((step * microsecondsPerStep) - timestamp) / microsecondsPerSubbeat;
                 if (message->noteOffObject) {
                     duration = (message->noteOffObject->message.getTimeStamp() - timestamp - delay) / microsecondsPerStep;
@@ -418,7 +419,7 @@ bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorde
             row = patternModel->bankOffset() + (step / patternModel->width());
             column = step % patternModel->width();
             subnoteIndex = patternModel->addSubnote(row, column, note);
-            qDebug() << Q_FUNC_INFO << "Inserted subnote at" << row << column << "New subnote is" << note;
+            qDebug() << Q_FUNC_INFO << "Inserted subnote at" << row << column << "New subnote is" << note << "with duration" << duration << "delay" << delay;
             patternModel->setSubnoteMetadata(row, column, subnoteIndex, "velocity", velocity);
             if (duration > 0) {
                 patternModel->setSubnoteMetadata(row, column, subnoteIndex, "duration", duration);
