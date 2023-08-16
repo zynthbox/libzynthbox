@@ -24,6 +24,10 @@ struct alignas(64) TimerCommand {
         SetBpmOperation = 10, ///@< Set the BPM of the timer to the value in stored in parameter (this will be clamped to fit between SyncTimer's allowed values)
         AutomationOperation = 11, ///@< Set the value of a given parameter on a given engine on a given channel to a given value. parameter contains the channel (-1 is global fx engines, 0 through 9 being zl channels), parameter2 contains the engine index, parameter3 is the parameter's index, parameter4 is the value
         PassthroughClientOperation = 12, ///@< Set the volume of the given volume channel to the given value. parameter is the channel (-1 is global playback, 0 through 9 being zl channels), parameter2 is the setting index in the list (dry, wetfx1, wetfx2, pan, muted), parameter3 being the left value, parameter4 being right value. If parameter2 is pan or muted, parameter4 is ignored. For volumes, parameter3 and parameter4 can be 0 through 100. For pan, -100 for all left through 100 for all right, with 0 being no pan. For muted, 0 is not muted, any other value is muted.
+        ChannelRecorderStartOperation = 20, ///@< Start recording a channel. Make sure you have set up the channel recorder before scheduling this command (see AudioLevels::setChannelToRecord and AudioLevels::setChannelFilenamePrefix)
+        ChannelRecorderStopOperation = 21, ///@< Stop recording a channel
+        MidiRecorderStartOperation = 30, ///@< Start recording a midi channel. parameter is the sketchpad track to record (-1 for global channel, 0 through 9 for sketchpad tracks)
+        MidiRecorderStopOperation = 31, ///@< Stop any ongoing midi recordings
         RegisterCASOperation = 10001, ///@< INTERNAL - Register a ClipAudioSource with SamplerSynth, so it can be used for playback - dataParameter should contain a ClipAudioSource* object instance
         UnregisterCASOperation = 10002, ///@< INTERNAL - Unregister a ClipAudioSource with SamplerSynth, so it can be used for playback - dataParameter should contain a ClipAudioSource* object instance
     };

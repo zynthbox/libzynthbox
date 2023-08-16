@@ -187,7 +187,7 @@ public:
    * @param parameter2 A third integer optionally used by the command's handler to perform its work
    * @param variantParameter A QVariant used by the parameter's handler, if an integer is insufficient
    */
-  void scheduleTimerCommand(quint64 delay, int operation, int parameter1 = 0, int parameter2 = 0, int parameter3 = 0, const QVariant &variantParameter = QVariant());
+  Q_INVOKABLE void scheduleTimerCommand(quint64 delay, int operation, int parameter1 = 0, int parameter2 = 0, int parameter3 = 0, const QVariant &variantParameter = QVariant());
 
   /**
    * \brief Schedule a playback command into the playback schedule to be sent with the given delay

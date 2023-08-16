@@ -10,6 +10,8 @@
 #include "TimerCommand.h"
 #include "TransportManager.h"
 #include "JackThreadAffinitySetter.h"
+#include "AudioLevels.h"
+#include "MidiRecorder.h"
 
 #include <QDebug>
 #include <QHash>
@@ -620,6 +622,18 @@ public:
                                     qWarning() << Q_FUNC_INFO << "Failed to retrieve clip from clip registration timer command";
                                 }
                             }
+                            break;
+                        case TimerCommand::ChannelRecorderStartOperation:
+                            AudioLevels::instance()->startRecording();
+                            break;
+                        case TimerCommand::ChannelRecorderStopOperation:
+                            AudioLevels::instance()->stopRecording();
+                            break;
+                        case TimerCommand::MidiRecorderStartOperation:
+                            MidiRecorder::instance()->startRecording(command->parameter, false, stepNextPlaybackPosition);
+                            break;
+                        case TimerCommand::MidiRecorderStopOperation:
+                            MidiRecorder::instance()->stopRecording(command->parameter);
                             break;
                         case TimerCommand::StartPartOperation:
                         case TimerCommand::StopPartOperation:

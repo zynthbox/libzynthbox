@@ -52,13 +52,29 @@ public:
      * \brief Start recording
      * @param sketchpadTrack The sketchpad track to start recording on (-1 if you only want global)
      * @param clear Whether or not to clear the current recording before starting the recording (the same as stopping, clearing, and starting)
+     * @param startTimestamp If > 0, this will be used as the start timestamp instead of whatever is currently reported by SyncTimer's playhead
      */
-    Q_INVOKABLE void startRecording(int sketchpadTrack, bool clear = false);
+    Q_INVOKABLE void startRecording(int sketchpadTrack, bool clear = false, quint64 startTimestamp = 0);
+    /**
+     * \brief Schedules a start of the recording process on all enabled channels
+     * @note If you wish to record more than one track, just schedule multiple starts with the same delay (as they will be started on the same position anyway)
+     * @param delay The amount of time to wait until starting the recording (if you need to do it now, just call startRecording)
+     * @param sketchpadTrack The sketchpad track that should be recorded on (-1 is global, 0 through 9 are sketchpad tracks)
+     * @see startRecording()
+     */
+    Q_INVOKABLE void scheduleStartRecording(quint64 delay, int sketchpadTrack);
     /**
      * \brief Stop recording
      * @param sketchpadTrack The sketchpad track channel you want to stop recording (if -1, all recording is stopped)
      */
     Q_INVOKABLE void stopRecording(int sketchpadTrack = -1);
+    /**
+     * \brief Schedules a stop of all recording processes ongoing at the time the event is fired
+     * @param delay The amount of time to wait until stopping recording (if you need to do it now, just call stopRecording)
+     * @param sketchpadTrack The sketchpad track channel you want to stop recording (if -1, all recording is stopped)
+     * @see stopRecording()
+     */
+    Q_INVOKABLE void scheduleStopRecording(quint64 delay, int sketchpadTrack);
     /**
      * \brief Clears any previously recorded data
      * Clearing will also reset the timestamp. Any events recorded during the next recording session will be started at time 0

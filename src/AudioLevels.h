@@ -189,9 +189,21 @@ public:
      */
     Q_INVOKABLE void startRecording();
     /**
+     * \brief Schedules a start of the recording process on all enabled channels
+     * @param delay The amount of time to wait until starting the recording (if you need to do it now, just call startRecording)
+     * @see startRecording()
+     */
+    Q_INVOKABLE void scheduleStartRecording(quint64 delay);
+    /**
      * \brief Stop any ongoing recordings
      */
     Q_INVOKABLE void stopRecording();
+    /**
+     * \brief Schedules a stop of all recording processes ongoing at the time the event is fired
+     * @param delay The amount of time to wait until stopping recording (if you need to do it now, just call stopRecording)
+     * @see stopRecording()
+     */
+    Q_INVOKABLE void scheduleStopRecording(quint64 delay);
 
     /**
      * \brief Returns a list of filenames for all the recordings (index 0 is global, 1 is the ports recording, 2 through 11 are sketchpad tracks 0 through 9)

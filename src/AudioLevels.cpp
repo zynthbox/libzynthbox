@@ -12,6 +12,8 @@
 #include "AudioLevels.h"
 #include "DiskWriter.h"
 #include "JackThreadAffinitySetter.h"
+#include "SyncTimer.h"
+#include "TimerCommand.h"
 
 #include <QDateTime>
 #include <QDebug>
@@ -412,11 +414,23 @@ void AudioLevels::startRecording()
     }
     for (DiskWriter *channelWriter : d->channelWriters) {
         if (channelWriter->shouldRecord()) {
-            const QString filename = QString("%1-%2.wav").arg(channelWriter->filenamePrefix()).arg(timestamp);
-            channelWriter->startRecording(filename, sampleRate);
+            if (channelWriter->filenamePrefix().endsWith(".wav")) {
+                // If prefix already ends with `.wav` do not add timestamp and suffix to filename
+                channelWriter->startRecording(channelWriter->filenamePrefix(), sampleRate);
+            } else {
+                const QString filename = QString("%1-%2.wav").arg(channelWriter->filenamePrefix()).arg(timestamp);
+                channelWriter->startRecording(filename, sampleRate);
+            }
         }
     }
     Q_EMIT isRecordingChanged();
+}
+
+void AudioLevels::scheduleStartRecording(quint64 delay)
+{
+    TimerCommand *command = SyncTimer::instance()->getTimerCommand();
+    command->operation = TimerCommand::ChannelRecorderStartOperation;
+    SyncTimer::instance()->scheduleTimerCommand(delay, command);
 }
 
 void AudioLevels::stopRecording()
@@ -426,6 +440,13 @@ void AudioLevels::stopRecording()
     for (DiskWriter *channelWriter : d->channelWriters) {
         channelWriter->stop();
     }
+}
+
+void AudioLevels::scheduleStopRecording(quint64 delay)
+{
+    TimerCommand *command = SyncTimer::instance()->getTimerCommand();
+    command->operation = TimerCommand::ChannelRecorderStopOperation;
+    SyncTimer::instance()->scheduleTimerCommand(delay, command);
 }
 
 QStringList AudioLevels::recordingFilenames() const

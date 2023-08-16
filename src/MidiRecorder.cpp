@@ -25,6 +25,7 @@
 #include "PlayGridManager.h"
 #include "PatternModel.h"
 #include "SyncTimer.h"
+#include "TimerCommand.h"
 
 #include <QDebug>
 #include <QTimer>
@@ -88,7 +89,7 @@ MidiRecorder::MidiRecorder(QObject *parent)
 
 MidiRecorder::~MidiRecorder() = default;
 
-void MidiRecorder::startRecording(int sketchpadTrack, bool clear)
+void MidiRecorder::startRecording(int sketchpadTrack, bool clear, quint64 startTimestamp)
 {
     if (clear) {
         clearRecording();
@@ -97,10 +98,22 @@ void MidiRecorder::startRecording(int sketchpadTrack, bool clear)
         d->trackEnabled[sketchpadTrack] = true;
     }
     if (!d->isRecording) {
-        d->recordingStartTime = SyncTimer::instance()->jackPlayheadUsecs();
+        if (startTimestamp > 0) {
+            d->recordingStartTime = startTimestamp;
+        } else {
+            d->recordingStartTime = SyncTimer::instance()->jackPlayheadUsecs();
+        }
         d->isRecording = true;
         Q_EMIT isRecordingChanged();
     }
+}
+
+void MidiRecorder::scheduleStartRecording(quint64 delay, int sketchpadTrack)
+{
+    TimerCommand *command = SyncTimer::instance()->getTimerCommand();
+    command->operation = TimerCommand::MidiRecorderStartOperation;
+    command->parameter = sketchpadTrack;
+    SyncTimer::instance()->scheduleTimerCommand(delay, command);
 }
 
 void MidiRecorder::stopRecording(int sketchpadTrack)
@@ -123,6 +136,14 @@ void MidiRecorder::stopRecording(int sketchpadTrack)
         d->isRecording = false;
         Q_EMIT isRecordingChanged();
     }
+}
+
+void MidiRecorder::scheduleStopRecording(quint64 delay, int sketchpadTrack)
+{
+    TimerCommand *command = SyncTimer::instance()->getTimerCommand();
+    command->operation = TimerCommand::MidiRecorderStopOperation;
+    command->parameter = sketchpadTrack;
+    SyncTimer::instance()->scheduleTimerCommand(delay, command);
 }
 
 void MidiRecorder::clearRecording()
