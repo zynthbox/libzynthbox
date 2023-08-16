@@ -254,6 +254,7 @@ public:
             }
             zLSelectedSketch = newSelectedSketch;
             if (zLSelectedSketch) {
+                connect(zLSelectedSketch, SIGNAL(segmentsModelChanged()), this, SLOT(selectedSegmentModelChanged()));
                 setZLSegmentsModel(zLSelectedSketch->property("segmentsModel").value<QObject*>());
             }
         }
@@ -300,6 +301,9 @@ public Q_SLOTS:
                 qWarning() << Q_FUNC_INFO << "Sequence" << i << "could not be fetched, and will be unavailable for playback management";
             }
         }
+    }
+    void selectedSegmentModelChanged() {
+        setZLSegmentsModel(zLSelectedSketch->property("segmentsModel").value<QObject*>());
     }
     void updateSegments(qint64 stopAfter) {
         static const QLatin1String sampleLoopedType{"sample-loop"};
