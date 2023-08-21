@@ -12,6 +12,9 @@
 #include "JackThreadAffinitySetter.h"
 #include "AudioLevels.h"
 #include "MidiRecorder.h"
+#include "SegmentHandler.h"
+#include "PlayGridManager.h"
+#include "SequenceModel.h"
 
 #include <QDebug>
 #include <QHash>
@@ -526,6 +529,7 @@ public:
             // In case we're cycling through stuff we've already played, let's just... not do anything with that
             // Basically that just means nobody else has attempted to do stuff with the step since we last played it
             if (!stepData->played) {
+                stepData->played = true;
                 // First, let's get the midi messages sent out
                 for (const juce::MidiMessageMetadata &juceMessage : qAsConst(stepData->midiBuffer)) {
                     if (firstAvailableFrame >= nframes) {
@@ -568,10 +572,10 @@ public:
                     Q_EMIT q->timerCommand(command);
                     switch (command->operation) {
                         case TimerCommand::StartPlaybackOperation:
-                            Q_EMIT q->pleaseStartPlayback();
+                            startPlayback(command);
                             break;
                         case TimerCommand::StopPlaybackOperation:
-                            Q_EMIT q->pleaseStopPlayback();
+                            stopPlayback();
                             break;
                         case TimerCommand::StartClipLoopOperation:
                         case TimerCommand::StopClipLoopOperation:
@@ -624,13 +628,13 @@ public:
                             }
                             break;
                         case TimerCommand::ChannelRecorderStartOperation:
-                            AudioLevels::instance()->startRecording();
+                            AudioLevels::instance()->startRecording(firstAvailableFrame + current_frames);
                             break;
                         case TimerCommand::ChannelRecorderStopOperation:
-                            AudioLevels::instance()->stopRecording();
+                            AudioLevels::instance()->stopRecording(firstAvailableFrame + current_frames);
                             break;
                         case TimerCommand::MidiRecorderStartOperation:
-                            MidiRecorder::instance()->startRecording(command->parameter, false, stepNextPlaybackPosition);
+                            MidiRecorder::instance()->startRecording(command->parameter, false, firstAvailableFrame + current_frames);
                             break;
                         case TimerCommand::MidiRecorderStopOperation:
                             MidiRecorder::instance()->stopRecording(command->parameter);
@@ -644,7 +648,6 @@ public:
                             break;
                     }
                 }
-                stepData->played = true;
             }
             // Update our internal BPM state, based on what we had on the previous step
             if (jackPlayheadBpm != thisStepBpm) {
@@ -722,6 +725,81 @@ public:
         return 0;
     }
 
+    void startPlayback(TimerCommand *command) {
+        if (timerThread->isPaused()) {
+            SegmentHandler *handler = SegmentHandler::instance();
+            if (command->parameter == 1) {
+                handler->startPlayback(command->parameter2, command->bigParameter);
+            } else {
+                qDebug() << Q_FUNC_INFO << "Starting metronome and playback";
+                PlayGridManager *pgm = PlayGridManager::instance();
+                for (int i = 1; i < 11; ++i) {
+                    SequenceModel* sequence = qobject_cast<SequenceModel*>(pgm->getSequenceModel(QString("T%1").arg(i)));
+                    if (sequence) {
+                        sequence->prepareSequencePlayback();
+                    } else {
+                        qWarning() << Q_FUNC_INFO << "Sequence for track" << i << "could not be fetched, and playback could not be prepared";
+                    }
+                }
+                QObject *clipToRecord = pgm->zlSketchpad()->property("clipToRecord").value<QObject*>();
+                if (clipToRecord) {
+                    MidiRecorder::instance()->startRecording(pgm->currentMidiChannel(), true);
+                }
+                QMetaObject::invokeMethod(pgm->zlSketchpad(), "startPlayback", Qt::DirectConnection);
+                q->start();
+                qDebug() << Q_FUNC_INFO << "Metronome and playback started";
+            }
+        } else {
+            qDebug() << Q_FUNC_INFO << "Attempted to start playback without playback running";
+        }
+    }
+    void stopPlayback() {
+        if (timerThread->isPaused()) {
+            qDebug() << Q_FUNC_INFO << "Attempted to stop playback when playback was already stopped";
+        } else {
+            PlayGridManager *pgm = PlayGridManager::instance();
+            if (SegmentHandler::instance()->songMode()) {
+                qDebug() << Q_FUNC_INFO << "Stopping metronome and playback in song mode";
+                QMetaObject::invokeMethod(pgm->zlSketchpad(), "stopAllPlayback", Qt::DirectConnection);
+                SegmentHandler::instance()->stopPlayback();
+                q->stop();
+                for (int chan = 0; chan < 10; ++chan) {
+                    // One All Notes Off message for each track (not midi channel)
+                    q->sendMidiMessageImmediately(3, 176 + chan, 123, 0);
+                }
+                qDebug() << Q_FUNC_INFO << "Stopped metronome and playback in song mode";
+            } else {
+                qDebug() << Q_FUNC_INFO << "Stopping metronome and playback";
+                for (int i = 1; i < 11; ++i) {
+                    SequenceModel* sequence = qobject_cast<SequenceModel*>(pgm->getSequenceModel(QString("T%1").arg(i)));
+                    if (sequence) {
+                        sequence->stopSequencePlayback();
+                    } else {
+                        qWarning() << Q_FUNC_INFO << "Sequence for track" << i << "could not be fetched, and playback could not be stopped";
+                    }
+                }
+                const bool isRecording = pgm->zlSketchpad()->property("isRecording").toBool();
+                if (isRecording) {
+                    MidiRecorder::instance()->stopRecording();
+                    pgm->zlSketchpad()->setProperty("lastRecordingMidi", MidiRecorder::instance()->base64TrackMidi(pgm->currentMidiChannel()));
+                    const QString recordingType = pgm->zlSketchpad()->property("recordingType").toString();
+                    if (recordingType == QLatin1String{"audio"}) {
+                        QMetaObject::invokeMethod(pgm->zlSketchpad(), "stopAudioRecording", Qt::DirectConnection);
+                    }
+                    QMetaObject::invokeMethod(pgm->zlSketchpad(), "stopRecording", Qt::DirectConnection);
+                }
+                QMetaObject::invokeMethod(pgm->zlSketchpad(), "stopAllPlayback", Qt::DirectConnection);
+                pgm->stopMetronome();
+                q->stop();
+                for (int chan = 0; chan < 10; ++chan) {
+                    // One All Notes Off message for each track (not midi channel)
+                    q->sendMidiMessageImmediately(3, 176 + chan, 123, 0);
+                }
+                qDebug() << Q_FUNC_INFO << "Metronome and playback stopped";
+            }
+        }
+    }
+
     quint64 scheduleAheadAmount{0};
     void updateScheduleAheadAmount() {
         scheduleAheadAmount = (timerThread->nanosecondsToSubbeatCount(timerThread->getBpm(), jackLatency * (float)1000000)) + 1;
@@ -763,7 +841,7 @@ SyncTimer::SyncTimer(QObject *parent)
     d->jackSubbeatLengthInMicroseconds = timerThread->subbeatCountToNanoseconds(timerThread->getBpm(), 1) / 1000;
     connect(timerThread, &SyncTimerThread::pausedChanged, this, [this](){
         d->isPaused = timerThread->isPaused();
-    });
+    }, Qt::DirectConnection);
     // Open the client.
     jack_status_t real_jack_status{};
     d->jackClient = jack_client_open("SyncTimer", JackNullOption, &real_jack_status);
@@ -899,13 +977,15 @@ void SyncTimer::startWithCountin()
 }
 
 void SyncTimer::start() {
-    qDebug() << "#### Starting timer with previously set BPM" << getBpm();
+    if (timerThread->isPaused()) {
+        qDebug() << "#### Starting timer with previously set BPM" << getBpm();
 #ifdef DEBUG_SYNCTIMER_TIMING
-    d->intervals.clear();
-    d->lastRound = frame_clock::now();
+        d->intervals.clear();
+        d->lastRound = frame_clock::now();
 #endif
-    d->stepReadHeadOnStart = (*d->stepReadHead).index;
-    timerThread->resume();
+        d->stepReadHeadOnStart = (*d->stepReadHead).index;
+        timerThread->resume();
+    }
 }
 
 void SyncTimer::stop() {
@@ -920,18 +1000,21 @@ void SyncTimer::stop() {
     d->jackPlayhead = 0;
 
     // A touch of hackery to ensure we end immediately, and leave a clean state
+    // We want to fire off all the off notes immediately, and none of the on notes
     juce::MidiBuffer onlyOffs;
+    // We also want to fire off all the clip commands (so they happen, but without making noises)
     QList<ClipCommand*> clipCommands;
+    // We also want to clean up the step, so timer commands still happen at the expected times, without the other two happening
     for (quint64 step = 0; step < StepRingCount; ++step) {
         StepData *stepData = &d->stepRing[(step + d->stepReadHead->index) % StepRingCount];
         if (!stepData->played) {
-            stepData->played = true;
             // First, collect all the queued midi messages, but in strict order, and only off notes...
             for (const juce::MidiMessageMetadata& message : stepData->midiBuffer) {
                 if (message.getMessage().isNoteOff()) {
                     onlyOffs.addEvent(message.getMessage(), 0);
                 }
             }
+            stepData->midiBuffer.clear();
             // Now for the clip commands
             for (ClipCommand *clipCommand : qAsConst(stepData->clipCommands)) {
                 // Actually run all the commands (so we don't end up in a weird state), but also
@@ -940,6 +1023,7 @@ void SyncTimer::stop() {
                 clipCommand->volume = 0;
                 clipCommands << clipCommand;
             }
+            stepData->clipCommands.clear();
         }
     }
     // And now everything has been marked as sent out, let's re-schedule the things that actually want to go out
@@ -976,7 +1060,7 @@ quint64 SyncTimer::secondsToSubbeatCount(quint64 bpm, float seconds) const
     return timerThread->nanosecondsToSubbeatCount(qBound(quint64(BPM_MINIMUM), bpm, quint64(BPM_MAXIMUM)), floor(seconds * (float)1000000000));
 }
 
-int SyncTimer::getMultiplier() {
+int SyncTimer::getMultiplier() const {
     return BeatSubdivisions;
 }
 
@@ -1226,6 +1310,25 @@ TimerCommand * SyncTimer::getTimerCommand()
 void SyncTimer::deleteTimerCommand(TimerCommand* command)
 {
     d->timerCommandsToDelete.write(command, d->refreshThingsAfter);
+}
+
+void SyncTimer::scheduleStartPlayback(quint64 delay, bool startInSongMode, int startOffset, quint64 duration)
+{
+    TimerCommand *command = getTimerCommand();
+    command->operation = TimerCommand::StartPlaybackOperation;
+    if (startInSongMode) {
+        command->parameter = 1;
+        command->parameter2 = startOffset;
+        command->bigParameter = duration;
+    }
+    scheduleTimerCommand(delay, command);
+}
+
+void SyncTimer::scheduleStopPlayback(quint64 delay)
+{
+    TimerCommand *command = getTimerCommand();
+    command->operation = TimerCommand::StopPlaybackOperation;
+    scheduleTimerCommand(delay, command);
 }
 
 void SyncTimer::process(jack_nframes_t /*nframes*/, void */*buffer*/, quint64 *jackPlayhead, quint64 *jackSubbeatLengthInMicroseconds)

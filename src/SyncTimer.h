@@ -20,6 +20,7 @@ class SyncTimerPrivate;
  */
 class SyncTimer : public QObject {
   Q_OBJECT
+  Q_PROPERTY(bool timerRunning READ timerRunning NOTIFY timerRunningChanged)
   Q_PROPERTY(quint64 bpm READ getBpm WRITE setBpm NOTIFY bpmChanged)
   Q_PROPERTY(quint64 scheduleAheadAmount READ scheduleAheadAmount NOTIFY scheduleAheadAmountChanged)
   Q_PROPERTY(bool audibleMetronome READ audibleMetronome WRITE setAudibleMetronome NOTIFY audibleMetronomeChanged)
@@ -82,7 +83,7 @@ public:
    * \brief The timer's beat multiplier (that is, the number of subbeats per quarter note)
    * @return The number of subbeats per quarter note
    */
-  Q_INVOKABLE int getMultiplier();
+  Q_INVOKABLE int getMultiplier() const;
   /**
    * \brief The timer's current bpm rate
    * @return The number of beats per minute currently used as the basis for the timer's operation
@@ -265,6 +266,20 @@ public:
   Q_SLOT TimerCommand *getTimerCommand();
   Q_SLOT void deleteTimerCommand(TimerCommand *command);
 
+  /**
+   * \brief Schedule start of playback at the given delay
+   * @param delay The amount of ticks to delay the start of playback
+   * @param startInSongMode If true, playback will be started in song mode
+   * @param startOffset In song mode, use this to set the start offset position (or leave it alone)
+   * @param duration In song mode, use this to set for how long playback should commence before stopping
+   * @see SegmentHandler::startPlayback(qint64, quint64)
+   */
+  Q_INVOKABLE void scheduleStartPlayback(quint64 delay, bool startInSongMode = false, int startOffset = 0, quint64 duration = 0);
+  /**
+   * \brief Schedule stop of playback at the given delay
+   * @param delay The amount of ticks to delay the stop of playback
+   */
+  Q_INVOKABLE void scheduleStopPlayback(quint64 delay);
   Q_SIGNAL void pleaseStartPlayback();
   Q_SIGNAL void pleaseStopPlayback();
 protected:
