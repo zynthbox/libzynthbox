@@ -91,6 +91,10 @@ class PlayGridManager : public QObject
      */
     Q_PROPERTY(QObject* zlDashboard READ zlDashboard WRITE setZlDashboard NOTIFY zlDashboardChanged)
     /**
+     * \brief The global instance of the core Sketchpad gui control object
+     */
+    Q_PROPERTY(QObject* zlSketchpad READ zlSketchpad WRITE setZlSketchpad NOTIFY zlSketchpadChanged)
+    /**
      * \brief The midi channel associated with the currently selected channel, or -1 if the channel is invalid
      * @default -1
      */
@@ -297,6 +301,10 @@ public:
     QObject *zlDashboard() const;
     void setZlDashboard(QObject *zlDashboard);
     Q_SIGNAL void zlDashboardChanged();
+
+    QObject *zlSketchpad() const;
+    void setZlSketchpad(QObject *zlSketchpad);
+    Q_SIGNAL void zlSketchpadChanged();
 
     void setCurrentMidiChannel(int midiChannel);
     int currentMidiChannel() const;

@@ -80,6 +80,7 @@ public:
     };
     PlayGridManager *q{nullptr};
     QObject *zlDashboard{nullptr};
+    QObject *zlSketchpad{nullptr};
 
     void setZlDashboard(QObject *newZlDashboard) {
         if (zlDashboard != newZlDashboard) {
@@ -90,6 +91,16 @@ public:
             if (zlDashboard) {
                 connect(zlDashboard, SIGNAL(selected_channel_changed()), this, SLOT(selectedChannelChanged()), Qt::QueuedConnection);
                 selectedChannelChanged();
+            }
+        }
+    }
+    void setZlSketchpad(QObject *newZlSketchpad) {
+        if (zlSketchpad != newZlSketchpad) {
+            if (zlSketchpad) {
+                zlSketchpad->disconnect(this);
+            }
+            zlSketchpad = newZlSketchpad;
+            if (zlSketchpad) {
             }
         }
     }
@@ -998,6 +1009,20 @@ void PlayGridManager::setZlDashboard(QObject *zlDashboard)
         Q_EMIT zlDashboardChanged();
     }
 }
+
+QObject * PlayGridManager::zlSketchpad() const
+{
+    return d->zlSyncManager->zlSketchpad;
+}
+
+void PlayGridManager::setZlSketchpad(QObject* zlSketchpad)
+{
+    if (d->zlSyncManager->zlSketchpad != zlSketchpad) {
+        d->zlSyncManager->setZlSketchpad(zlSketchpad);
+        Q_EMIT zlSketchpadChanged();
+    }
+}
+
 
 void PlayGridManager::setCurrentMidiChannel(int midiChannel)
 {
