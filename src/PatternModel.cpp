@@ -471,8 +471,8 @@ PatternModel::PatternModel(SequenceModel* parent)
     // We need to make sure that we support orphaned patterns (that is, a pattern that is not contained within a sequence)
     d->sequence = parent;
     if (parent) {
-        connect(d->sequence, &SequenceModel::isPlayingChanged, this, updateIsPlaying);
-        connect(d->sequence, &SequenceModel::soloPatternChanged, this, updateIsPlaying);
+        connect(d->sequence, &SequenceModel::isPlayingChanged, this, updateIsPlaying, Qt::DirectConnection);
+        connect(d->sequence, &SequenceModel::soloPatternChanged, this, updateIsPlaying, Qt::DirectConnection);
         // This is to ensure that when the current sound changes and we have no midi channel, we will schedule
         // the notes that are expected of us
         connect(d->sequence->playGridManager(), &PlayGridManager::currentMidiChannelChanged, this, [this](){
