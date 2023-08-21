@@ -93,6 +93,7 @@ public:
     QList<SequenceModel*> sequenceModels;
     bool songMode{false};
     qint64 startOffset{0};
+    qint64 duration{0};
 
     PlayfieldState *playfieldState{nullptr};
     qint64 playhead{0};
@@ -316,7 +317,7 @@ public Q_SLOTS:
             qDebug() << Q_FUNC_INFO << "Working with" << segmentCount << "segments...";
             for (int segmentIndex = 0; segmentIndex < segmentCount; ++segmentIndex) {
                 QObject *segment{nullptr};
-                QMetaObject::invokeMethod(zLSegmentsModel, "get_segment", Q_RETURN_ARG(QObject*, segment), Q_ARG(int, segmentIndex));
+                QMetaObject::invokeMethod(zLSegmentsModel, "get_segment", Qt::DirectConnection, Q_RETURN_ARG(QObject*, segment), Q_ARG(int, segmentIndex));
                 if (segment) {
                     qDebug() << Q_FUNC_INFO <<  "Working on segment at index" << segmentIndex;
                     QList<TimerCommand*> commands;
@@ -408,7 +409,11 @@ public Q_SLOTS:
             stopCommand->operation = TimerCommand::StopPlaybackOperation;
             commands << stopCommand;
             playlist[segmentPosition] = commands;
+            d->duration = segmentPosition;
+        } else {
+            d->duration = 0;
         }
+        Q_EMIT q->durationChanged();
         d->playlist = playlist;
     }
 };
@@ -477,6 +482,11 @@ int SegmentHandler::playhead() const
     return d->playhead;
 }
 
+qint64 SegmentHandler::duration() const
+{
+    return d->duration;
+}
+
 void SegmentHandler::startPlayback(qint64 startOffset, quint64 duration)
 {
     if (d->playfieldState) {
@@ -495,21 +505,24 @@ void SegmentHandler::startPlayback(qint64 startOffset, quint64 duration)
     d->playhead = 1;
     d->movePlayhead(0, true);
     d->movePlayhead(startOffset, true);
-    if (duration > 0) {
-        TimerCommand *stopCommand = d->syncTimer->getTimerCommand();
-        stopCommand->operation = TimerCommand::StopPlaybackOperation;
-        d->syncTimer->scheduleTimerCommand(duration, stopCommand);
-    }
-    // Hook up the global sequences to playback
-    for (int i = 1; i < 11; ++i) {
-        SequenceModel *sequence = qobject_cast<SequenceModel*>(d->playGridManager->getSequenceModel(QString("T%1").arg(i)));
-        if (sequence) {
-            sequence->prepareSequencePlayback();
-        } else {
-            qDebug() << Q_FUNC_INFO << "Sequence" << i << "could not be fetched, and playback could not be prepared";
+    if (d->duration > 0) {
+        if (duration > 0) {
+            TimerCommand *stopCommand = d->syncTimer->getTimerCommand();
+            stopCommand->operation = TimerCommand::StopPlaybackOperation;
+            d->syncTimer->scheduleTimerCommand(duration, stopCommand);
         }
+        // Hook up the global sequences to playback
+        for (int i = 1; i < 11; ++i) {
+            SequenceModel *sequence = qobject_cast<SequenceModel*>(d->playGridManager->getSequenceModel(QString("T%1").arg(i)));
+            if (sequence) {
+                sequence->prepareSequencePlayback();
+            } else {
+                qDebug() << Q_FUNC_INFO << "Sequence" << i << "could not be fetched, and playback could not be prepared";
+            }
+        }
+        d->playGridManager->hookUpTimer();
+        d->syncTimer->start();
     }
-    d->playGridManager->startMetronome();
 }
 
 qint64 SegmentHandler::startOffset() const

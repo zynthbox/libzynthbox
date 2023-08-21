@@ -44,6 +44,10 @@ class SegmentHandler : public QObject
      * \brief The current local playhead position for SegmentHandler
      */
     Q_PROPERTY(int playhead READ playhead NOTIFY playheadChanged)
+    /**
+     * \brief The total duration of the current set of segments
+     */
+    Q_PROPERTY(qint64 duration READ duration NOTIFY durationChanged)
 public:
     static SegmentHandler* instance() {
         static SegmentHandler* instance{nullptr};
@@ -64,6 +68,9 @@ public:
 
     int playhead() const;
     Q_SIGNAL void playheadChanged();
+
+    qint64 duration() const;
+    Q_SIGNAL void durationChanged();
 
     /**
      * \brief Starts playback at the given offset
