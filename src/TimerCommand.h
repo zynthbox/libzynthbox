@@ -13,7 +13,7 @@ struct alignas(64) TimerCommand {
     // TODO Before shipping this, make sure these are sequential...
     enum Operation {
         InvalidOperation = 0, ///@< An invalid operation, ignored
-        StartPlaybackOperation = 1, ///@< Start global playback
+        StartPlaybackOperation = 1, ///@< Start global playback. If parameter is 1, playback will be started in song mode. For song mode, parameter1 is startOffset, and bigParameter is the duration. See also SegmentHandler::startPlayback(qint64, quint64)
         StopPlaybackOperation = 2, ///@< Stop all playback
         StartPartOperation = 3, ///@< Start playing the given part. Pass channel index as parameter 1, track index as parameter2 and part index as parameter3
         StopPartOperation = 4, ///@< Stop playing the given part. Pass channel index as parameter 1, track index as parameter2 and part index as parameter3
