@@ -51,6 +51,8 @@ public:
     QTimer analysisTimer;
     jack_client_t* jackClient{nullptr};
     bool initialized{false};
+    quint64 startTimestamp{0};
+    quint64 stopTimestamp{0};
 
     void connectPorts(const QString &from, const QString &to) {
         int result = jack_connect(jackClient, from.toUtf8(), to.toUtf8());
@@ -103,8 +105,14 @@ std::mutex AudioLevels::singletonMutex;
 static int audioLevelsProcess(jack_nframes_t nframes, void* arg) {
     const AudioLevelsPrivate* d = static_cast<AudioLevelsPrivate*>(arg);
     if (d->initialized) {
+        jack_nframes_t current_frames;
+        jack_time_t current_usecs;
+        jack_time_t next_usecs;
+        float period_usecs;
+        jack_get_cycle_times(d->jackClient, &current_frames, &current_usecs, &next_usecs, &period_usecs);
+        jack_nframes_t next_frames{current_frames + nframes};
         for (AudioLevelsChannel *channel : qAsConst(d->audioLevelsChannels)) {
-            channel->process(nframes);
+            channel->process(nframes, current_frames, next_frames, current_usecs, next_usecs, period_usecs);
         }
     }
     return 0;
@@ -373,8 +381,18 @@ bool AudioLevels::shouldRecordPorts() const
     return d->portsRecorder->shouldRecord();
 }
 
-void AudioLevels::startRecording()
+void AudioLevels::startRecording(quint64 startTimestamp)
 {
+    // If we've been passed a timestamp, use that, otherwise just set to the most recent jack playhead timestamp
+    if (startTimestamp > 0) {
+        d->startTimestamp = startTimestamp;
+    } else {
+        d->startTimestamp = SyncTimer::instance()->jackPlayhead();
+    }
+    // Inform all the channels they should only be recording from (and including) that given timestamp
+    for (AudioLevelsChannel *channel : qAsConst(d->audioLevelsChannels)) {
+        channel->firstRecordingFrame = d->startTimestamp;
+    }
     const QString timestamp{QDateTime::currentDateTime().toString(Qt::ISODate)};
     const double sampleRate = jack_get_sample_rate(d->jackClient);
     // Doing this in two goes, because when we ask recording to start, it will very extremely start,
@@ -433,12 +451,16 @@ void AudioLevels::scheduleStartRecording(quint64 delay)
     SyncTimer::instance()->scheduleTimerCommand(delay, command);
 }
 
-void AudioLevels::stopRecording()
+void AudioLevels::stopRecording(quint64 stopTimestamp)
 {
-    d->globalPlaybackWriter->stop();
-    d->portsRecorder->stop();
-    for (DiskWriter *channelWriter : d->channelWriters) {
-        channelWriter->stop();
+    if (stopTimestamp > 0) {
+        d->stopTimestamp = stopTimestamp;
+    } else {
+        d->stopTimestamp = SyncTimer::instance()->jackPlayhead();
+    }
+    // Inform all the channels they should only be recording from (and including) that given timestamp
+    for (AudioLevelsChannel *channel : qAsConst(d->audioLevelsChannels)) {
+        channel->lastRecordingFrame = d->stopTimestamp;
     }
 }
 

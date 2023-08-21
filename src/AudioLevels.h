@@ -186,8 +186,9 @@ public:
      * - Start playback after the recording, to ensure everything is included
      * - Stop recording when needed
      * - Stop playback
+     * @param startTimestamp If set, this will be used in place of the current jack playhead as the start time for recordings
      */
-    Q_INVOKABLE void startRecording();
+    Q_INVOKABLE void startRecording(quint64 startTimestamp = 0);
     /**
      * \brief Schedules a start of the recording process on all enabled channels
      * @param delay The amount of time to wait until starting the recording (if you need to do it now, just call startRecording)
@@ -196,8 +197,9 @@ public:
     Q_INVOKABLE void scheduleStartRecording(quint64 delay);
     /**
      * \brief Stop any ongoing recordings
+     * @param stopTimestamp If set, this will be used in place of the current jack playhead as the stop time for recordings
      */
-    Q_INVOKABLE void stopRecording();
+    Q_INVOKABLE void stopRecording(quint64 stopTimestamp = 0);
     /**
      * \brief Schedules a stop of all recording processes ongoing at the time the event is fired
      * @param delay The amount of time to wait until stopping recording (if you need to do it now, just call stopRecording)
