@@ -346,7 +346,7 @@ public:
         quint64 step{0};
         if (isPaused) {
             // If paused, base the delay on the current stepReadHead
-            step = (stepReadHead->index + delay + 1) % StepRingCount;
+            step = (stepReadHead->index + delay) % StepRingCount;
         } else {
             // If running, base the delay on the current cumulativeBeat (adjusted to at least stepReadHead, just in case)
             step = (stepReadHeadOnStart + qMax(cumulativeBeat + delay, jackPlayhead + 1)) % StepRingCount;
@@ -439,6 +439,7 @@ public:
     quint64 stepReadHeadOnStart{0};
     jack_time_t jackMostRecentNextUsecs{0};
     jack_time_t jackStartTime{0};
+    quint64 jackPlayheadAtStart{0};
     quint64 jackNextPlaybackPosition{0};
     quint64 jackSubbeatLengthInMicroseconds{0};
     quint64 jackLatency{0};
@@ -573,6 +574,9 @@ public:
                     switch (command->operation) {
                         case TimerCommand::StartPlaybackOperation:
                             startPlayback(command);
+                            // Start playback does in fact happen here, but anything scheduled for step 0 of playback will happen on /next/ step.
+                            // Consequently, we'll need to kind of lie a little bit, since playback actually will start next step, not this step.
+                            jackPlayheadAtStart = firstAvailableFrame + current_frames + thisStepSubbeatLengthInMicroseconds;
                             break;
                         case TimerCommand::StopPlaybackOperation:
                             stopPlayback();
@@ -634,10 +638,10 @@ public:
                             AudioLevels::instance()->stopRecording(firstAvailableFrame + current_frames);
                             break;
                         case TimerCommand::MidiRecorderStartOperation:
-                            MidiRecorder::instance()->startRecording(command->parameter, false, firstAvailableFrame + current_frames);
+                            MidiRecorder::instance()->startRecording(command->parameter, false, stepNextPlaybackPosition);
                             break;
                         case TimerCommand::MidiRecorderStopOperation:
-                            MidiRecorder::instance()->stopRecording(command->parameter);
+                            MidiRecorder::instance()->stopRecording(command->parameter, stepNextPlaybackPosition);
                             break;
                         case TimerCommand::StartPartOperation:
                         case TimerCommand::StopPartOperation:
@@ -780,7 +784,10 @@ public:
                 }
                 const bool isRecording = pgm->zlSketchpad()->property("isRecording").toBool();
                 if (isRecording) {
-                    MidiRecorder::instance()->stopRecording();
+                    if (MidiRecorder::instance()->isRecording()) {
+                        // Don't stop again if we've already been stopped
+                        MidiRecorder::instance()->stopRecording();
+                    }
                     pgm->zlSketchpad()->setProperty("lastRecordingMidi", MidiRecorder::instance()->base64TrackMidi(pgm->currentMidiChannel()));
                     const QString recordingType = pgm->zlSketchpad()->property("recordingType").toString();
                     if (recordingType == QLatin1String{"audio"}) {
@@ -1121,6 +1128,11 @@ int SyncTimer::beat() const {
 
 quint64 SyncTimer::cumulativeBeat() const {
     return d->cumulativeBeat;
+}
+
+const quint64 & SyncTimer::jackPlayheadAtStart() const
+{
+    return d->jackPlayheadAtStart;
 }
 
 const quint64 &SyncTimer::jackPlayhead() const

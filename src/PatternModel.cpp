@@ -1822,7 +1822,7 @@ void PatternModel::handleMidiMessage(const unsigned char &byte1, const unsigned 
             if (d->noteDataPoolReadHead->object) {
                 NewNoteData *newNote = d->noteDataPoolReadHead->object;
                 d->noteDataPoolReadHead = d->noteDataPoolReadHead->next;
-                newNote->timestamp = timeStamp;
+                newNote->timestamp = timeStamp - d->syncTimer->jackPlayheadAtStart();
                 newNote->midiNote = byte2;
                 newNote->velocity = byte3;
                 d->recordingLiveNotes << newNote;
@@ -1840,7 +1840,7 @@ void PatternModel::handleMidiMessage(const unsigned char &byte1, const unsigned 
                 newNote = iterator.value();
                 if (newNote->midiNote == byte2) {
                     iterator.remove();
-                    newNote->endTimestamp = timeStamp;
+                    newNote->endTimestamp = timeStamp - d->syncTimer->jackPlayheadAtStart();
                     QMetaObject::invokeMethod(d->zlSyncManager, "addRecordedNote", Qt::QueuedConnection, Q_ARG(void*, newNote));
                     break;
                 }

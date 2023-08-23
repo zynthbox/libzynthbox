@@ -21,6 +21,7 @@
 
 #include "MidiRecorder.h"
 
+#include "MidiRouter.h"
 #include "Note.h"
 #include "PlayGridManager.h"
 #include "PatternModel.h"
@@ -29,33 +30,114 @@
 
 #include <QDebug>
 #include <QTimer>
+#include <float.h>
 
 // Hackety hack - we don't need all the thing, just need some storage things (MidiBuffer and MidiNote specifically)
 #define JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED 1
 #include <juce_audio_formats/juce_audio_formats.h>
 
-using frame_clock = std::chrono::steady_clock;
+#define MidiRecorderRingSize 65536
+class MidiRecorderRing {
+public:
+    struct Entry {
+        Entry *previous{nullptr};
+        Entry *next{nullptr};
+        double timestamp{0.0};
+        int sketchpadTrack{-1};
+        bool processed{true};
+        unsigned char byte0{0};
+        unsigned char byte1{0};
+        unsigned char byte2{0};
+        char size{0};
+    };
+    MidiRecorderRing() {
+        Entry* entryPrevious{&ringData[MidiRecorderRingSize - 1]};
+        for (quint64 i = 0; i < MidiRecorderRingSize; ++i) {
+            entryPrevious->next = &ringData[i];
+            ringData[i].previous = entryPrevious;
+            entryPrevious = &ringData[i];
+        }
+        readHead = writeHead = ringData;
+    }
+    ~MidiRecorderRing() { }
+
+    void write(const double &timestamp, const int &sketchpadTrack, const unsigned char &byte0, const unsigned char &byte1, const unsigned char &byte2, const char &size) {
+        Entry *entry = writeHead;
+        writeHead = writeHead->next;
+        if (entry->processed == false) {
+            qWarning() << Q_FUNC_INFO << "There is unprocessed data stored at the write location for time" << writeHead->timestamp << "This likely means the buffer size is too small, which will require attention at the api level.";
+        }
+        entry->sketchpadTrack = sketchpadTrack;
+        entry->size = size;
+        entry->byte0 = byte0;
+        entry->byte1 = byte1;
+        entry->byte2 = byte2;
+        entry->timestamp = timestamp;
+        entry->processed = false;
+    }
+    /**
+     * \brief Attempt to read the data out of the ring, until there are no more unprocessed entries
+     * @return Whether or not the read was valid
+     */
+    bool read(double *timestamp, int *sketchpadTrack, unsigned char *byte0, unsigned char *byte1, unsigned char *byte2, char *size) {
+        if (readHead->processed == false) {
+            Entry *entry = readHead;
+            readHead = readHead->next;
+            *sketchpadTrack = entry->sketchpadTrack;
+            *byte0 = entry->byte0;
+            *byte1 = entry->byte1;
+            *byte2 = entry->byte2;
+            *size = entry->size;
+            *timestamp = entry->timestamp;
+            entry->processed = true;
+            return true;
+        }
+        return false;
+    }
+
+    Entry ringData[MidiRecorderRingSize];
+    Entry *readHead{nullptr};
+    Entry *writeHead{nullptr};
+};
 
 class MidiRecorderPrivate {
 public:
-    MidiRecorderPrivate() {}
+    MidiRecorderPrivate() { }
     bool isRecording{false};
     bool isPlaying{false};
     bool trackEnabled[10];
+    MidiRecorderRing recorderRing;
     // One for each of the sketchpad tracks
     juce::MidiMessageSequence globalMidiMessageSequence;
     juce::MidiMessageSequence midiMessageSequence[10];
-    double recordingStartTime;
+    double recordingStartTime{0.0};
+    double recordingStopTime{DBL_MAX};
     void handleMidiMessage(const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const double& timestamp, const int &sketchpadTrack) {
-        if (isRecording) {
+        if (recordingStartTime <= recordingStartTime && timestamp <= recordingStopTime) {
             if (0x7F < byte1 && byte1 < 0xA0) {
                 // Using microseconds for timestamps (midi is commonly that anyway)
                 // and juce expects ongoing timestamps, not intervals (it will create those when saving)
                 double ourTimestamp = qMax(timestamp - recordingStartTime, 0.0);
-                juce::MidiMessage message{byte1, byte2, byte3, ourTimestamp};
-                midiMessageSequence[sketchpadTrack].addEvent(message);
-                globalMidiMessageSequence.addEvent(message);
+                recorderRing.write(ourTimestamp, sketchpadTrack, byte1, byte2, byte3, 3);
             }
+        } else {
+            qDebug() << Q_FUNC_INFO << "Did not add message for" << sketchpadTrack << "containing bytes" << byte1 << byte2 << byte3 << "at time" << quint64(timestamp) << "which was not between" << quint64(recordingStartTime) << "and" << quint64(recordingStopTime);
+        }
+    }
+
+    QTimer processingTimer;
+    void processRingData() {
+        double timestamp{0.0};
+        int sketchpadTrack{-1};
+        unsigned char byte0{0};
+        unsigned char byte1{0};
+        unsigned char byte2{0};
+        char size{0};
+        while (recorderRing.read(&timestamp, &sketchpadTrack, &byte0, &byte1, &byte2, &size)) {
+            juce::MidiMessage message{byte0, byte1, byte2, timestamp};
+            midiMessageSequence[sketchpadTrack].addEvent(message);
+            globalMidiMessageSequence.addEvent(message);
+            qDebug() << Q_FUNC_INFO << "Added message for track" << sketchpadTrack << "containing bytes" << byte0 << byte1 << byte2 << "with local timestamp" << quint64(timestamp) << "µs, or" << (timestamp / 1000000) << "seconds";
         }
     }
 };
@@ -73,21 +155,32 @@ MidiRecorder::MidiRecorder(QObject *parent)
                         d->isPlaying = false;
                         Q_EMIT isPlayingChanged();
                     }
-                    if (d->isRecording) {
+                    if (d->isRecording && d->recordingStopTime == DBL_MAX) {
                         stopRecording();
                     }
                 }
             }
     );
-    connect(PlayGridManager::instance(), &PlayGridManager::midiMessage,
-            this, [this](const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const double& timeStamp, const int &sketchpadTrack)
-            {
-                d->handleMidiMessage(byte1, byte2, byte3, timeStamp, sketchpadTrack);
-            }
-    );
+    d->processingTimer.setInterval(100);
+    d->processingTimer.setSingleShot(false);
+    connect(&d->processingTimer, &QTimer::timeout, this, [this](){
+        d->processRingData();
+    });
+    connect(this, &MidiRecorder::isRecordingChanged, this, [this](){
+        if (d->isRecording) {
+            QMetaObject::invokeMethod(&d->processingTimer, "start");
+        } else {
+            QMetaObject::invokeMethod(&d->processingTimer, "stop");
+        }
+    });
 }
 
 MidiRecorder::~MidiRecorder() = default;
+
+void MidiRecorder::handleMidiMessage(const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const double& timeStamp, const int& sketchpadTrack)
+{
+    d->handleMidiMessage(byte1, byte2, byte3, timeStamp, sketchpadTrack);
+}
 
 void MidiRecorder::startRecording(int sketchpadTrack, bool clear, quint64 startTimestamp)
 {
@@ -103,6 +196,7 @@ void MidiRecorder::startRecording(int sketchpadTrack, bool clear, quint64 startT
         } else {
             d->recordingStartTime = SyncTimer::instance()->jackPlayheadUsecs();
         }
+        d->recordingStopTime = DBL_MAX;
         d->isRecording = true;
         Q_EMIT isRecordingChanged();
     }
@@ -116,8 +210,14 @@ void MidiRecorder::scheduleStartRecording(quint64 delay, int sketchpadTrack)
     SyncTimer::instance()->scheduleTimerCommand(delay, command);
 }
 
-void MidiRecorder::stopRecording(int sketchpadTrack)
+void MidiRecorder::stopRecording(int sketchpadTrack, quint64 stopTimestamp)
 {
+    qDebug() << Q_FUNC_INFO << sketchpadTrack << stopTimestamp;
+    if (stopTimestamp > 0) {
+        d->recordingStopTime = stopTimestamp;
+    } else {
+        d->recordingStopTime = SyncTimer::instance()->jackPlayheadUsecs();
+    }
     if (sketchpadTrack == -1) {
         for (int i = 0; i < 10; ++i) {
             d->trackEnabled[i] = false;
@@ -191,6 +291,10 @@ QByteArray MidiRecorder::trackMidi(int sketchpadTrack) const
 {
     QByteArray data;
 
+    // First, make sure we've processed everything we've recorded into our sequences
+    d->processRingData();
+
+    // Then load the data into a midi file
     juce::MidiFile file;
     if (sketchpadTrack == -1) {
         file.addTrack(d->globalMidiMessageSequence);

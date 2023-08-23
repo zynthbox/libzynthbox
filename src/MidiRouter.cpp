@@ -1,5 +1,7 @@
 #include "MidiRouter.h"
+
 #include "JackPassthrough.h"
+#include "MidiRecorder.h"
 #include "SyncTimer.h"
 #include "DeviceMessageTranslations.h"
 #include "TransportManager.h"
@@ -280,8 +282,7 @@ public:
     MidiListenerPort externalOutListener;
     MidiListenerPort* listenerPorts[4];
     // FIXME The consumers of this currently functionally assume a note message, and... we will need to handle other things as well, but for now we only call this for note messages
-    static inline void addMessage(MidiListenerPort &port, const double &timeStamp, const jack_midi_event_t &event, const int rewriteChannel, const int sketchpadTrack
-    )
+    static inline void addMessage(MidiListenerPort &port, const double &timeStamp, const jack_midi_event_t &event, const int rewriteChannel, const int sketchpadTrack)
     {
         NoteMessage &message = port.getNextAvailableWriteMessage();
         message.timeStamp = timeStamp;
@@ -291,6 +292,9 @@ public:
         message.byte2 = event.size > 2 ? event.buffer[2] : 0;
         message.sketchpadTrack = sketchpadTrack;
         message.submitted = false;
+        if (port.identifier == MidiRouter::PassthroughPort) {
+            MidiRecorder::instance()->handleMidiMessage(message.byte0, message.byte1, message.byte2, timeStamp, sketchpadTrack);
+        }
     }
 
     void connectPorts(const QString &from, const QString &to) {
@@ -354,7 +358,7 @@ public:
         jack_time_t next_usecs;
         float period_usecs;
         jack_get_cycle_times(jackClient, &current_frames, &current_usecs, &next_usecs, &period_usecs);
-        const quint64 microsecondsPerFrame = (next_usecs - current_usecs) / nframes;
+        const double microsecondsPerFrame = double(next_usecs - current_usecs) / double(nframes);
 
         // TODO Maybe what we should do is reissue all of the previous run's events at immediate time
         // instead, so they all happen /now/ instead of offset by, effectively, nframes samples
@@ -427,7 +431,7 @@ public:
                             const unsigned char &byte1 = event.buffer[0];
                             const bool isNoteMessage = byte1 > 0x7F && byte1 < 0xA0;
                             output = outputs[eventChannel];
-                            const double timestamp = currentJackPlayhead + (event.time * microsecondsPerFrame / subbeatLengthInMicroseconds);
+                            const double timestamp = current_usecs + (microsecondsPerFrame * double(event.time));
                             switch (output->destination) {
                                 case MidiRouter::ZynthianDestination:
                                     if (isNoteMessage) {
@@ -575,7 +579,7 @@ public:
                                     }
                                     currentOutput = outputs[adjustedCurrentChannel];
 
-                                    const double timestamp = currentJackPlayhead + (event.time * microsecondsPerFrame / subbeatLengthInMicroseconds);
+                                    const double timestamp = current_usecs + (microsecondsPerFrame * double(event.time));
                                     switch (currentOutput->destination) {
                                         case MidiRouter::ZynthianDestination:
                                             if (isNoteMessage) {

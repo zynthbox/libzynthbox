@@ -142,6 +142,11 @@ public:
   Q_INVOKABLE quint64 cumulativeBeat() const;
 
   /**
+   * \brief The jack playhead for the most recent playback start event
+   * @return The jack frame timestamp for the point at which playback was most recently started
+   */
+  const quint64 &jackPlayheadAtStart() const;
+  /**
    * \brief Used only for playback purposes, for synchronising the sampler synth loop playback
    * In short - you probably don't need this, unless you need to sync specifically with jack's internal playback position
    * (which is the most recent tick for stuff put into a jack buffer)

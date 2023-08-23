@@ -52,7 +52,7 @@ public:
      * \brief Start recording
      * @param sketchpadTrack The sketchpad track to start recording on (-1 if you only want global)
      * @param clear Whether or not to clear the current recording before starting the recording (the same as stopping, clearing, and starting)
-     * @param startTimestamp If > 0, this will be used as the start timestamp instead of whatever is currently reported by SyncTimer's playhead
+     * @param startTimestamp If > 0, this will be used as the start timestamp instead of whatever is currently reported by SyncTimer's playhead (microseconds)
      */
     Q_INVOKABLE void startRecording(int sketchpadTrack, bool clear = false, quint64 startTimestamp = 0);
     /**
@@ -66,8 +66,9 @@ public:
     /**
      * \brief Stop recording
      * @param sketchpadTrack The sketchpad track channel you want to stop recording (if -1, all recording is stopped)
+     * @param stopTimestamp If > 0, this will be used as the timestamp when recording should no longer occur (microseconds)
      */
-    Q_INVOKABLE void stopRecording(int sketchpadTrack = -1);
+    Q_INVOKABLE void stopRecording(int sketchpadTrack = -1, quint64 stopTimestamp = 0);
     /**
      * \brief Schedules a stop of all recording processes ongoing at the time the event is fired
      * @param delay The amount of time to wait until stopping recording (if you need to do it now, just call stopRecording)
@@ -192,8 +193,12 @@ public:
     Q_SIGNAL void isPlayingChanged();
     bool isRecording() const;
     Q_SIGNAL void isRecordingChanged();
+
 private:
     std::unique_ptr<MidiRecorderPrivate> d;
+
+    friend class MidiRouterPrivate;
+    void handleMidiMessage(const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const double &timeStamp, const int& sketchpadTrack);
 };
 Q_DECLARE_OPERATORS_FOR_FLAGS(MidiRecorder::ApplicatorSettings)
 
