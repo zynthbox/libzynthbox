@@ -120,8 +120,8 @@ public:
                 double ourTimestamp = qMax(timestamp - recordingStartTime, 0.0);
                 recorderRing.write(ourTimestamp, sketchpadTrack, byte1, byte2, byte3, 3);
             }
-        } else {
-            qDebug() << Q_FUNC_INFO << "Did not add message for" << sketchpadTrack << "containing bytes" << byte1 << byte2 << byte3 << "at time" << quint64(timestamp) << "which was not between" << quint64(recordingStartTime) << "and" << quint64(recordingStopTime);
+        // } else {
+            // qDebug() << Q_FUNC_INFO << "Did not add message for" << sketchpadTrack << "containing bytes" << byte1 << byte2 << byte3 << "at time" << quint64(timestamp) << "which was not between" << quint64(recordingStartTime) << "and" << quint64(recordingStopTime);
         }
     }
 

@@ -140,10 +140,10 @@ public:
                         for (SequenceModel* sequence : qAsConst(sequenceModels)) {
                             sequence->disconnectSequencePlayback();
                         }
-                        qDebug() << Q_FUNC_INFO << "Scheduled" << command;
+                        qDebug() << Q_FUNC_INFO << "Scheduled" << command << command->operation;
                         syncTimer->scheduleTimerCommand(0, TimerCommand::cloneTimerCommand(command));
                     } else {
-                        qDebug() << Q_FUNC_INFO << "Scheduled" << command;
+                        qDebug() << Q_FUNC_INFO << "Scheduled" << command << command->operation;
                         syncTimer->scheduleTimerCommand(0, TimerCommand::cloneTimerCommand(command));
                     }
                 }

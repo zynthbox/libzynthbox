@@ -389,9 +389,11 @@ void AudioLevels::startRecording(quint64 startTimestamp)
     } else {
         d->startTimestamp = SyncTimer::instance()->jackPlayhead();
     }
+    d->stopTimestamp = 0;
     // Inform all the channels they should only be recording from (and including) that given timestamp
     for (AudioLevelsChannel *channel : qAsConst(d->audioLevelsChannels)) {
         channel->firstRecordingFrame = d->startTimestamp;
+        channel->lastRecordingFrame = ULONG_LONG_MAX;
     }
     const QString timestamp{QDateTime::currentDateTime().toString(Qt::ISODate)};
     const double sampleRate = jack_get_sample_rate(d->jackClient);
