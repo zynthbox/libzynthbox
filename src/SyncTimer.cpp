@@ -1059,7 +1059,7 @@ int SyncTimer::getInterval(int bpm) {
 
 float SyncTimer::subbeatCountToSeconds(quint64 bpm, quint64 beats) const
 {
-    return timerThread->subbeatCountToNanoseconds(qBound(quint64(BPM_MINIMUM), bpm, quint64(BPM_MAXIMUM)), beats) / (float)1000000000;
+    return double(timerThread->subbeatCountToNanoseconds(qBound(quint64(BPM_MINIMUM), bpm, quint64(BPM_MAXIMUM)), beats)) / (float)1000000000;
 }
 
 quint64 SyncTimer::secondsToSubbeatCount(quint64 bpm, float seconds) const
