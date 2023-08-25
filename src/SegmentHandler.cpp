@@ -139,8 +139,9 @@ public:
                         // Disconnect the global sequences, as we want them to stop making noises immediately
                         for (SequenceModel* sequence : qAsConst(sequenceModels)) {
                             sequence->disconnectSequencePlayback();
+                            sequence->resetSequence();
                         }
-                        qDebug() << Q_FUNC_INFO << "Scheduled" << command << command->operation;
+                        qDebug() << Q_FUNC_INFO << "Scheduled stop command" << command;
                         syncTimer->scheduleTimerCommand(0, TimerCommand::cloneTimerCommand(command));
                     } else {
                         qDebug() << Q_FUNC_INFO << "Scheduled" << command << command->operation;
