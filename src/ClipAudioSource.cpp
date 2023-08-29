@@ -156,6 +156,7 @@ private:
 ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *parent)
     : QObject(parent)
     , d(new Private(this)) {
+  moveToThread(Plugin::instance()->qmlEngine()->thread());
   d->syncTimer = SyncTimer::instance();
   d->engine = Plugin::instance()->getTracktionEngine();
   d->id = Plugin::instance()->nextClipId();
@@ -167,41 +168,35 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
 
   IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Opening file:" << filepath;
 
-  Helper::callFunctionOnMessageThread(
-      [&]() {
-        d->givenFile = juce::File(filepath);
+  d->givenFile = juce::File(filepath);
 
-        const File editFile = File::createTempFile("editFile");
+  const File editFile = File::createTempFile("editFile");
 
-        d->edit = te::createEmptyEdit(*d->engine, editFile);
-        auto clip = Helper::loadAudioFileAsClip(*d->edit, d->givenFile);
+  d->edit = te::createEmptyEdit(*d->engine, editFile);
+  auto clip = Helper::loadAudioFileAsClip(*d->edit, d->givenFile);
 
-        d->fileName = d->givenFile.getFileName();
-        d->filePath = QString::fromUtf8(filepath);
-        // Initially set the length in seconds to the full duration of the sample,
-        // let the user set it to something else later on if they want to
-        d->lengthInSeconds = d->edit->getLength();
+  d->fileName = d->givenFile.getFileName();
+  d->filePath = QString::fromUtf8(filepath);
+  // Initially set the length in seconds to the full duration of the sample,
+  // let the user set it to something else later on if they want to
+  d->lengthInSeconds = d->edit->getLength();
 
-        if (clip) {
-          clip->setAutoTempo(false);
-          clip->setAutoPitch(false);
-          clip->setTimeStretchMode(te::TimeStretcher::defaultMode);
-          d->sampleRate = clip->getAudioFile().getSampleRate();
-          d->adsr.setSampleRate(d->sampleRate);
-        }
+  if (clip) {
+    clip->setAutoTempo(false);
+    clip->setAutoPitch(false);
+    clip->setTimeStretchMode(te::TimeStretcher::defaultMode);
+    d->sampleRate = clip->getAudioFile().getSampleRate();
+    d->adsr.setSampleRate(d->sampleRate);
+  }
 
-        Helper::getOrInsertAudioTrackAt(*d->edit, 0);
-
-        if (muted) {
-          IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Clip marked to be muted";
-          setVolume(-100.0f);
-        }
-
-        d->startTimerHz(30);
-      }, true);
+  if (muted) {
+    IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Clip marked to be muted";
+    setVolume(-100.0f);
+  }
+  d->startTimerHz(30);
 
   d->positionsModel = new ClipAudioSourcePositionsModel(this);
-  d->positionsModel->moveToThread(QCoreApplication::instance()->thread());
+  d->positionsModel->moveToThread(Plugin::instance()->qmlEngine()->thread());
   connect(d->positionsModel, &ClipAudioSourcePositionsModel::peakGainChanged, this, [&](){ d->syncAudioLevel(); });
   connect(d->positionsModel, &QAbstractItemModel::dataChanged, this, [&](const QModelIndex& topLeft, const QModelIndex& /*bottomRight*/, const QVector< int >& roles = QVector<int>()){
     if (topLeft.row() == 0 && roles.contains(ClipAudioSourcePositionsModel::PositionProgressRole)) {
@@ -226,7 +221,6 @@ ClipAudioSource::~ClipAudioSource() {
   Helper::callFunctionOnMessageThread(
     [&]() {
       d->stopTimer();
-      auto track = Helper::getOrInsertAudioTrackAt(*d->edit, 0);
       d->edit.reset();
     }, true);
 }
