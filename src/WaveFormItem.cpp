@@ -143,7 +143,7 @@ void WaveFormItem::paint(QPainter *painter)
                             0, // channel num
                             1.0f);
     if (!m_thumbnail.isFullyLoaded()) {
-        m_repaintTimer->start();
+        QMetaObject::invokeMethod(m_repaintTimer, "start");
     }
 }
 
