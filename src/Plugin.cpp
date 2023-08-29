@@ -179,6 +179,7 @@ tracktion_engine::Engine *Plugin::getTracktionEngine()
 
 void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
 {
+    m_qmlEngine = engine;
     engine->addImageProvider("pattern", new PatternImageProvider());
 
     qmlRegisterType<FilterProxy>(uri, 1, 0, "FilterProxy");
@@ -273,6 +274,14 @@ QList<JackPassthrough *> Plugin::channelPassthroughClients() const
 QList<QList<JackPassthrough *>> Plugin::fxPassthroughClients() const
 {
     return m_fxPassthroughClients;
+}
+
+QQmlEngine * Plugin::qmlEngine() const
+{
+    if (m_qmlEngine == nullptr) {
+        qWarning() << Q_FUNC_INFO << "QML Engine was null when attempting to retrieve it - this function should never be called before the Plugin types have been registered";
+    }
+    return m_qmlEngine;
 }
 
 std::atomic<Plugin*> Plugin::singletonInstance;

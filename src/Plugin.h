@@ -78,6 +78,7 @@ public:
     QList<JackPassthrough*> channelPassthroughClients() const;
     QList<QList<JackPassthrough*>> fxPassthroughClients() const;
 
+    QQmlEngine *qmlEngine() const;
 private:
     explicit Plugin(QObject *parent = nullptr);
 
@@ -92,4 +93,5 @@ private:
 
     static std::atomic<Plugin*> singletonInstance;
     static std::mutex singletonMutex;
+    QQmlEngine *m_qmlEngine{nullptr};
 };
