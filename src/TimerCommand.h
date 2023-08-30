@@ -13,7 +13,7 @@ struct alignas(64) TimerCommand {
     // TODO Before shipping this, make sure these are sequential...
     enum Operation {
         InvalidOperation = 0, ///@< An invalid operation, ignored
-        StartPlaybackOperation = 1, ///@< Start global playback. If parameter is 1, playback will be started in song mode. For song mode, parameter1 is startOffset, and bigParameter is the duration. See also SegmentHandler::startPlayback(qint64, quint64)
+        StartPlaybackOperation = 1, ///@< Start global playback. If parameter is 1, playback will be started in song mode. For song mode, parameter is startOffset, and bigParameter is the duration. See also SegmentHandler::startPlayback(qint64, quint64)
         StopPlaybackOperation = 2, ///@< Stop all playback
         StartPartOperation = 3, ///@< Start playing the given part. Pass channel index as parameter 1, track index as parameter2 and part index as parameter3
         StopPartOperation = 4, ///@< Stop playing the given part. Pass channel index as parameter 1, track index as parameter2 and part index as parameter3
@@ -24,6 +24,7 @@ struct alignas(64) TimerCommand {
         SetBpmOperation = 10, ///@< Set the BPM of the timer to the value in stored in parameter (this will be clamped to fit between SyncTimer's allowed values)
         AutomationOperation = 11, ///@< Set the value of a given parameter on a given engine on a given channel to a given value. parameter contains the channel (-1 is global fx engines, 0 through 9 being zl channels), parameter2 contains the engine index, parameter3 is the parameter's index, parameter4 is the value
         PassthroughClientOperation = 12, ///@< Set the volume of the given volume channel to the given value. parameter is the channel (-1 is global playback, 0 through 9 being zl channels), parameter2 is the setting index in the list (dry, wetfx1, wetfx2, pan, muted), parameter3 being the left value, parameter4 being right value. If parameter2 is pan or muted, parameter4 is ignored. For volumes, parameter3 and parameter4 can be 0 through 100. For pan, -100 for all left through 100 for all right, with 0 being no pan. For muted, 0 is not muted, any other value is muted.
+        GuiMessageOperation = 13, ///@< Emits a signal on SyncTimer (timerMessage) which must be consumed by the UI in a queued manner. Set variantParameter to the message you wish to pass to the UI. You can also pass parameter, parameter2 and so on, but there is no guarantees made how these are interpreted by the UI (so you'll have to do your own filtering)
         ChannelRecorderStartOperation = 20, ///@< Start recording a channel. Make sure you have set up the channel recorder before scheduling this command (see AudioLevels::setChannelToRecord and AudioLevels::setChannelFilenamePrefix)
         ChannelRecorderStopOperation = 21, ///@< Stop recording a channel
         MidiRecorderStartOperation = 30, ///@< Start recording a midi channel. parameter is the sketchpad track to record (-1 for global channel, 0 through 9 for sketchpad tracks)
