@@ -251,6 +251,10 @@ public:
     const std::chrono::nanoseconds getInterval() {
         return interval;
     }
+    /**
+     * \brief This is a workaround for firing a signal in a queued fashion (this could be anywhere, just as long as it's not public)
+     */
+    Q_SIGNAL void timerMessage(const QString& message, const int &parameter, const int &parameter2, const int &parameter3, const int &parameter4, const quint64 &bigParameter);
 private:
     qint64 nextExtraTickAt{0};
     quint64 currentExtraTick{0};
@@ -312,6 +316,7 @@ public:
         QObject::connect(timerThread, &QThread::started, q, [q](){ Q_EMIT q->timerRunningChanged(); });
         QObject::connect(timerThread, &QThread::finished, q, [q](){ Q_EMIT q->timerRunningChanged(); });
         QObject::connect(timerThread, &SyncTimerThread::pausedChanged, q, [q](){ q->timerRunningChanged(); });
+        QObject::connect(timerThread, &SyncTimerThread::timerMessage, q, &SyncTimer::timerMessage, Qt::QueuedConnection);
         timerThread->start();
     }
     ~SyncTimerPrivate() {
@@ -615,6 +620,9 @@ public:
                                 setBpm(newBpm);
                                 thisStepBpm = newBpm;
                             }
+                            break;
+                        case TimerCommand::GuiMessageOperation:
+                            Q_EMIT timerThread->timerMessage(command->variantParameter.toString(), command->parameter, command->parameter2, command->parameter3, command->parameter4, command->bigParameter);
                             break;
                         case TimerCommand::RegisterCASOperation:
                         case TimerCommand::UnregisterCASOperation:
@@ -964,11 +972,14 @@ void SyncTimer::queueClipToStop(ClipAudioSource *clip) {
     queueClipToStopOnChannel(clip, -1);
 }
 
-void SyncTimer::startWithCountin()
+void SyncTimer::startWithCountin(quint64 bars, bool songMode)
 {
     ClipCommand *command{nullptr};
-    for (quint64 beat = 0; beat < 4; ++beat) {
-        if (beat == 0) {
+    TimerCommand *messageCommand{nullptr};
+    // How long should the message be shown for, in ms (we add 50, to ensure a slight overlap)
+    quint64 showDuration = 50 + quint64(subbeatCountToSeconds(getBpm(), BeatSubdivisions) * 1000.0f);
+    for (quint64 beat = 0; beat < 4 * bars; ++beat) {
+        if (beat % 4 == 0) {
             command = ClipCommand::globalCommand(d->metronomeTick);
         } else {
             command = ClipCommand::globalCommand(d->metronomeTock);
@@ -977,10 +988,24 @@ void SyncTimer::startWithCountin()
         command->changeVolume = true;
         command->volume = 1.0;
         scheduleClipCommand(command, beat * BeatSubdivisions);
+        messageCommand = getTimerCommand();
+        messageCommand->operation = TimerCommand::GuiMessageOperation;
+        messageCommand->parameter = 1; // Set to 1 to make the UI know this is a count-in message
+        messageCommand->parameter2 = (beat % 4) + 1; // The current beat of the countin
+        messageCommand->parameter3 = (beat / 4) + 1; // The current bar of the countin
+        messageCommand->parameter4 = bars; // How many bars did we get asked to count
+        messageCommand->bigParameter = showDuration;
+        scheduleTimerCommand(beat * BeatSubdivisions, messageCommand);
+        // qDebug() << Q_FUNC_INFO << "Scheduled gui message operation for countin message with" << messageCommand->parameter << messageCommand->parameter2 << messageCommand->parameter3 << messageCommand->parameter4 << messageCommand->bigParameter;
     }
     TimerCommand *startCommand = getTimerCommand();
     startCommand->operation = TimerCommand::StartPlaybackOperation;
-    scheduleTimerCommand(4 * BeatSubdivisions - 1, startCommand);
+    if (songMode) {
+        startCommand->parameter = 1;
+        startCommand->parameter2 = 0;
+        startCommand->bigParameter = 0;
+    }
+    scheduleTimerCommand(bars * 4 * BeatSubdivisions - 1, startCommand);
 }
 
 void SyncTimer::start() {

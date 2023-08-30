@@ -56,10 +56,12 @@ public:
   void queueClipToStartOnChannel(ClipAudioSource *clip, int midiChannel);
   void queueClipToStopOnChannel(ClipAudioSource *clip, int midiChannel);
   /**
-   * \brief Plays a full bar of metronome ticks (four), and starts playback on the next bar
+   * \brief Plays a number of full bar of metronome ticks (four), and starts playback on the next bar
    * @note This does not change the audible metronome state, and that will require turning on explicitly
+   * @param bars The number of bars to count in (default 1, passing 0 will just start playback)
+   * @param songMode If true, playback will be started in song mode
    */
-  Q_INVOKABLE void startWithCountin();
+  Q_INVOKABLE void startWithCountin(quint64 bars = 1, bool songMode = false);
   void start();
   void stop();
   int getInterval(int bpm);
@@ -265,6 +267,11 @@ public:
   Q_SIGNAL void removedHardwareInputDevice(const QString &deviceName, const QString &humanReadableName);
   Q_SIGNAL void addedHardwareOutputDevice(const QString &deviceName, const QString &humanReadableName);
   Q_SIGNAL void removedHardwareOutputDevice(const QString &deviceName, const QString &humanReadableName);
+
+  /**
+   * \brief Emitted when a GuiMessageOperation is found in the schedule
+   */
+  Q_SIGNAL void timerMessage(const QString& message, const int &parameter, const int &parameter2, const int &parameter3, const int &parameter4, const quint64 &bigParameter);
 
   Q_SLOT ClipCommand *getClipCommand();
   Q_SLOT void deleteClipCommand(ClipCommand *command);
