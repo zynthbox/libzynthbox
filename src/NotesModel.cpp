@@ -706,3 +706,13 @@ void NotesModel::endLongOperation()
         endResetModel();
     }
 }
+
+QString NotesModel::toJson() const
+{
+    return PlayGridManager::instance()->modelToJson(this);
+}
+
+void NotesModel::setFromJson(const QString& json)
+{
+    PlayGridManager::instance()->setModelFromJson(this, json);
+}

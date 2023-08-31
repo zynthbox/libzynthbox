@@ -253,6 +253,16 @@ public:
      * @see startLongOperation()
      */
     Q_INVOKABLE void endLongOperation();
+
+    /**
+     * \brief Returns the json representation of this model
+     */
+    Q_INVOKABLE QString toJson() const;
+    /**
+     * \brief Set this model to match what's in the json serialisation passed to the function
+     * @param json Serialised model, as returned by the toJson() function
+     */
+    Q_INVOKABLE void setFromJson(const QString &json);
 private:
     class Private;
     Private* d;
