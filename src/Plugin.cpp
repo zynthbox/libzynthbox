@@ -114,7 +114,10 @@ void Plugin::initialize()
     }
     qDebug() << "Creating Channel Passthrough Client";
     for (int i=0; i<10; ++i) {
-        m_channelPassthroughClients << new JackPassthrough(QString("ChannelPassthrough:Channel%1").arg(i+1), QCoreApplication::instance());
+        JackPassthrough* client = new JackPassthrough(QString("ChannelPassthrough:Channel%1").arg(i+1), QCoreApplication::instance());
+        client->setWetFx1Amount(0.0f);
+        client->setWetFx2Amount(0.0f);
+        m_channelPassthroughClients << client;
     }
     // Create 10 FX Passthrough client for 10 channels having 5 lanes each for each fx slot in a channel
     qDebug() << "Creating FX Passthrough Client";
@@ -122,7 +125,7 @@ void Plugin::initialize()
         QList<JackPassthrough*> lanes;
         for (int j=0; j<5; ++j) {
             JackPassthrough* fxPassthrough = new JackPassthrough(QString("FXPassthrough:Channel%1-lane%2").arg(i+1).arg(j+1), QCoreApplication::instance(), true, true, false);
-            fxPassthrough->setDryWetMixAmount(0.7f);
+            fxPassthrough->setDryWetMixAmount(1.0f);
             lanes << fxPassthrough;
         }
         m_fxPassthroughClients << lanes;
