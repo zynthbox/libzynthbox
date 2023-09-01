@@ -331,10 +331,18 @@ void JackPassthrough::setDryWetMixAmount(const float &newValue)
 {
     if (d->dryWetMixAmount != newValue) {
         d->dryWetMixAmount = newValue;
-        if (newValue >= 0.0f && newValue <= 1.0f) {
-            setDryAmount(1.0f - newValue, false);
+        if (newValue >= 0.0f && newValue < 1.0f) {
+            setDryAmount(1.0f, false);
             setWetFx1Amount(newValue, false);
             setWetFx2Amount(newValue, false);
+        } else if (newValue == 1.0f) {
+            setDryAmount(1.0f, false);
+            setWetFx1Amount(1.0f, false);
+            setWetFx2Amount(1.0f, false);
+        } else if (newValue > 1.0f && newValue <= 2.0f) {
+            setDryAmount(2.0f - newValue, false);
+            setWetFx1Amount(1.0f, false);
+            setWetFx2Amount(1.0f, false);
         }
         Q_EMIT dryWetMixAmountChanged();
     }

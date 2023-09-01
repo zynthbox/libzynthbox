@@ -32,14 +32,17 @@ class JackPassthrough : public QObject {
      * \brief Control dry/wet output mixture
      *
      * dryWetMixAmount allows you to redirect what percentage of dry and what percent of wet data is put out.
-     * If say X amount of dryWetMixAmount is set then it will output X amount of wet data and 1-X amount of dry data so that dry and wet data
      *
-     * Initially -1 is store as dryWetMixAmount as it is unused for all passthrough clients by default. Setting dryWetMixAmount will actualyl set dry and wet amounts individually.
+     * Initially -1 is stored as dryWetMixAmount as it is unused for all passthrough clients by default. Setting dryWetMixAmount will actually set dry and wet amounts individually.
      * Setting dry amount or wet amount individually for any client will uninitialize dryWetMixAmount by setting it to -1
      *
+     * Value from 0.0f to 1.0f will control wet output from 0% to 100% while dry remains 100%
+     * Value from 1.0f to 2.0f will control dry output from 100% to 0% while wet remains 100%
+     * Value 1.0f will mean both wet and dry set to 100%
+     *
      * @default -1.0f Unused by default
-     * @minimum 0.0f Sets output to be fully dry
-     * @maximum 1.0f Sets output to be fully wet
+     * @minimum 0.0f 0% wet and 100% dry. 0.0f to 1.0f will control wet output from 0% to 100% while dry remains 100%
+     * @maximum 2.0f 100% wet and 0% dry. 1.0f to 2.0f will control dry output from 100% to 0% while wet remains 100%
      */
     Q_PROPERTY(float dryWetMixAmount READ dryWetMixAmount WRITE setDryWetMixAmount NOTIFY dryWetMixAmountChanged)
     Q_PROPERTY(float panAmount READ panAmount WRITE setPanAmount NOTIFY panAmountChanged)
