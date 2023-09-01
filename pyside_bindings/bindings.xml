@@ -8,6 +8,7 @@
     <object-type name="AudioLevels"></object-type>
     <object-type name="ClipAudioSource"></object-type>
     <object-type name="JackPassthrough"></object-type>
+    <object-type name="MidiRecorder"></object-type>
     <object-type name="MidiRouter">
         <!-- Why do we need to inject glue code manually which should be auto injected by typesystem_core? -->
         <!-- This snippet is from glue/qtcore.cpp -->

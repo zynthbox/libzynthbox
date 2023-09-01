@@ -6,6 +6,7 @@
 #include <ClipAudioSource.h>
 #include <JackPassthrough.h>
 #include <MidiRouter.h>
+#include <MidiRecorder.h>
 #include <PlayGridManager.h>
 #include <Plugin.h>
 #include <SyncTimer.h>
