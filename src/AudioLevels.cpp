@@ -161,16 +161,16 @@ AudioLevels::AudioLevels(QObject *parent)
                     } else if (channelIndex == 2) {
                         d->portsRecorder = channel->diskRecorder();
                     } else {
-                    const int sketchpadChannelIndex{channelIndex - 3};
-                    /**
-                    * Do not assign items by index like this : d->channelWriters[sketchpadChannelIndex] = channel->diskRecorder;
-                    * Assigning items by index causes size() to report 0 even though items are added.
-                    * This might be causing a crash sometimes during initialization
-                    *
-                    * Instead of assigning by index, create a qlist with 10 elements having nullptr as value
-                    * and replace nullptr with DiskWriter pointer when initializing
-                    */
-                    d->channelWriters.replace(sketchpadChannelIndex, channel->diskRecorder());
+                        const int sketchpadChannelIndex{channelIndex - 3};
+                        /**
+                        * Do not assign items by index like this : d->channelWriters[sketchpadChannelIndex] = channel->diskRecorder;
+                        * Assigning items by index causes size() to report 0 even though items are added.
+                        * This might be causing a crash sometimes during initialization
+                        *
+                        * Instead of assigning by index, create a qlist with 10 elements having nullptr as value
+                        * and replace nullptr with DiskWriter pointer when initializing
+                        */
+                        d->channelWriters.replace(sketchpadChannelIndex, channel->diskRecorder());
                     }
                     d->audioLevelsChannels << channel;
                     ++channelIndex;
