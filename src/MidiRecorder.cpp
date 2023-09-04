@@ -270,8 +270,10 @@ bool MidiRecorder::loadTrackFromMidi(const QByteArray& midiData, const int& sket
         if (file.getNumTracks() > 0) {
             if (sketchpadTrack == -1) {
                 d->globalMidiMessageSequence = juce::MidiMessageSequence(*file.getTrack(0));
+                qDebug() << Q_FUNC_INFO << "Loaded" << d->globalMidiMessageSequence.getNumEvents() << "events into the global midi sequence";
             } else {
                 d->midiMessageSequence[sketchpadTrack] = juce::MidiMessageSequence(*file.getTrack(0));
+                qDebug() << Q_FUNC_INFO << "Loaded" << d->midiMessageSequence[sketchpadTrack].getNumEvents() << "events into the sequence for track" << sketchpadTrack;
             }
             success = true;
         }
@@ -316,6 +318,7 @@ QByteArray MidiRecorder::trackMidi(int sketchpadTrack) const
 
 bool MidiRecorder::loadFromBase64Midi(const QString &data)
 {
+    qDebug() << Q_FUNC_INFO << data;
     return loadFromMidi(QByteArray::fromBase64(data.toLatin1()));
 }
 
@@ -357,34 +360,39 @@ void MidiRecorder::forceToChannel(int channel)
 
 void MidiRecorder::playRecording()
 {
-//     qDebug() << Q_FUNC_INFO;
+    qDebug() << Q_FUNC_INFO;
     SyncTimer *syncTimer = SyncTimer::instance();
     juce::MidiBuffer midiBuffer;
     double mostRecentTimestamp{-1};
     for (const juce::MidiMessageSequence::MidiEventHolder *holder : d->globalMidiMessageSequence) {
-//         qDebug() << "Investimagating" << QString::fromStdString(holder->message.getDescription().toStdString());
+        qDebug() << "Investimagating" << QString::fromStdString(holder->message.getDescription().toStdString());
         if (holder->message.getTimeStamp() != mostRecentTimestamp) {
             if (midiBuffer.getNumEvents() > 0) {
-//                 qDebug() << "Hey, things in the buffer, let's schedule those" << midiBuffer.getNumEvents() << "things, this far into the future:" << syncTimer->secondsToSubbeatCount(syncTimer->getBpm(), mostRecentTimestamp / (double)1000000);
-                syncTimer->scheduleMidiBuffer(midiBuffer, syncTimer->secondsToSubbeatCount(syncTimer->getBpm(), mostRecentTimestamp / (double)1000000));
+                qDebug() << "Hey, things in the buffer, let's schedule those" << midiBuffer.getNumEvents() << "things, this far into the future:" << syncTimer->secondsToSubbeatCount(syncTimer->getBpm(), mostRecentTimestamp / 1000000.0);
+                syncTimer->scheduleMidiBuffer(midiBuffer, syncTimer->secondsToSubbeatCount(syncTimer->getBpm(), mostRecentTimestamp / 1000000.0));
             }
             mostRecentTimestamp = holder->message.getTimeStamp();
-//             qDebug() << "New timestamp, clear the buffer, timestamp is now" << mostRecentTimestamp;
+            qDebug() << "New timestamp, clear the buffer, timestamp is now" << mostRecentTimestamp;
             midiBuffer.clear();
         }
         midiBuffer.addEvent(holder->message, midiBuffer.getNumEvents());
     }
-//     qDebug() << "Unblocking, lets go!";
-    syncTimer->start();
+    if (midiBuffer.getNumEvents() > 0) {
+        qDebug() << "Hey, things in the buffer, let's schedule those" << midiBuffer.getNumEvents() << "things, this far into the future:" << syncTimer->secondsToSubbeatCount(syncTimer->getBpm(), mostRecentTimestamp / 1000000.0);
+        syncTimer->scheduleMidiBuffer(midiBuffer, syncTimer->secondsToSubbeatCount(syncTimer->getBpm(), mostRecentTimestamp / 1000000.0));
+    }
+    qDebug() << "Unblocking, lets go! Calling stop after" << 100 + (mostRecentTimestamp / 1000.0) << "ms";
     d->isPlaying = true;
     Q_EMIT isPlayingChanged();
-    QTimer::singleShot(100 + mostRecentTimestamp / 1000, syncTimer, &SyncTimer::stop);
+    QTimer::singleShot(100 + (mostRecentTimestamp / 1000.0), this, [this](){ stopPlayback(); });
 }
 
 void MidiRecorder::stopPlayback()
 {
-    SyncTimer *syncTimer = SyncTimer::instance();
-    syncTimer->stop();
+    d->isPlaying = false;
+    Q_EMIT isPlayingChanged();
+    // (ab)use the stop call to force this call to reschedule all the off notes to "just do it now please"
+    SyncTimer::instance()->stop();
 }
 
 bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorder::ApplicatorSetting> settings) const
