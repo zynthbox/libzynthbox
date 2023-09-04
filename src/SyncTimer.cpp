@@ -578,13 +578,13 @@ public:
                     Q_EMIT q->timerCommand(command);
                     switch (command->operation) {
                         case TimerCommand::StartPlaybackOperation:
-                            startPlayback(command, firstAvailableFrame + current_frames);
+                            startPlayback(command, firstAvailableFrame + current_frames, stepNextPlaybackPosition);
                             // Start playback does in fact happen here, but anything scheduled for step 0 of playback will happen on /next/ step.
                             // Consequently, we'll need to kind of lie a little bit, since playback actually will start next step, not this step.
-                            jackPlayheadAtStart = firstAvailableFrame + current_frames + thisStepSubbeatLengthInMicroseconds;
+                            jackPlayheadAtStart = firstAvailableFrame + current_frames + (thisStepSubbeatLengthInMicroseconds / microsecondsPerFrame);
                             break;
                         case TimerCommand::StopPlaybackOperation:
-                            stopPlayback(firstAvailableFrame + current_frames);
+                            stopPlayback(firstAvailableFrame + current_frames, stepNextPlaybackPosition);
                             break;
                         case TimerCommand::StartClipLoopOperation:
                         case TimerCommand::StopClipLoopOperation:
@@ -737,7 +737,7 @@ public:
         return 0;
     }
 
-    void startPlayback(TimerCommand *command, jack_nframes_t currentFrame) {
+    void startPlayback(TimerCommand *command, jack_nframes_t currentFrame, jack_time_t currentFrameUsecs) {
         if (timerThread->isPaused()) {
             SegmentHandler *handler = SegmentHandler::instance();
             if (command->parameter == 1) {
@@ -755,7 +755,7 @@ public:
                 }
                 QObject *clipToRecord = pgm->zlSketchpad()->property("clipToRecord").value<QObject*>();
                 if (clipToRecord) {
-                    MidiRecorder::instance()->startRecording(pgm->currentMidiChannel(), true, currentFrame);
+                    MidiRecorder::instance()->startRecording(pgm->currentMidiChannel(), true, currentFrameUsecs);
                     AudioLevels::instance()->startRecording(currentFrame);
                 }
                 QMetaObject::invokeMethod(pgm->zlSketchpad(), "startPlayback", Qt::DirectConnection);
@@ -766,7 +766,7 @@ public:
             qDebug() << Q_FUNC_INFO << "Attempted to start playback without playback running";
         }
     }
-    void stopPlayback(jack_nframes_t currentFrame) {
+    void stopPlayback(jack_nframes_t currentFrame, jack_time_t currentFrameUsecs) {
         if (timerThread->isPaused()) {
             qDebug() << Q_FUNC_INFO << "Attempted to stop playback when playback was already stopped";
         } else {
@@ -795,7 +795,7 @@ public:
                 if (isRecording) {
                     if (MidiRecorder::instance()->isRecording()) {
                         // Don't stop again if we've already been stopped
-                        MidiRecorder::instance()->stopRecording(-1, currentFrame);
+                        MidiRecorder::instance()->stopRecording(-1, currentFrameUsecs);
                     }
                     if (AudioLevels::instance()->isRecording()) {
                         AudioLevels::instance()->stopRecording(currentFrame);
