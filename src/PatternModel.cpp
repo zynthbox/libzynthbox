@@ -76,7 +76,7 @@ public:
         layerDataPuller = new QTimer(this);
         layerDataPuller->setInterval(100);
         layerDataPuller->setSingleShot(true);
-        connect(layerDataPuller, &QTimer::timeout, this, &ZLPatternSynchronisationManager::retrieveLayerData);
+        connect(layerDataPuller, &QTimer::timeout, this, &ZLPatternSynchronisationManager::retrieveLayerData, Qt::QueuedConnection);
         syncTimer = SyncTimer::instance();
     };
     PatternModel *q{nullptr};
@@ -88,6 +88,7 @@ public:
     QTimer *layerDataPuller{nullptr};
 
     bool channelMuted{false};
+    bool channelOneToOnePlayback{false}; // Whether sample picking should be done equal to the clip position of the pattern (so pattern for clip a only plays samples in slot 1, and patterns for clip c only plays samples in slot 3)
     void setZlChannel(QObject *newZlChannel)
     {
         if (zlChannel != newZlChannel) {
@@ -105,6 +106,7 @@ public:
                 connect(zlChannel, SIGNAL(chained_sounds_changed()), layerDataPuller, SLOT(start()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(recordingPopupActiveChanged()), this, SIGNAL(recordingPopupActiveChanged()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(mutedChanged()), this, SLOT(mutedChanged()), Qt::QueuedConnection);
+                connect(zlChannel, SIGNAL(channel_routing_style_changed()), this, SLOT(routingStyleChanged()), Qt::QueuedConnection);
                 q->setMidiChannel(zlChannel->property("id").toInt());
                 channelAudioTypeChanged();
                 externalMidiChannelChanged();
@@ -112,6 +114,7 @@ public:
                 selectedPartChanged();
                 layerDataPuller->start();
                 chainedSoundsChanged();
+                routingStyleChanged();
             }
             mutedChanged();
             Q_EMIT q->zlChannelChanged();
@@ -242,6 +245,13 @@ public Q_SLOTS:
             MidiRouter::instance()->setZynthianChannels(q->channelIndex(), chainedSounds);
         }
     }
+    void routingStyleChanged() {
+        if (zlChannel) {
+            channelOneToOnePlayback = (zlChannel->property("channelRoutingStyle").toString() == "one-to-one");
+        } else {
+            channelOneToOnePlayback = false;
+        }
+    }
     void mutedChanged() {
         if (zlChannel) {
             channelMuted = zlChannel->property("muted").toBool();
@@ -313,7 +323,6 @@ public:
     int playingRow{0};
     int playingColumn{0};
     int previouslyUpdatedMidiChannel{-1};
-    bool oneToOnePlayback{false}; // Whether sample picking should be done equal to the clip position of the pattern (so pattern for clip a only plays samples in slot 1, and patterns for clip c only plays samples in slot 3)
 
     juce::MidiBuffer &getOrCreateBuffer(QHash<int, juce::MidiBuffer> &collection, int position);
     void noteLengthDetails(int noteLength, qint64 &nextPosition, bool &relevantToUs, qint64 &noteDuration);
@@ -408,7 +417,7 @@ public:
         int clipIndex{0};
         for (ClipAudioSource *clip : qAsConst(clips)) {
             // There must be a clip or it just doesn't matter, and then the note must fit inside the clip's keyzone
-            if (clip && clip->keyZoneStart() <= byte2 && byte2 <= clip->keyZoneEnd() && (oneToOnePlayback == false || clipIndex == partIndex)) {
+            if (clip && clip->keyZoneStart() <= byte2 && byte2 <= clip->keyZoneEnd() && (zlSyncManager->channelOneToOnePlayback == false || clipIndex == partIndex)) {
                 ClipCommand *command = ClipCommand::channelCommand(clip, (byte1 & 0xf));
                 command->startPlayback = byte1 > 0x8F;
                 command->stopPlayback = byte1 < 0x90;
