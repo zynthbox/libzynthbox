@@ -80,6 +80,10 @@ target_link_libraries(libzynthbox
 target_include_directories(libzynthbox
     PRIVATE
         ${Jack_INCLUDE_DIRS}
+        /usr/include/arm-linux-gnueabihf/qt5/QtQml/5.15.8
+        /usr/include/arm-linux-gnueabihf/qt5/QtQml/5.15.8/QtQml
+        /usr/include/arm-linux-gnueabihf/qt5/QtCore/5.15.8
+        /usr/include/arm-linux-gnueabihf/qt5/QtCore/5.15.8/QtCore
     INTERFACE
         $<TARGET_PROPERTY:libzynthbox,INCLUDE_DIRECTORIES>
 )

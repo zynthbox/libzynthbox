@@ -55,6 +55,64 @@
 
 #include "Plugin.h"
 
+/*
+ * To use, uncomment the define below, and then from gdb, you can call:
+
+ (gdb) call KDAB::printQmlStackTraces()
+Stack trace for QQuickView(0x7fffffffd2e0 active exposed, visibility=QWindow::Windowed, flags=QFlags<Qt::WindowType>(Window), geometry=0,1290 500x500)
+    onSomeIndirection2Changed [qrc:/main.qml:28]
+    onSomeIndirectionChanged [qrc:/main.qml:22]
+    onClicked [qrc:/main.qml:17]
+
+    * Based on: https://github.com/iamsergio/gdb_qml_backtraces
+ */
+// #define KDAB_QML_STACKTRACE
+#ifdef KDAB_QML_STACKTRACE
+#include <QGuiApplication>
+#include <QQuickWindow>
+#include <QQmlContext>
+#include <QQuickItem>
+#include <5.15.8/QtQml/private/qqmlengine_p.h>
+
+namespace KDAB {
+
+QString qmlStackTrace(QV4::ExecutionEngine *engine)
+{
+    QString result;
+    QVector<QV4::StackFrame> frames = engine->stackTrace(15);
+    for (auto &f : frames)
+        result += QStringLiteral("    %1 [%2:%3]\n").arg(f.function, f.source).arg(f.line);
+
+    return result;
+}
+
+void printQmlStackTraces()
+{
+    auto windows = qApp->topLevelWindows();
+    for (QWindow *w : windows) {
+        if (auto qw = qobject_cast<QQuickWindow*>(w)) {
+            QQuickItem *item = qw->contentItem();
+            QQmlContext* context = QQmlEngine::contextForObject(item);
+            if (context) {
+                QQmlEnginePrivate *enginePriv = QQmlEnginePrivate::get(context->engine());
+                QV4::ExecutionEngine *v4engine = enginePriv->v4engine();
+                qDebug() << "Stack trace for" << qw << "engine" << v4engine << "with the current top frame being" << v4engine->currentStackFrame;
+                qDebug().noquote() << qmlStackTrace(v4engine);
+                qDebug() << "\n";
+            }
+        }
+    }
+    QQmlEnginePrivate *enginePriv = QQmlEnginePrivate::get(Plugin::instance()->qmlEngine());
+    QV4::ExecutionEngine *v4engine = enginePriv->v4engine();
+    qDebug() << "Stack trace for the Plugin's engine" << v4engine << "with the current top frame being" << v4engine->currentStackFrame;
+    qDebug().noquote() << qmlStackTrace(v4engine);
+    qDebug() << "\n";
+}
+
+}
+
+#endif
+
 using namespace std;
 using namespace std::chrono;
 
@@ -75,8 +133,36 @@ Plugin *Plugin::instance()
     return sin;
 }
 
+void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QString &msg)
+{
+    QByteArray localMsg = msg.toLocal8Bit();
+    const char *file = context.file ? context.file : "";
+    const char *function = context.function ? context.function : "";
+    if (msg == QString::fromLocal8Bit("QObject::connect(QObject, QQmlDMObjectData): invalid nullptr parameter")) {
+        raise(SIGSEGV);
+    }
+    switch (type) {
+    case QtDebugMsg:
+        fprintf(stderr, "Debug: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
+        break;
+    case QtInfoMsg:
+        fprintf(stderr, "Info: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
+        break;
+    case QtWarningMsg:
+        fprintf(stderr, "Warning: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
+        break;
+    case QtCriticalMsg:
+        fprintf(stderr, "Critical: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
+        break;
+    case QtFatalMsg:
+        fprintf(stderr, "Fatal: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
+        break;
+    }
+}
+
 void Plugin::initialize()
 {
+    // qInstallMessageHandler(myMessageOutput);
     qDebug() << "libzynthbox Initialisation Started";
     juceEventLoop.start();
     qDebug() << "Started juce event loop";
