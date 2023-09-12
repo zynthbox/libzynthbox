@@ -197,7 +197,8 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
 
   d->positionsModel = new ClipAudioSourcePositionsModel(this);
   d->positionsModel->moveToThread(Plugin::instance()->qmlEngine()->thread());
-  connect(d->positionsModel, &ClipAudioSourcePositionsModel::peakGainChanged, this, [&](){ d->syncAudioLevel(); });
+  // We don't connect to this, as we are already syncing explicitly in timerCallback
+  // connect(d->positionsModel, &ClipAudioSourcePositionsModel::peakGainChanged, this, [&](){ d->syncAudioLevel(); });
   connect(d->positionsModel, &QAbstractItemModel::dataChanged, this, [&](const QModelIndex& topLeft, const QModelIndex& /*bottomRight*/, const QVector< int >& roles = QVector<int>()){
     if (topLeft.row() == 0 && roles.contains(ClipAudioSourcePositionsModel::PositionProgressRole)) {
       syncProgress();
