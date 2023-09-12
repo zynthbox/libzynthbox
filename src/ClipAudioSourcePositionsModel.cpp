@@ -90,9 +90,6 @@ public:
     // ui update period, or double the frame size, which ever is larger
     jack_nframes_t updateGracePeriod{2048};
     DataRing positionUpdates;
-
-    void updatePositions() {
-    }
 };
 
 ClipAudioSourcePositionsModel::ClipAudioSourcePositionsModel(ClipAudioSource *clip)
@@ -152,7 +149,6 @@ void ClipAudioSourcePositionsModel::setPositionData(jack_nframes_t timestamp, Cl
     d->positionUpdates.write(timestamp, clipCommand, progress, gain, pan);
     d->mostRecentPositionUpdate = timestamp; // we can safely do this without checking, as this timestamp will always grow
     d->updatePeakGain = true;
-    Q_EMIT peakGainChanged();
 }
 
 void ClipAudioSourcePositionsModel::setMostRecentPositionUpdate(jack_nframes_t timestamp)
@@ -164,7 +160,7 @@ float ClipAudioSourcePositionsModel::peakGain()
 {
     if (d->updatePeakGain) {
         // First update the positions given new data
-        d->updatePositions();
+        updatePositions();
         // Then update the peak gain
         float peak{0.0f};
         for (int positionIndex = 0; positionIndex < POSITION_COUNT; ++positionIndex) {
@@ -174,6 +170,7 @@ float ClipAudioSourcePositionsModel::peakGain()
             d->peakGain = peak;
         }
         d->updatePeakGain = false;
+        QMetaObject::invokeMethod(this, "peakGainChanged", Qt::QueuedConnection);
     }
     return d->peakGain;
 }
