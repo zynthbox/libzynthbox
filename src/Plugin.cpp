@@ -195,22 +195,25 @@ void Plugin::initialize()
     qDebug() << "Creating GlobalPlayback Passthrough Client";
     m_globalPlaybackClient = new JackPassthrough("GlobalPlayback", QCoreApplication::instance(), true, false, false);
     qDebug() << "Creating SynthPassthroughClient";
-    for (int i = 0; i <= 15; i++) {
+    for (int i = 0; i < 16; i++) {
         m_synthPassthroughClients << new JackPassthrough(QString("SynthPassthrough:Synth%1").arg(i+1), QCoreApplication::instance(), true, false, false);
     }
     qDebug() << "Creating Channel Passthrough Client";
-    for (int i=0; i<10; ++i) {
-        JackPassthrough* client = new JackPassthrough(QString("ChannelPassthrough:Channel%1").arg(i+1), QCoreApplication::instance());
-        client->setWetFx1Amount(0.0f);
-        client->setWetFx2Amount(0.0f);
-        m_channelPassthroughClients << client;
+    // Create a ChannelPassthrough client for each of five lanes on each of the ten channels
+    for (int channelNumber = 0; channelNumber < 10; ++channelNumber) {
+        for (int laneNumber = 0; laneNumber < 5; ++laneNumber) {
+            JackPassthrough* client = new JackPassthrough(QString("ChannelPassthrough:Channel%1-lane%2").arg(channelNumber+1).arg(laneNumber+1), QCoreApplication::instance());
+            client->setWetFx1Amount(0.0f);
+            client->setWetFx2Amount(0.0f);
+            m_channelPassthroughClients << client;
+        }
     }
     // Create 10 FX Passthrough client for 10 channels having 5 lanes each for each fx slot in a channel
     qDebug() << "Creating FX Passthrough Client";
-    for (int i=0; i<10; ++i) {
+    for (int channelNumber = 0; channelNumber < 10; ++channelNumber) {
         QList<JackPassthrough*> lanes;
-        for (int j=0; j<5; ++j) {
-            JackPassthrough* fxPassthrough = new JackPassthrough(QString("FXPassthrough:Channel%1-lane%2").arg(i+1).arg(j+1), QCoreApplication::instance(), true, true, false);
+        for (int laneNumber = 0; laneNumber < 5; ++laneNumber) {
+            JackPassthrough* fxPassthrough = new JackPassthrough(QString("FXPassthrough:Channel%1-lane%2").arg(channelNumber+1).arg(laneNumber+1), QCoreApplication::instance(), true, true, false);
             fxPassthrough->setDryWetMixAmount(1.0f);
             lanes << fxPassthrough;
         }
