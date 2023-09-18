@@ -247,6 +247,12 @@ void Plugin::initialize()
     // Make sure to have the AudioLevels instantiated by explicitly calling instance
     qDebug() << "Initialising AudioLevels";
     AudioLevels::instance();
+
+    qDebug() << "Initialising MidiRecorder";
+    MidiRecorder::instance();
+
+    qDebug() << "Initialising SegmentHandler";
+    SegmentHandler::instance();
 }
 
 void Plugin::shutdown()
