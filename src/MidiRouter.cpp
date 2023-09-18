@@ -527,17 +527,17 @@ public:
                         } else {
                             if (event.buffer[0] == 0xf0) {
                                 // If we are starting a sysex message, pass the instruction through, and set the device as having started sysex delivery
-                                device->sysexActive = true;
+                                // device->sysexActive = true;
                                 writeEventToBuffer(event, externalOutputBuffer, eventChannel, &externalMostRecentTime, externalOutputPort);
                                 writeEventToBuffer(event, passthroughOutputBuffer, currentChannel, &passthroughOutputMostRecentTime, passthroughOutputPort);
-                            } else if (device->sysexActive) {
+                            // } else if (device->sysexActive) {
                                 // If sysex is active, pass it through
-                                writeEventToBuffer(event, externalOutputBuffer, eventChannel, &externalMostRecentTime, externalOutputPort);
-                                writeEventToBuffer(event, passthroughOutputBuffer, currentChannel, &passthroughOutputMostRecentTime, passthroughOutputPort);
-                                if (event.buffer[0] == 0xF7) {
-                                    // If the message is the sysex end message, make sure we also update our state
-                                    device->sysexActive = false;
-                                }
+                                // writeEventToBuffer(event, externalOutputBuffer, eventChannel, &externalMostRecentTime, externalOutputPort);
+                                // writeEventToBuffer(event, passthroughOutputBuffer, currentChannel, &passthroughOutputMostRecentTime, passthroughOutputPort);
+                                // if (event.buffer[0] == 0xF7) {
+                                    // // If the message is the sysex end message, make sure we also update our state
+                                    // device->sysexActive = false;
+                                // }
                             } else {
                                 // Check whether we've got any message translation to do
                                 if (event.buffer[0] > 0xAF && event.buffer[0] < 0xC0) {
