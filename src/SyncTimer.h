@@ -253,6 +253,19 @@ public:
    * @param byte2 The third byte of the message
    */
   Q_INVOKABLE void sendMidiMessageImmediately(int size, int byte0, int byte1 = 0, int byte2 = 0);
+  /**
+   * \brief Send a program change to the given channel (will be sent to all external devices)
+   * @param midiChannel The midi channel to send the message to
+   * @param program The new value (will be clamped to 0 through 127)
+   */
+  Q_INVOKABLE void sendProgramChangeImmediately(int midiChannel, int program);
+  /**
+   * \brief Send a control change message to the given channel (will be sent to all external devices)
+   * @param midiChannel The midi channel to send the message to
+   * @param control The control (a conceptual knob, will be clamped between to 0 through 127)
+   * @param value The value of the control (will be clamped to 0 through 127)
+   */
+  Q_INVOKABLE void sendCCMessageImmediately(int midiChannel, int control, int value);
 
   /**
    * \brief Send a set of midi messages out immediately (ensuring they go through the step sequencer output)

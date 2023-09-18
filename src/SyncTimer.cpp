@@ -1289,6 +1289,16 @@ void SyncTimer::sendMidiMessageImmediately(int size, int byte0, int byte1, int b
     }
 }
 
+void SyncTimer::sendProgramChangeImmediately(int midiChannel, int program)
+{
+    sendMidiMessageImmediately(2, 192 + std::clamp(midiChannel, 0, 16), std::clamp(program, 0, 127));
+}
+
+void SyncTimer::sendCCMessageImmediately(int midiChannel, int control, int value)
+{
+    sendMidiMessageImmediately(3, 176 + std::clamp(midiChannel, 0, 16), std::clamp(control, 0, 127), std::clamp(value, 0, 127));
+}
+
 void SyncTimer::sendMidiBufferImmediately(const juce::MidiBuffer& buffer)
 {
     StepData *stepData{d->delayedStep(0)};
