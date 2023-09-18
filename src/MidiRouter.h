@@ -91,6 +91,16 @@ public:
      * \brief Fired whenever a note has changed
      */
     Q_SIGNAL void noteChanged( MidiRouter::ListenerPort port, int midiNote, int midiChannel, int velocity, bool setOn, double timeStamp, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const int &sketchpadTrack);
+    /**
+     * \brief Fired whenever any midi message arrives
+     * @param port The listener port that the message arrived on (you will likely want to filter on just managing PassthroughPort, unless you have a specific reason)
+     * @param size How many bytes the message contains (either 1, 2, or 3)
+     * @param byte1 The first byte (always valid)
+     * @param byte2 The second byte (usually valid, byt always test size before using)
+     * @param byte3 The third byte (commonly valid, but always test size before using)
+     * @param fromInternal Whether the message arrived from an internal source
+     */
+    Q_SIGNAL void midiMessage(MidiRouter::ListenerPort port, int size, const unsigned char &byte1, const unsigned char &byte2, const unsigned char& byte3, const int &sketchpadTrack, bool fromInternal);
 
 private:
     MidiRouterPrivate *d{nullptr};
