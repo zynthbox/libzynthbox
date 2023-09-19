@@ -1281,7 +1281,7 @@ void SyncTimer::sendMidiMessageImmediately(int size, int byte0, int byte1, int b
     if (size ==1) {
         stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage(byte0)));
     } else if (size == 2) {
-        stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage(byte0, byte2)));
+        stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage(byte0, byte1)));
     } else if (size == 3) {
         stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage(byte0, byte1, byte2)));
     } else {
