@@ -109,6 +109,7 @@ public Q_SLOTS:
         if (zlDashboard) {
             const int selectedChannel = zlDashboard->property("selectedChannel").toInt();
             q->setCurrentMidiChannel(selectedChannel);
+            SyncTimer::instance()->sendProgramChangeImmediately(MidiRouter::instance()->masterChannel(), 64);
         }
     }
 };
