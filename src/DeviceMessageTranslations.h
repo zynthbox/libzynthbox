@@ -5,6 +5,7 @@
 
 #include <jack/midiport.h>
 
+const QLatin1String device_identifier_seaboard_rise{"Seaboard RISE MIDI"};
 const QLatin1String device_identifier_presonus_atom_sq{"ATM SQ ATM SQ"};
 jack_midi_event_t device_translations_cc_presonus_atom_sq[128];
 jack_midi_event_t device_translations_cc_none[128];
@@ -37,5 +38,12 @@ namespace DeviceMessageTranslations {
         } else {
             *translations_cc = device_translations_cc_none;
         }
+    }
+    int deviceMasterChannel(const QString& identifier) {
+        if (identifier.startsWith(device_identifier_seaboard_rise)) {
+            qDebug() << "ZLRouter: Identified device as a ROLI Seaboard Rise, returning master channel 0";
+            return 0;
+        }
+        return 15;
     }
 }
