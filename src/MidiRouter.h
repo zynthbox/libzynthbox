@@ -27,6 +27,10 @@ class MidiRouter : public QThread
      * @default 0
      */
     Q_PROPERTY(int currentChannel READ currentChannel WRITE setCurrentChannel NOTIFY currentChannelChanged)
+    /**
+     * \brief The master channel as set up through webconf
+     */
+    Q_PROPERTY(int masterChannel READ masterChannel NOTIFY masterChannelChanged)
 public:
     static MidiRouter* instance() {
         static MidiRouter* instance{nullptr};
@@ -74,6 +78,9 @@ public:
      */
     Q_SLOT void reloadConfiguration();
 
+    int masterChannel() const;
+    Q_SIGNAL void masterChannelChanged();
+
     Q_SIGNAL void addedHardwareInputDevice(const QString &deviceName, const QString &humanReadableName);
     Q_SIGNAL void removedHardwareInputDevice(const QString &deviceName, const QString &humanReadableName);
     Q_SIGNAL void addedHardwareOutputDevice(const QString &deviceName, const QString &humanReadableName);
@@ -100,7 +107,7 @@ public:
      * @param byte3 The third byte (commonly valid, but always test size before using)
      * @param fromInternal Whether the message arrived from an internal source
      */
-    Q_SIGNAL void midiMessage(MidiRouter::ListenerPort port, int size, const unsigned char &byte1, const unsigned char &byte2, const unsigned char& byte3, const int &sketchpadTrack, bool fromInternal);
+    Q_SIGNAL void midiMessage(int port, int size, const unsigned char &byte1, const unsigned char &byte2, const unsigned char& byte3, const int &sketchpadTrack, bool fromInternal);
 
 private:
     MidiRouterPrivate *d{nullptr};
