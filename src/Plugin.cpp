@@ -220,9 +220,10 @@ void Plugin::initialize()
         m_fxPassthroughClients << lanes;
     }
 
-    qDebug() << "Registering qml meta types";
+    qDebug() << "Registering Qt meta types";
     qRegisterMetaType<AudioLevels*>("AudioLevels");
     qRegisterMetaType<JackPassthrough*>("JackPassthrough");
+    qRegisterMetaType<MidiRouter*>("MidiRouter");
     qRegisterMetaType<PatternModel*>("PatternModel");
     qRegisterMetaType<PlayGridManager*>("PlayGridManager");
     qRegisterMetaType<SegmentHandler*>("SegmentHandler");
@@ -326,6 +327,7 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
         return AudioLevels::instance();
     });
     qmlRegisterSingletonType<Plugin>(uri, 1, 0, "Plugin", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
+        Q_UNUSED(engine)
         Q_UNUSED(scriptEngine)
         Plugin *plugin = instance();
         QQmlEngine::setObjectOwnership(plugin, QQmlEngine::CppOwnership);
