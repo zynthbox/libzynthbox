@@ -352,7 +352,7 @@ public:
                         currentTrack = sketchpadTracks[sketchpadTrack];
                         switch (currentTrack->destination) {
                             case MidiRouter::ZynthianDestination:
-                                passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, *event, sketchpadTrack, currentSketchpadTrack);
+                                passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, *event, eventChannel, currentSketchpadTrack);
                                 for (const int &zynthianChannel : currentTrack->zynthianChannels) {
                                     if (zynthianChannel == -1) {
                                         continue;
@@ -362,15 +362,15 @@ public:
                                 passthroughOutputPort->routerDevice->writeEventToOutput(*event);
                                 break;
                             case MidiRouter::SamplerDestination:
-                                passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, *event, sketchpadTrack, currentSketchpadTrack);
+                                passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, *event, eventChannel, currentSketchpadTrack);
                                 currentTrack->routerDevice->writeEventToOutput(*event);
                                 passthroughOutputPort->routerDevice->writeEventToOutput(*event);
                                 break;
                             case MidiRouter::ExternalDestination:
                             {
                                 int externalChannel = (currentTrack->externalChannel == -1) ? currentTrack->trackIndex : currentTrack->externalChannel;
-                                passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, *event, sketchpadTrack, currentSketchpadTrack);
-                                externalOutListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, *event, sketchpadTrack, currentSketchpadTrack);
+                                passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, *event, eventChannel, currentSketchpadTrack);
+                                externalOutListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, *event, externalChannel, currentSketchpadTrack);
                                 if (!(inputDeviceIsHardware == false && eventChannel == masterChannel)) {
                                     // Since we've already done this above for master-channel events, don't write them again
                                     for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
