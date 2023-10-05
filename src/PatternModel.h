@@ -564,9 +564,6 @@ public:
     bool isPlaying() const;
     Q_SIGNAL void isPlayingChanged();
 
-    Q_INVOKABLE void setPositionOff(int row, int column) const;
-    Q_INVOKABLE QObjectList setPositionOn(int row, int column) const;
-
     /**
      * \brief Used by SequenceModel to advance the sequence position during playback
      *

@@ -550,9 +550,9 @@ PatternModel::PatternModel(SequenceModel* parent)
         }
         if (zlChannel() && zlChannel()->property("recordingPopupActive").toBool()) {
             // Recording Popup is active. Do connect midi channel to allow recording even if channel mode is trig/slice
-            MidiRouter::instance()->setChannelDestination(d->midiChannel, MidiRouter::ZynthianDestination, actualChannel == d->midiChannel ? -1 : actualChannel);
+            MidiRouter::instance()->setSkechpadTrackDestination(d->midiChannel, MidiRouter::ZynthianDestination, actualChannel == d->midiChannel ? -1 : actualChannel);
         } else {
-            MidiRouter::instance()->setChannelDestination(d->midiChannel, routerDestination, actualChannel == d->midiChannel ? -1 : actualChannel);
+            MidiRouter::instance()->setSkechpadTrackDestination(d->midiChannel, routerDestination, actualChannel == d->midiChannel ? -1 : actualChannel);
         }
         if (d->previouslyUpdatedMidiChannel != d->midiChannel) {
             startLongOperation();
@@ -595,10 +595,10 @@ PatternModel::PatternModel(SequenceModel* parent)
                 Note *note = qobject_cast<Note*>(PlayGridManager::instance()->getNote(clipCommand->midiNote, d->midiChannel));
                 if (note) {
                     if (clipCommand->stopPlayback) {
-                        note->setIsPlaying(false);
+                        note->setIsPlaying(false, d->midiChannel);
                     }
                     if (clipCommand->startPlayback) {
-                        note->setIsPlaying(true);
+                        note->setIsPlaying(true, d->midiChannel);
                     }
                 }
                 break;
@@ -667,7 +667,7 @@ int PatternModel::addSubnote(int row, int column, QObject* note)
 
         // Ensure the note is correct according to our midi channel settings
         Note *newNote = qobject_cast<Note*>(note);
-        if (newNote->midiChannel() != d->midiChannel) {
+        if (newNote->sketchpadTrack() != d->midiChannel) {
             newNote = qobject_cast<Note*>(playGridManager()->getNote(newNote->midiNote(), d->midiChannel));
         }
 
@@ -694,7 +694,7 @@ void PatternModel::insertSubnote(int row, int column, int subnoteIndex, QObject 
 
         // Ensure the note is correct according to our midi channel settings
         Note *newNote = qobject_cast<Note*>(note);
-        if (newNote->midiChannel() != d->midiChannel) {
+        if (newNote->sketchpadTrack() != d->midiChannel) {
             newNote = qobject_cast<Note*>(playGridManager()->getNote(newNote->midiNote(), d->midiChannel));
         }
 
@@ -727,7 +727,7 @@ int PatternModel::insertSubnoteSorted(int row, int column, QObject* note)
         }
 
         // Ensure the note is correct according to our midi channel settings
-        if (newNote->midiChannel() != d->midiChannel) {
+        if (newNote->sketchpadTrack() != d->midiChannel) {
             newNote = qobject_cast<Note*>(playGridManager()->getNote(newNote->midiNote(), d->midiChannel));
         }
 
@@ -968,7 +968,7 @@ void PatternModel::setNoteDestination(const PatternModel::NoteDestination &noteD
         // Before switching the destination, first let's quickly send a little note off for aaaaall notes on this channel
         juce::MidiBuffer buffer;
         buffer.addEvent(juce::MidiMessage::allNotesOff(d->midiChannel + 1), 0);
-        SyncTimer::instance()->sendMidiBufferImmediately(buffer);
+        SyncTimer::instance()->sendMidiBufferImmediately(buffer, d->midiChannel);
         d->noteDestination = noteDestination;
         Q_EMIT noteDestinationChanged();
     }
@@ -1497,73 +1497,17 @@ bool PatternModel::isPlaying() const
     return d->isPlaying;
 }
 
-void PatternModel::setPositionOff(int row, int column) const
-{
-    if (row > -1 && row < height() && column > -1 && column < width()) {
-        const Note *note = qobject_cast<Note*>(getNote(row, column));
-        if (note) {
-            for (const QVariant &subnoteVar : note->subnotes()) {
-                Note *subnote = subnoteVar.value<Note*>();
-                if (subnote) {
-                    subnote->setOff();
-                }
-            }
-        }
+void addNoteToBuffer(juce::MidiBuffer &buffer, const Note *theNote, unsigned char velocity, bool setOn, int availableChannel) {
+    unsigned char note[3];
+    if (setOn) {
+        note[0] = 0x90 + availableChannel;
+    } else {
+        note[0] = 0x80 + availableChannel;
     }
-}
-
-QObjectList PatternModel::setPositionOn(int row, int column) const
-{
-    static const QLatin1String velocityString{"velocity"};
-    QObjectList onifiedNotes;
-    if (row > -1 && row < height() && column > -1 && column < width()) {
-        const Note *note = qobject_cast<Note*>(getNote(row, column));
-        if (note) {
-            const QVariantList &subnotes = note->subnotes();
-            const QVariantList &meta = getMetadata(row, column).toList();
-            if (meta.count() == subnotes.count()) {
-                for (int i = 0; i < subnotes.count(); ++i) {
-                    Note *subnote = subnotes[i].value<Note*>();
-                    const QVariantHash &metaHash = meta[i].toHash();
-                    if (metaHash.isEmpty() && subnote) {
-                        playGridManager()->scheduleNote(subnote->midiNote(), subnote->midiChannel(), true);
-                        onifiedNotes << subnote;
-                    } else if (subnote) {
-                        int velocity{64};
-                        if (metaHash.contains(velocityString)) {
-                            velocity = metaHash.value(velocityString).toInt();
-                        }
-                        playGridManager()->scheduleNote(subnote->midiNote(), subnote->midiChannel(), true, velocity);
-                        onifiedNotes << subnote;
-                    }
-                }
-            } else {
-                for (const QVariant &subnoteVar : subnotes) {
-                    Note *subnote = subnoteVar.value<Note*>();
-                    if (subnote) {
-                        playGridManager()->scheduleNote(subnote->midiNote(), subnote->midiChannel(), true);
-                        onifiedNotes << subnote;
-                    }
-                }
-            }
-        }
-    }
-    return onifiedNotes;
-}
-
-void addNoteToBuffer(juce::MidiBuffer &buffer, const Note *theNote, unsigned char velocity, bool setOn, int overrideChannel) {
-    if ((overrideChannel > -1 ? overrideChannel : theNote->midiChannel()) >= -1 && (overrideChannel > -1 ? overrideChannel : theNote->midiChannel()) <= 15) {
-        unsigned char note[3];
-        if (setOn) {
-            note[0] = 0x90 + (overrideChannel > -1 ? overrideChannel : theNote->midiChannel());
-        } else {
-            note[0] = 0x80 + (overrideChannel > -1 ? overrideChannel : theNote->midiChannel());
-        }
-        note[1] = theNote->midiNote();
-        note[2] = velocity;
-        const int onOrOff = setOn ? 1 : 0;
-        buffer.addEvent(note, 3, onOrOff);
-    }
+    note[1] = theNote->midiNote();
+    note[2] = velocity;
+    const int onOrOff = setOn ? 1 : 0;
+    buffer.addEvent(note, 3, onOrOff);
 }
 
 inline juce::MidiBuffer &PatternModel::Private::getOrCreateBuffer(QHash<int, juce::MidiBuffer> &collection, int position)
@@ -1654,7 +1598,6 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
             )
         )
     ) {
-        const int overrideChannel{(d->midiChannel == 15) ? d->playGridManager->currentMidiChannel() : -1};
         const qint64 playbackOffset{d->segmentHandler->songMode() ? d->segmentHandler->playfieldOffset(d->channelIndex, d->sequence->sceneIndex(), d->partIndex) - d->segmentHandler->startOffset() : 0};
         qint64 noteDuration{0};
         bool relevantToUs{false};
@@ -1691,9 +1634,10 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                         const Note *subnote = subnotes[subnoteIndex].value<Note*>();
                                         const QVariantHash &metaHash = meta[subnoteIndex].toHash();
                                         if (subnote) {
+                                            const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(progressionIncrement));
                                             if (metaHash.isEmpty()) {
-                                                addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, 0), subnote, 64, true, overrideChannel);
-                                                addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, noteDuration), subnote, 64, false, overrideChannel);
+                                                addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, 0), subnote, 64, true, avaialbleChannel);
+                                                addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, noteDuration), subnote, 64, false, avaialbleChannel);
                                             } else {
                                                 const int velocity{metaHash.value(velocityString, 64).toInt()};
                                                 const int delay{metaHash.value(delayString, 0).toInt()};
@@ -1701,8 +1645,8 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                                 if (duration < 1) {
                                                     duration = noteDuration;
                                                 }
-                                                addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay), subnote, velocity, true, overrideChannel);
-                                                addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay + duration), subnote, velocity, false, overrideChannel);
+                                                addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay), subnote, velocity, true, avaialbleChannel);
+                                                addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay + duration), subnote, velocity, false, avaialbleChannel);
                                             }
                                         }
                                     }
@@ -1710,13 +1654,15 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                     for (const QVariant &subnoteVar : subnotes) {
                                         const Note *subnote = subnoteVar.value<Note*>();
                                         if (subnote) {
-                                            addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, 0), subnote, 64, true, overrideChannel);
-                                            addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, noteDuration), subnote, 64, false, overrideChannel);
+                                            const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(progressionIncrement));
+                                            addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, 0), subnote, 64, true, avaialbleChannel);
+                                            addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, noteDuration), subnote, 64, false, avaialbleChannel);
                                         }
                                     }
                                 } else {
-                                    addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, 0), note, 64, true, overrideChannel);
-                                    addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, noteDuration), note, 64, false, overrideChannel);
+                                    const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(progressionIncrement));
+                                    addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, 0), note, 64, true, avaialbleChannel);
+                                    addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, noteDuration), note, 64, false, avaialbleChannel);
                                 }
                             // The lookahead notes only need handling if, and only if, there is matching meta, and the delay is negative (as in, position before that step)
                             } else {
@@ -1729,6 +1675,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                             if (!metaHash.isEmpty() && metaHash.contains(delayString)) {
                                                 const int delay{metaHash.value(delayString, 0).toInt()};
                                                 if (delay < 0) {
+                                                    const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(progressionIncrement));
                                                     const int velocity{metaHash.value(velocityString, 64).toInt()};
                                                     int duration{metaHash.value(durationString, noteDuration).toInt()};
                                                     if (duration < 1) {
@@ -1736,8 +1683,8 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                                     }
 //                                                     qDebug() << "Next position" << nextPosition << "with ourPosition" << ourPosition << "where delay" << delay << "is less than 0";
 //                                                     qDebug() << "With position adjustment" << positionAdjustment << "we end up with start" << positionAdjustment + delay << "and end" << positionAdjustment + delay + duration;
-                                                    addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, positionAdjustment + delay), subnote, velocity, true, overrideChannel);
-                                                    addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, positionAdjustment + delay + duration), subnote, velocity, false, overrideChannel);
+                                                    addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, positionAdjustment + delay), subnote, velocity, true, avaialbleChannel);
+                                                    addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, positionAdjustment + delay + duration), subnote, velocity, false, avaialbleChannel);
                                                 }
                                             }
                                         }
