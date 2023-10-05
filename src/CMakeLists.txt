@@ -8,6 +8,7 @@ target_sources(libzynthbox
         ClipAudioSource.cpp
         ClipAudioSourcePositionsModel.cpp
         MidiRouter.cpp
+        MidiRouterDevice.cpp
         SamplerSynth.cpp
         SamplerSynthSound.cpp
         SamplerSynthVoice.cpp
