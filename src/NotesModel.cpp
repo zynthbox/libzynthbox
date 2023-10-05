@@ -48,7 +48,8 @@ public:
                         note->disconnect(q);
                         connect(note, &Note::nameChanged, q, [this,note](){ noteChanged(note); });
                         connect(note, &Note::midiNoteChanged, q, [this,note](){ noteChanged(note); });
-                        connect(note, &Note::midiChannelChanged, q, [this,note](){ noteChanged(note); });
+                        connect(note, &Note::sketchpadTrackChanged, q, [this,note](){ noteChanged(note); });
+                        connect(note, &Note::activeChannelChanged, q, [this,note](){ noteChanged(note); });
                         connect(note, &Note::isPlayingChanged, q, [this,note](){ noteChanged(note); });
                         connect(note, &Note::subnotesChanged, q, [this,note](){ noteChanged(note); });
                     }

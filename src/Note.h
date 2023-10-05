@@ -29,9 +29,10 @@ class Note : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QString name READ name NOTIFY nameChanged)
+    Q_PROPERTY(int sketchpadTrack READ sketchpadTrack NOTIFY sketchpadTrackChanged)
     Q_PROPERTY(int midiNote READ midiNote NOTIFY midiNoteChanged)
     Q_PROPERTY(int octave READ octave NOTIFY midiNoteChanged)
-    Q_PROPERTY(int midiChannel READ midiChannel NOTIFY midiChannelChanged)
+    Q_PROPERTY(int activeChannel READ activeChannel NOTIFY activeChannelChanged)
     Q_PROPERTY(bool isPlaying READ isPlaying NOTIFY isPlayingChanged)
     Q_PROPERTY(QVariantList subnotes READ subnotes WRITE setSubnotes NOTIFY subnotesChanged)
     // This is arbitrary metadata... do we want to keep this?
@@ -49,11 +50,17 @@ public:
     int octave() const;
     Q_SIGNAL void midiNoteChanged();
 
-    void setMidiChannel(int midiChannel);
-    int midiChannel() const;
-    Q_SIGNAL void midiChannelChanged();
+    void setSketchpadTrack(const int &sketchpadTrack);
+    int sketchpadTrack() const;
+    Q_SIGNAL void sketchpadTrackChanged();
 
-    void setIsPlaying(bool isPlaying);
+    /**
+     * \brief The midi channel on which the note is active, or -1 when the note is not active
+     */
+    int activeChannel() const;
+    Q_SIGNAL void activeChannelChanged();
+
+    void setIsPlaying(const bool &isPlaying, const int &midiChannel);
     bool isPlaying() const;
     Q_SIGNAL void isPlayingChanged();
 
@@ -65,9 +72,9 @@ public:
     int scaleIndex() const;
     Q_SIGNAL void scaleIndexChanged();
 
-    Q_INVOKABLE void setSubnotesOn(const QVariantList &velocities) const;
-    Q_INVOKABLE void setOn(int velocity = 64) const;
-    Q_INVOKABLE void setOff() const;
+    Q_INVOKABLE void setSubnotesOn(const QVariantList &velocities);
+    Q_INVOKABLE void setOn(int velocity = 64);
+    Q_INVOKABLE void setOff();
 private:
     class Private;
     Private* d;

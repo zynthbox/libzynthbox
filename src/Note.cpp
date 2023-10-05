@@ -25,13 +25,13 @@
 class Note::Private {
 public:
     Private() { }
-    PlayGridManager* playGridManager{nullptr};
     QString name;
     int midiNote{0};
-    int midiChannel{0};
+    int sketchpadTrack{-1};
     bool isPlaying{false};
     QVariantList subnotes;
     int scaleIndex{0};
+    int activeChannel{-1};
 
     SyncTimer *syncTimer{nullptr};
 };
@@ -40,7 +40,6 @@ Note::Note(PlayGridManager* parent)
     : QObject(parent)
     , d(new Private)
 {
-    d->playGridManager = parent;
     d->syncTimer = SyncTimer::instance();
 }
 
@@ -80,23 +79,34 @@ int Note::octave() const
     return d->midiNote / 12;
 }
 
-void Note::setMidiChannel(int midiChannel)
+void Note::setSketchpadTrack(const int& sketchpadTrack)
 {
-    if (midiChannel != d->midiChannel) {
-        d->midiChannel = midiChannel;
-        Q_EMIT midiChannelChanged();
+    if (d->sketchpadTrack != sketchpadTrack) {
+        d->sketchpadTrack = sketchpadTrack;
+        Q_EMIT sketchpadTrackChanged();
     }
 }
 
-int Note::midiChannel() const
+int Note::sketchpadTrack() const
 {
-    return d->midiChannel;
+    return d->sketchpadTrack;
 }
 
-void Note::setIsPlaying(bool isPlaying)
+int Note::activeChannel() const
+{
+    return d->activeChannel;
+}
+
+void Note::setIsPlaying(const bool &isPlaying, const int &midiChannel)
 {
     if (isPlaying != d->isPlaying) {
         d->isPlaying = isPlaying;
+        if (isPlaying == false) {
+            d->activeChannel = -1;
+        } else {
+            d->activeChannel = midiChannel;
+            QMetaObject::invokeMethod(this, "activeChannelChanged", Qt::QueuedConnection);
+        }
         // This will tend to cause the UI to update while things are trying to happen that
         // are timing-critical, so let's postpone it for a quick tick
         // Also, timers don't work cross-threads, and this gets called from a thread,
@@ -147,46 +157,50 @@ int Note::scaleIndex() const
     return d->scaleIndex;
 }
 
-void Note::setSubnotesOn(const QVariantList &velocities) const
+void Note::setSubnotesOn(const QVariantList &velocities)
 {
     int i = -1;
-    for (const QVariant &note : d->subnotes) {
+    for (const QVariant &note : qAsConst(d->subnotes)) {
         if (++i >= d->subnotes.count()) {
             break;
         }
-        const Note* subnote = note.value<Note*>();
+        Note* subnote = note.value<Note*>();
         if (subnote) {
-            d->playGridManager->sendAMidiNoteMessage(subnote->midiNote(), velocities[i].toUInt(), subnote->midiChannel(), true);
+            subnote->setOn(velocities[i].toInt());
         }
     }
 }
 
-void Note::setOn(int velocity) const
+void Note::setOn(int velocity)
 {
-    if (d->midiNote < 128) {
-        if (d->playGridManager) {
-            d->playGridManager->sendAMidiNoteMessage(d->midiNote, velocity, d->midiChannel, true);
+    // Don't attempt to set a note to on if it's already, well... on
+    if (d->activeChannel == -1) {
+        d->activeChannel = d->syncTimer->nextAvailableChannel(d->sketchpadTrack);
+        QMetaObject::invokeMethod(this, "activeChannelChanged", Qt::QueuedConnection);
+        if (d->midiNote < 128) {
+            d->syncTimer->sendNoteImmediately(d->midiNote, d->activeChannel, true, velocity, d->sketchpadTrack);
         }
-    }
-    for (const QVariant &note : d->subnotes) {
-        const Note* subnote = note.value<Note*>();
-        if (subnote) {
-            d->playGridManager->sendAMidiNoteMessage(subnote->midiNote(), velocity, subnote->midiChannel(), true);
+        for (const QVariant &note : qAsConst(d->subnotes)) {
+            const Note* subnote = note.value<Note*>();
+            if (subnote) {
+                d->syncTimer->sendNoteImmediately(subnote->midiNote(), d->activeChannel, true, velocity, d->sketchpadTrack);
+            }
         }
     }
 }
 
-void Note::setOff() const
+void Note::setOff()
 {
-    if (d->midiNote < 128) {
-        if (d->playGridManager) {
-            d->playGridManager->sendAMidiNoteMessage(d->midiNote, 0, d->midiChannel, false);
+    // Don't attempt to set a note to off if it's already, well... off
+    if (d->activeChannel > -1) {
+        if (d->midiNote < 128) {
+            d->syncTimer->sendNoteImmediately(d->midiNote, d->activeChannel, false, 0);
         }
-    }
-    for (const QVariant &note : d->subnotes) {
-        const Note* subnote = note.value<Note*>();
-        if (subnote) {
-            d->playGridManager->sendAMidiNoteMessage(subnote->midiNote(), 0, subnote->midiChannel(), false);
+        for (const QVariant &note : qAsConst(d->subnotes)) {
+            const Note* subnote = note.value<Note*>();
+            if (subnote) {
+                d->syncTimer->sendNoteImmediately(subnote->midiNote(), d->activeChannel, false, 0, d->sketchpadTrack);
+            }
         }
     }
 }
