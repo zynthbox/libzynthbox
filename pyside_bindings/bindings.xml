@@ -32,7 +32,4 @@
     <object-type name="PlayGridManager"></object-type>
     <object-type name="Plugin"></object-type>
     <object-type name="SyncTimer"></object-type>
-
-    <rejection class="SyncTimer" function-name="addCallback" />
-    <rejection class="SyncTimer" function-name="removeCallback" />
 </typesystem>
