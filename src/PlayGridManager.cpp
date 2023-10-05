@@ -20,6 +20,7 @@
  */
 
 #include "PlayGridManager.h"
+#include "ZynthboxBasics.h"
 #include "Note.h"
 #include "NotesModel.h"
 #include "PatternModel.h"
@@ -124,6 +125,20 @@ public:
         midiMessage.push_back(0);
         midiMessage.push_back(0);
 
+        // pre-generate all possible notes (that is, all the note options for all tracks)
+        Note *note{nullptr};
+        for (int track = 0; track < ZynthboxTrackCount; ++track) {
+            for (int midiNote = 0; midiNote < 128; ++midiNote) {
+                static const QString note_int_to_str_map[12]{"C", "C#","D","D#","E","F","F#","G","G#","A","A#","B"};
+                note = new Note(q);
+                note->setName(note_int_to_str_map[midiNote % 12]);
+                note->setMidiNote(midiNote);
+                note->setSketchpadTrack(track);
+                QQmlEngine::setObjectOwnership(note, QQmlEngine::CppOwnership);
+                notes << note;
+            }
+        }
+
         updatePlaygrids();
         connect(&watcher, &QFileSystemWatcher::directoryChanged, q, [this](){
             updatePlaygrids();
@@ -187,8 +202,9 @@ public:
             hardwareOutNoteActivations[i] = 0;
         }
         QObject::connect(midiRouter, &MidiRouter::noteChanged, q, [this](const MidiRouter::ListenerPort &port, const int &midiNote, const int &midiChannel, const int &velocity, const bool &setOn, const double &timeStamp, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const int &sketchpadTrack){ emitMidiMessage(port, timeStamp, midiNote, midiChannel, velocity, setOn, byte1, byte2, byte3, sketchpadTrack); }, Qt::DirectConnection);
-        QObject::connect(midiRouter, &MidiRouter::noteChanged, q, [this](const MidiRouter::ListenerPort &port, const int &midiNote, const int &midiChannel, const int &velocity, const bool &setOn, const double &timeStamp, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3){ updateNoteState(port, timeStamp, midiNote, midiChannel, velocity, setOn, byte1, byte2, byte3); }, Qt::QueuedConnection);
+        QObject::connect(midiRouter, &MidiRouter::noteChanged, q, [this](const MidiRouter::ListenerPort &port, const int &midiNote, const int &midiChannel, const int &velocity, const bool &setOn, const double &timeStamp, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const int &sketchpadTrack){ updateNoteState(port, timeStamp, midiNote, midiChannel, velocity, setOn, byte1, byte2, byte3, sketchpadTrack); }, Qt::QueuedConnection);
         QObject::connect(midiRouter, &MidiRouter::noteChanged, q, [this](const MidiRouter::ListenerPort &port, const int &midiNote, const int &midiChannel, const int &velocity, const bool &setOn, const double &timeStamp, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3){ handleInputEvent(port, timeStamp, midiNote, midiChannel, velocity, setOn, byte1, byte2, byte3); }, Qt::QueuedConnection);
+        QObject::connect(midiRouter, &MidiRouter::midiMessage, q, [this](int port, int size, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const int& sketchpadTrack, bool fromInternal ){ handleMidiMessage(port, size, byte1, byte2, byte3, sketchpadTrack, fromInternal); });
         currentPlaygrids = {
             {"minigrid", 0}, // As these are sorted alphabetically, notesgrid for minigrid and
             {"playgrid", 1}, // stepsequencer for playgrid
@@ -288,7 +304,7 @@ public:
         }
     }
 
-    void updateNoteState(const MidiRouter::ListenerPort &port, const double &/*timeStamp*/, const int &midiNote, const int &midiChannel, const int &velocity, const bool &setOn, const unsigned char &/*byte1*/, const unsigned char &/*byte2*/, const unsigned char &/*byte3*/) {
+    void updateNoteState(const MidiRouter::ListenerPort &port, const double &/*timeStamp*/, const int &midiNote, const int &midiChannel, const int &velocity, const bool &setOn, const unsigned char &/*byte1*/, const unsigned char &/*byte2*/, const unsigned char &/*byte3*/, const int &sketchpadTrack) {
         if (port == MidiRouter::PassthroughPort) {
             static const QLatin1String note_on{"note_on"};
             static const QLatin1String note_off{"note_off"};
@@ -299,6 +315,7 @@ public:
             metadata["channel"] = midiChannel;
             metadata["velocity"] = velocity;
             metadata["type"] = setOn ? note_on : note_off;
+            metadata["sketchpadTrack"] = sketchpadTrack;
             metadata.insert("timestamp", QVariant::fromValue<qint64>(currentTime));
             mostRecentlyChangedNotes << metadata;
             while (mostRecentlyChangedNotes.count() > 100) {
@@ -306,9 +323,25 @@ public:
             }
             QMetaObject::invokeMethod(q, &PlayGridManager::mostRecentlyChangedNotesChanged, Qt::QueuedConnection);
 
-            Note *note = findExistingNote(midiNote, midiChannel);
+            Note *note = findExistingNote(midiNote, sketchpadTrack);
             if (note) {
-                note->setIsPlaying(setOn);
+                note->setIsPlaying(setOn, midiChannel);
+            }
+        }
+    }
+
+    void handleMidiMessage(int port, int size, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const int& sketchpadTrack, bool fromInternal) {
+        if (port == MidiRouter::PassthroughPort) {
+            if (size == 3) {
+                if (0xAF < byte1 && byte1 < 0xC0) {
+                    if (byte2 == 0x7B) {
+                        // All Notes Off
+                        for (int note = 0; note < 128; ++note) {
+                            noteActivations[note] = 0;
+                            activeNotesUpdater->start();
+                        }
+                    }
+                }
             }
         }
     }
@@ -350,10 +383,10 @@ public:
         qDebug() << Q_FUNC_INFO << "We now have the following known grids:" << playgrids;
     }
 
-    Note *findExistingNote(int midiNote, int midiChannel) {
+    Note *findExistingNote(int midiNote, int sketchpadTrack) {
         Note *note{nullptr};
         for (Note *aNote : qAsConst(notes)) {
-            if (aNote->midiNote() == midiNote && aNote->midiChannel() == midiChannel) {
+            if (aNote->midiNote() == midiNote && aNote->sketchpadTrack() == sketchpadTrack) {
                 note = aNote;
                 break;
             }
@@ -578,13 +611,14 @@ QObject* PlayGridManager::getNotesModel(const QString& name)
     return model;
 }
 
-QObject* PlayGridManager::getNote(int midiNote, int midiChannel)
+QObject* PlayGridManager::getNote(int midiNote, int sketchpadTrack)
 {
     Note *note{nullptr};
+    const int theTrack{sketchpadTrack == -1 ? d->syncTimer->currentTrack() : std::clamp(sketchpadTrack, 0, ZynthboxTrackCount - 1)};
     // The channel numbers here /are/ invalid - however, we need them to distinguish "invalid" notes while still having a Note to operate with
-    if (0 <= midiNote && midiNote <= 127 && -1 <= midiChannel && midiChannel <= 16) {
+    if (0 <= midiNote && midiNote <= 127) {
         for (Note *aNote : d->notes) {
-            if (aNote->midiNote() == midiNote && aNote->midiChannel() == midiChannel) {
+            if (aNote->midiNote() == midiNote && aNote->sketchpadTrack() == theTrack) {
                 note = aNote;
                 break;
             }
@@ -594,7 +628,7 @@ QObject* PlayGridManager::getNote(int midiNote, int midiChannel)
             note = new Note(this);
             note->setName(note_int_to_str_map[midiNote % 12]);
             note->setMidiNote(midiNote);
-            note->setMidiChannel(midiChannel);
+            note->setSketchpadTrack(theTrack);
             QQmlEngine::setObjectOwnership(note, QQmlEngine::CppOwnership);
             d->notes << note;
         }
@@ -615,7 +649,7 @@ QObject* PlayGridManager::getCompoundNote(const QVariantList& notes)
     for (QObject *subnote : actualNotes) {
         Note *actualSubnote = qobject_cast<Note*>(subnote);
         if (actualSubnote) {
-            fake_midi_note = fake_midi_note + (index * (127 * actualSubnote->midiNote() + (actualSubnote->midiChannel() + 1)));
+            fake_midi_note = fake_midi_note + (index * (127 * actualSubnote->midiNote() + (actualSubnote->sketchpadTrack() + 1)));
         } else {
             // BAD CODER! THIS IS NOT A NOTE!
             fake_midi_note = -1;
@@ -690,7 +724,7 @@ QJsonObject PlayGridManager::noteToJsonObject(Note *note) const
     QJsonObject jsonObject;
     if (note) {
         jsonObject.insert("midiNote", note->midiNote());
-        jsonObject.insert("midiChannel", note->midiChannel());
+        jsonObject.insert("midiChannel", note->sketchpadTrack());
         if (note->subnotes().count() > 0) {
             QJsonArray subnoteArray;
             for (const QVariant &subnote : note->subnotes()) {
@@ -935,7 +969,7 @@ void PlayGridManager::setNoteState(Note* note, int velocity, bool setOn)
             }
         }
     } else {
-        qDebug() << "Attempted to set the state of a null-value note";
+        qDebug() << Q_FUNC_INFO << "Attempted to set the state of a null-value note";
     }
 }
 
@@ -971,19 +1005,21 @@ void PlayGridManager::updateNoteState(QVariantMap metadata)
     static const QLatin1String noteString{"note"};
     static const QLatin1String channelString{"channel"};
     static const QLatin1String typeString{"type"};
-    int midiNote = metadata[noteString].toInt();
-    int midiChannel = metadata[channelString].toInt();
+    static const QLatin1String sketchpadTrackString{"sketchpadTrack"};
+    const int midiNote = metadata[noteString].toInt();
+    const int midiChannel = metadata[channelString].toInt();
+    const int sketchpadTrack = metadata[sketchpadTrackString].toInt();
     const QString messageType = metadata[typeString].toString();
     if (messageType == note_on) {
-        Note *note = d->findExistingNote(midiNote, midiChannel);
+        Note *note = d->findExistingNote(midiNote, sketchpadTrack);
         if (note) {
-            note->setIsPlaying(true);
+            note->setIsPlaying(true, midiChannel);
             Q_EMIT noteStateChanged(note);
         }
     } else if (messageType == note_off) {
-        Note *note = d->findExistingNote(midiNote, midiChannel);
+        Note *note = d->findExistingNote(midiNote, sketchpadTrack);
         if (note) {
-            note->setIsPlaying(false);
+            note->setIsPlaying(false, midiChannel);
             Q_EMIT noteStateChanged(note);
         }
     }
@@ -1029,7 +1065,8 @@ void PlayGridManager::setCurrentMidiChannel(int midiChannel)
 {
     if (d->currentMidiChannel != midiChannel) {
         d->currentMidiChannel = midiChannel;
-        MidiRouter::instance()->setCurrentChannel(midiChannel);
+        SyncTimer::instance()->setCurrentTrack(midiChannel);
+        MidiRouter::instance()->setCurrentSketchpadTrack(midiChannel);
         Q_EMIT currentMidiChannelChanged();
     }
 }

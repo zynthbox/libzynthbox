@@ -184,7 +184,7 @@ public:
      */
     Q_INVOKABLE QObject* getPatternModel(const QString&name, SequenceModel *sequence = nullptr);
     Q_INVOKABLE QObject* getNotesModel(const QString &name);
-    Q_INVOKABLE QObject* getNote(int midiNote, int midiChannel = 0);
+    Q_INVOKABLE QObject* getNote(int midiNote, int sketchpadTrack = -1);
     Q_INVOKABLE QObject* getCompoundNote(const QVariantList &notes);
     Q_INVOKABLE QObject* getSettingsStore(const QString &name);
     /**
