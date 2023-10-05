@@ -382,22 +382,27 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
             const float control = d->ccControlRing.read(&dataChannel, &dataNote);
             float value = d->ccValueRing.read(&dataChannel, &dataNote);
             if (dataChannel == -1 || (d->clipCommand && dataChannel == d->clipCommand->midiChannel)) {
-                if (control == d->ccForLowpass) {
-                    // Brightness control
-                    value = std::clamp(value, 0.0f, 127.0f);
-                    d->lowpassCutoff = (127.0f - value) / 127.0f;
-                    // Update the coefficient etc (see above for this hz number)
-                    const float adjustmentInHz = pow(2, ((127.0f * d->lowpassCutoff) - 69) / 12) * 440;
-                    const double tan = std::tan(M_PI * adjustmentInHz / d->playbackData.sourceSampleRate);
-                    d->playbackData.lowpassCoefficient = (tan - 1.f) / (tan + 1.f);
-                }
-                if (control == d->ccForHighpass) {
-                    value = std::clamp(value, 0.0f, 127.0f);
-                    d->highpassCutoff = value / 127.0f;
-                    // Update the coefficient etc (see above for this hz number)
-                    const float adjustmentInHz = pow(2, ((127.0f * d->highpassCutoff) - 69) / 12) * 440;
-                    const double tan = std::tan(M_PI * adjustmentInHz / d->playbackData.sourceSampleRate);
-                    d->playbackData.highpassCoefficient = (tan - 1.f) / (tan + 1.f);
+                if (control == 0x7B) {
+                    // All Notes Off
+                    stopNote(0, false, currentFrame);
+                } else {
+                    if (control == d->ccForLowpass) {
+                        // Brightness control
+                        value = std::clamp(value, 0.0f, 127.0f);
+                        d->lowpassCutoff = (127.0f - value) / 127.0f;
+                        // Update the coefficient etc (see above for this hz number)
+                        const float adjustmentInHz = pow(2, ((127.0f * d->lowpassCutoff) - 69) / 12) * 440;
+                        const double tan = std::tan(M_PI * adjustmentInHz / d->playbackData.sourceSampleRate);
+                        d->playbackData.lowpassCoefficient = (tan - 1.f) / (tan + 1.f);
+                    }
+                    if (control == d->ccForHighpass) {
+                        value = std::clamp(value, 0.0f, 127.0f);
+                        d->highpassCutoff = value / 127.0f;
+                        // Update the coefficient etc (see above for this hz number)
+                        const float adjustmentInHz = pow(2, ((127.0f * d->highpassCutoff) - 69) / 12) * 440;
+                        const double tan = std::tan(M_PI * adjustmentInHz / d->playbackData.sourceSampleRate);
+                        d->playbackData.highpassCoefficient = (tan - 1.f) / (tan + 1.f);
+                    }
                 }
             }
         }

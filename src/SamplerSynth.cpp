@@ -252,6 +252,15 @@ public:
             }
         }
     }
+    void handleControlChange(int midiChannel, int control, int /*value*/, jack_nframes_t /*eventTime*/) {
+        if (control == 0x7B) {
+            for (GraineratorVoice *voice : qAsConst(voices)) {
+                if (voice->command && voice->command->midiChannel == midiChannel) {
+                    voice->stop();
+                }
+            }
+        }
+    }
     void process(jack_nframes_t nframes, float framesPerMillisecond, jack_nframes_t current_frames) {
         for (jack_nframes_t frame = 0; frame < nframes; ++frame) {
             for (GraineratorVoice *voice : qAsConst(voices)) {
@@ -378,11 +387,11 @@ int SamplerChannel::process(jack_nframes_t nframes) {
             } else {
                 jack_nframes_t thisEventFrame = current_frames + event.time;
                 const unsigned char &byte1 = event.buffer[0];
-                const int globalChannel{MidiRouter::instance()->masterChannel()};
                 if (0x7F < byte1 &&  byte1 < 0xf0) {
                     // TODO handle all-off message (so we can make the thing shut up when things like e.g. the pewpew app on a roli light block doesn't send out off notes when cleared)
                     // TODO Handle MPE global-channel instructions and upper/lower split...
                     eventChannel = (byte1 & 0xf);
+                    const int globalChannel{MidiRouter::instance()->masterChannel()};
                     if (eventChannel == globalChannel) {
                         eventChannel = -1;
                     }
@@ -439,6 +448,7 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                             // Mod wheel - just storing this so we can pass it to new voices when we start them, so initial values make sense
                             modwheelValue = value;
                         }
+                        grainerator->handleControlChange(eventChannel, control, value, event.time);
                     } else if (0xBF < byte1 && byte1 < 0xD0) {
                         // Program change
                     } else if (0xCF < byte1 && byte1 < 0xE0) {
