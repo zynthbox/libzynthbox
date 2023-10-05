@@ -237,11 +237,6 @@ void Plugin::initialize()
     qDebug() << "Initialising MidiRouter";
     MidiRouter::instance();
 
-    QObject::connect(MidiRouter::instance(), &MidiRouter::addedHardwareInputDevice, SyncTimer::instance(), &SyncTimer::addedHardwareInputDevice);
-    QObject::connect(MidiRouter::instance(), &MidiRouter::removedHardwareInputDevice, SyncTimer::instance(), &SyncTimer::removedHardwareInputDevice);
-    QObject::connect(MidiRouter::instance(), &MidiRouter::addedHardwareOutputDevice, SyncTimer::instance(), &SyncTimer::addedHardwareOutputDevice);
-    QObject::connect(MidiRouter::instance(), &MidiRouter::removedHardwareOutputDevice, SyncTimer::instance(), &SyncTimer::removedHardwareOutputDevice);
-
     qDebug() << "Initialising SamplerSynth";
     SamplerSynth::instance()->initialize(tracktionEngine);
 
