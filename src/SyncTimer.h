@@ -20,6 +20,7 @@ class SyncTimerPrivate;
  */
 class SyncTimer : public QObject {
   Q_OBJECT
+  Q_PROPERTY(int currentTrack READ currentTrack WRITE setCurrentTrack NOTIFY currentTrackChanged)
   Q_PROPERTY(bool timerRunning READ timerRunning NOTIFY timerRunningChanged)
   Q_PROPERTY(quint64 bpm READ getBpm WRITE setBpm NOTIFY bpmChanged)
   Q_PROPERTY(quint64 scheduleAheadAmount READ scheduleAheadAmount NOTIFY scheduleAheadAmountChanged)
@@ -43,14 +44,6 @@ public:
    * @param beat The beat inside the current note (a number from 0 through 4*getMultiplier())
    */
   Q_SIGNAL void timerTick(int beat);
-  /**
-   * \deprecated
-   */
-  void addCallback(void (*functionPtr)(int));
-  /**
-   * \deprecated
-   */
-  void removeCallback(void (*functionPtr)(int));
   void queueClipToStart(ClipAudioSource *clip);
   void queueClipToStop(ClipAudioSource *clip);
   void queueClipToStartOnChannel(ClipAudioSource *clip, int midiChannel);
@@ -169,6 +162,18 @@ public:
   const quint64 &jackSubbeatLengthInMicroseconds() const;
 
   /**
+   * \brief The Zynthbox Sketchpad's currently selected track
+   * @returns The track index (0 through 9)
+   */
+  int currentTrack() const;
+  /**
+   * \brief Set the current track for Zynthbox' Sketchpad
+   * @param newTrack The index of the track to be set as current (will be clamped to the range 0 through 9)
+   */
+  void setCurrentTrack(const int &newTrack);
+  Q_SIGNAL void currentTrackChanged();
+
+  /**
    * \brief Schedule an audio clip to have one or more commands run on it on the next tick of the timer
    * If a command with the associated clip is already scheduled at the position and the given midiNote you're attempting to schedule it into,
    * this function will change the existing to match any new settings (that is, things marked to be done on the command
@@ -217,6 +222,17 @@ public:
   Q_SIGNAL void timerCommand(TimerCommand *command);
 
   /**
+   * \brief Get the next channel available on the given track
+   * The returned channel will never include the master channel (which is always available for scheduling)
+   * The channel returned by the function will be marked as busy. Schedule events into SyncTimer using this
+   * channel to update the internal state back to available after some time.
+   * @param sketchpadTrack The track to get channel availability for (if -1, we'll assume the current track)
+   * @param delay The time after which the channel needs to be available (if 0, we're working with right now)
+   * @return A number from 0 to 15, representing a midi channel available for scheduling events onto without clashing (if there are channels available, otherwise the oldest active channel will be overridden)
+   */
+  int nextAvailableChannel(const int &sketchpadTrack = -1, quint64 delay = 0);
+
+  /**
    * \brief Schedule a note message to be sent on the next tick of the timer
    * @note This is not thread-safe in itself - when the timer is running, don't call this function outside of a callback
    * @param midiNote The note you wish to change the state of
@@ -225,16 +241,18 @@ public:
    * @param velocity The velocity of the note (only matters if you're turning it on)
    * @param duration An optional duration for on notes (0 means don't schedule a release, higher will schedule an off at the durationth beat from the start of the note)
    * @param delay A delay in numbers of timer ticks counting from the current position
+   * @param sketchpadTrack The sketchpad track to schedule this to (-1 will send to the current track)
    */
-  void scheduleNote(unsigned char midiNote, unsigned char midiChannel, bool setOn, unsigned char velocity, quint64 duration, quint64 delay);
+  void scheduleNote(unsigned char midiNote, unsigned char midiChannel, bool setOn, unsigned char velocity, quint64 duration, quint64 delay, int sketchpadTrack = -1);
 
   /**
    * \brief Schedule a buffer of midi messages (the Juce type) to be sent with the given delay
    * @note This is not thread-safe in itself - when the timer is running, don't call this function outside of a callback
    * @param buffer The buffer that you wish to add to the schedule
    * @param delay The delay (if any) you wish to add
+   * @param sketchpadTrack The sketchpad track to schedule this to (-1 will send to the current track)
    */
-  void scheduleMidiBuffer(const juce::MidiBuffer& buffer, quint64 delay);
+  void scheduleMidiBuffer(const juce::MidiBuffer& buffer, quint64 delay, int sketchpadTrack = -1);
 
   /**
    * \brief Send a note message immediately (ensuring it goes through the step sequencer output)
@@ -242,8 +260,9 @@ public:
    * @param midiChannel The channel you wish to change the given note on
    * @param setOn Whether or not you are turning the note on
    * @param velocity The velocity of the note (only matters if you're turning it on)
+   * @param sketchpadTrack The sketchpad track to send this to (-1 will send to the current track)
    */
-  void sendNoteImmediately(unsigned char midiNote, unsigned char midiChannel, bool setOn, unsigned char velocity);
+  void sendNoteImmediately(unsigned char midiNote, unsigned char midiChannel, bool setOn, unsigned char velocity, int sketchpadTrack = -1);
 
   /**
    * \brief Send a raw midi message with the given values at the next possible opportunity
@@ -251,35 +270,34 @@ public:
    * @param byte0 The first byte of the message
    * @param byte1 The second byte of the message
    * @param byte2 The third byte of the message
+   * @param sketchpadTrack The sketchpad track to send this to (-1 will send to the current track)
    */
-  Q_INVOKABLE void sendMidiMessageImmediately(int size, int byte0, int byte1 = 0, int byte2 = 0);
+  Q_INVOKABLE void sendMidiMessageImmediately(int size, int byte0, int byte1 = 0, int byte2 = 0, int sketchpadTrack = -1);
   /**
    * \brief Send a program change to the given channel (will be sent to all external devices)
    * @param midiChannel The midi channel to send the message to
    * @param program The new value (will be clamped to 0 through 127)
+   * @param sketchpadTrack The sketchpad track to send this to (-1 will send to the current track)
    */
-  Q_INVOKABLE void sendProgramChangeImmediately(int midiChannel, int program);
+  Q_INVOKABLE void sendProgramChangeImmediately(int midiChannel, int program, int sketchpadTrack = -1);
   /**
    * \brief Send a control change message to the given channel (will be sent to all external devices)
    * @param midiChannel The midi channel to send the message to
    * @param control The control (a conceptual knob, will be clamped between to 0 through 127)
    * @param value The value of the control (will be clamped to 0 through 127)
+   * @param sketchpadTrack The sketchpad track to send this to (-1 will send to the current track)
    */
-  Q_INVOKABLE void sendCCMessageImmediately(int midiChannel, int control, int value);
+  Q_INVOKABLE void sendCCMessageImmediately(int midiChannel, int control, int value, int sketchpadTrack = -1);
 
   /**
    * \brief Send a set of midi messages out immediately (ensuring they go through the step sequencer output)
    * @param buffer The buffer that you wish to send out immediately
+   * @param sketchpadTrack The sketchpad track to send this to (-1 will send to the current track)
    */
-  void sendMidiBufferImmediately(const juce::MidiBuffer& buffer);
+  void sendMidiBufferImmediately(const juce::MidiBuffer& buffer, int sketchpadTrack = -1);
 
   bool timerRunning();
   Q_SIGNAL void timerRunningChanged();
-
-  Q_SIGNAL void addedHardwareInputDevice(const QString &deviceName, const QString &humanReadableName);
-  Q_SIGNAL void removedHardwareInputDevice(const QString &deviceName, const QString &humanReadableName);
-  Q_SIGNAL void addedHardwareOutputDevice(const QString &deviceName, const QString &humanReadableName);
-  Q_SIGNAL void removedHardwareOutputDevice(const QString &deviceName, const QString &humanReadableName);
 
   /**
    * \brief Emitted when a GuiMessageOperation is found in the schedule
