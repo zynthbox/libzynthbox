@@ -5,12 +5,12 @@
 
 #include <jack/midiport.h>
 
-const QLatin1String device_identifier_seaboard_rise{"Seaboard RISE MIDI"};
-const QLatin1String device_identifier_presonus_atom_sq{"ATM SQ ATM SQ"};
-jack_midi_event_t device_translations_cc_presonus_atom_sq[128];
-jack_midi_event_t device_translations_cc_none[128];
-
 namespace DeviceMessageTranslations {
+    const QLatin1String device_identifier_seaboard_rise{"Seaboard RISE MIDI"};
+    const QLatin1String device_identifier_presonus_atom_sq{"ATM SQ ATM SQ"};
+    jack_midi_event_t device_translations_cc_presonus_atom_sq[128];
+    jack_midi_event_t device_translations_cc_none[128];
+    int loadCount{0};
     void load() {
         for (int i = 0; i < 128; ++i) {
             switch(i) {
@@ -30,6 +30,17 @@ namespace DeviceMessageTranslations {
                     break;
             }
         }
+        ++loadCount;
+    }
+    void unload() {
+        --loadCount;
+        if (loadCount == 0) {
+            for (int i = 0; i < 128; ++i) {
+                if (DeviceMessageTranslations::device_translations_cc_presonus_atom_sq[i].size > 0) {
+                    delete[] DeviceMessageTranslations::device_translations_cc_presonus_atom_sq[i].buffer;
+                }
+            }
+        }
     }
     void apply(const QString &identifier, jack_midi_event_t **translations_cc) {
         if (identifier.endsWith(device_identifier_presonus_atom_sq)) {
@@ -42,8 +53,10 @@ namespace DeviceMessageTranslations {
     int deviceMasterChannel(const QString& identifier) {
         if (identifier.startsWith(device_identifier_seaboard_rise)) {
             qDebug() << "ZLRouter: Identified device as a ROLI Seaboard Rise, returning master channel 0";
+            // By default, the Touch Faders use MIDI CCs 107, 109, and 111 in MIDI mode (white dot)
+            // By default, the XY Touchpad uses MIDI CCs 113 and 114.
             return 0;
         }
-        return 15;
+        return -1;
     }
 }
