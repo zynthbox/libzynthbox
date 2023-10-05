@@ -276,13 +276,6 @@ public:
      */
     Q_INVOKABLE QObject* jsonToNote(const QString &json);
 
-    Q_INVOKABLE void setNotesOn(QVariantList notes, QVariantList velocities);
-    Q_INVOKABLE void setNotesOff(QVariantList notes);
-    Q_INVOKABLE void setNoteOn(QObject *note, int velocity = 64);
-    Q_INVOKABLE void setNoteOff(QObject *note);
-
-    Q_INVOKABLE void setNoteState(Note *note, int velocity = 64, bool setOn = true);
-    Q_SIGNAL void noteStateChanged(QObject *note);
     Q_SIGNAL void midiMessage(const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const double& timeStamp, const int& sketchpadTrack);
     Q_INVOKABLE QVariantList mostRecentlyChangedNotes() const;
     Q_SIGNAL void mostRecentlyChangedNotesChanged();

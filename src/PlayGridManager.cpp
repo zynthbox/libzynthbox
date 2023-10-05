@@ -330,16 +330,21 @@ public:
         }
     }
 
-    void handleMidiMessage(int port, int size, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const int& sketchpadTrack, bool fromInternal) {
+    void handleMidiMessage(int port, int size, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& /*byte3*/, const int& /*sketchpadTrack*/, bool /*fromInternal*/) {
         if (port == MidiRouter::PassthroughPort) {
             if (size == 3) {
                 if (0xAF < byte1 && byte1 < 0xC0) {
                     if (byte2 == 0x7B) {
                         // All Notes Off
                         for (int note = 0; note < 128; ++note) {
+                            for (Note *note : qAsConst(notes)) {
+                                if (note->isPlaying()) {
+                                    note->setIsPlaying(false, note->activeChannel());
+                                }
+                            }
                             noteActivations[note] = 0;
-                            activeNotesUpdater->start();
                         }
+                        activeNotesUpdater->start();
                     }
                 }
             }
@@ -910,69 +915,6 @@ QObject* PlayGridManager::jsonToNote(const QString& json)
     return jsonObjectToNote(jsonDoc.object());
 }
 
-void PlayGridManager::setNotesOn(QVariantList notes, QVariantList velocities)
-{
-    if (notes.count() == velocities.count()) {
-        for (int i = 0; i < notes.count(); ++i) {
-            setNoteState(notes.at(i).value<Note*>(), velocities.at(i).toInt(), true);
-        }
-    }
-}
-
-void PlayGridManager::setNotesOff(QVariantList notes)
-{
-    for (int i = 0; i < notes.count(); ++i) {
-        setNoteState(notes.at(i).value<Note*>(), 0, false);
-    }
-}
-void PlayGridManager::setNoteOn(QObject* note, int velocity)
-{
-    setNoteState(qobject_cast<Note*>(note), velocity, true);
-}
-
-void PlayGridManager::setNoteOff(QObject* note)
-{
-    setNoteState(qobject_cast<Note*>(note), 0, false);
-}
-
-void PlayGridManager::setNoteState(Note* note, int velocity, bool setOn)
-{
-    if (note) {
-        QObjectList subnotes;
-        const QVariantList tempSubnotes = note->subnotes();
-        for (const QVariant &tempSubnote : tempSubnotes) {
-            subnotes << tempSubnote.value<QObject*>();
-        }
-        int subnoteCount = subnotes.count();
-        if (subnoteCount > 0) {
-            for (QObject *note : subnotes) {
-                setNoteState(qobject_cast<Note*>(note), velocity, setOn);
-            }
-        } else {
-            if (d->noteStateMap.contains(note)) {
-                if (setOn) {
-                    d->noteStateMap[note] = d->noteStateMap[note] + 1;
-                } else {
-                    d->noteStateMap[note] = d->noteStateMap[note] - 1;
-                    if (d->noteStateMap[note] == 0) {
-                        note->setOff();
-                        d->noteStateMap.remove(note);
-                    }
-                }
-            } else {
-                if (setOn) {
-                    note->setOn(velocity);
-                    d->noteStateMap[note] = 1;
-                } else {
-                    note->setOff();
-                }
-            }
-        }
-    } else {
-        qDebug() << Q_FUNC_INFO << "Attempted to set the state of a null-value note";
-    }
-}
-
 QVariantList PlayGridManager::mostRecentlyChangedNotes() const
 {
     return d->mostRecentlyChangedNotes;
@@ -1014,13 +956,11 @@ void PlayGridManager::updateNoteState(QVariantMap metadata)
         Note *note = d->findExistingNote(midiNote, sketchpadTrack);
         if (note) {
             note->setIsPlaying(true, midiChannel);
-            Q_EMIT noteStateChanged(note);
         }
     } else if (messageType == note_off) {
         Note *note = d->findExistingNote(midiNote, sketchpadTrack);
         if (note) {
             note->setIsPlaying(false, midiChannel);
-            Q_EMIT noteStateChanged(note);
         }
     }
     d->mostRecentlyChangedNotes << metadata;
