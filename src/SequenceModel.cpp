@@ -732,30 +732,6 @@ void SequenceModel::setPatternProperty(int patternIndex, const QString& property
     }
 }
 
-void SequenceModel::setPreviousOff() const
-{
-    for (QObject *obj : d->onifiedNotes) {
-        const Note *note = qobject_cast<Note*>(obj);
-        if (note) {
-            note->setOff();
-        }
-    }
-    d->onifiedNotes.clear();
-}
-
-void SequenceModel::setPositionOn(int row, int column, bool stopPrevious) const
-{
-    if (stopPrevious) {
-        setPreviousOff();
-    }
-    for (int i = 0; i < PATTERN_COUNT; ++i) {
-        PatternModel *pattern = d->patternModelIterator[i];
-        if (pattern && pattern->enabled()) {
-            d->onifiedNotes.append(pattern->setPositionOn(row + pattern->bankOffset(), column));
-        }
-    }
-}
-
 bool SequenceModel::isPlaying() const
 {
     return d->isPlaying;
