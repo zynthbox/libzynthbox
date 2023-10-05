@@ -197,7 +197,7 @@ public:
 private:
     std::unique_ptr<MidiRecorderPrivate> d;
 
-    friend class MidiRouterPrivate;
+    friend struct MidiListenerPort;
     void handleMidiMessage(const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const double &timeStamp, const int& sketchpadTrack);
 };
 Q_DECLARE_OPERATORS_FOR_FLAGS(MidiRecorder::ApplicatorSettings)
