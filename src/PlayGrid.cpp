@@ -159,34 +159,6 @@ QObject* PlayGrid::jsonToNote(const QString& json)
     return nullptr;
 }
 
-void PlayGrid::setNoteOn(QObject* note, int velocity)
-{
-    if (d->playGridManager) {
-        d->playGridManager->setNoteOn(note, velocity);
-    }
-}
-
-void PlayGrid::setNoteOff(QObject* note)
-{
-    if (d->playGridManager) {
-        d->playGridManager->setNoteOff(note);
-    }
-}
-
-void PlayGrid::setNotesOn(const QVariantList& notes, const QVariantList& velocities)
-{
-    if (d->playGridManager) {
-        d->playGridManager->setNotesOn(notes, velocities);
-    }
-}
-
-void PlayGrid::setNotesOff(const QVariantList& notes)
-{
-    if (d->playGridManager) {
-        d->playGridManager->setNotesOff(notes);
-    }
-}
-
 QString PlayGrid::loadData(const QString& key)
 {
     QString data;

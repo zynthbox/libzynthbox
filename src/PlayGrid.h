@@ -236,38 +236,6 @@ public:
     Q_INVOKABLE QObject* jsonToNote(const QString &json);
 
     /**
-     * \brief Turns the note passed to it on, if it is not already playing
-     *
-     * This will turn on the note, but it will not turn the note off and back on again if it is already
-     * turned on. If you wish to release and fire the note again, you can either check the note's
-     * isPlaying property first and then turn it off first, or you can simply call setNoteOff, and then
-     * call setNoteOn immediately.
-     *
-     * @param note The note which should be turned on
-     * @param velocity The velocity at which the note should be played (defaults to 64)
-     */
-    Q_INVOKABLE void setNoteOn(QObject *note, int velocity = 64);
-    /**
-     * \brief Turns the note passed to it off
-     *
-     * @param note The note which should be turned off
-     */
-    Q_INVOKABLE void setNoteOff(QObject *note);
-    /**
-     * \brief Turn a list of notes on, with the specified velocities
-     *
-     * @param notes A list of notes
-     * @param velocities A list of velocities (must be equal length to notes)
-     */
-    Q_INVOKABLE void setNotesOn(const QVariantList &notes, const QVariantList &velocities);
-    /**
-     * \brief Turn a list of notes off
-     *
-     * @param notes A list of notes
-     */
-    Q_INVOKABLE void setNotesOff(const QVariantList &notes);
-
-    /**
      * \brief Load a string value saved to disk under a specified name
      * @param key The name of the data you wish to retrieve
      * @return A string containing the data contained in the specified key (an empty string if none was found)
