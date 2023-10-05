@@ -22,15 +22,21 @@ class MidiRouter : public QThread
 {
     Q_OBJECT
     /**
-     * \brief A midi channel (must be 0 through 15) interpreted as the current one
-     * Used for routing hardware input if it is supposed to go somewhere external
+     * \brief The sketchpadTrack (0 through 9) which is currently active
+     * Used for routing the various inputs to their appropriate output
      * @default 0
      */
-    Q_PROPERTY(int currentChannel READ currentChannel WRITE setCurrentChannel NOTIFY currentChannelChanged)
+    Q_PROPERTY(int currentSketchpadTrack READ currentSketchpadTrack WRITE setCurrentSketchpadTrack NOTIFY currentSketchpadTrackChanged)
     /**
-     * \brief The master channel as set up through webconf
+     * \brief The master channels as defined by the MPE split point (16 entries, one per channel)
+     * @note if the split is all-Upper zone, this will be what is set in webconf, otherwise it will be 0 or 15, depending on the Zone
+     * @see setExpressiveSplitPoint(int)
      */
-    Q_PROPERTY(int masterChannel READ masterChannel NOTIFY masterChannelChanged)
+    Q_PROPERTY(QList<int> masterChannels READ masterChannels NOTIFY masterChannelsChanged)
+    /**
+     * \brief The master channel set by in webconf (that is, our internal-use master channel)
+     */
+    Q_PROPERTY(int masterChannel READ masterChannel NOTIFY masterChannelsChanged)
 public:
     static MidiRouter* instance() {
         static MidiRouter* instance{nullptr};
@@ -52,39 +58,47 @@ public:
         SamplerDestination = 3, // Route all events only to passthrough (which is then handled elsewhere for distribution to the sampler)
     };
     /**
-     * \brief Where notes on a specific midi channel should be routed
-     * @note Logically, in zynthbox, we really only have ten channels (corresponding to a channel each), but we might
-     *       as well support all 16, because it makes little functional difference, and has near enough to no
-     *       performance impact.
-     * @param channel The midi channel (0 through 15)
+     * \brief Where notes on a specific sketchpad track should be routed
+     * @param sketchpadTrack The sketchpad track (from 0 through 9)
      * @param destination Where the channel's notes should go (the default for all channels is ZynthianDestination)
      * @param externalChannel If set, messages on the given channel will be translated to end up on this channel instead
      */
-    void setChannelDestination(int channel, RoutingDestination destination, int externalChannel = -1);
+    void setSkechpadTrackDestination(int sketchpadTrack, RoutingDestination destination, int externalChannel = -1);
 
-    void setCurrentChannel(int currentChannel);
-    int currentChannel() const;
-    Q_SIGNAL void currentChannelChanged();
+    void setCurrentSketchpadTrack(int currentSketchpadTrack);
+    int currentSketchpadTrack() const;
+    Q_SIGNAL void currentSketchpadTrackChanged();
 
     /**
-     * \brief Set the channels which will be used to map eevnts for the channel for the given channel into zynthian
-     * @param channel The midi channel (0 through 15)
+     * \brief Set the channels which will be used to map events for the given sketchpad track into zynthian
+     * @param sketchpadTrack The sketchpad track (0 through 9)
      * @param zynthianChannels The channels that zynthian should play notes on for the channel with the given input channel
      */
-    void setZynthianChannels(int channel, QList<int> zynthianChannels);
+    void setZynthianChannels(int sketchpadTrack, QList<int> zynthianChannels);
 
     /**
      * \brief Call this function to reload the midi routing configuration and set ports back up
      */
     Q_SLOT void reloadConfiguration();
 
-    int masterChannel() const;
-    Q_SIGNAL void masterChannelChanged();
+    /**
+     * \brief Set the point at which the MPE zones are split
+     * Conceptually, this is the upper limit for the Lower zone. Consequently, you can perform any normal setup using this:
+     * To use an all-Lower zone setup, set the split point to 15 (that is, give all channels to the Lower zone)
+     * To use an all-Upper zone setup, set the split point to -1 (that is, give all channels to the Upper zone)
+     * To use a "standard" split, set the split point to 7 (giving channels 0 through 7 to the Lower zone, and channels 8 through 15 to the Upper zone)
+     * To use a mono-channel setup for the Lower zone, set the split point to 1 (giving the Lower zone channels 0 and 1, and 2 through 15 to the Upper zone)
+     * @note If you set the split point to 14, you will have only given the Upper zone a master channel (which isn't very useful). So, probably don't do that. Notes will still be sent out for the Upper zone, but on the master channel, which is not very MPE
+     */
+    void setExpressiveSplitPoint(const int &splitPoint);
+    const int &expressiveSplitPoint() const;
+    Q_SIGNAL void expressiveSplitPointChanged();
+    const QList<int> &masterChannels() const;
+    const int &masterChannel() const;
+    Q_SIGNAL void masterChannelsChanged();
 
-    Q_SIGNAL void addedHardwareInputDevice(const QString &deviceName, const QString &humanReadableName);
-    Q_SIGNAL void removedHardwareInputDevice(const QString &deviceName, const QString &humanReadableName);
-    Q_SIGNAL void addedHardwareOutputDevice(const QString &deviceName, const QString &humanReadableName);
-    Q_SIGNAL void removedHardwareOutputDevice(const QString &deviceName, const QString &humanReadableName);
+    Q_SIGNAL void addedHardwareDevice(const QString &deviceId, const QString &humanReadableName);
+    Q_SIGNAL void removedHardwareDevice(const QString &deviceId, const QString &humanReadableName);
 
     enum ListenerPort {
         UnknownPort = -1,
