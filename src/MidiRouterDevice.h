@@ -83,6 +83,20 @@ public:
     const int &noteActivationTrack(const int &channel, const int &note) const;
 
     /**
+     * \brief Set the hardware ID of the device (essentially our internal ID used to distinguish the device)
+     * @param hardwareId The hardware ID for this device
+     */
+    void setHardwareId(const QString &hardwareId);
+    /**
+     * \brief The hardware ID for this device (essentially our internal ID used to distinguish the device)
+     * This is useful when a hardware device shows up as multiple devices with otherwise identical names. This
+     * affects e.g. Keystation 61 MK3, which shows up as two inputs and two outputs, with the same name: One for
+     * the keybed, and one for the DAW control buttons on the device. We need to distinguish between the two,
+     * and so we want to have both as separate devices.
+     * @return The hardware ID for this device
+     */
+    const QString &hardwareId() const;
+    /**
      * \brief Set the name we expect zynthian to know this device by
      * This is used to translate between the settings from webconf (enabled/disabled, that sort of thing)
      * @param zynthianId The string ID for this device

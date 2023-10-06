@@ -459,7 +459,7 @@ public:
             MidiRouterDevice *device{nullptr};
             jack_port_t *hardwarePort = jack_port_by_name(jackClient, *p);
             if (hardwarePort) {
-                QString humanReadableName, zynthianId;
+                QString humanReadableName, zynthianId, hardwareId;
                 int num_aliases;
                 char *aliases[2];
                 aliases[0] = (char *)malloc(size_t(jack_port_name_size()));
@@ -469,28 +469,31 @@ public:
                 if (portName.startsWith(ttyMidiPortName)) {
                     humanReadableName = QString{"Midi 5-Pin"};
                     zynthianId = portName;
+                    hardwareId = portName;
                 } else if (num_aliases > 0) {
                     int i;
                     for (i = 0; i < num_aliases; i++) {
+                        QStringList hardwareIdSplit;
                         QStringList splitAlias = QString::fromUtf8(aliases[i]).split('-');
                         if (splitAlias.length() > 5) {
                             for (int i = 0; i < 5; ++i) {
-                                splitAlias.removeFirst();
+                                if (i > 0) {
+                                    hardwareIdSplit.append(splitAlias.takeFirst());
+                                } else {
+                                    splitAlias.removeFirst();
+                                }
                             }
                             humanReadableName = splitAlias.join(" ");
                             zynthianId = splitAlias.join("_");
+                            hardwareId = hardwareIdSplit.join("-");
                             break;
                         }
                     }
                 } else {
                     QStringList splitAlias = portName.split('-');
-                    if (splitAlias.length() > 5) {
-                        for (int i = 0; i < 5; ++i) {
-                            splitAlias.removeFirst();
-                        }
-                        humanReadableName = splitAlias.join(" ");
-                        zynthianId = splitAlias.join("_");
-                    }
+                    humanReadableName = splitAlias.join(" ");
+                    zynthianId = splitAlias.join("_");
+                    hardwareId = zynthianId;
                 }
                 free(aliases[0]);
                 free(aliases[1]);
@@ -498,14 +501,14 @@ public:
                 QString inputPortName = QString("input-%1").arg(portName);
                 QString outputPortName = QString("output-%1").arg(portName);
                 for (MidiRouterDevice *needle : qAsConst(devices)) {
-                    if (needle->zynthianId() == zynthianId) {
+                    if (needle->hardwareId() == hardwareId && needle->zynthianId() == zynthianId) {
                         device = needle;
                         break;
                     }
                 }
                 if (!device) {
                     for (MidiRouterDevice *needle : qAsConst(newDevices)) {
-                        if (needle->zynthianId() == zynthianId) {
+                        if (needle->hardwareId() == hardwareId && needle->zynthianId() == zynthianId) {
                             device = needle;
                             break;
                         }
@@ -516,6 +519,7 @@ public:
                         device->setDeviceType(MidiRouterDevice::HardwareDeviceType);
                         device->setZynthianMasterChannel(masterChannel);
                         device->setZynthianId(zynthianId);
+                        device->setHardwareId(hardwareId);
                         device->setHumanReadableName(humanReadableName);
                     }
                 }

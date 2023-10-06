@@ -39,6 +39,7 @@ public:
     int noteActivationTrack[16][128];
     int midiChannelTargetTrack[16];
     jack_client_t *jackClient{nullptr};
+    QString hardwareId;
     QString zynthianId;
     QString humanReadableName;
     jack_midi_event_t *device_translations_cc{nullptr};
@@ -232,10 +233,21 @@ const int & MidiRouterDevice::noteActivationTrack(const int& channel, const int&
     return d->noteActivationTrack[channel][note];
 }
 
+void MidiRouterDevice::setHardwareId(const QString& hardwareId)
+{
+    d->hardwareId = hardwareId;
+    setObjectName(QString("%1/%2").arg(d->hardwareId).arg(d->zynthianId));
+}
+
+const QString & MidiRouterDevice::hardwareId() const
+{
+    return d->hardwareId;
+}
+
 void MidiRouterDevice::setZynthianId(const QString& zynthianId)
 {
     d->zynthianId = zynthianId;
-    setObjectName(zynthianId);
+    setObjectName(QString("%1/%2").arg(d->hardwareId).arg(d->zynthianId));
 }
 
 const QString & MidiRouterDevice::zynthianId() const
