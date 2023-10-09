@@ -9,15 +9,6 @@
 #include <QDebug>
 #include <QtMath>
 
-static inline float velocityToGain(const float &velocity) {
-//     static const float sensibleMinimum{log10(1.0f/127.0f)};
-//     if (velocity == 0) {
-//         return 0;
-//     }
-//     return (sensibleMinimum-log10(velocity))/sensibleMinimum;
-    return velocity;
-}
-
 #define DataRingSize 128
 class DataRing {
 public:
@@ -119,7 +110,6 @@ public:
     ClipCommand *clipCommand{nullptr};
     ClipAudioSource *clip{nullptr};
     SamplerSynthSound* sound{nullptr};
-    double maxSampleDeviation{0.0};
     double pitchRatio = 0;
     double sourceSamplePosition = 0;
     double sourceSampleLength = 0;
@@ -201,8 +191,8 @@ void SamplerSynthVoice::setCurrentCommand(ClipCommand *clipCommand)
         if (clipCommand->changeVolume) {
             d->clipCommand->volume = clipCommand->volume;
             d->clipCommand->changeVolume = true;
-            d->lgain = velocityToGain(d->clipCommand->volume);
-            d->rgain = velocityToGain(d->clipCommand->volume);
+            d->lgain = d->clipCommand->volume;
+            d->rgain = d->clipCommand->volume;
         }
         if (clipCommand->changeSlice) {
             d->clipCommand->slice = clipCommand->slice;
@@ -234,7 +224,6 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
 
         d->pitchRatio = std::pow (2.0, (clipCommand->midiNote - sound->rootMidiNote()) / 12.0) * sound->sourceSampleRate() / d->clip->sampleRate();
 
-        d->maxSampleDeviation = d->syncTimer->subbeatCountToSeconds(d->syncTimer->getBpm(), 1) * sound->sourceSampleRate();
         d->sourceSampleLength = d->clip->getDuration() * sound->sourceSampleRate();
         if (d->clipCommand->changePitch && d->clipCommand->pitchChange < 0) {
             d->sourceSamplePosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition : d->clip->getStopPosition(d->clipCommand->slice)) * sound->sourceSampleRate());
@@ -245,8 +234,8 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         d->playbackData.snappedToBeat = (trunc(d->clip->getLengthInBeats()) == d->clip->getLengthInBeats());
         d->playbackData.isLooping = d->clipCommand->looping;
 
-        d->lgain = velocityToGain(clipCommand->volume);
-        d->rgain = velocityToGain(clipCommand->volume);
+        d->lgain = clipCommand->volume;
+        d->rgain = clipCommand->volume;
 
         d->adsr.reset();
         d->adsr.setSampleRate(sound->sourceSampleRate());
@@ -258,6 +247,7 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         d->playbackData.inL = d->playbackData.data->getReadPointer(0);
         d->playbackData.inR = d->playbackData.data->getNumChannels() > 1 ? d->playbackData.data->getReadPointer(1) : nullptr;
         d->playbackData.sourceSampleRate = d->sound->sourceSampleRate();
+        d->playbackData.sampleDuration = sound->length() - 1;
 
         // this bit is basically mtof - that is, converts a midi note to its equivalent expected frequency (here given a 440Hz concert tone), and it's going to be somewhere within a reasonable amount along the audible scale
         const float highpassAdjustmentInHz = pow(2, ((127.0f * d->highpassCutoff) - 69) / 12) * 440;
@@ -268,8 +258,6 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         d->playbackData.lowpassCoefficient = (lowpassTan - 1.f) / (lowpassTan + 1.f);
 
         d->playbackData.pan = std::clamp(float(d->clip->pan()) + d->clipCommand->pan, -1.0f, 1.0f);
-        d->playbackData.sampleDuration = sound->length() - 1;
-
         d->playbackData.startPosition = (int) ((d->clipCommand->setStartPosition ? d->clipCommand->startPosition : d->clip->getStartPosition(d->clipCommand->slice)) * d->playbackData.sourceSampleRate);
         d->playbackData.stopPosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition : d->clip->getStopPosition(d->clipCommand->slice)) * d->playbackData.sourceSampleRate);
         d->playbackData.loopPosition = int((d->clip->getStartPosition(d->clipCommand->slice) + d->clip->loopDelta()) * d->playbackData.sourceSampleRate);
@@ -353,6 +341,24 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
     if (d->clip && d->samplerSynth->clipToSound(d->clip) == nullptr) {
         stopNote(0, false, current_frames);
     }
+
+    // We don't want to have super-high precision on this, as it's user control, but we
+    // do want to be able to change the various sound settings at play-time (for
+    // controlling loops and such), so let's make sure we do that once per process call
+    // for any playing voice, in addition to when it starts
+    if (d->clip && d->clipCommand) {
+        d->playbackData.pan = std::clamp(float(d->clip->pan()) + d->clipCommand->pan, -1.0f, 1.0f);
+        d->playbackData.startPosition = (int) ((d->clipCommand->setStartPosition ? d->clipCommand->startPosition : d->clip->getStartPosition(d->clipCommand->slice)) * d->playbackData.sourceSampleRate);
+        d->playbackData.stopPosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition : d->clip->getStopPosition(d->clipCommand->slice)) * d->playbackData.sourceSampleRate);
+        d->playbackData.loopPosition = int((d->clip->getStartPosition(d->clipCommand->slice) + d->clip->loopDelta()) * d->playbackData.sourceSampleRate);
+        if (d->playbackData.loopPosition >= d->playbackData.stopPosition) {
+            d->playbackData.loopPosition = d->playbackData.startPosition;
+        }
+        d->playbackData.forwardTailingOffPosition = (d->playbackData.stopPosition - (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
+        d->playbackData.backwardTailingOffPosition = (d->playbackData.startPosition + (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
+    }
+
+    // Process each frame in turn (any commands that want handling for a given frame, control changes, that sort of thing, and finally the audio itself)
     for(jack_nframes_t frame = 0; frame < nframes; ++frame) {
         // Check if we've got any commands that need handling for this frame
         const jack_nframes_t currentFrame{current_frames + frame};
