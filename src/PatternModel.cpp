@@ -1617,7 +1617,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                 // start + (numberToBeWrapped - start) % (limit - start)
                 nextPosition = nextPosition % (d->availableBars * d->width);
 
-                if (!d->positionBuffers.contains(nextPosition + (d->bankOffset * d->width))) {
+                if (d->positionBuffers.contains(nextPosition + (d->bankOffset * d->width)) == false) {
                     QHash<int, juce::MidiBuffer> positionBuffers;
                     // Do a lookup for any notes after this position that want playing before their step (currently
                     // just looking ahead one step, we could probably afford to do a bunch, but one for now)
@@ -1770,12 +1770,11 @@ void PatternModel::handleSequenceStop()
     setRecordLive(false);
 }
 
-void PatternModel::handleMidiMessage(const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const double& timeStamp)
+void PatternModel::handleMidiMessage(const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const double& timeStamp, const int& sketchpadTrack)
 {
-    // if we're recording live, and it's a note-on message, create a newnotedata and add to list of notes being recorded
-    if (d->recordingLive && 0x8F < byte1 && byte1 < 0xA0) {
-        const int midiChannel = byte1 - 0x90;
-        if (d->midiChannel == midiChannel) {
+    if (sketchpadTrack == d->midiChannel) {
+        // if we're recording live, and it's a note-on message, create a newnotedata and add to list of notes being recorded
+        if (d->recordingLive && 0x8F < byte1 && byte1 < 0xA0) {
             // Belts and braces here - it shouldn't really happen (a hundred notes is kind of a lot to add in a single shot), but just in case...
             if (d->noteDataPoolReadHead->object) {
                 NewNoteData *newNote = d->noteDataPoolReadHead->object;
@@ -1786,11 +1785,8 @@ void PatternModel::handleMidiMessage(const unsigned char &byte1, const unsigned 
                 d->recordingLiveNotes << newNote;
             }
         }
-    }
-    // if note-off, check whether there's a matching on note, and if there is, add that note with velocity, delay, and duration as appropriate for current time and step
-    if (d->recordingLiveNotes.count() > 0 && 0x7F < byte1 && byte1 < 0x90) {
-        const int midiChannel = byte1 - 0x80;
-        if ( d->midiChannel == midiChannel) {
+        // if note-off, check whether there's a matching on note, and if there is, add that note with velocity, delay, and duration as appropriate for current time and step
+        if (d->recordingLiveNotes.count() > 0 && 0x7F < byte1 && byte1 < 0x90) {
             QMutableListIterator<NewNoteData*> iterator(d->recordingLiveNotes);
             NewNoteData *newNote{nullptr};
             while (iterator.hasNext()) {

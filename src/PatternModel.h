@@ -585,7 +585,7 @@ public:
      */
     void handleSequenceStop();
 
-    Q_SLOT void handleMidiMessage(const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const double& timeStamp);
+    Q_SLOT void handleMidiMessage(const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const double& timeStamp, const int& sketchpadTrack);
     void midiMessageToClipCommands(ClipCommandRing* listToPopulate, const int& samplerIndex, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3) const;
 private:
     friend class ZLPatternSynchronisationManager;
