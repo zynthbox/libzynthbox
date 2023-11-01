@@ -117,7 +117,7 @@ public:
      * @param port The listener port that the message arrived on (you will likely want to filter on just managing PassthroughPort, unless you have a specific reason)
      * @param size How many bytes the message contains (either 1, 2, or 3)
      * @param byte1 The first byte (always valid)
-     * @param byte2 The second byte (usually valid, byt always test size before using)
+     * @param byte2 The second byte (usually valid, but always test size before using)
      * @param byte3 The third byte (commonly valid, but always test size before using)
      * @param fromInternal Whether the message arrived from an internal source
      */
