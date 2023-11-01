@@ -965,9 +965,11 @@ PatternModel::NoteDestination PatternModel::noteDestination() const
 void PatternModel::setNoteDestination(const PatternModel::NoteDestination &noteDestination)
 {
     if (d->noteDestination != noteDestination) {
-        // Before switching the destination, first let's quickly send a little note off for aaaaall notes on this channel
+        // Before switching the destination, first let's quickly send a little note off for aaaaall notes on this track
         juce::MidiBuffer buffer;
-        buffer.addEvent(juce::MidiMessage::allNotesOff(d->midiChannel + 1), 0);
+        for (int midiChannel = 1; midiChannel < 17; ++midiChannel) {
+            buffer.addEvent(juce::MidiMessage::allNotesOff(midiChannel), 0);
+        }
         SyncTimer::instance()->sendMidiBufferImmediately(buffer, d->midiChannel);
         d->noteDestination = noteDestination;
         Q_EMIT noteDestinationChanged();
@@ -1723,7 +1725,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                         const QHash<int, juce::MidiBuffer> &positionBuffers = d->positionBuffers[nextPosition + (d->bankOffset * d->width)];
                         QHash<int, juce::MidiBuffer>::const_iterator position;
                         for (position = positionBuffers.constBegin(); position != positionBuffers.constEnd(); ++position) {
-                            d->syncTimer->scheduleMidiBuffer(position.value(), quint64(qMax(0, progressionIncrement + position.key())));
+                            d->syncTimer->scheduleMidiBuffer(position.value(), quint64(qMax(0, progressionIncrement + position.key())), d->midiChannel);
                         }
                         break;
                     }
