@@ -203,8 +203,7 @@ public:
         }
         QObject::connect(midiRouter, &MidiRouter::noteChanged, q, [this](const MidiRouter::ListenerPort &port, const int &midiNote, const int &midiChannel, const int &velocity, const bool &setOn, const double &timeStamp, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const int &sketchpadTrack){ emitMidiMessage(port, timeStamp, midiNote, midiChannel, velocity, setOn, byte1, byte2, byte3, sketchpadTrack); }, Qt::DirectConnection);
         QObject::connect(midiRouter, &MidiRouter::noteChanged, q, [this](const MidiRouter::ListenerPort &port, const int &midiNote, const int &midiChannel, const int &velocity, const bool &setOn, const double &timeStamp, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const int &sketchpadTrack){ updateNoteState(port, timeStamp, midiNote, midiChannel, velocity, setOn, byte1, byte2, byte3, sketchpadTrack); }, Qt::QueuedConnection);
-        QObject::connect(midiRouter, &MidiRouter::noteChanged, q, [this](const MidiRouter::ListenerPort &port, const int &midiNote, const int &midiChannel, const int &velocity, const bool &setOn, const double &timeStamp, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3){ handleInputEvent(port, timeStamp, midiNote, midiChannel, velocity, setOn, byte1, byte2, byte3); }, Qt::QueuedConnection);
-        QObject::connect(midiRouter, &MidiRouter::midiMessage, q, [this](int port, int size, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const int& sketchpadTrack, bool fromInternal ){ handleMidiMessage(port, size, byte1, byte2, byte3, sketchpadTrack, fromInternal); });
+        QObject::connect(midiRouter, &MidiRouter::midiMessage, q, [this](int port, int size, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const int& sketchpadTrack, bool fromInternal ){ handleMidiMessage(port, size, byte1, byte2, byte3, sketchpadTrack, fromInternal); }, Qt::QueuedConnection);
         currentPlaygrids = {
             {"minigrid", 0}, // As these are sorted alphabetically, notesgrid for minigrid and
             {"playgrid", 1}, // stepsequencer for playgrid
@@ -272,31 +271,6 @@ public:
 
     QFileSystemWatcher watcher;
 
-    void handleInputEvent(const MidiRouter::ListenerPort &port, const double &/*timeStamp*/, const int &midiNote, const int &/*midiChannel*/, const int &/*velocity*/, const bool &setOn, const unsigned char &/*byte1*/, const unsigned char &/*byte2*/, const unsigned char &/*byte3*/) {
-        switch(port) {
-            case MidiRouter::PassthroughPort:
-                noteActivations[midiNote] = setOn ? 1 : 0;
-                activeNotesUpdater->start();
-                break;
-            case MidiRouter::InternalPassthroughPort:
-                internalPassthroughNoteActivations[midiNote] = setOn ? 1 : 0;
-                internalPassthroughActiveNotesUpdater->start();
-                break;
-            case MidiRouter::HardwareInPassthroughPort:
-                hardwareInNoteActivations[midiNote] = setOn ? 1 : 0;
-                hardwareInActiveNotesUpdater->start();
-                break;
-            case MidiRouter::ExternalOutPort:
-                hardwareOutNoteActivations[midiNote] = setOn ? 1 : 0;
-                hardwareOutActiveNotesUpdater->start();
-                break;
-            case MidiRouter::UnknownPort:
-            default:
-                qWarning() << Q_FUNC_INFO << "Input event came in from an unknown port, somehow - no idea what to do with this";
-                break;
-        }
-    }
-
     void emitMidiMessage(const MidiRouter::ListenerPort &port, const double &timeStamp, const int &/*midiNote*/, const int &/*midiChannel*/, const int &/*velocity*/, const bool &/*setOn*/, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const int &sketchpadTrack) {
         if (port == MidiRouter::PassthroughPort) {
             // First notify all our friends of the thing (because they might like to know very quickly)
@@ -331,23 +305,58 @@ public:
     }
 
     void handleMidiMessage(int port, int size, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& /*byte3*/, const int& /*sketchpadTrack*/, bool /*fromInternal*/) {
-        if (port == MidiRouter::PassthroughPort) {
-            if (size == 3) {
-                if (0xAF < byte1 && byte1 < 0xC0) {
-                    if (byte2 == 0x7B) {
-                        // All Notes Off
-                        for (int note = 0; note < 128; ++note) {
-                            for (Note *note : qAsConst(notes)) {
-                                if (note->isPlaying()) {
-                                    note->setIsPlaying(false, note->activeChannel());
-                                }
-                            }
-                            noteActivations[note] = 0;
-                        }
+        switch(port) {
+            case MidiRouter::PassthroughPort:
+                if (size == 3) {
+                    if (0x79 < byte1 && byte1 < 0xA0) {
+                        const bool setOn{0x8F < byte1};
+                        noteActivations[byte2] = setOn ? 1 : 0;
                         activeNotesUpdater->start();
+                    } else if (0xAF < byte1 && byte1 < 0xC0) {
+                        if (byte2 == 0x7B) {
+                            // All Notes Off
+                            for (Note *note : qAsConst(notes)) {
+                                note->setIsPlaying(false, -1);
+                            }
+                            for (int note = 0; note < 128; ++note) {
+                                noteActivations[note] = 0;
+                            }
+                            activeNotesUpdater->start();
+                        }
                     }
                 }
-            }
+                break;
+            case MidiRouter::InternalPassthroughPort:
+                if (size == 3) {
+                    if (0x79 < byte1 && byte1 < 0xA0) {
+                        const bool setOn{0x8F < byte1};
+                        internalPassthroughNoteActivations[byte2] = setOn ? 1 : 0;
+                        internalPassthroughActiveNotesUpdater->start();
+                    }
+                }
+                break;
+            case MidiRouter::HardwareInPassthroughPort:
+                if (size == 3) {
+                    if (0x79 < byte1 && byte1 < 0xA0) {
+                        const bool setOn{0x8F < byte1};
+                        hardwareInNoteActivations[byte2] = setOn ? 1 : 0;
+                        hardwareInActiveNotesUpdater->start();
+                    }
+                }
+                break;
+            case MidiRouter::ExternalOutPort:
+                if (size == 3) {
+                    if (0x79 < byte1 && byte1 < 0xA0) {
+                        const bool setOn{0x8F < byte1};
+                        hardwareOutNoteActivations[byte2] = setOn ? 1 : 0;
+                        hardwareOutActiveNotesUpdater->start();
+                    }
+                }
+                break;
+            case MidiRouter::UnknownPort:
+            default:
+                qWarning() << Q_FUNC_INFO << "Input event came in from an unknown port, somehow - no idea what to do with this";
+                break;
         }
     }
 
