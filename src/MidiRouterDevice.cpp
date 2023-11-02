@@ -125,7 +125,12 @@ void MidiRouterDevice::writeEventToOutput(jack_midi_event_t& event, const int &o
     const bool isNoteMessage = event.buffer[0] > 0x7F && event.buffer[0] < 0xA0;
     if (isNoteMessage == false || d->acceptsNote[event.buffer[1]]) {
         d->zynthboxToDevice(&event);
-        const int eventChannel = (event.buffer[0] & 0xf);
+        const int eventChannel{event.buffer[0] & 0xf};
+        if (event.size == 3 && 0xAF < event.buffer[0] && event.buffer[0] < 0xC0 && event.buffer[1] == 0x78) {
+            for (int note = 0; note < 128; ++note) {
+                d->noteState[eventChannel][note] = 0;
+            }
+        }
         if (outputChannel > -1) {
             event.buffer[0] = event.buffer[0] - eventChannel + outputChannel;
         }
@@ -216,6 +221,8 @@ void MidiRouterDevice::setNoteActive(const int &sketchpadTrack, const int& chann
             d->noteState[channel][note] -= 1;
             if (d->noteState[channel][note] == 0) {
                 d->noteActivationTrack[channel][note] = -1;
+            } else if (d->noteState[channel][note] < 0) {
+                d->noteState[channel][note] = 0;
             }
         }
     } else {
