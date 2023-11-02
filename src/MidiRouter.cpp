@@ -342,6 +342,8 @@ public:
                         if (inputDeviceIsHardware) {
                             // qDebug() << Q_FUNC_INFO << "Hardware input message received for channel" << eventChannel << "of size" << event->size;
                             hardwareInListener.addMessage(false, isNoteMessage, timestamp, *event, eventChannel, currentSketchpadTrack);
+                        } else {
+                            internalPassthroughListener.addMessage(true, isNoteMessage, timestamp, *event, eventChannel, currentSketchpadTrack);
                         }
                         if (inputDeviceIsHardware == false && eventChannel == masterChannel) {
                             for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
