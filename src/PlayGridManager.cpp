@@ -304,7 +304,7 @@ public:
         }
     }
 
-    void handleMidiMessage(int port, int size, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& /*byte3*/, const int& /*sketchpadTrack*/, bool /*fromInternal*/) {
+    void handleMidiMessage(int port, int size, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& /*byte3*/, const int& sketchpadTrack, bool /*fromInternal*/) {
         switch(port) {
             case MidiRouter::PassthroughPort:
                 if (size == 3) {
@@ -316,7 +316,9 @@ public:
                         if (byte2 == 0x7B) {
                             // All Notes Off
                             for (Note *note : qAsConst(notes)) {
-                                note->setIsPlaying(false, -1);
+                                if (note->sketchpadTrack() == sketchpadTrack) {
+                                    note->setIsPlaying(false, -1);
+                                }
                             }
                             for (int note = 0; note < 128; ++note) {
                                 noteActivations[note] = 0;
