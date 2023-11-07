@@ -236,11 +236,20 @@ public Q_SLOTS:
         if (zlChannel) {
             QList<int> chainedSounds;
             const QVariantList channelChainedSounds = zlChannel->property("chainedSounds").toList();
+            const QVariantList channelChainedSoundsAcceptedChannels = zlChannel->property("chainedSoundsAcceptedChannels").toList();
+            int index{0};
             for (const QVariant &channelChainedSound : channelChainedSounds) {
                 const int chainedSound = channelChainedSound.toInt();
                 if (chainedSound > -1) {
                     chainedSounds << chainedSound;
+                    QList<int> acceptedChannelsActual;
+                    const QVariantList &acceptedChannels = channelChainedSoundsAcceptedChannels[index].toList();
+                    for (const QVariant &acceptedChannel : acceptedChannels) {
+                        acceptedChannelsActual << acceptedChannel.toInt();
+                    }
+                    MidiRouter::instance()->setZynthianSynthAcceptedChannels(chainedSound, acceptedChannelsActual);
                 }
+                ++index;
             }
             MidiRouter::instance()->setZynthianChannels(q->channelIndex(), chainedSounds);
         }
