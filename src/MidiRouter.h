@@ -74,7 +74,13 @@ public:
      * @param sketchpadTrack The sketchpad track (0 through 9)
      * @param zynthianChannels The channels that zynthian should play notes on for the channel with the given input channel
      */
-    void setZynthianChannels(int sketchpadTrack, QList<int> zynthianChannels);
+    void setZynthianChannels(int sketchpadTrack, const QList<int> &zynthianChannels);
+    /**
+     * \brief Set the midi channels accepted by the Zynthian synth at the given index
+     * @param zynthianChannel The index of the Zynthian synth to set accepted midi channels for
+     * @param acceptedMidiChannels A list of all channels accepted by the given synth
+     */
+    void setZynthianSynthAcceptedChannels(int zynthianChannel, const QList<int> &acceptedMidiChannels);
 
     /**
      * \brief Call this function to reload the midi routing configuration and set ports back up

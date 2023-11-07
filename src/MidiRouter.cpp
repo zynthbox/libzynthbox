@@ -773,7 +773,7 @@ int MidiRouter::currentSketchpadTrack() const
     return d->currentSketchpadTrack;
 }
 
-void MidiRouter::setZynthianChannels(int sketchpadTrack, QList<int> zynthianChannels)
+void MidiRouter::setZynthianChannels(int sketchpadTrack, const QList<int> &zynthianChannels)
 {
     if (sketchpadTrack > -1 && sketchpadTrack < ZynthboxTrackCount) {
         SketchpadTrackInfo *trackInfo = d->sketchpadTracks[sketchpadTrack];
@@ -788,6 +788,13 @@ void MidiRouter::setZynthianChannels(int sketchpadTrack, QList<int> zynthianChan
         if (hasChanged) {
             if (DebugZLRouter) { qDebug() << "ZLRouter: Updating zynthian channels for" << trackInfo->portName << "from" << trackInfo->zynthianChannels << "to" << zynthianChannels; }
         }
+    }
+}
+
+void MidiRouter::setZynthianSynthAcceptedChannels(int zynthianChannel, const QList<int> &acceptedMidiChannels)
+{
+    if (0 <zynthianChannel && zynthianChannel < 16) {
+        d->zynthianOutputs[zynthianChannel]->setAcceptedMidiChannels(acceptedMidiChannels);
     }
 }
 
