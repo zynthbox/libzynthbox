@@ -17,6 +17,7 @@ public:
     MidiRouterDevicePrivate () {
         DeviceMessageTranslations::load();
         for (int channel = 0; channel < 16; ++channel) {
+            acceptsChannel[channel] = true;
             receiveFromChannel[channel] = true;
             sendToChannel[channel] = true;
             masterChannel[channel] = -1;
@@ -35,6 +36,8 @@ public:
     inline const void deviceToZynthbox(jack_midi_event_t *event) const;
 
     int acceptsNote[128];
+    int acceptsChannel[16];
+    int lastAcceptedChannel{15};
     int noteState[16][128];
     int noteActivationTrack[16][128];
     int midiChannelTargetTrack[16];
@@ -120,7 +123,7 @@ void MidiRouterDevice::processBegin(const jack_nframes_t &nframes)
     }
 }
 
-void MidiRouterDevice::writeEventToOutput(jack_midi_event_t& event, const int &outputChannel)
+void MidiRouterDevice::writeEventToOutput(jack_midi_event_t& event, int outputChannel)
 {
     const bool isNoteMessage = event.buffer[0] > 0x7F && event.buffer[0] < 0xA0;
     if (isNoteMessage == false || d->acceptsNote[event.buffer[1]]) {
@@ -132,6 +135,12 @@ void MidiRouterDevice::writeEventToOutput(jack_midi_event_t& event, const int &o
             }
         }
         if (outputChannel > -1) {
+            if (d->acceptsChannel[outputChannel] == false) {
+                outputChannel = d->lastAcceptedChannel;
+            }
+            event.buffer[0] = event.buffer[0] - eventChannel + outputChannel;
+        } else if (d->acceptsChannel[eventChannel] == false) {
+            outputChannel = d->lastAcceptedChannel;
             event.buffer[0] = event.buffer[0] - eventChannel + outputChannel;
         }
         int errorCode = jack_midi_event_write(d->outputBuffer, event.time, event.buffer, event.size);
@@ -364,6 +373,16 @@ void MidiRouterDevice::setAcceptedNotes(const QList<int> notes, bool accepted, b
 void MidiRouterDevice::setAcceptsNote(const int& note, bool accepted)
 {
     d->acceptsNote[std::clamp(note, 0, 127)] = accepted;
+}
+
+void MidiRouterDevice::setAcceptedMidiChannels(const QList<int>& acceptedMidiChannels)
+{
+    for (int channel = 0; channel < 16; ++channel) {
+        d->acceptsChannel[channel] = acceptedMidiChannels.contains(channel);
+        if (d->acceptsChannel[channel]) {
+            d->lastAcceptedChannel = channel;
+        }
+    }
 }
 
 void MidiRouterDevice::setDeviceDirection(const DeviceDirection& direction, const bool& supportsDirection)

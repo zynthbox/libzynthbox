@@ -40,7 +40,7 @@ public:
      * @param event The event to be written
      * @param overrideChannel If greater than -1, the event will be written to the output using that channel (the event will be returned intact)
      */
-    void writeEventToOutput(jack_midi_event_t &event, const int &overrideChannel = -1);
+    void writeEventToOutput(jack_midi_event_t &event, int overrideChannel = -1);
     /**
      * \brief The current input event - size will be 0 if the end was reached
      * Once processed, call nextInputEvent() to progress to the next one
@@ -191,6 +191,16 @@ public:
      * @param accepted If true, set the note as accepted. If false, they will be marked as not accepted
      */
     void setAcceptsNote(const int &note, bool accepted = true);
+
+    /**
+     * \brief Set the channels which this device will accept
+     * Any note which arrives on a different channel will be moved to one of the given channels
+     * There is no guarantee of an even spread here (in essence, an unaccepted channel will be
+     * moved to the last channel in the accepted list, which might potentially result in clashes,
+     * but is inexpensive to calculate, as well as consistent)
+     * @param acceptedMidiChannels The midi channels this device will accept notes on
+     */
+    void setAcceptedMidiChannels(const QList<int> &acceptedMidiChannels);
 
     /**
      * \brief Mark the device as being (or not being) some type or another
