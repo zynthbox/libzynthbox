@@ -181,18 +181,35 @@ public:
 //                 qDebug() << Q_FUNC_INFO << "Moved playhead to" << playhead;
                 if (playlist.contains(playhead)) {
                     const QList<TimerCommand*> commands = playlist[playhead];
-                    for (TimerCommand* command : commands) {
-                        if (ignoreStop && command->operation == TimerCommand::StopPlaybackOperation) {
-                            continue;
-                        } else if (command->operation == TimerCommand::StartClipLoopOperation || command->operation == TimerCommand::StopClipLoopOperation) {
-                            // If there's no clip to start or stop looping, we should really just ignore the command
-                            if (command->parameter2 > 0) {
-                                TimerCommand *clonedCommand = TimerCommand::cloneTimerCommand(command);
-                                ensureTimerClipCommand(clonedCommand);
-                                syncTimer->scheduleTimerCommand(0, clonedCommand);
+                    if (commands.count() > 0) {
+                        // When moving backward, we need to handle the stop and start commands in opposite direction
+                        // Forward playback: Stop things first, then start things
+                        // Backward playback: Start things first, then stop things
+                        const int startCommand = (direction == -1) ? 0 : commands.count() - 1;
+                        const int endCommand = (direction == -1) ? commands.count() : -1;
+                        for (int commandIndex = startCommand; commandIndex != endCommand; commandIndex -= direction) {
+                            TimerCommand *command = commands[commandIndex];
+                            if (ignoreStop && command->operation == TimerCommand::StopPlaybackOperation) {
+                                continue;
+                            } else if (command->operation == TimerCommand::StartClipLoopOperation || command->operation == TimerCommand::StopClipLoopOperation) {
+                                // If there's no clip to start or stop looping, we should really just ignore the command
+                                if (command->parameter2 > 0) {
+                                    TimerCommand *clonedCommand = TimerCommand::cloneTimerCommand(command);
+                                    if (direction == -1) {
+                                        clonedCommand->operation = (clonedCommand->operation == TimerCommand::StartClipLoopOperation) ? TimerCommand::StopClipLoopOperation : TimerCommand::StartClipLoopOperation;
+                                    }
+                                    ensureTimerClipCommand(clonedCommand);
+                                    syncTimer->scheduleTimerCommand(0, clonedCommand);
+                                }
+                            } else {
+                                if (direction == -1) {
+                                    TimerCommand *clonedCommand = TimerCommand::cloneTimerCommand(command);
+                                    clonedCommand->operation = (clonedCommand->operation == TimerCommand::StartPartOperation) ? TimerCommand::StopPartOperation : TimerCommand::StartPartOperation;
+                                    handleTimerCommand(clonedCommand);
+                                } else {
+                                    handleTimerCommand(command);
+                                }
                             }
-                        } else {
-                            handleTimerCommand(command);
                         }
                     }
                 }
@@ -502,9 +519,8 @@ void SegmentHandler::startPlayback(qint64 startOffset, quint64 duration)
     } else {
         d->zlSyncManager->updateSegments(startOffset + qint64(duration));
     }
-    // If we're starting with a new playfield anyway, playhead's logically at 0, but also we need to handle the first position before we start playing (specifically so the sequences know what to do)
-    d->playhead = 1;
-    d->movePlayhead(0, true);
+    // If we're starting with a new playfield anyway, we want to ensure the first movement also catches that first position, so start counting for the playhead at a logical -1 position with nothing on it
+    d->playhead = -1;
     d->movePlayhead(startOffset, true);
     if (d->duration > 0) {
         if (duration > 0) {
@@ -538,7 +554,7 @@ void SegmentHandler::stopPlayback()
         sequence->disconnectSequencePlayback();
     }
     d->playGridManager->stopMetronome();
-    d->movePlayhead(0, true);
+    d->movePlayhead(-1, true);
     d->songMode = false;
     Q_EMIT songModeChanged();
 }
