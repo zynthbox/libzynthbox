@@ -282,10 +282,10 @@ public:
             case MidiRouter::PassthroughPort:
                 if (size == 3) {
                     if (0x79 < byte1 && byte1 < 0xA0) {
-                        const bool setOn{0x8F < byte1};
-                        const int midiChannel = setOn ? (byte1 - 0xA0) : (byte1 - 0x90);
                         static const QLatin1String note_on{"note_on"};
                         static const QLatin1String note_off{"note_off"};
+                        const bool setOn{0x8F < byte1};
+                        const int midiChannel = (byte1 & 0xF);
                         const qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
                         QVariantMap metadata;
                         metadata["note"] = byte2;
