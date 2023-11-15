@@ -63,11 +63,15 @@ class ClipAudioSource : public QObject {
      */
     Q_PROPERTY(float audioLevel READ audioLevel NOTIFY audioLevelChanged)
     /**
-     * \brief The current playback progress as a float
+     * \brief Whether or not there is at least one active position in the playback model which is active
      */
+    Q_PROPERTY(bool isPlaying READ isPlaying NOTIFY isPlayingChanged)
+    /**
+     * \brief The current playback progress (of the first position in the positions model) as a floating point amount of seconds
+      */
     Q_PROPERTY(float progress READ progress NOTIFY progressChanged)
     /**
-     * \brief The current playback position (of the first position in the positions model) in seconds
+     * \brief The current playback position (of the first position in the positions model) as a floating point value from 0 through 1
      */
     Q_PROPERTY(double position READ position NOTIFY positionChanged)
     /**
@@ -331,6 +335,9 @@ public:
 
   float audioLevel() const;
   Q_SIGNAL void audioLevelChanged();
+
+  bool isPlaying() const;
+  Q_SIGNAL void isPlayingChanged();
 
   float progress() const;
   Q_SIGNAL void progressChanged();

@@ -125,6 +125,7 @@ public:
   double firstPositionProgress{0};
   qint64 nextGainUpdateTime{0};
   double progress{0};
+  bool isPlaying{false};
 
   void syncAudioLevel() {
     if (nextGainUpdateTime < QDateTime::currentMSecsSinceEpoch()) {
@@ -231,6 +232,15 @@ void ClipAudioSource::syncProgress() {
     double newPosition = d->startPositionInSeconds / getDuration();
     if (d->positionsModel && d->positionsModel->firstProgress() > -1.0f) {
       newPosition = d->positionsModel->firstProgress();
+      if (d->isPlaying == false) {
+        d->isPlaying = true;
+        Q_EMIT isPlayingChanged();
+      }
+    } else {
+      if (d->isPlaying == true) {
+        d->isPlaying = false;
+        Q_EMIT isPlayingChanged();
+      }
     }
     if (abs(d->firstPositionProgress - newPosition) > 0.001) {
       d->firstPositionProgress = newPosition;
@@ -521,6 +531,11 @@ void ClipAudioSource::setLaneAffinity(const int& newValue)
 float ClipAudioSource::audioLevel() const
 {
   return d->currentLeveldB;
+}
+
+bool ClipAudioSource::isPlaying() const
+{
+  return d->isPlaying;
 }
 
 float ClipAudioSource::progress() const
