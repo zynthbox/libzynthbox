@@ -196,6 +196,7 @@ void ClipAudioSourcePositionsModel::updatePositions()
         PositionData &position = d->positions[positionIndex];
         if (position.keepUntil < d->mostRecentPositionUpdate) {
             position.clipCommand = nullptr;
+            position.id = -1;
             anyPositionUpdates = true;
         }
     }
