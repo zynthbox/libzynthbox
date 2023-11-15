@@ -40,6 +40,9 @@
 #define ChannelCount 10
 struct TrackState {
     TrackState() {
+        clear();
+    }
+    void clear() {
         for (int partIndex = 0; partIndex < PartCount; ++partIndex) {
             partStates[partIndex] = false;
             partOffset[partIndex] = 0;
@@ -60,6 +63,11 @@ struct ChannelState {
             delete trackStates[trackIndex];
         }
     }
+    void clear() {
+        for (TrackState *trackState : trackStates) {
+            trackState->clear();
+        }
+    }
     TrackState* trackStates[TrackCount];
 };
 struct PlayfieldState {
@@ -73,6 +81,11 @@ struct PlayfieldState {
             delete channelStates[channelIndex];
         }
     }
+    void clear() {
+        for (ChannelState *channelState : channelStates) {
+            channelState->clear();
+        }
+    }
     ChannelState* channelStates[ChannelCount];
 };
 
@@ -84,7 +97,6 @@ public:
     {
         syncTimer = SyncTimer::instance();
         playGridManager = PlayGridManager::instance();
-        playfieldState = new PlayfieldState();
     }
     SegmentHandler* q{nullptr};
     SyncTimer* syncTimer{nullptr};
@@ -95,7 +107,7 @@ public:
     qint64 startOffset{0};
     qint64 duration{0};
 
-    PlayfieldState *playfieldState{nullptr};
+    PlayfieldState playfieldState;
     qint64 playhead{0};
     QHash<qint64, QList<TimerCommand*> > playlist;
     QList<ClipAudioSource*> runningLoops;
@@ -157,12 +169,12 @@ public:
         // Yes, these are dangerous, but also we really, really want this to be fast
         if (command->operation == TimerCommand::StartPartOperation) {
 //             qDebug() << Q_FUNC_INFO << "Timer command says to start part" << command->parameter << command->parameter2 << command->parameter3;
-            playfieldState->channelStates[command->parameter]->trackStates[command->parameter2]->partStates[command->parameter3] = true;
-            playfieldState->channelStates[command->parameter]->trackStates[command->parameter2]->partOffset[command->parameter3] = qint64(command->bigParameter);
+            playfieldState.channelStates[command->parameter]->trackStates[command->parameter2]->partStates[command->parameter3] = true;
+            playfieldState.channelStates[command->parameter]->trackStates[command->parameter2]->partOffset[command->parameter3] = qint64(command->bigParameter);
             Q_EMIT q->playfieldInformationChanged(command->parameter, command->parameter2, command->parameter3);
         } else if(command->operation == TimerCommand::StopPartOperation) {
 //             qDebug() << Q_FUNC_INFO << "Timer command says to stop part" << command->parameter << command->parameter2 << command->parameter3;
-            playfieldState->channelStates[command->parameter]->trackStates[command->parameter2]->partStates[command->parameter3] = false;
+            playfieldState.channelStates[command->parameter]->trackStates[command->parameter2]->partStates[command->parameter3] = false;
             Q_EMIT q->playfieldInformationChanged(command->parameter, command->parameter2, command->parameter3);
         } else if (command->operation == TimerCommand::StopPlaybackOperation) {
             q->stopPlayback();
@@ -466,8 +478,7 @@ SegmentHandler::SegmentHandler(QObject *parent)
                 }
             }
             // Then refresh the playfield
-            delete d->playfieldState;
-            d->playfieldState = new PlayfieldState();
+            d->playfieldState.clear();
         }
     }, Qt::QueuedConnection);
 }
@@ -507,10 +518,7 @@ qint64 SegmentHandler::duration() const
 
 void SegmentHandler::startPlayback(qint64 startOffset, quint64 duration)
 {
-    if (d->playfieldState) {
-        delete d->playfieldState;
-    }
-    d->playfieldState = new PlayfieldState();
+    d->playfieldState.clear();
     d->songMode = true;
     Q_EMIT songModeChanged();
     d->startOffset = startOffset;
@@ -561,12 +569,12 @@ void SegmentHandler::stopPlayback()
 
 bool SegmentHandler::playfieldState(int channel, int track, int part) const
 {
-    return d->playfieldState->channelStates[channel]->trackStates[track]->partStates[part];
+    return d->playfieldState.channelStates[channel]->trackStates[track]->partStates[part];
 }
 
 qint64 SegmentHandler::playfieldOffset(int channel, int track, int part) const
 {
-    return d->playfieldState->channelStates[channel]->trackStates[track]->partOffset[part];
+    return d->playfieldState.channelStates[channel]->trackStates[track]->partOffset[part];
 }
 
 void SegmentHandler::progressPlayback() const
