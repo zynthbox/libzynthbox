@@ -660,7 +660,6 @@ void SequenceModel::clear()
         PatternModel *pattern = d->patternModelIterator[i];
         if (pattern) {
             pattern->clear();
-            pattern->setMidiChannel(0);
             pattern->setLayerData("");
             pattern->setNoteLength(3);
             pattern->setAvailableBars(1);

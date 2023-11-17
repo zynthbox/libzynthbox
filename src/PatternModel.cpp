@@ -628,7 +628,6 @@ void PatternModel::cloneOther(PatternModel *otherPattern)
         clear();
         setWidth(otherPattern->width());
         setHeight(otherPattern->height());
-        setMidiChannel(otherPattern->midiChannel());
         setLayerData(otherPattern->layerData());
         setNoteLength(otherPattern->noteLength());
         setAvailableBars(otherPattern->availableBars());
