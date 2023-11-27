@@ -799,7 +799,7 @@ void MidiRouter::setZynthianChannels(int sketchpadTrack, const QList<int> &zynth
 
 void MidiRouter::setZynthianSynthAcceptedChannels(int zynthianChannel, const QList<int> &acceptedMidiChannels)
 {
-    if (0 <zynthianChannel && zynthianChannel < 16) {
+    if (-1 < zynthianChannel && zynthianChannel < 16) {
         d->zynthianOutputs[zynthianChannel]->setAcceptedMidiChannels(acceptedMidiChannels);
     }
 }
