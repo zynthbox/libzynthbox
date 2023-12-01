@@ -380,6 +380,9 @@ public:
     quint64 cumulativeBeat = 0;
     int callbackCount{0};
 
+    int timerCommandBundleStarts{0};
+    QHash<TimerCommand*, quint64> bundledTimerCommands;
+
     ClipCommandRing sentOutClipsRing;
 
     StepData stepRing[StepRingCount];
@@ -706,10 +709,18 @@ public:
                             }
                             break;
                         case TimerCommand::ChannelRecorderStartOperation:
-                            AudioLevels::instance()->startRecording(firstAvailableFrame + current_frames);
+                            if (command->parameter == 1) {
+                                AudioLevels::instance()->handleTimerCommand(firstAvailableFrame + current_frames, command);
+                            } else {
+                                AudioLevels::instance()->startRecording(firstAvailableFrame + current_frames);
+                            }
                             break;
                         case TimerCommand::ChannelRecorderStopOperation:
-                            AudioLevels::instance()->stopRecording(firstAvailableFrame + current_frames);
+                            if (command->parameter == 1) {
+                                AudioLevels::instance()->handleTimerCommand(firstAvailableFrame + current_frames, command);
+                            } else {
+                                AudioLevels::instance()->stopRecording(firstAvailableFrame + current_frames);
+                            }
                             break;
                         case TimerCommand::MidiRecorderStartOperation:
                             MidiRecorder::instance()->startRecording(command->parameter, false, stepNextPlaybackPosition);
@@ -717,6 +728,34 @@ public:
                         case TimerCommand::MidiRecorderStopOperation:
                             MidiRecorder::instance()->stopRecording(command->parameter, stepNextPlaybackPosition);
                             break;
+                        case TimerCommand::SendMidiMessageOperation:
+                            {
+                                if (-1 < command->parameter && command->parameter < ZynthboxTrackCount) {
+                                    size_t size = 3;
+                                    const jack_midi_data_t message[3]{jack_midi_data_t(command->parameter2), jack_midi_data_t(command->parameter3), jack_midi_data_t(command->parameter4)};
+                                    if (-1 < command->parameter4 && command->parameter4 < 256) {
+                                        size = 3;
+                                    } else if (-1 < command->parameter3 && command->parameter3 < 256) {
+                                        size = 2;
+                                    } else {
+                                        size = 1;
+                                    }
+                                    errorCode = jack_midi_event_write(buffer[command->parameter], relativePosition, message, size);
+                                    if (errorCode == ENOBUFS) {
+                                        qWarning() << "Ran out of space while writing events - scheduling the event there's not enough space for to be fired first next round";
+                                        if (!missingBitsBuffer[command->parameter]) {
+                                            missingBitsBuffer[command->parameter] = &missingBitsBufferInstance[command->parameter];
+                                        }
+                                        // Schedule the rest of the buffer for immediate dispatch on next go-around
+                                        missingBitsBuffer[command->parameter]->addEvent(message, size, 0);
+                                    } else {
+                                        if (errorCode != 0) {
+                                            qWarning() << Q_FUNC_INFO << "Error writing midi event:" << -errorCode << strerror(-errorCode);
+                                        }
+                                    }
+                                }
+                                break;
+                            }
                         case TimerCommand::StartPartOperation:
                         case TimerCommand::StopPartOperation:
                         case TimerCommand::InvalidOperation:
@@ -1311,17 +1350,55 @@ void SyncTimer::setCurrentTrack(const int& newTrack)
 
 void SyncTimer::scheduleTimerCommand(quint64 delay, TimerCommand *command)
 {
-    StepData *stepData{d->delayedStep(delay)};
-    stepData->timerCommands << command;
+    if (d->timerCommandBundleStarts == 0) {
+        StepData *stepData{d->delayedStep(delay)};
+        stepData->timerCommands << command;
+    } else {
+        d->bundledTimerCommands[command] = delay;
+    }
 }
 
-void SyncTimer::scheduleTimerCommand(quint64 delay, int operation, int parameter1, int parameter2, int parameter3, const QVariant &variantParameter)
+void SyncTimer::startTimerCommandBundle()
+{
+    d->timerCommandBundleStarts += 1;
+}
+
+void SyncTimer::endTimerCommandBundle(quint64 startDelay)
+{
+    if (d->timerCommandBundleStarts > 0) {
+        d->timerCommandBundleStarts -= 1;
+    }
+    if (d->timerCommandBundleStarts == 0) {
+        // If we are at zero, submit any and all bundled commands properly
+        // Operate using an offset from a specific step to be ultra certain. To ensure we can handle very extreme
+        // duration work, we take the next-next from current, and count everything from there.
+        StepData *logicalFirstStep{d->delayedStep(startDelay)};
+        QHashIterator<TimerCommand*, quint64> bundleIterator{d->bundledTimerCommands};
+        while (bundleIterator.hasNext()) {
+            bundleIterator.next();
+            StepData *addToStep{logicalFirstStep};
+            const quint64 delay{bundleIterator.value()};
+            if (delay > StepRingCount) {
+                qCritical() << Q_FUNC_INFO << "Attempting to add a timer command further into the future than our Step Ring size. This is going to cause fairly serious problems, and we are going to need to increase the size of the ring. The ring size is" << StepRingCount << "and the requested delay was" << delay;
+            }
+            for (quint64 delayCounter = 0; delayCounter < delay; ++delayCounter) {
+                addToStep = addToStep->next;
+            }
+            addToStep->ensureFresh();
+            addToStep->timerCommands << bundleIterator.key();
+        }
+        d->bundledTimerCommands.clear();
+    }
+}
+
+void SyncTimer::scheduleTimerCommand(quint64 delay, int operation, int parameter1, int parameter2, int parameter3, const QVariant &variantParameter, int parameter4)
 {
     TimerCommand* timerCommand = getTimerCommand();
     timerCommand->operation = static_cast<TimerCommand::Operation>(operation);
     timerCommand->parameter = parameter1;
     timerCommand->parameter2 = parameter2;
     timerCommand->parameter3 = parameter3;
+    timerCommand->parameter4 = parameter4;
     if (variantParameter.isValid()) {
         timerCommand->variantParameter = variantParameter;
     }

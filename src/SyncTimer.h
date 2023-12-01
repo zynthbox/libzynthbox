@@ -191,6 +191,29 @@ public:
   Q_SIGNAL void clipCommandSent(ClipCommand *clipCommand);
 
   /**
+   * \brief Call this function to start collecting timer commands to be submitted all at the same time, end with endTimerCommandBundle()
+   * The logic here is that to ensure timer commands are added at the precise moment we really want it,
+   * if there is too much back and forth between QML and C++, this could take an inordinate amount of time,
+   * and to reduce the effect of that, we instead allow you to send a bunch of commands, the same way you
+   * would normally do it using scheduleTimerCommand, and then submit all of them at the same time, reducing
+   * the roundtripping during the actual submission step.
+   * @note Ensure that you have the same number of start and stop calls, as it is reference counted
+   * @see endTimerCommandBundle()
+   */
+  Q_INVOKABLE void startTimerCommandBundle();
+  /**
+   * \brief Call this function to submit the commands collected after calling startTimerCommandBundle()
+   * The start delay can be used to pick a specific step on which to start, but the default is selected
+   * (yes, it's a seemingly magic number: not the current step, and also not the next, just to be sure)
+   * to try and ensure we don't end up attempting to add data to a step which has now been played. This
+   * is usually the safer option, but you can adjust it manually if you need it closer to the function
+   * being called.
+   * @param startDelay An initial extra delay which is used to pick the first step to insert data into
+   * @see startTimerCommandBundle()
+   * @see scheduleTimerCommand(quint, int, int, int, int, const QVariant&)
+   */
+  Q_INVOKABLE void endTimerCommandBundle(quint64 startDelay = 2);
+  /**
    * \brief Schedule a playback command into the playback schedule to be sent with the given delay
    * @note This function will take ownership of the command, and you should expect it to no longer exist after
    * @param delay A delay in number of timer ticks counting from the current position (cumulativeBeat)
@@ -200,7 +223,7 @@ public:
    * @param parameter2 A third integer optionally used by the command's handler to perform its work
    * @param variantParameter A QVariant used by the parameter's handler, if an integer is insufficient
    */
-  Q_INVOKABLE void scheduleTimerCommand(quint64 delay, int operation, int parameter1 = 0, int parameter2 = 0, int parameter3 = 0, const QVariant &variantParameter = QVariant());
+  Q_INVOKABLE void scheduleTimerCommand(quint64 delay, int operation, int parameter1 = 0, int parameter2 = 0, int parameter3 = 0, const QVariant &variantParameter = QVariant(), int parameter4 = 0);
 
   /**
    * \brief Schedule a playback command into the playback schedule to be sent with the given delay
