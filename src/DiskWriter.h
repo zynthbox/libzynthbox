@@ -12,7 +12,7 @@ public:
     explicit DiskWriter();
     ~DiskWriter();
 
-    void startRecording(const QString& fileName, double sampleRate = 44100, int bitRate = 16, int channelCount=DISKWRITER_CHANNEL_COUNT);
+    void startRecording(const QString& fileName, double sampleRate = 44100, int bitRate = 32, int channelCount=DISKWRITER_CHANNEL_COUNT);
 
     // The input data must be an array with the same number of channels as the writer expects (that is, in our general case DISKWRITER_CHANNEL_COUNT)
     void processBlock(const float** inputChannelData, int numSamples) const;
