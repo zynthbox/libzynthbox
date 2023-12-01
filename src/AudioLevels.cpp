@@ -49,6 +49,7 @@ public:
     QVariantList channelsToRecord;
     QVariantList levels;
     QTimer analysisTimer;
+    QTimer isRecordingChangedThrottle;
     jack_client_t* jackClient{nullptr};
     bool initialized{false};
     quint64 startTimestamp{0};
@@ -181,6 +182,9 @@ AudioLevels::AudioLevels(QObject *parent)
                 d->analysisTimer.setInterval(50);
                 connect(&d->analysisTimer, &QTimer::timeout, this, &AudioLevels::timerCallback);
                 d->analysisTimer.start();
+                d->isRecordingChangedThrottle.setInterval(50);
+                d->isRecordingChangedThrottle.setSingleShot(true);
+                connect(&d->isRecordingChangedThrottle, &QTimer::timeout, this, &AudioLevels::isRecordingChanged);
                 d->initialized = true;
             } else {
                 qWarning() << Q_FUNC_INFO << "Failed to activate AudioLevels Jack client with the return code" << result;
@@ -453,6 +457,23 @@ void AudioLevels::scheduleStartRecording(quint64 delay)
     SyncTimer::instance()->scheduleTimerCommand(delay, command);
 }
 
+QString AudioLevels::scheduleChannelRecorderStart(quint64 delay, int sketchpadTrack, const QString& prefix, const QString &suffix)
+{
+    TimerCommand *command = SyncTimer::instance()->getTimerCommand();
+    command->operation = TimerCommand::ChannelRecorderStartOperation;
+    command->parameter = 1;
+    command->parameter2 = sketchpadTrack;
+    const QString timestamp{QDateTime::currentDateTime().toString(Qt::ISODate)};
+    if (prefix.endsWith(suffix)) {
+        // If prefix already ends with `.wav` do not add timestamp and suffix to filename
+        command->variantParameter = prefix;
+    } else {
+        command->variantParameter = QString("%1-%2%3").arg(prefix).arg(timestamp).arg(suffix);
+    }
+    SyncTimer::instance()->scheduleTimerCommand(delay, command);
+    return command->variantParameter.toString();
+}
+
 void AudioLevels::stopRecording(quint64 stopTimestamp)
 {
     if (stopTimestamp > 0) {
@@ -471,6 +492,29 @@ void AudioLevels::scheduleStopRecording(quint64 delay)
     TimerCommand *command = SyncTimer::instance()->getTimerCommand();
     command->operation = TimerCommand::ChannelRecorderStopOperation;
     SyncTimer::instance()->scheduleTimerCommand(delay, command);
+}
+
+void AudioLevels::scheduleChannelRecorderStop(quint64 delay, int sketchpadTrack)
+{
+    TimerCommand* command = SyncTimer::instance()->getTimerCommand();
+    command->operation = TimerCommand::ChannelRecorderStopOperation;
+    command->parameter = 1;
+    command->parameter2 = sketchpadTrack;
+    SyncTimer::instance()->scheduleTimerCommand(delay, command);
+}
+
+void AudioLevels::handleTimerCommand(quint64 timestamp, TimerCommand* command)
+{
+    if (command->operation == TimerCommand::ChannelRecorderStartOperation) {
+        if (command->parameter == 1 && (-1 < command->parameter2 && command->parameter2 < 10)) {
+            d->audioLevelsChannels[command->parameter2 + 3]->startCommandsRing.write(command, timestamp);
+        }
+    } else if (command->operation == TimerCommand::ChannelRecorderStopOperation) {
+        if (command->parameter == 1 && (-1 < command->parameter2 && command->parameter2 < 10)) {
+            d->audioLevelsChannels[command->parameter2 + 3]->lastRecordingFrame = timestamp;
+        }
+    }
+    QMetaObject::invokeMethod(&d->isRecordingChangedThrottle, "start");
 }
 
 QStringList AudioLevels::recordingFilenames() const

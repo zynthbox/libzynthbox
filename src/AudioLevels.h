@@ -20,6 +20,7 @@
 #include <atomic>
 #include <mutex>
 
+struct TimerCommand;
 class AudioLevelsPrivate;
 /**
  * @brief The AudioLevels class provides a way to read audio levels of different ports
@@ -196,6 +197,15 @@ public:
      */
     Q_INVOKABLE void scheduleStartRecording(quint64 delay);
     /**
+     * \brief Schedules a start of the recording process for the given sketchpad track, with the given filename prefix
+     * @param delay The amount of time to wait until starting the recording
+     * @param sketchpadTrack Which sketchpad track to start recording (0 through 9 inclusive, invalid numbers will cause the command to be ignored)
+     * @param prefix The filename prefix for the recording which is asking to be started
+     * @param suffix The file suffix for the recording which is being asked to be started
+     * @return The full filename that will be used for the recording (timestamp will be scheduling time, not recording start time)
+     */
+    Q_INVOKABLE QString scheduleChannelRecorderStart(quint64 delay, int sketchpadTrack, const QString &prefix, const QString &suffix = QString{".wav"});
+    /**
      * \brief Stop any ongoing recordings
      * @param stopTimestamp If set, this will be used in place of the current jack playhead as the stop time for recordings
      */
@@ -206,6 +216,19 @@ public:
      * @see stopRecording()
      */
     Q_INVOKABLE void scheduleStopRecording(quint64 delay);
+    /**
+     * \brief Schedules the recording to stop on the given sketchpad track
+     * @param delay The amount of time to wait until stopping the recording
+     * @param sketchpadTrack The sketchpad track on which to stop recording (0 through 9 inclusive, invalid numbers will cause the command to be ignored)
+     */
+    Q_INVOKABLE void scheduleChannelRecorderStop(quint64 delay, int sketchpadTrack);
+
+    /**
+     * \brief Handle the given timer command
+     * @param timestamp The jack playhead time that the operation should actually happen at
+     * @param command The timer command that requires handling
+     */
+    void handleTimerCommand(quint64 timestamp, TimerCommand *command);
 
     /**
      * \brief Returns a list of filenames for all the recordings (index 0 is global, 1 is the ports recording, 2 through 11 are sketchpad tracks 0 through 9)
