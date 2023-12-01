@@ -1,5 +1,7 @@
 #pragma once
 
+#include "TimerCommand.h"
+
 #include <jack/jack.h>
 #include <QString>
 #include <limits.h>
@@ -28,7 +30,9 @@ public:
     QString clientName;
     quint64 firstRecordingFrame{0};
     quint64 lastRecordingFrame{ULONG_LONG_MAX};
+    TimerCommandRing startCommandsRing;
 private:
     const float** recordingPassthroughBuffer{new const float* [2]};
     DiskWriter *m_diskRecorder{nullptr};
+    inline void doRecordingHandling(jack_nframes_t nframes, jack_nframes_t current_frames, jack_nframes_t next_frames);
 };
