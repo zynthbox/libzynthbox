@@ -28,7 +28,7 @@ public:
     QString name;
     int midiNote{0};
     int sketchpadTrack{-1};
-    bool isPlaying{false};
+    int isPlaying{0};
     QVariantList subnotes;
     int scaleIndex{0};
     int activeChannel{-1};
@@ -99,25 +99,23 @@ int Note::activeChannel() const
 
 void Note::setIsPlaying(const bool &isPlaying, const int &midiChannel)
 {
-    if (isPlaying != d->isPlaying) {
-        d->isPlaying = isPlaying;
-        if (isPlaying == false) {
-            d->activeChannel = -1;
-        } else {
-            d->activeChannel = midiChannel;
-        }
-        QMetaObject::invokeMethod(this, "activeChannelChanged", Qt::QueuedConnection);
-        // This will tend to cause the UI to update while things are trying to happen that
-        // are timing-critical, so let's postpone it for a quick tick
-        // Also, timers don't work cross-threads, and this gets called from a thread,
-        // so... queued metaobject invocation it is
-        QMetaObject::invokeMethod(this, "isPlayingChanged", Qt::QueuedConnection);
+    d->isPlaying = qMax(0, d->isPlaying + (isPlaying ? 1 : -1));
+    if (d->isPlaying == 0) {
+        d->activeChannel = -1;
+    } else {
+        d->activeChannel = midiChannel;
     }
+    QMetaObject::invokeMethod(this, "activeChannelChanged", Qt::QueuedConnection);
+    // This will tend to cause the UI to update while things are trying to happen that
+    // are timing-critical, so let's postpone it for a quick tick
+    // Also, timers don't work cross-threads, and this gets called from a thread,
+    // so... queued metaobject invocation it is
+    QMetaObject::invokeMethod(this, "isPlayingChanged", Qt::QueuedConnection);
 }
 
 bool Note::isPlaying() const
 {
-    return d->isPlaying;
+    return d->isPlaying > 0;
 }
 
 void Note::setSubnotes(const QVariantList& subnotes)
@@ -174,7 +172,9 @@ void Note::setSubnotesOn(const QVariantList &velocities)
 void Note::setOn(int velocity)
 {
     // Don't attempt to set a note to on if it's already, well... on
-    if (d->isPlaying == false && d->activeChannel == -1) {
+    if (d->isPlaying < 1 && d->activeChannel == -1) {
+        d->isPlaying = d->isPlaying + 1;
+        QMetaObject::invokeMethod(this, "isPlayingChanged", Qt::QueuedConnection);
         d->activeChannel = d->syncTimer->nextAvailableChannel(d->sketchpadTrack);
         QMetaObject::invokeMethod(this, "activeChannelChanged", Qt::QueuedConnection);
         if (d->midiNote < 128) {
@@ -193,7 +193,9 @@ void Note::setOff()
 {
     // Don't attempt to set a note to off if it's already, well... off
     // qDebug() << Q_FUNC_INFO << "is playing:" << d->isPlaying << "- active channel:" << d->activeChannel << "- note:" << d->midiNote << " - track:" << d->sketchpadTrack;
-    if (d->isPlaying && d->activeChannel > -1) {
+    if (d->isPlaying > 0 && d->activeChannel > -1) {
+        d->isPlaying = qMax(0, d->isPlaying - 1);
+        QMetaObject::invokeMethod(this, "isPlayingChanged", Qt::QueuedConnection);
         if (d->midiNote < 128) {
             d->syncTimer->sendNoteImmediately(d->midiNote, d->activeChannel, false, 0, d->sketchpadTrack);
         }
