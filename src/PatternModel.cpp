@@ -605,10 +605,10 @@ PatternModel::PatternModel(SequenceModel* parent)
                 Note *note = qobject_cast<Note*>(PlayGridManager::instance()->getNote(clipCommand->midiNote, d->midiChannel));
                 if (note) {
                     if (clipCommand->stopPlayback) {
-                        note->setIsPlaying(false, d->midiChannel);
+                        note->registerOff(d->midiChannel);
                     }
                     if (clipCommand->startPlayback) {
-                        note->setIsPlaying(true, d->midiChannel);
+                        note->registerOn(d->midiChannel);
                     }
                 }
                 break;

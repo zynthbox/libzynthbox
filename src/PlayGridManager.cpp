@@ -303,14 +303,18 @@ public:
                         activeNotesUpdater->start();
                         Note *note = findExistingNote(byte2, sketchpadTrack);
                         if (note) {
-                            note->setIsPlaying(setOn, midiChannel);
+                            if (setOn) {
+                                note->registerOn(midiChannel);
+                            } else {
+                                note->registerOff(midiChannel);
+                            }
                         }
                     } else if (0xAF < byte1 && byte1 < 0xC0) {
                         if (byte2 == 0x7B) {
                             // All Notes Off
                             for (Note *note : qAsConst(notes)) {
                                 if (note->sketchpadTrack() == sketchpadTrack) {
-                                    note->setIsPlaying(false, -1);
+                                    note->resetRegistrations();
                                 }
                             }
                             for (int note = 0; note < 128; ++note) {
@@ -959,12 +963,12 @@ void PlayGridManager::updateNoteState(QVariantMap metadata)
     if (messageType == note_on) {
         Note *note = d->findExistingNote(midiNote, sketchpadTrack);
         if (note) {
-            note->setIsPlaying(true, midiChannel);
+            note->registerOn(midiChannel);
         }
     } else if (messageType == note_off) {
         Note *note = d->findExistingNote(midiNote, sketchpadTrack);
         if (note) {
-            note->setIsPlaying(false, midiChannel);
+            note->registerOff(midiChannel);
         }
     }
     d->mostRecentlyChangedNotes << metadata;

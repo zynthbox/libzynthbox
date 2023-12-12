@@ -56,11 +56,15 @@ public:
 
     /**
      * \brief The midi channel on which the note is active, or -1 when the note is not active
+     * If the note has been activated more than once, this will be the most recent channel
      */
     int activeChannel() const;
     Q_SIGNAL void activeChannelChanged();
 
-    void setIsPlaying(const bool &isPlaying, const int &midiChannel);
+    void resetRegistrations();
+    void registerOn(const int &midiChannel);
+    void registerOff(const int &midiChannel);
+
     bool isPlaying() const;
     Q_SIGNAL void isPlayingChanged();
 
