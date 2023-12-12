@@ -322,6 +322,14 @@ public:
                             }
                             activeNotesUpdater->start();
                         }
+                    } else if (0xDF < byte1 && byte1 < 0xF0) {
+                        const int midiChannel = (byte1 & 0xF);
+                        const int pitch = (byte3 * 128) + byte2;
+                        for (Note *note : qAsConst(notes)) {
+                            if (note->sketchpadTrack() == sketchpadTrack && note->activeChannel() == midiChannel) {
+                                note->registerPitchChange(pitch);
+                            }
+                        }
                     }
                 }
                 break;

@@ -34,6 +34,7 @@ class Note : public QObject
     Q_PROPERTY(int octave READ octave NOTIFY midiNoteChanged)
     Q_PROPERTY(int activeChannel READ activeChannel NOTIFY activeChannelChanged)
     Q_PROPERTY(bool isPlaying READ isPlaying NOTIFY isPlayingChanged)
+    Q_PROPERTY(int pitch READ pitch NOTIFY pitchChanged)
     Q_PROPERTY(QVariantList subnotes READ subnotes WRITE setSubnotes NOTIFY subnotesChanged)
     // This is arbitrary metadata... do we want to keep this?
     Q_PROPERTY(int scaleIndex READ scaleIndex WRITE setScaleIndex NOTIFY scaleIndexChanged)
@@ -79,6 +80,11 @@ public:
     Q_INVOKABLE void setSubnotesOn(const QVariantList &velocities);
     Q_INVOKABLE void setOn(int velocity = 64);
     Q_INVOKABLE void setOff();
+
+    void registerPitchChange(const int &pitch);
+    int pitch() const;
+    Q_SIGNAL void pitchChanged();
+    Q_INVOKABLE void sendPitchChange(const int &pitch);
 private:
     class Private;
     Private* d;

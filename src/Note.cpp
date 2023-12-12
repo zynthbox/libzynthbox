@@ -33,6 +33,7 @@ public:
     int scaleIndex{0};
     int activeChannel{-1};
     int internalOnChannel{-1};
+    int pitch{0};
 
     SyncTimer *syncTimer{nullptr};
 };
@@ -215,4 +216,23 @@ void Note::setOff()
         }
         d->internalOnChannel = -1;
     }
+}
+
+void Note::registerPitchChange(const int& pitch)
+{
+    if (d->pitch != pitch - 8192) {
+        d->pitch = pitch - 8192;
+        Q_EMIT pitchChanged();
+    }
+}
+
+int Note::pitch() const
+{
+    return d->pitch;
+}
+
+void Note::sendPitchChange(const int& pitch)
+{
+    const int adjusted = qBound(0, pitch + 8192, 16383);
+    d->syncTimer->sendMidiMessageImmediately(3, 0xE0 + d->activeChannel,  adjusted & 127, (adjusted >> 7) & 127, d->sketchpadTrack);
 }
