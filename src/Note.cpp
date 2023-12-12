@@ -105,6 +105,7 @@ void Note::resetRegistrations()
     QMetaObject::invokeMethod(this, "isPlayingChanged", Qt::QueuedConnection);
     d->activeChannel = -1;
     QMetaObject::invokeMethod(this, "activeChannelChanged", Qt::QueuedConnection);
+    d->internalOnChannel = -1;
 }
 
 void Note::registerOn(const int& midiChannel)
@@ -174,7 +175,7 @@ void Note::setSubnotesOn(const QVariantList &velocities)
 {
     int i = -1;
     for (const QVariant &note : qAsConst(d->subnotes)) {
-        if (++i >= d->subnotes.count()) {
+        if (++i >= velocities.count()) {
             break;
         }
         Note* subnote = note.value<Note*>();
@@ -203,6 +204,9 @@ void Note::setOff()
 {
     // Don't attempt to set a note to off if we don't have a channel to send the message to
     // qDebug() << Q_FUNC_INFO << "is playing:" << d->isPlaying << "- internal on channel:" << d->internalOnChannel << "- note:" << d->midiNote << " - track:" << d->sketchpadTrack;
+    if (d->internalOnChannel == -1) {
+        d->internalOnChannel = d->activeChannel;
+    }
     if (d->internalOnChannel > -1) {
         registerOff(d->internalOnChannel);
         if (d->midiNote < 128) {
@@ -215,6 +219,8 @@ void Note::setOff()
             }
         }
         d->internalOnChannel = -1;
+    } else {
+        registerOff(d->activeChannel);
     }
 }
 
