@@ -37,6 +37,12 @@ class MidiRouter : public QThread
      * \brief The master channel set by in webconf (that is, our internal-use master channel)
      */
     Q_PROPERTY(int masterChannel READ masterChannel NOTIFY masterChannelsChanged)
+    /**
+     * \brief The amount of the allotted time taken up by the processing loop from 0 through 1
+     *
+     * This is as reported by Jack and updated regularly
+     */
+    Q_PROPERTY(float processingLoad READ processingLoad NOTIFY processingLoadChanged)
 public:
     static MidiRouter* instance() {
         static MidiRouter* instance{nullptr};
@@ -102,6 +108,9 @@ public:
     const QList<int> &masterChannels() const;
     const int &masterChannel() const;
     Q_SIGNAL void masterChannelsChanged();
+
+    float processingLoad() const;
+    Q_SIGNAL void processingLoadChanged();
 
     Q_SIGNAL void addedHardwareDevice(const QString &deviceId, const QString &humanReadableName);
     Q_SIGNAL void removedHardwareDevice(const QString &deviceId, const QString &humanReadableName);

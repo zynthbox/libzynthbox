@@ -205,6 +205,7 @@ public:
     int expressiveSplitPoint{-1};
     int masterChannel{15};
     QList<int> masterChannels;
+    float processingLoad{0.0f};
 
     int currentSketchpadTrack{0};
     jack_client_t* jackClient{nullptr};
@@ -428,6 +429,7 @@ public:
             for (MidiRouterDevice *device : qAsConst(devices)) {
                 device->processEnd();
             }
+            processingLoad = jack_cpu_load(jackClient);
 
 #if ZLROUTER_WATCHDOG
             mostRecentEventsForZynthian = jack_midi_get_event_count(zynthianOutputBuffer);
@@ -745,8 +747,15 @@ void MidiRouter::run() {
                 message = listenerPort->readHead;
             }
         }
+        Q_EMIT processingLoadChanged();
         msleep(5);
     }
+}
+
+float MidiRouter::processingLoad() const
+{
+    // Jack returns a floating-point percent value, but we want it as a 0-1 floating point value
+    return d->processingLoad / 100;
 }
 
 void MidiRouter::markAsDone() {

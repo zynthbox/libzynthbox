@@ -445,7 +445,7 @@ public:
             ClipCommand *command{nullptr};
             if (beat == 0) {
                 // Spit out a touch of useful information on beat zero
-                qDebug() << "Current tracktion/juce CPU usage:" << samplerSynth->engine()->getDeviceManager().getCpuUsage() << "with total jack process call saturation at:" << samplerSynth->cpuLoad();
+                qDebug() << Q_FUNC_INFO << "Current jack process call saturation:" << MidiRouter::instance()->processingLoad();
                 if (audibleMetronome) {
                     command = ClipCommand::globalCommand(metronomeTick);
                 }

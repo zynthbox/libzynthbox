@@ -56,7 +56,6 @@ public:
     SamplerVoicePoolRing *voicePool{nullptr};
     SamplerSynthPrivate* d{nullptr};
     int midiChannel{-1};
-    float cpuLoad{0.0f};
     int modwheelValue{0};
 
     bool enabled{false};
@@ -524,10 +523,6 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                 }
             }
         }
-        // Micro-hackery - -1 is the first item in the list of channels, so might as well just go with that
-        if (midiChannel == -1) {
-            cpuLoad = jack_cpu_load(jackClient);
-        }
     }
     return 0;
 }
@@ -746,14 +741,6 @@ SamplerSynthSound * SamplerSynth::clipToSound(ClipAudioSource* clip) const
         return d->clipSounds[clip];
     }
     return nullptr;
-}
-
-float SamplerSynth::cpuLoad() const
-{
-    if (d->channels.count() == 0) {
-        return 0;
-    }
-    return d->channels[0]->cpuLoad;
 }
 
 void SamplerSynth::handleClipCommand(ClipCommand *clipCommand, quint64 currentTick)

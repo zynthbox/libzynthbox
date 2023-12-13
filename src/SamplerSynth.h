@@ -28,12 +28,6 @@ public:
     void registerClip(ClipAudioSource *clip);
     void unregisterClip(ClipAudioSource *clip);
     SamplerSynthSound *clipToSound(ClipAudioSource *clip) const;
-
-    /**
-     * \brief SamplerSynth's CPU load as estimated by JackD
-     * @return a float, from 0 through 1, describing the current CPU load
-     */
-    float cpuLoad() const;
 protected:
     // Some stuff to ensure SyncTimer can operate with sufficient speed
     void handleClipCommand(ClipCommand* clipCommand, quint64 currentTick);
