@@ -511,13 +511,7 @@ public:
     quint64 jackPlayheadReturn{0};
     quint64 jackSubbeatLengthInMicrosecondsReturn{0};
 
-// Temporarily leaving this behind - this was from when we used to call SyncTimer's process function explicitly from MidiRouter
-//     int process(jack_nframes_t nframes, void *buffer, quint64 *jackPlayheadReturn, quint64 *jackSubbeatLengthInMicrosecondsReturn) {
-// Clear the buffer that MidiRouter gives us, because we want to be sure we've got a blank slate to work with
-
     juce::MidiBuffer missingBitsBufferInstance[ZynthboxTrackCount];
-    // This looks like a Jack process call, but it is in fact called explicitly by MidiRouter for insurance purposes (doing it like
-    // this means we've got tighter control, and we really don't need to pass it through jack anyway)
     int process(jack_nframes_t nframes) {
         // const std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
         void *buffer[ZynthboxTrackCount];
@@ -573,7 +567,18 @@ public:
         int errorCode{0};
         juce::MidiBuffer *missingBitsBuffer[ZynthboxTrackCount];
         for (int track = 0; track < ZynthboxTrackCount; ++track) {
-            missingBitsBuffer[track] = nullptr;
+            missingBitsBuffer[track] = &missingBitsBufferInstance[track];
+            // In case there were any missing events from the last run... we do that first, and then we get onto the rest of the events
+            // This is going to be an extremely rare case, and if it happens there's likely something more substantial wrong, but best safe.
+            if (missingBitsBuffer[track]->isEmpty() == false) {
+                for (const juce::MidiMessageMetadata &juceMessage : qAsConst(*missingBitsBuffer[track])) {
+                    jack_midi_event_write(buffer[track], relativePosition,
+                        const_cast<jack_midi_data_t*>(juceMessage.data), // this might seems odd, but it's really only because juce's internal store is const here, and the data types are otherwise the same
+                        size_t(juceMessage.numBytes) // this changes signedness, but from a lesser space (int) to a larger one (unsigned long)
+                    );
+                }
+                missingBitsBuffer[track]->clear();
+            }
         }
         // As long as the next playback position is before this period is supposed to end, and we have frames for it, let's post some events
         while (stepNextPlaybackPosition < next_usecs && firstAvailableFrame < nframes) {
@@ -582,7 +587,7 @@ public:
             stepReadHead = stepReadHead->next;
             // Counting total steps, for determining delays and the like at a global level
             ++jackCumulativePlayhead;
-            // If the notes are in the past, they need to be scheduled as soon as we can, so just put those on position 0, and if we are here, that means that ending up in the future is a rounding error, so clamp that
+            // If the events are in the past, they need to be scheduled as soon as we can, so just put those on position 0, and if we are here, that means that ending up in the future is a rounding error, so clamp that
             if (stepNextPlaybackPosition <= current_usecs) {
                 relativePosition = firstAvailableFrame;
                 ++firstAvailableFrame;
@@ -596,6 +601,7 @@ public:
             if (jackMidiBeatTick == TicksPerMidiBeatClock) {
                 jackMidiBeatTick = 0;
             }
+
             // In case we're cycling through stuff we've already played, let's just... not do anything with that
             // Basically that just means nobody else has attempted to do stuff with the step since we last played it
             if (!stepData->played) {
@@ -607,7 +613,7 @@ public:
                     }
                     for (const juce::MidiMessageMetadata &juceMessage : qAsConst(stepData->trackBuffer[track])) {
                         if (firstAvailableFrame >= nframes) {
-                            qWarning() << "First available frame is in the future - that's a problem";
+                            qWarning() << Q_FUNC_INFO << "First available frame is in the future - that's a problem";
                             break;
                         }
                         errorCode = jack_midi_event_write(buffer[track], relativePosition,
@@ -615,10 +621,7 @@ public:
                             size_t(juceMessage.numBytes) // this changes signedness, but from a lesser space (int) to a larger one (unsigned long)
                         );
                         if (errorCode == ENOBUFS) {
-                            qWarning() << "Ran out of space while writing events - scheduling the event there's not enough space for to be fired first next round";
-                            if (!missingBitsBuffer[track]) {
-                                missingBitsBuffer[track] = &missingBitsBufferInstance[track];
-                            }
+                            qWarning() << Q_FUNC_INFO << "Ran out of space while writing events - scheduling the event there's not enough space for to be fired first next round";
                             // Schedule the rest of the buffer for immediate dispatch on next go-around
                             missingBitsBuffer[track]->addEvent(juceMessage.getMessage(), 0);
                         } else {
@@ -742,12 +745,9 @@ public:
                                     }
                                     errorCode = jack_midi_event_write(buffer[command->parameter], relativePosition, message, size);
                                     if (errorCode == ENOBUFS) {
-                                        qWarning() << "Ran out of space while writing events - scheduling the event there's not enough space for to be fired first next round";
-                                        if (!missingBitsBuffer[command->parameter]) {
-                                            missingBitsBuffer[command->parameter] = &missingBitsBufferInstance[command->parameter];
-                                        }
+                                        qWarning() << Q_FUNC_INFO << "Ran out of space while writing events - scheduling the event there's not enough space for to be fired first next round";
                                         // Schedule the rest of the buffer for immediate dispatch on next go-around
-                                        missingBitsBuffer[command->parameter]->addEvent(message, size, 0);
+                                        missingBitsBuffer[command->parameter]->addEvent(message, int(size), 0);
                                     } else {
                                         if (errorCode != 0) {
                                             qWarning() << Q_FUNC_INFO << "Error writing midi event:" << -errorCode << strerror(-errorCode);
@@ -806,16 +806,6 @@ public:
         updatedJackBeatsPerMinute += jackPlayheadBpm * double(currentStepUsecsEnd - currentStepUsecsStart) / period_usecs;
         jackBeatsPerMinute = std::round(updatedJackBeatsPerMinute * 100.0) / 100.0; // Round to within the nearest two decimal points - otherwise we run into precision issues
         // qDebug() << Q_FUNC_INFO << "Final updated jack beats per minute:" << jackBeatsPerMinute;
-        // If we've had anything added to the buffer for missing bits, make sure we append that for next time 'round.
-        // As a note, this is most likely to be an extremely rare situation (that's kind of a lot of events), but just
-        // in case, it's good to cover this base.
-        for (int track = 0; track < ZynthboxTrackCount; ++track) {
-            if (missingBitsBuffer[track]) {
-                q->sendMidiBufferImmediately(*missingBitsBuffer[track]);
-                missingBitsBuffer[track]->clear();
-                missingBitsBuffer[track] = nullptr;
-            }
-        }
 #ifdef DEBUG_SYNCTIMER_JACK
         if (eventCount > 0) {
             for (int track = 0; track < ZynthboxTrackCount; ++track) {
@@ -823,9 +813,9 @@ public:
                     qDebug() << "Lost some notes:" << lost;
                 }
             }
-            qDebug() << "We advanced jack playback by" << stepCount << "steps, and are now at position" << jackPlayhead << "and we filled up jack with" << eventCount << "events" << nframes << jackSubbeatLengthInMicroseconds << frameSteps << framePositions << commandValues << noteValues << velocities;
+            qDebug() << Q_FUNC_INFO << "We advanced jack playback by" << stepCount << "steps, and are now at position" << jackPlayhead << "and we filled up jack with" << eventCount << "events" << nframes << jackSubbeatLengthInMicroseconds << frameSteps << framePositions << commandValues << noteValues << velocities;
         } else {
-            qDebug() << "We advanced jack playback by" << stepCount << "steps, and are now at position" << jackPlayhead << "and scheduled no notes";
+            qDebug() << Q_FUNC_INFO << "We advanced jack playback by" << stepCount << "steps, and are now at position" << jackPlayhead << "and scheduled no notes";
         }
 #endif
         // const std::chrono::duration<double, std::milli> ms_double = std::chrono::high_resolution_clock::now() - t1;
@@ -1480,7 +1470,8 @@ void SyncTimer::scheduleMidiBuffer(const juce::MidiBuffer& buffer, quint64 delay
 
 void SyncTimer::sendNoteImmediately(unsigned char midiNote, unsigned char midiChannel, bool setOn, unsigned char velocity, int sketchpadTrack)
 {
-    StepData *stepData{d->delayedStep(0)};
+    StepData *stepData{d->stepReadHead};
+    stepData->ensureFresh();
     if (setOn) {
         stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage::noteOn(midiChannel + 1, midiNote, juce::uint8(velocity))), d->sketchpadTrack(sketchpadTrack));
     } else {
@@ -1490,7 +1481,8 @@ void SyncTimer::sendNoteImmediately(unsigned char midiNote, unsigned char midiCh
 
 void SyncTimer::sendMidiMessageImmediately(int size, int byte0, int byte1, int byte2, int sketchpadTrack)
 {
-    StepData *stepData{d->delayedStep(0)};
+    StepData *stepData{d->stepReadHead};
+    stepData->ensureFresh();
     if (size ==1) {
         stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage(byte0)), d->sketchpadTrack(sketchpadTrack));
     } else if (size == 2) {
