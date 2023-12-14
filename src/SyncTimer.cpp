@@ -393,11 +393,12 @@ public:
      * \brief Get the ring buffer position based on the given delay from the current playback position (cumulativeBeat if playing, or stepReadHead if not playing)
      * @param delay The delay of the position to use
      * @param ensureFresh Set this to false to disable the freshness insurance
+     * @param ignorePlaybackState Set this to true to ignore whether or not playback is ongoing (usually done for sending things with zero delay, and just very immediately)
      * @return The stepRing position to use for the given delay
      */
-    inline StepData* delayedStep(quint64 delay, bool ensureFresh = true) {
+    inline StepData* delayedStep(quint64 delay, bool ensureFresh = true, bool ignorePlaybackState = false) {
         quint64 step{0};
-        if (isPaused) {
+        if (ignorePlaybackState || isPaused) {
             // If paused, base the delay on the current stepReadHead
             step = (stepReadHead->index + delay) % StepRingCount;
         } else {
@@ -1468,8 +1469,7 @@ void SyncTimer::scheduleMidiBuffer(const juce::MidiBuffer& buffer, quint64 delay
 
 void SyncTimer::sendNoteImmediately(unsigned char midiNote, unsigned char midiChannel, bool setOn, unsigned char velocity, int sketchpadTrack)
 {
-    StepData *stepData{d->stepReadHead};
-    stepData->ensureFresh();
+    StepData *stepData{d->delayedStep(0, true, true)};
     if (setOn) {
         stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage::noteOn(midiChannel + 1, midiNote, juce::uint8(velocity))), d->sketchpadTrack(sketchpadTrack));
     } else {
@@ -1479,8 +1479,7 @@ void SyncTimer::sendNoteImmediately(unsigned char midiNote, unsigned char midiCh
 
 void SyncTimer::sendMidiMessageImmediately(int size, int byte0, int byte1, int byte2, int sketchpadTrack)
 {
-    StepData *stepData{d->stepReadHead};
-    stepData->ensureFresh();
+    StepData *stepData{d->delayedStep(0, true, true)};
     if (size ==1) {
         stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage(byte0)), d->sketchpadTrack(sketchpadTrack));
     } else if (size == 2) {
@@ -1504,7 +1503,7 @@ void SyncTimer::sendCCMessageImmediately(int midiChannel, int control, int value
 
 void SyncTimer::sendMidiBufferImmediately(const juce::MidiBuffer& buffer, int sketchpadTrack)
 {
-    StepData *stepData{d->delayedStep(0)};
+    StepData *stepData{d->delayedStep(0, true, true)};
     stepData->insertMidiBuffer(buffer, d->sketchpadTrack(sketchpadTrack));
 }
 
