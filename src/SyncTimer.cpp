@@ -511,7 +511,7 @@ public:
     quint64 jackPlayheadReturn{0};
     quint64 jackSubbeatLengthInMicrosecondsReturn{0};
 
-    juce::MidiBuffer missingBitsBufferInstance[ZynthboxTrackCount];
+    juce::MidiBuffer missingBitsBuffer[ZynthboxTrackCount];
     int process(jack_nframes_t nframes) {
         // const std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
         void *buffer[ZynthboxTrackCount];
@@ -565,19 +565,17 @@ public:
         jack_nframes_t firstAvailableFrame{0};
         jack_nframes_t relativePosition{0};
         int errorCode{0};
-        juce::MidiBuffer *missingBitsBuffer[ZynthboxTrackCount];
         for (int track = 0; track < ZynthboxTrackCount; ++track) {
-            missingBitsBuffer[track] = &missingBitsBufferInstance[track];
             // In case there were any missing events from the last run... we do that first, and then we get onto the rest of the events
             // This is going to be an extremely rare case, and if it happens there's likely something more substantial wrong, but best safe.
-            if (missingBitsBuffer[track]->isEmpty() == false) {
-                for (const juce::MidiMessageMetadata &juceMessage : qAsConst(*missingBitsBuffer[track])) {
+            if (missingBitsBuffer[track].isEmpty() == false) {
+                for (const juce::MidiMessageMetadata &juceMessage : qAsConst(missingBitsBuffer[track])) {
                     jack_midi_event_write(buffer[track], relativePosition,
                         const_cast<jack_midi_data_t*>(juceMessage.data), // this might seems odd, but it's really only because juce's internal store is const here, and the data types are otherwise the same
                         size_t(juceMessage.numBytes) // this changes signedness, but from a lesser space (int) to a larger one (unsigned long)
                     );
                 }
-                missingBitsBuffer[track]->clear();
+                missingBitsBuffer[track].clear();
             }
         }
         // As long as the next playback position is before this period is supposed to end, and we have frames for it, let's post some events
@@ -623,7 +621,7 @@ public:
                         if (errorCode == ENOBUFS) {
                             qWarning() << Q_FUNC_INFO << "Ran out of space while writing events - scheduling the event there's not enough space for to be fired first next round";
                             // Schedule the rest of the buffer for immediate dispatch on next go-around
-                            missingBitsBuffer[track]->addEvent(juceMessage.getMessage(), 0);
+                            missingBitsBuffer[track].addEvent(juceMessage.getMessage(), 0);
                         } else {
                             if (errorCode != 0) {
                                 qWarning() << Q_FUNC_INFO << "Error writing midi event:" << -errorCode << strerror(-errorCode);
@@ -747,7 +745,7 @@ public:
                                     if (errorCode == ENOBUFS) {
                                         qWarning() << Q_FUNC_INFO << "Ran out of space while writing events - scheduling the event there's not enough space for to be fired first next round";
                                         // Schedule the rest of the buffer for immediate dispatch on next go-around
-                                        missingBitsBuffer[command->parameter]->addEvent(message, int(size), 0);
+                                        missingBitsBuffer[command->parameter].addEvent(message, int(size), 0);
                                     } else {
                                         if (errorCode != 0) {
                                             qWarning() << Q_FUNC_INFO << "Error writing midi event:" << -errorCode << strerror(-errorCode);
