@@ -208,12 +208,13 @@ void Plugin::initialize()
             m_channelPassthroughClients << client;
         }
     }
-    // Create 10 FX Passthrough client for 10 channels having 5 lanes each for each fx slot in a channel
+    // Create FX Passthrough clients for the 5 lanes, with 10 tracks each, for each fx slot in a channel
+    // The lanes have individual clients, ensuring we can avoid loops when routing the sketchpad track' slots in serial mode
     qDebug() << "Creating FX Passthrough Client";
     for (int channelNumber = 0; channelNumber < 10; ++channelNumber) {
         QList<JackPassthrough*> lanes;
         for (int laneNumber = 0; laneNumber < 5; ++laneNumber) {
-            JackPassthrough* fxPassthrough = new JackPassthrough(QString("FXPassthrough:Channel%1-lane%2").arg(channelNumber+1).arg(laneNumber+1), QCoreApplication::instance(), true, true, false);
+            JackPassthrough* fxPassthrough = new JackPassthrough(QString("FXPassthrough-lane%1:Channel%2").arg(laneNumber+1).arg(channelNumber+1), QCoreApplication::instance(), true, true, false);
             fxPassthrough->setDryWetMixAmount(1.0f);
             lanes << fxPassthrough;
         }
