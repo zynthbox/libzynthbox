@@ -116,12 +116,14 @@ public:
         if (command->dataParameter == nullptr) {
             // Since the clip command is swallowed each time, we'll need to reset it
             ClipCommand* clipCommand = syncTimer->getClipCommand();
-            clipCommand->startPlayback = (command->operation == TimerCommand::StartClipLoopOperation); // otherwise, if statement above ensures it's a stop clip loop operation
+            clipCommand->startPlayback = (command->operation == TimerCommand::StartClipLoopOperation); // otherwise, the inversion below ensures it's a stop clip loop operation, and this function requires either a start or stop operation
             clipCommand->stopPlayback = !clipCommand->startPlayback;
             clipCommand->midiChannel = command->parameter;
             clipCommand->clip = Plugin::instance()->getClipById(command->parameter2);
             clipCommand->midiNote = command->parameter3;
-            clipCommand->volume = clipCommand->clip->volumeAbsolute();
+            clipCommand->changeVolume = true;
+            clipCommand->volume = 1.0; // this matches how the ClipAudioSource::Play function works
+            clipCommand->changeLooping = true;
             clipCommand->looping = true;
             command->operation = TimerCommand::ClipCommandOperation;
             command->dataParameter = clipCommand;
