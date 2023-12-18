@@ -429,8 +429,8 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
         if (d->clip) {
             const float clipPitchChange = d->clipCommand->changePitch ? d->clipCommand->pitchChange : 1.0f;
             const float clipVolume = d->clip->volumeAbsolute() * d->clip->getGain();
-            const float lPan = 0.5 * (1.0 + d->playbackData.pan);
-            const float rPan = 0.5 * (1.0 - d->playbackData.pan);
+            const float lPan = 2 * (1.0 + d->playbackData.pan); // Used for m/s panning, to ensure the signal is proper, we need to multiply it by 2 eventually, so might as well pre-do that calculation here
+            const float rPan = 2 * (1.0 - d->playbackData.pan); // Used for m/s panning, to ensure the signal is proper, we need to multiply it by 2 eventually, so might as well pre-do that calculation here
 
             const float envelopeValue = d->adsr.getNextSample();
             float l{0};
