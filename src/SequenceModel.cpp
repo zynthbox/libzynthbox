@@ -24,6 +24,7 @@
 #include "PatternModel.h"
 #include "SegmentHandler.h"
 #include "SyncTimer.h"
+#include "ZynthboxBasics.h"
 
 #include <QCollator>
 #include <QDebug>
@@ -36,10 +37,9 @@
 #include <QRegularExpression>
 #include <QTimer>
 
-#define CHANNEL_COUNT 10
-#define PART_COUNT 5
-#define PATTERN_COUNT (CHANNEL_COUNT * PART_COUNT)
-static const QStringList trackNames{"T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10"};
+#define ZynthboxPartCount 5
+#define PATTERN_COUNT (ZynthboxTrackCount * ZynthboxPartCount)
+static const QStringList globalSequenceNames{"global", "global2", "global3", "global4", "global5", "global6", "global7", "global8", "global9", "global10"};
 static const QStringList partNames{"a", "b", "c", "d", "e"};
 
 class ZLSequenceSynchronisationManager : public QObject {
@@ -403,7 +403,7 @@ void SequenceModel::setActivePattern(int activePattern)
 
 void SequenceModel::setActiveChannel(int channelId, int partId)
 {
-    setActivePattern((channelId * PART_COUNT) + partId);
+    setActivePattern((channelId * ZynthboxPartCount) + partId);
 }
 
 int SequenceModel::activePattern() const
@@ -505,53 +505,57 @@ void SequenceModel::load(const QString &fileName)
             file.close();
         }
     }
-    const QString trackName{trackNames.contains(objectName()) ? objectName() : ""};
+    const QString sequenceName{globalSequenceNames.contains(objectName()) ? objectName() : ""};
     QJsonDocument jsonDoc = QJsonDocument::fromJson(data.toUtf8());
     if (jsonDoc.isObject()) {
         // First, load the patterns from disk
         QDir dir(QString("%1/patterns").arg(d->filePath.left(d->filePath.lastIndexOf("/"))));
         QFileInfoList entries = dir.entryInfoList({"*.pattern.json"}, QDir::Files, QDir::NoSort);
+        if (entries.count() == 1) {
+            d->playGridManager->taskMessage(QString("Loading 1 pattern"));
+        } else if (entries.count() > 1) {
+            d->playGridManager->taskMessage(QString("Loading %1 patterns").arg(entries.count()));
+        }
         QCollator collator;
         collator.setNumericMode(true);
         std::sort(entries.begin(), entries.end(), [&](const QFileInfo &file1, const QFileInfo &file2){ return collator.compare(file1.absoluteFilePath(), file2.absoluteFilePath()) < 0; });
         // Now we have a list of all the entries in the patterns directory that has the pattern
         // file suffix, sorted naturally (so 10 is at the end, not after 1, which is just silly)
         int actualIndex{0};
-        // The filename for patterns is "pattern-t(trackIndex)-ch(channelIndex)-part(partLetter).pattern.json"
-        // where trackIndex is a number from 1 through 10, channelIndex is a number from 1 through 10, and partName is a single lower-case letter
-        QRegularExpression patternFilenameRegexp("pattern-t(\\d\\d?)-ch(\\d\\d?)-part([a-z])\\.pattern\\.json");
+        // The filename for patterns is "part(trackIndex)(partLetter).pattern.json"
+        // where trackIndex is a number from 1 through 10, and partName is a single lower-case letter
+        QRegularExpression patternFilenameRegexp("part(\\d\\d?)([a-z])");
         for (const QFileInfo &entry : entries) {
             // The filename for patterns is "sequencename-(channelIndex)(partName).pattern.json"
             const QString absolutePath{entry.absoluteFilePath()};
             QRegularExpressionMatch match = patternFilenameRegexp.match(entry.fileName());
             if (!match.hasMatch()) {
-                qWarning() << Q_FUNC_INFO << "This file is not recognised as a pattern file, skipping:" << entry.fileName();
+                qWarning() << Q_FUNC_INFO << "This file is not recognised as a pattern file, skipping (is this an old-style filename? In that case, you can restore it by renaming it to part#n.pattern.json to match the name of the clip it is in):" << entry.fileName();
                 continue;
             }
             const int trackIndex{match.captured(1).toInt() - 1};
-            const int channelIndex{match.captured(2).toInt() - 1};
-            const QString partName{match.captured(3)};
+            const QString partName{match.captured(2)};
             const int partIndex = partNames.indexOf(partName);
             Q_UNUSED(trackIndex)
-//             qDebug() << "Loading pattern track" << trackIndex + 1 << "channel" << channelIndex + 1 << "part" << partName << "for sequence" << this << "from file" << absolutePath;
-            while (actualIndex < (channelIndex * PART_COUNT) + partIndex) {
+//             qDebug() << "Loading pattern track" << trackIndex + 1 << "part" << partName << "for sequence" << this << "from file" << absolutePath;
+            while (actualIndex < (trackIndex * ZynthboxPartCount) + partIndex) {
                 // then we're missing some patterns, which is not great and we should deal with that so we don't end up with holes in the model...
-                const int intermediaryChannelIndex = actualIndex / PART_COUNT;
-                const QString &intermediaryPartName = partNames[actualIndex - (intermediaryChannelIndex * PART_COUNT)];
-                PatternModel *model = qobject_cast<PatternModel*>(playGridManager()->getPatternModel(QString("%1-%2%3").arg(trackName).arg(QString::number(intermediaryChannelIndex + 1)).arg(intermediaryPartName), this));
+                const int intermediaryTrackIndex = actualIndex / ZynthboxPartCount;
+                const QString &intermediaryPartName = partNames[actualIndex - (intermediaryTrackIndex * ZynthboxPartCount)];
+                PatternModel *model = qobject_cast<PatternModel*>(playGridManager()->getPatternModel(QString("%1-%2%3").arg(sequenceName).arg(QString::number(intermediaryTrackIndex + 1)).arg(intermediaryPartName), this));
                 model->startLongOperation();
                 model->resetPattern(true);
-                model->setChannelIndex(intermediaryChannelIndex);
-                model->setPartIndex(actualIndex % PART_COUNT);
+                model->setChannelIndex(intermediaryTrackIndex);
+                model->setPartIndex(actualIndex % ZynthboxPartCount);
                 insertPattern(model);
                 model->endLongOperation();
 //                 qWarning() << "Sequence missing patterns prior to that, added:" << model;
                 ++actualIndex;
             }
-            PatternModel *model = qobject_cast<PatternModel*>(playGridManager()->getPatternModel(QString("%1-%2%3").arg(trackName).arg(QString::number(channelIndex + 1)).arg(partName), this));
+            PatternModel *model = qobject_cast<PatternModel*>(playGridManager()->getPatternModel(QString("%1-%2%3").arg(sequenceName).arg(QString::number(trackIndex + 1)).arg(partName), this));
             model->startLongOperation();
             model->resetPattern(true);
-            model->setChannelIndex(channelIndex);
+            model->setChannelIndex(trackIndex);
             model->setPartIndex(partIndex);
             insertPattern(model);
             if (entry.exists()) {
@@ -575,13 +579,13 @@ void SequenceModel::load(const QString &fileName)
     // This ensures that when we're first creating ourselves a sequence, we end up with some models in it
     if (d->patternModels.count() < PATTERN_COUNT) {
         for (int i = d->patternModels.count(); i < PATTERN_COUNT; ++i) {
-            const int intermediaryChannelIndex = i / PART_COUNT;
-            const QString &intermediaryPartName = partNames[i % PART_COUNT];
-            PatternModel *model = qobject_cast<PatternModel*>(playGridManager()->getPatternModel(QString("%1-%2%3").arg(trackName).arg(QString::number(intermediaryChannelIndex + 1)).arg(intermediaryPartName), this));
+            const int intermediaryChannelIndex = i / ZynthboxPartCount;
+            const QString &intermediaryPartName = partNames[i % ZynthboxPartCount];
+            PatternModel *model = qobject_cast<PatternModel*>(playGridManager()->getPatternModel(QString("%1-%2%3").arg(sequenceName).arg(QString::number(intermediaryChannelIndex + 1)).arg(intermediaryPartName), this));
             model->startLongOperation();
             model->resetPattern(true);
             model->setChannelIndex(intermediaryChannelIndex);
-            model->setPartIndex(i % PART_COUNT);
+            model->setPartIndex(i % ZynthboxPartCount);
             insertPattern(model);
             model->endLongOperation();
 //             qDebug() << "Added missing model" << intermediaryChannelIndex << intermediaryPartName << "to" << objectName() << model->channelIndex() << model->partIndex();
@@ -599,7 +603,9 @@ void SequenceModel::load(const QString &fileName)
     }
     Q_EMIT isLoadingChanged();
     Q_EMIT countChanged();
-    qDebug() << this << "Loaded" << loadedPatternCount << "patterns and filled in" << PATTERN_COUNT - loadedPatternCount << "in" << elapsedTimer.elapsed() << "milliseconds";
+    if (loadedPatternCount > 0 || objectName() == QLatin1String("global")) {
+        qDebug() << this << "Loaded" << loadedPatternCount << "patterns and filled in" << PATTERN_COUNT - loadedPatternCount << "in" << elapsedTimer.elapsed() << "milliseconds";
+    }
 }
 
 bool SequenceModel::save(const QString &fileName, bool exportOnly)
@@ -628,23 +634,28 @@ bool SequenceModel::save(const QString &fileName, bool exportOnly)
         if (dataFile.open(QIODevice::WriteOnly) && dataFile.write(data.toUtf8())) {
             dataFile.close();
             if (patternLocation.exists() || patternLocation.mkpath(patternLocation.path())) {
-                // The filename for patterns is "pattern-t(trackIndex)-ch(channelIndex)-part(partLetter).pattern.json"
-                const QString sequenceNameForFiles = QString(objectName().toLower()).replace(" ", "-");
+                bool hasAnyPattern{false};
+                // The filename for patterns is "part(trackIndex)(partLetter).pattern.json"
                 for (int i = 0; i < PATTERN_COUNT; ++i) {
                     PatternModel *pattern = d->patternModelIterator[i];
                     if (pattern) {
                         QString patternIdentifier = QString::number(i + 1);
                         if (pattern->channelIndex() > -1 && pattern->partIndex() > -1) {
-                            patternIdentifier = QString("ch%1-part%2").arg(QString::number(pattern->channelIndex() + 1)).arg(partNames[pattern->partIndex()]);
+                            patternIdentifier = QString("%1%2").arg(QString::number(pattern->channelIndex() + 1)).arg(partNames[pattern->partIndex()]);
                         }
-                        QString fileName = QString("%1/pattern-%2-%3.pattern.json").arg(patternLocation.path()).arg(sequenceNameForFiles).arg(patternIdentifier);
+                        QString fileName = QString("%1/part%2.pattern.json").arg(patternLocation.path()).arg(patternIdentifier);
                         QFile patternFile(fileName);
                         if (pattern->hasNotes()) {
                             pattern->exportToFile(fileName);
+                            hasAnyPattern = true;
                         } else if (patternFile.exists()) {
                             patternFile.remove();
                         }
                     }
+                }
+                if (hasAnyPattern == false) {
+                    // If we've not got any patterns, get rid of the container folder again, keep things nice and lean and clean
+                    sequenceLocation.removeRecursively();
                 }
             }
             success = true;
@@ -680,7 +691,6 @@ QObject* SequenceModel::song() const
 void SequenceModel::setSong(QObject* song)
 {
     if (d->song != song) {
-        d->playGridManager->taskMessage(QString("Loading patterns for %1").arg(objectName()));
         if (d->song) {
             d->song->disconnect(this);
         }
@@ -693,7 +703,17 @@ void SequenceModel::setSong(QObject* song)
         load();
         Q_EMIT songChanged();
         d->zlSyncManager->setZlSong(song);
-        d->playGridManager->taskMessage(QString("Done loading patterns for %1").arg(objectName()));
+        int patternsWithNotes{0};
+        for (int patternIndex = 0; patternIndex < PATTERN_COUNT; ++patternIndex) {
+            if (d->patternModelIterator[patternIndex]->hasNotes()) {
+                ++patternsWithNotes;
+            }
+        }
+        if (patternsWithNotes == 1) {
+            d->playGridManager->taskMessage(QString("Loaded %1 pattern").arg(patternsWithNotes));
+        } else if (patternsWithNotes > 1) {
+            d->playGridManager->taskMessage(QString("Loaded %1 patterns").arg(patternsWithNotes));
+        }
     }
 }
 
