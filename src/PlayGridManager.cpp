@@ -572,7 +572,7 @@ void PlayGridManager::setPreferredSequencer(const QString& playgridID)
 
 QObject* PlayGridManager::getSequenceModel(const QString& name, bool loadPatterns)
 {
-    SequenceModel *model = d->sequenceModels.value(name.isEmpty() ? QLatin1String("Global") : name);
+    SequenceModel *model = d->sequenceModels.value(name.isEmpty() ? QLatin1String("global") : name);
     if (!model) {
         model = new SequenceModel(this);
         model->setObjectName(name);
@@ -586,6 +586,15 @@ QObject* PlayGridManager::getSequenceModel(const QString& name, bool loadPattern
         }
     }
     return model;
+}
+
+QObjectList PlayGridManager::getSequenceModels() const
+{
+    QObjectList sequenceModels;
+    for (SequenceModel *model : qAsConst(d->sequenceModels)) {
+        sequenceModels << model;
+    }
+    return sequenceModels;
 }
 
 QObject* PlayGridManager::getPatternModel(const QString&name, SequenceModel *sequence)

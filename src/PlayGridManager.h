@@ -47,7 +47,7 @@ class PlayGridManager : public QObject
      * \code{.js}
         zynthian.current_modal_screen_id = "playgrid";
         ZynQuick.PlayGridManager.setCurrentPlaygrid("playgrid", ZynQuick.PlayGridManager.sequenceEditorIndex);
-        var sequence = ZynQuick.PlayGridManager.getSequenceModel("Global");
+        var sequence = ZynQuick.PlayGridManager.getSequenceModel("global");
         sequence.activePattern = indexOfYourSelectedPattern;
      * \endcode
      *
@@ -159,6 +159,14 @@ public:
      */
     Q_INVOKABLE QObject* getSequenceModel(const QString &name, bool loadPatterns = true);
     /**
+     * \brief Get all previously created sequence models
+     *
+     * Use this function to fetch all the instances of SequenceModel which have been created
+     * by previously calling getSequenceModel(const QString&, bool loadPatterns).
+     * @return A list of sequenceModel instances
+     */
+    Q_INVOKABLE QObjectList getSequenceModels() const;
+    /**
      * \brief Returns a model suitable for use as a pattern
      *
      * Use this function to fetch a named model, which will persist for the duration of the application
@@ -169,7 +177,7 @@ public:
      *
      * @note This will return the global pattern with the given name. If you need a playgrid-local one, see PlayGrid::getPattern
      * @param patternName The name of the pattern
-     * @param sequenceName The name of the sequence the pattern is associated with (pass an empty string or "Global" for the global sequence, see getSequenceModel)
+     * @param sequenceName The name of the sequence the pattern is associated with (pass an empty string or "global" for the first global sequence, see getSequenceModel)
      * @return The pattern with the given name
      */
     Q_INVOKABLE QObject* getPatternModel(const QString &name, const QString& sequenceName);
