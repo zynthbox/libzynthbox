@@ -843,8 +843,9 @@ public:
             } else {
                 qDebug() << Q_FUNC_INFO << "Starting metronome and playback";
                 PlayGridManager *pgm = PlayGridManager::instance();
-                for (int i = 1; i < 11; ++i) {
-                    SequenceModel* sequence = qobject_cast<SequenceModel*>(pgm->getSequenceModel(QString("T%1").arg(i)));
+                const QObjectList sequenceModels{pgm->getSequenceModels()};
+                for (QObject *object : qAsConst(sequenceModels)) {
+                    SequenceModel *sequence{qobject_cast<SequenceModel*>(object)};
                     if (sequence) {
                         sequence->prepareSequencePlayback();
                     } else {
@@ -881,8 +882,9 @@ public:
                 qDebug() << Q_FUNC_INFO << "Stopped metronome and playback in song mode";
             } else {
                 qDebug() << Q_FUNC_INFO << "Stopping metronome and playback";
-                for (int i = 1; i < 11; ++i) {
-                    SequenceModel* sequence = qobject_cast<SequenceModel*>(pgm->getSequenceModel(QString("T%1").arg(i)));
+                const QObjectList sequenceModels{pgm->getSequenceModels()};
+                for (QObject *object : qAsConst(sequenceModels)) {
+                    SequenceModel *sequence{qobject_cast<SequenceModel*>(object)};
                     if (sequence) {
                         sequence->stopSequencePlayback();
                     } else {

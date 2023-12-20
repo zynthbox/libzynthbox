@@ -326,12 +326,13 @@ public Q_SLOTS:
         setZLSelectedSketch(sketch);
     }
     void fetchSequenceModels() {
-        for (int i = 1; i < 11; ++i) {
-            SequenceModel *sequence = qobject_cast<SequenceModel*>(d->playGridManager->getSequenceModel(QString("T%1").arg(i)));
+        const QObjectList sequenceModels{d->playGridManager->getSequenceModels()};
+        for (QObject *object : qAsConst(sequenceModels)) {
+            SequenceModel *sequence{qobject_cast<SequenceModel*>(object)};
             if (sequence) {
                 d->sequenceModels << sequence;
             } else {
-                qWarning() << Q_FUNC_INFO << "Sequence" << i << "could not be fetched, and will be unavailable for playback management";
+                qWarning() << Q_FUNC_INFO << "Sequence in object" << object << "was apparently not a SequenceModel, and will be unavailable for playback management";
             }
         }
     }
@@ -539,12 +540,13 @@ void SegmentHandler::startPlayback(qint64 startOffset, quint64 duration)
             d->syncTimer->scheduleTimerCommand(duration, stopCommand);
         }
         // Hook up the global sequences to playback
-        for (int i = 1; i < 11; ++i) {
-            SequenceModel *sequence = qobject_cast<SequenceModel*>(d->playGridManager->getSequenceModel(QString("T%1").arg(i)));
+        const QObjectList sequenceModels{d->playGridManager->getSequenceModels()};
+        for (QObject *object : qAsConst(sequenceModels)) {
+            SequenceModel *sequence{qobject_cast<SequenceModel*>(object)};
             if (sequence) {
                 sequence->prepareSequencePlayback();
             } else {
-                qDebug() << Q_FUNC_INFO << "Sequence" << i << "could not be fetched, and playback could not be prepared";
+                qDebug() << Q_FUNC_INFO << "Sequence in object" << object << "was apparently not a SequenceModel, and playback could not be prepared";
             }
         }
         d->playGridManager->hookUpTimer();
