@@ -355,11 +355,17 @@ public Q_SLOTS:
                     qDebug() << Q_FUNC_INFO <<  "Working on segment at index" << segmentIndex;
                     QList<TimerCommand*> commands;
                     QVariantList clips = segment->property("clips").toList();
+                    const QVariantList restartClipsData = segment->property("restartClips").toList();
+                    QList<QObject*> restartClips;
+                    for (const QVariant &clip : qAsConst(restartClipsData)) {
+                        restartClips << clip.value<QObject*>();
+                    }
                     QList<QObject*> includedClips;
                     for (const QVariant &variantClip : clips) {
                         QObject *clip = variantClip.value<QObject*>();
                         includedClips << clip;
-                        const bool shouldResetPlaybackposition{!clipsInPrevious.contains(clip)}; // This is currently always true for "not in previous segment", but likely we'll want to be able to explicitly do this as well (perhaps with an explicit offset even)
+                        // Set the playback offset if: Either we explicitly get asked to restart the clip, Or the clip wasn't in the previous segment
+                        const bool shouldResetPlaybackposition{restartClips.contains(clip) || !clipsInPrevious.contains(clip)};
                         if (shouldResetPlaybackposition || !clipsInPrevious.contains(clip)) {
                             qDebug() << Q_FUNC_INFO << "The clip" << clip << "was not in the previous segment, so we should start playing it";
                             // If the clip was not there in the previous step, that means we should turn it on
@@ -383,7 +389,7 @@ public Q_SLOTS:
                         }
                     }
                     for (QObject *clip : clipsInPrevious) {
-                        if (!includedClips.contains(clip)) {
+                        if (!includedClips.contains(clip) || restartClips.contains(clip)) {
                             qDebug() << Q_FUNC_INFO << "The clip" << clip << "was in the previous segment but not in this one, so we should stop playing that clip";
                             // If the clip was in the previous step, but not in this step, that means it
                             // should be turned off when reaching this position
