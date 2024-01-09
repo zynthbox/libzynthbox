@@ -35,6 +35,8 @@ public:
     int internalOnChannel{-1};
     int pitch{0};
 
+    int activations[16]{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
     SyncTimer *syncTimer{nullptr};
 };
 
@@ -102,6 +104,9 @@ int Note::activeChannel() const
 void Note::resetRegistrations()
 {
     d->isPlaying = 0;
+    for (int i = 0; i < 16; ++i) {
+        d->activations[i] = 0;
+    }
     QMetaObject::invokeMethod(this, "isPlayingChanged", Qt::QueuedConnection);
     d->activeChannel = -1;
     QMetaObject::invokeMethod(this, "activeChannelChanged", Qt::QueuedConnection);
@@ -110,6 +115,7 @@ void Note::resetRegistrations()
 
 void Note::registerOn(const int& midiChannel)
 {
+    d->activations[midiChannel]++;
     d->activeChannel = midiChannel;
     QMetaObject::invokeMethod(this, "activeChannelChanged", Qt::QueuedConnection);
     d->isPlaying = d->isPlaying + 1;
@@ -118,8 +124,17 @@ void Note::registerOn(const int& midiChannel)
 
 void Note::registerOff(const int& midiChannel)
 {
+    d->activations[midiChannel] = qMax(0, d->activations[midiChannel] - 1);
     d->isPlaying = qMax(0, d->isPlaying - 1);
     QMetaObject::invokeMethod(this, "isPlayingChanged", Qt::QueuedConnection);
+    if (d->activations[midiChannel] == 0) {
+        for (int i = 0; i < 16; ++i) {
+            if (d->activations[i] > 0) {
+                d->activeChannel = i;
+                break;
+            }
+        }
+    }
     if (d->isPlaying == 0) {
         if (d->activeChannel > -1 && d->activeChannel != midiChannel) {
             qWarning() << Q_FUNC_INFO << "Received an off registration on a midi channel we're supposedly not active, this is a bit weird, but ok. Active channel is" << d->activeChannel << "and we received the event on" << midiChannel;
