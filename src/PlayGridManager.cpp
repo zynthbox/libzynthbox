@@ -35,6 +35,7 @@
 #include "MidiRouter.h"
 #include "SyncTimer.h"
 #include "Plugin.h"
+#include "PlayfieldManager.h"
 
 #include <QQmlEngine>
 #include <QDebug>
@@ -221,6 +222,7 @@ public:
     ZLPGMSynchronisationManager *zlSyncManager{nullptr};
     QQmlEngine *engine{nullptr};
     SegmentHandler *segmentHandler{nullptr};
+    PlayfieldManager *playfieldManager{nullptr};
     QStringList playgrids;
     QVariantMap currentPlaygrids;
     QString preferredSequencer;
@@ -1051,6 +1053,10 @@ void PlayGridManager::scheduleNote(unsigned char midiNote, unsigned char midiCha
 
 void PlayGridManager::handleMetronomeTick(int beat)
 {
+    if (d->playfieldManager == nullptr) {
+        d->playfieldManager = PlayfieldManager::instance();
+    }
+    d->playfieldManager->progressPlayback();
     if (d->segmentHandler == nullptr) {
         d->segmentHandler = SegmentHandler::instance();
     }

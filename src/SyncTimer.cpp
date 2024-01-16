@@ -15,6 +15,7 @@
 #include "MidiRecorder.h"
 #include "SegmentHandler.h"
 #include "PlayGridManager.h"
+#include "PlayfieldManager.h"
 #include "SequenceModel.h"
 
 #include <QDebug>
@@ -429,7 +430,7 @@ public:
     ClipAudioSource *metronomeTick{nullptr};
     ClipAudioSource *metronomeTock{nullptr};
 
-    #ifdef DEBUG_SYNCTIMER_TIMING
+#ifdef DEBUG_SYNCTIMER_TIMING
     frame_clock::time_point lastRound;
     QList<long> intervals;
 #endif
@@ -445,8 +446,6 @@ public:
 
             ClipCommand *command{nullptr};
             if (beat == 0) {
-                // Spit out a touch of useful information on beat zero
-                qDebug() << Q_FUNC_INFO << "Current jack process call saturation:" << MidiRouter::instance()->processingLoad();
                 if (audibleMetronome) {
                     command = ClipCommand::globalCommand(metronomeTick);
                 }
@@ -857,6 +856,7 @@ public:
                     MidiRecorder::instance()->startRecording(pgm->currentMidiChannel(), true, currentFrameUsecs);
                     AudioLevels::instance()->startRecording(currentFrame);
                 }
+                PlayfieldManager::instance()->startPlayback();
                 QMetaObject::invokeMethod(pgm->zlSketchpad(), "startPlayback", Qt::DirectConnection);
                 q->start();
                 qDebug() << Q_FUNC_INFO << "Metronome and playback started";
@@ -905,6 +905,7 @@ public:
                 QMetaObject::invokeMethod(pgm->zlSketchpad(), "stopAllPlayback", Qt::DirectConnection);
                 pgm->stopMetronome();
                 q->stop();
+                PlayfieldManager::instance()->stopPlayback();
                 for (int chan = 0; chan < 10; ++chan) {
                     // One All Notes Off message for each track (not midi channel)
                     q->sendMidiMessageImmediately(3, 176 + chan, 123, 0);
