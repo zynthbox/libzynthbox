@@ -22,6 +22,7 @@
 #include "PatternModel.h"
 #include "Note.h"
 #include "SegmentHandler.h"
+#include "PlayfieldManager.h"
 
 #include <QDateTime>
 #include <QDebug>
@@ -291,6 +292,7 @@ class PatternModel::Private {
 public:
     Private(PatternModel *q) : q(q) {
         playGridManager = PlayGridManager::instance();
+        playfieldManager = PlayfieldManager::instance();
         syncTimer = qobject_cast<SyncTimer*>(playGridManager->syncTimer());
 
         NoteDataPoolEntry* noteDataPrevious{&noteDataPool[NoteDataPoolSize - 1]};
@@ -316,6 +318,7 @@ public:
     PatternModel *q{nullptr};
     ZLPatternSynchronisationManager *zlSyncManager{nullptr};
     SegmentHandler *segmentHandler{nullptr};
+    PlayfieldManager *playfieldManager{nullptr};
     QHash<QString, qint64> lastSavedTimes;
     int width{16};
     PatternModel::NoteDestination noteDestination{PatternModel::SynthDestination};
@@ -388,6 +391,7 @@ public:
 
     SyncTimer* syncTimer{nullptr};
     SequenceModel *sequence;
+    int song{0}; // This is just... always zero at the moment, but maybe this would be the global sequence id or something like that?
     int channelIndex{-1};
     int partIndex{-1};
 
@@ -465,27 +469,27 @@ PatternModel::PatternModel(SequenceModel* parent)
     auto updateIsPlaying = [this](){
         bool isPlaying{false};
         if (d->segmentHandler->songMode()) {
-            isPlaying = d->segmentHandler->playfieldState(d->channelIndex, d->sequence->sceneIndex(), d->partIndex);
+            isPlaying = d->playfieldManager->clipPlaystate(d->song, d->channelIndex, d->partIndex) == PlayfieldManager::PlayingState;
         } else if (d->sequence && d->sequence->isPlaying()) {
             if (d->sequence->soloPattern() > -1) {
                 isPlaying = (d->sequence->soloPatternObject() == this);
             } else {
-                isPlaying = d->enabled;
+                isPlaying = d->playfieldManager->clipPlaystate(d->song, d->channelIndex, d->partIndex) == PlayfieldManager::PlayingState;
             }
+        } else {
+            isPlaying = false;
         }
         if (d->isPlaying != isPlaying) {
             d->isPlaying = isPlaying;
-            Q_EMIT isPlayingChanged();
+            QMetaObject::invokeMethod(this, "isPlayingChanged", Qt::QueuedConnection);
         }
     };
-    connect(d->segmentHandler, &SegmentHandler::songModeChanged, this, updateIsPlaying, Qt::DirectConnection);
-    connect(d->segmentHandler, &SegmentHandler::playfieldInformationChanged, this, updateIsPlaying, Qt::DirectConnection);
-    connect(d->segmentHandler, &SegmentHandler::playfieldInformationChanged, this, [this,updateIsPlaying](int channel, int track, int part){
-        if (d->sequence && channel == d->channelIndex && part == d->partIndex && track == d->sequence->sceneIndex()) {
+    connect(d->playfieldManager, &PlayfieldManager::directPlayfieldStateChanged, this, [this,updateIsPlaying](int song, int track, int part){
+        if (d->sequence && song == d->song && track == d->channelIndex && part == d->partIndex) {
             updateIsPlaying();
         }
     }, Qt::DirectConnection);
-    connect(this, &PatternModel::enabledChanged, this, updateIsPlaying);
+    connect(d->segmentHandler, &SegmentHandler::songModeChanged, this, updateIsPlaying, Qt::DirectConnection);
 
     // We need to make sure that we support orphaned patterns (that is, a pattern that is not contained within a sequence)
     d->sequence = parent;
@@ -1609,7 +1613,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
             )
         )
     ) {
-        const qint64 playbackOffset{d->segmentHandler->songMode() ? d->segmentHandler->playfieldOffset(d->channelIndex, d->sequence->sceneIndex(), d->partIndex) - d->segmentHandler->startOffset() : 0};
+        const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->channelIndex, d->partIndex) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
         qint64 noteDuration{0};
         bool relevantToUs{false};
         // Since this happens at the /end/ of the cycle in a beat, this should be used to schedule beats for the next
@@ -1753,8 +1757,9 @@ void PatternModel::updateSequencePosition(qint64 sequencePosition)
             || d->playGridManager->currentMidiChannel() > -1))
         || sequencePosition == 0
     ) {
+        const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->channelIndex, d->partIndex) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
         bool relevantToUs{false};
-        qint64 nextPosition{sequencePosition};
+        qint64 nextPosition{sequencePosition - playbackOffset};
         qint64 noteDuration{0};
         d->noteLengthDetails(d->noteLength, nextPosition, relevantToUs, noteDuration);
 
