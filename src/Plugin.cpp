@@ -52,6 +52,7 @@
 #include "MidiRouter.h"
 #include "SyncTimer.h"
 #include "ZLEngineBehaviour.h"
+#include "PlayfieldManager.h"
 
 #include "Plugin.h"
 
@@ -248,8 +249,14 @@ void Plugin::initialize()
     qDebug() << "Initialising MidiRecorder";
     MidiRecorder::instance();
 
+    qDebug() << "Initialising PlayGrid Manager";
+    PlayGridManager::instance();
+
     qDebug() << "Initialising SegmentHandler";
     SegmentHandler::instance();
+
+    qDebug() << "Initialising PlayfieldManager";
+    PlayfieldManager::instance();
 }
 
 void Plugin::shutdown()
@@ -289,6 +296,13 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
         playGridManager->setEngine(engine);
         QQmlEngine::setObjectOwnership(playGridManager, QQmlEngine::CppOwnership);
         return playGridManager;
+    });
+    qmlRegisterSingletonType<PlayfieldManager>(uri, 1, 0, "PlayfieldManager", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
+        Q_UNUSED(engine)
+        Q_UNUSED(scriptEngine)
+        PlayfieldManager *playfieldManager = PlayfieldManager::instance();
+        QQmlEngine::setObjectOwnership(playfieldManager, QQmlEngine::CppOwnership);
+        return playfieldManager;
     });
     qmlRegisterSingletonType<SegmentHandler>(uri, 1, 0, "SegmentHandler", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
         Q_UNUSED(engine)
