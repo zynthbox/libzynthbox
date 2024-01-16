@@ -20,6 +20,7 @@
  */
 
 #include "SegmentHandler.h"
+#include "PlayfieldManager.h"
 #include "PlayGridManager.h"
 #include "SequenceModel.h"
 
@@ -34,60 +35,6 @@
 #include <QDebug>
 #include <QTimer>
 #include <QVariant>
-
-#define PartCount 5
-#define TrackCount 10
-#define ChannelCount 10
-struct TrackState {
-    TrackState() {
-        clear();
-    }
-    void clear() {
-        for (int partIndex = 0; partIndex < PartCount; ++partIndex) {
-            partStates[partIndex] = false;
-            partOffset[partIndex] = 0;
-        }
-    }
-    // Whether or not the specified part should be making sounds right now
-    bool partStates[PartCount];
-    qint64 partOffset[PartCount];
-};
-struct ChannelState {
-    ChannelState() {
-        for (int trackIndex = 0; trackIndex < TrackCount; ++trackIndex) {
-            trackStates[trackIndex] = new TrackState();
-        }
-    }
-    ~ChannelState() {
-        for (int trackIndex = 0; trackIndex < TrackCount; ++trackIndex) {
-            delete trackStates[trackIndex];
-        }
-    }
-    void clear() {
-        for (TrackState *trackState : trackStates) {
-            trackState->clear();
-        }
-    }
-    TrackState* trackStates[TrackCount];
-};
-struct PlayfieldState {
-    PlayfieldState() {
-        for (int channelIndex = 0; channelIndex < ChannelCount; ++channelIndex) {
-            channelStates[channelIndex] = new ChannelState();
-        }
-    };
-    ~PlayfieldState() {
-        for (int channelIndex = 0; channelIndex < ChannelCount; ++channelIndex) {
-            delete channelStates[channelIndex];
-        }
-    }
-    void clear() {
-        for (ChannelState *channelState : channelStates) {
-            channelState->clear();
-        }
-    }
-    ChannelState* channelStates[ChannelCount];
-};
 
 class ZLSegmentHandlerSynchronisationManager;
 class SegmentHandlerPrivate {
@@ -107,7 +54,7 @@ public:
     qint64 startOffset{0};
     qint64 duration{0};
 
-    PlayfieldState playfieldState;
+    PlayfieldManager *playfieldManager{nullptr};
     qint64 playhead{0};
     QHash<qint64, QList<TimerCommand*> > playlist;
     QList<ClipAudioSource*> runningLoops;
@@ -170,14 +117,13 @@ public:
     inline void handleTimerCommand(TimerCommand* command) {
         // Yes, these are dangerous, but also we really, really want this to be fast
         if (command->operation == TimerCommand::StartPartOperation) {
+            if (playfieldManager == nullptr) { playfieldManager = PlayfieldManager::instance(); }
 //             qDebug() << Q_FUNC_INFO << "Timer command says to start part" << command->parameter << command->parameter2 << command->parameter3;
-            playfieldState.channelStates[command->parameter]->trackStates[command->parameter2]->partStates[command->parameter3] = true;
-            playfieldState.channelStates[command->parameter]->trackStates[command->parameter2]->partOffset[command->parameter3] = qint64(command->bigParameter);
-            Q_EMIT q->playfieldInformationChanged(command->parameter, command->parameter2, command->parameter3);
+            playfieldManager->setClipPlaystate(0, command->parameter, command->parameter3, PlayfieldManager::PlayingState, PlayfieldManager::CurrentPosition, qint64(command->bigParameter));
         } else if(command->operation == TimerCommand::StopPartOperation) {
+            if (playfieldManager == nullptr) { playfieldManager = PlayfieldManager::instance(); }
 //             qDebug() << Q_FUNC_INFO << "Timer command says to stop part" << command->parameter << command->parameter2 << command->parameter3;
-            playfieldState.channelStates[command->parameter]->trackStates[command->parameter2]->partStates[command->parameter3] = false;
-            Q_EMIT q->playfieldInformationChanged(command->parameter, command->parameter2, command->parameter3);
+            playfieldManager->setClipPlaystate(0, command->parameter, command->parameter3, PlayfieldManager::StoppedState, PlayfieldManager::CurrentPosition);
         } else if (command->operation == TimerCommand::StopPlaybackOperation) {
             q->stopPlayback();
         }
@@ -486,8 +432,6 @@ SegmentHandler::SegmentHandler(QObject *parent)
                     d->syncTimer->scheduleClipCommand(command, 0);
                 }
             }
-            // Then refresh the playfield
-            d->playfieldState.clear();
         }
     }, Qt::QueuedConnection);
 }
@@ -527,7 +471,6 @@ qint64 SegmentHandler::duration() const
 
 void SegmentHandler::startPlayback(qint64 startOffset, quint64 duration)
 {
-    d->playfieldState.clear();
     d->songMode = true;
     Q_EMIT songModeChanged();
     d->startOffset = startOffset;
@@ -575,16 +518,6 @@ void SegmentHandler::stopPlayback()
     d->movePlayhead(-1, true);
     d->songMode = false;
     Q_EMIT songModeChanged();
-}
-
-bool SegmentHandler::playfieldState(int channel, int track, int part) const
-{
-    return d->playfieldState.channelStates[channel]->trackStates[track]->partStates[part];
-}
-
-qint64 SegmentHandler::playfieldOffset(int channel, int track, int part) const
-{
-    return d->playfieldState.channelStates[channel]->trackStates[track]->partOffset[part];
 }
 
 void SegmentHandler::progressPlayback() const
