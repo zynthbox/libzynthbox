@@ -8,5 +8,6 @@
 #include <MidiRouter.h>
 #include <MidiRecorder.h>
 #include <PlayGridManager.h>
+#include <PlayfieldManager.h>
 #include <Plugin.h>
 #include <SyncTimer.h>

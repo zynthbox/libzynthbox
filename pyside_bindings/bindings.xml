@@ -8,8 +8,12 @@
     <object-type name="AudioLevels"></object-type>
     <object-type name="ClipAudioSource"></object-type>
     <object-type name="JackPassthrough"></object-type>
-    <object-type name="MidiRecorder"></object-type>
+    <object-type name="MidiRecorder">
+        <enum-type name="ApplicatorSetting" />
+    </object-type>
     <object-type name="MidiRouter">
+        <enum-type name="RoutingDestination" />
+        <enum-type name="ListenerPort" />
         <!-- Why do we need to inject glue code manually which should be auto injected by typesystem_core? -->
         <!-- This snippet is from glue/qtcore.cpp -->
         <inject-code class="native" position="beginning">
@@ -30,6 +34,10 @@
         </inject-code>
     </object-type>
     <object-type name="PlayGridManager"></object-type>
+    <object-type name="PlayfieldManager">
+        <enum-type name="PlaybackState" />
+        <enum-type name="PlayfieldStatePosition" />
+    </object-type>
     <object-type name="Plugin"></object-type>
     <object-type name="SyncTimer"></object-type>
 </typesystem>
