@@ -217,7 +217,7 @@ void PlayfieldManagerPrivate::handlePlayfieldStateChange(const int& songIndex, c
         // PatternModel handles the playback stuff)
         // Also, don't do this if we're in song mode (as that does its own clip scheduling)
         // qDebug() << Q_FUNC_INFO << "Updating" << songIndex << trackIndex << clipIndex << "to" << nextBarClip.state << "with destination" << zlSyncManager->destinations[songIndex][trackIndex];
-        if (segmentHandler->songMode() == false && zlSyncManager->destinations[songIndex][trackIndex] == PatternModel::SampleLoopedDestination) {
+        if (segmentHandler->songMode() == false && zlSyncManager->destinations[songIndex][trackIndex] == PatternModel::SampleLoopedDestination && zlSyncManager->sketches[songIndex][trackIndex][clipIndex] != nullptr) {
             ClipCommand *clipCommand = syncTimer->getClipCommand();
             clipCommand->startPlayback = currentClip.state == PlayfieldManager::PlayingState; // otherwise, the inversion below ensures it's a stop clip loop operation, and this function requires either a start or stop operation
             clipCommand->stopPlayback = !clipCommand->startPlayback;
