@@ -63,6 +63,7 @@ public:
         ExternalDestination = 2, // Route all events to the enabled external ports
         SamplerDestination = 3, // Route all events only to passthrough (which is then handled elsewhere for distribution to the sampler)
     };
+    Q_ENUM(RoutingDestination)
     /**
      * \brief Where notes on a specific sketchpad track should be routed
      * @param sketchpadTrack The sketchpad track (from 0 through 9)
