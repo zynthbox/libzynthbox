@@ -33,6 +33,7 @@ target_sources(libzynthbox
         SegmentHandler.cpp
         SequenceModel.cpp
         SettingsContainer.cpp
+        PlayfieldManager.cpp
 )
 target_compile_definitions(libzynthbox
     PUBLIC
