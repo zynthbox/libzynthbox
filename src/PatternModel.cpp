@@ -56,8 +56,10 @@ static const QString midiNoteNames[128]{
 };
 
 struct NewNoteData {
-    qint64 timestamp{0};
-    qint64 endTimestamp{0};
+    quint64 timestamp{0}; // Position in timer ticks
+    quint64 timestampOffset{0}; // Offset in jack frames
+    quint64 endTimestamp{0}; // Position in timer ticks
+    quint64 endTimestampOffset{0}; // Offset in jack frames
     int step{0};
     int midiNote{0};
     int velocity{0};
@@ -336,6 +338,8 @@ public:
     int playingRow{0};
     int playingColumn{0};
     int previouslyUpdatedMidiChannel{-1};
+    bool updateMostRecentStartTimestamp{true};
+    qint64 mostRecentStartTimestamp{0};
 
     juce::MidiBuffer &getOrCreateBuffer(QHash<int, juce::MidiBuffer> &collection, int position);
     void noteLengthDetails(int noteLength, qint64 &nextPosition, bool &relevantToUs, qint64 &noteDuration);
@@ -465,6 +469,11 @@ PatternModel::PatternModel(SequenceModel* parent)
 {
     d->zlSyncManager = new ZLPatternSynchronisationManager(this);
     d->segmentHandler = SegmentHandler::instance();
+    connect(d->syncTimer, &SyncTimer::timerRunningChanged, this, [this](){
+        if (d->syncTimer->timerRunning() == false) {
+            setRecordLive(false);
+        }
+    });
 
     auto updateIsPlaying = [this](){
         bool isPlaying{false};
@@ -481,6 +490,9 @@ PatternModel::PatternModel(SequenceModel* parent)
         }
         if (d->isPlaying != isPlaying) {
             d->isPlaying = isPlaying;
+            if (isPlaying) {
+                d->updateMostRecentStartTimestamp = true;
+            }
             QMetaObject::invokeMethod(this, "isPlayingChanged", Qt::QueuedConnection);
         }
     };
@@ -1613,6 +1625,10 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
             )
         )
     ) {
+        if (d->updateMostRecentStartTimestamp) {
+            d->updateMostRecentStartTimestamp = false;
+            d->mostRecentStartTimestamp = sequencePosition;
+        }
         const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->channelIndex, d->partIndex) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
         qint64 noteDuration{0};
         bool relevantToUs{false};
@@ -1745,6 +1761,8 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                 }
             }
         }
+    } else {
+        d->updateMostRecentStartTimestamp = true;
     }
 }
 
@@ -1793,7 +1811,7 @@ void PatternModel::handleMidiMessage(const unsigned char &byte1, const unsigned 
             if (d->noteDataPoolReadHead->object) {
                 NewNoteData *newNote = d->noteDataPoolReadHead->object;
                 d->noteDataPoolReadHead = d->noteDataPoolReadHead->next;
-                newNote->timestamp = timeStamp - d->syncTimer->jackPlayheadAtStart();
+                newNote->timestamp = d->syncTimer->timerTickForJackPlayhead(timeStamp, &newNote->timestampOffset);
                 newNote->midiNote = byte2;
                 newNote->velocity = byte3;
                 d->recordingLiveNotes << newNote;
@@ -1808,7 +1826,7 @@ void PatternModel::handleMidiMessage(const unsigned char &byte1, const unsigned 
                 newNote = iterator.value();
                 if (newNote->midiNote == byte2) {
                     iterator.remove();
-                    newNote->endTimestamp = timeStamp - d->syncTimer->jackPlayheadAtStart();
+                    newNote->endTimestamp = d->syncTimer->timerTickForJackPlayhead(timeStamp, &newNote->endTimestampOffset);
                     QMetaObject::invokeMethod(d->zlSyncManager, "addRecordedNote", Qt::QueuedConnection, Q_ARG(void*, newNote));
                     break;
                 }
@@ -1830,14 +1848,20 @@ void ZLPatternSynchronisationManager::addRecordedNote(void *recordedNote)
 {
     NewNoteData *newNote = static_cast<NewNoteData*>(recordedNote);
 
+    qint64 nextPosition{0}; // not relevant
     bool relevantToUs{false}; // not relevant
-    qint64 nextPosition{0};
     qint64 noteDuration{0};
     q->d->noteLengthDetails(q->noteLength(), nextPosition, relevantToUs, noteDuration);
-    int deviationAllowance = qMax(1.0, ceil(noteDuration * 0.3));
+
+    // Unless we're in the "all the zoomies" mode where each step is one pattern tick, allow for a deviation of 2 before auto-quantizing
+    int deviationAllowance = qMin(qint64(2), noteDuration);
+
+    // convert the timer ticks to pattern ticks, and adjust for whatever was the most recent restart of the pattern's playback
+    newNote->timestamp = (newNote->timestamp - quint64(q->d->mostRecentStartTimestamp)) / quint64(q->d->beatSubdivision6);
+    newNote->endTimestamp = (newNote->endTimestamp - quint64(q->d->mostRecentStartTimestamp)) / quint64(q->d->beatSubdivision6);
 
     const int patternLength = q->width() * q->availableBars();
-    const double normalisedTimestamp{double(newNote->timestamp % (patternLength * noteDuration))};
+    const double normalisedTimestamp{double(qint64(newNote->timestamp) % (patternLength * noteDuration))};
     newNote->step = normalisedTimestamp / noteDuration;
     newNote->delay = normalisedTimestamp - (newNote->step * noteDuration);
 
@@ -1878,14 +1902,14 @@ void ZLPatternSynchronisationManager::addRecordedNote(void *recordedNote)
     // If we didn't find one there already, /then/ we can create one
     if (subnoteIndex == -1) {
         subnoteIndex = q->addSubnote(newNote->row, newNote->column, q->playGridManager()->getNote(newNote->midiNote, q->midiChannel()));
-        qDebug() << Q_FUNC_INFO << "Didn't find a subnote with this midi note to change values on, created a new subnote at subnote index" << subnoteIndex;
+        // qDebug() << Q_FUNC_INFO << "Didn't find a subnote with this midi note to change values on, created a new subnote at subnote index" << subnoteIndex;
     } else {
         // Check whether this is what we already know about, and if it is, abort the changes
         const int oldVelocity = q->subnoteMetadata(newNote->row, newNote->column, subnoteIndex, "velocity").toInt();
         const int oldDuration = q->subnoteMetadata(newNote->row, newNote->column, subnoteIndex, "duration").toInt();
         const int oldDelay = q->subnoteMetadata(newNote->row, newNote->column, subnoteIndex, "delay").toInt();
         if (oldVelocity == newNote->velocity && oldDuration == newNote->duration && oldDelay == newNote->delay) {
-//             qDebug() << "This is a note we already have in the pattern, with the same data set on it, so no need to do anything with that" << newNote << newNote->timestamp << newNote->endTimestamp << newNote->step << newNote->row << newNote->column << newNote->midiNote << newNote->velocity << newNote->delay << newNote->duration;
+            // qDebug() <<  Q_FUNC_INFO << "This is a note we already have in the pattern, with the same data set on it, so no need to do anything with that" << newNote << newNote->timestamp << newNote->endTimestamp << newNote->step << newNote->row << newNote->column << newNote->midiNote << newNote->velocity << newNote->delay << newNote->duration;
             subnoteIndex = -1;
         }
     }
