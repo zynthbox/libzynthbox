@@ -71,11 +71,11 @@ struct MidiListenerPort {
         writeHead = &messages[0];
     }
     ~MidiListenerPort() { }
-    inline void addMessage(const bool &fromInternal, const bool &isNoteMessage, const double &timeStamp, const jack_midi_event_t &event, const int rewriteChannel, const int sketchpadTrack)
+    inline void addMessage(const bool &fromInternal, const bool &isNoteMessage, const double &timeStampFrames, const double &timeStampUsecs, const jack_midi_event_t &event, const int rewriteChannel, const int sketchpadTrack)
     {
         NoteMessage &message = *writeHead;
         writeHead = writeHead->next;
-        message.timeStamp = timeStamp;
+        message.timeStamp = timeStampFrames;
         const int eventChannel = (event.buffer[0] & 0xf);
         message.fromInternal = fromInternal;
         message.isNoteMessage = isNoteMessage;
@@ -86,7 +86,7 @@ struct MidiListenerPort {
         message.sketchpadTrack = sketchpadTrack;
         message.submitted = false;
         if (identifier == MidiRouter::PassthroughPort) {
-            MidiRecorder::instance()->handleMidiMessage(message.byte0, message.byte1, message.byte2, timeStamp, sketchpadTrack);
+            MidiRecorder::instance()->handleMidiMessage(message.byte0, message.byte1, message.byte2, timeStampUsecs, sketchpadTrack);
         }
     }
     NoteMessage messages[MAX_LISTENER_MESSAGES];
@@ -319,7 +319,8 @@ public:
                         eventChannel = -1;
                     }
                     if (-1 < eventChannel && eventChannel < 16) {
-                        const double timestamp = current_usecs + (microsecondsPerFrame * double(event->time));
+                        const double timestamp = current_frames + event->time;
+                        const double timestampUsecs = current_usecs + (microsecondsPerFrame * double(event->time));
                         int sketchpadTrack = eventDevice->targetTrackForMidiChannel(eventChannel);
                         if (sketchpadTrack == -1) {
                             sketchpadTrack = currentSketchpadTrack;
@@ -342,9 +343,9 @@ public:
                         }
                         if (inputDeviceIsHardware) {
                             // qDebug() << Q_FUNC_INFO << "Hardware input message received for channel" << eventChannel << "of size" << event->size;
-                            hardwareInListener.addMessage(false, isNoteMessage, timestamp, *event, eventChannel, sketchpadTrack);
+                            hardwareInListener.addMessage(false, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack);
                         } else {
-                            internalPassthroughListener.addMessage(true, isNoteMessage, timestamp, *event, eventChannel, sketchpadTrack);
+                            internalPassthroughListener.addMessage(true, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack);
                         }
                         if (inputDeviceIsHardware == false && eventChannel == masterChannel) {
                             for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
@@ -355,7 +356,7 @@ public:
                         currentTrack = sketchpadTracks[sketchpadTrack];
                         switch (currentTrack->destination) {
                             case MidiRouter::ZynthianDestination:
-                                passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, *event, eventChannel, sketchpadTrack);
+                                passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack);
                                 for (const int &zynthianChannel : currentTrack->zynthianChannels) {
                                     if (zynthianChannel == -1) {
                                         continue;
@@ -365,15 +366,15 @@ public:
                                 passthroughOutputPort->routerDevice->writeEventToOutput(*event);
                                 break;
                             case MidiRouter::SamplerDestination:
-                                passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, *event, eventChannel, sketchpadTrack);
+                                passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack);
                                 currentTrack->routerDevice->writeEventToOutput(*event);
                                 passthroughOutputPort->routerDevice->writeEventToOutput(*event);
                                 break;
                             case MidiRouter::ExternalDestination:
                             {
                                 int externalChannel = (currentTrack->externalChannel == -1) ? currentTrack->trackIndex : currentTrack->externalChannel;
-                                passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, *event, eventChannel, sketchpadTrack);
-                                externalOutListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, *event, externalChannel, sketchpadTrack);
+                                passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack);
+                                externalOutListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, externalChannel, sketchpadTrack);
                                 if (!(inputDeviceIsHardware == false && eventChannel == masterChannel)) {
                                     // Since we've already done this above for master-channel events, don't write them again
                                     for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
@@ -389,11 +390,12 @@ public:
                                 break;
                         }
                     } else if (event->size == 1 || event->size == 2) {
-                        const double timestamp = current_usecs + (microsecondsPerFrame * double(event->time));
+                        const double timestamp = current_frames + event->time;
+                        const double timestampUsecs = current_usecs + (microsecondsPerFrame * double(event->time));
                         const bool isBeatClock = (byte0 == 0xf2 || byte0 == 0xf8 || byte0 == 0xfa || byte0 == 0xfb || byte0 == 0xfc);
                         const bool isTimecode = (byte0 == 0xf9);
                         if (inputDeviceIsHardware) {
-                            hardwareInListener.addMessage(false, false, timestamp, *event, eventChannel, currentSketchpadTrack);
+                            hardwareInListener.addMessage(false, false, timestamp, timestampUsecs, *event, eventChannel, currentSketchpadTrack);
                         }
                         for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
                             if (isBeatClock && device->sendBeatClock() == false) {

@@ -126,6 +126,16 @@ public:
     Q_ENUM( ListenerPort )
     /**
      * \brief Fired whenever a note has changed
+     * @param port The listener port the message arrived on (you will likely want to filter on just managing PassthroughPort, unless you have a specific reason)
+     * @param midiNote The note value for the note which has changed
+     * @param midiChannel The channel of the note which changed
+     * @param velocity The velocity value for the changed note
+     * @param setOn Whether the message was an on message (false if it was an off message)
+     * @param timestamp The timestamp at which the message arrived, counted in jack frames (absolute value since startup)
+     * @param byte1 The first byte of the message
+     * @param byte2 The second byte of the message
+     * @param byte3 The third byte of the message
+     * @param sketchpadTrack The sketchpad track the message arrived on
      */
     Q_SIGNAL void noteChanged( MidiRouter::ListenerPort port, int midiNote, int midiChannel, int velocity, bool setOn, double timeStamp, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const int &sketchpadTrack);
     /**
@@ -135,6 +145,7 @@ public:
      * @param byte1 The first byte (always valid)
      * @param byte2 The second byte (usually valid, but always test size before using)
      * @param byte3 The third byte (commonly valid, but always test size before using)
+     * @param sketchpadTrack The sketchpad track the message arrived on
      * @param fromInternal Whether the message arrived from an internal source
      */
     Q_SIGNAL void midiMessage(int port, int size, const unsigned char &byte1, const unsigned char &byte2, const unsigned char& byte3, const int &sketchpadTrack, bool fromInternal);
