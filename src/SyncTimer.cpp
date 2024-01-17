@@ -341,6 +341,7 @@ public:
         }
         StepData* previous{&stepRing[StepRingCount - 1]};
         for (quint64 i = 0; i < StepRingCount; ++i) {
+            jackPlayheadForTimerTick[i] = UINT64_MAX;
             stepRing[i].index = i;
             stepRing[i].d = this;
             previous->next = &stepRing[i];
@@ -506,6 +507,8 @@ public:
     quint64 jackLatency{0};
     bool isPaused{true};
 
+    quint64 mostRecentlyUpdatedJackPlayheadForTimerTick{0};
+    quint64 jackPlayheadForTimerTick[StepRingCount];
     jack_time_t current_usecs{0};
     jack_time_t refreshThingsAfter{0};
     quint64 jackPlayheadReturn{0};
@@ -552,6 +555,10 @@ public:
                 // We need to send out a beat clock tick on the first position as well, so let's make sure we do that
                 jackMidiBeatTick = TicksPerMidiBeatClock - 1;
                 transportManager->restartTransport();
+                mostRecentlyUpdatedJackPlayheadForTimerTick = 0;
+                for (int step = 0; step < StepRingCount; ++step) {
+                    jackPlayheadForTimerTick[step] = UINT_MAX;
+                }
             }
             jackMostRecentNextUsecs = next_usecs;
         }
@@ -593,6 +600,9 @@ public:
                 relativePosition = std::clamp<jack_nframes_t>((stepNextPlaybackPosition - current_usecs) / microsecondsPerFrame, firstAvailableFrame, nframes - 1);
                 firstAvailableFrame = relativePosition;
             }
+            // Assign this step's position, so we can retrieve it if any consumers need that (such as for live recording reasons)
+            mostRecentlyUpdatedJackPlayheadForTimerTick = jackPlayhead;
+            jackPlayheadForTimerTick[jackPlayhead % StepRingCount] = current_frames + relativePosition;
             // Make sure there's a midi beat pulse going out if one is needed
             ++jackMidiBeatTick;
             bool writeBeatTick{false};
@@ -1338,6 +1348,20 @@ void SyncTimer::setCurrentTrack(const int& newTrack)
         d->currentTrack = std::clamp(newTrack, 0, 9);
         Q_EMIT currentTrackChanged();
     }
+}
+
+const quint64 SyncTimer::timerTickForJackPlayhead(const quint64& jackPlayhead, quint64* remainder) const
+{
+    quint64 position = 0;
+    for (; position < StepRingCount; ++position) {
+        quint64 checkingPosition{(d->mostRecentlyUpdatedJackPlayheadForTimerTick - position) % StepRingCount};
+        if (d->jackPlayheadForTimerTick[checkingPosition] <= jackPlayhead) {
+            *remainder = jackPlayhead - d->jackPlayheadForTimerTick[checkingPosition];
+            position = checkingPosition;
+            break;
+        }
+    }
+    return position;
 }
 
 void SyncTimer::scheduleTimerCommand(quint64 delay, TimerCommand *command)

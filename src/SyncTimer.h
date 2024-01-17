@@ -174,6 +174,16 @@ public:
   Q_SIGNAL void currentTrackChanged();
 
   /**
+   * \brief The timer tick for a given jack playhead value (valid while timer is running)
+   * Use this to convert a jack playhead value (as returned by jackPlayhead()) to a timer tick
+   * @note This is not kept perpetually (we only keep 32768 of these values - technically, the same amount as the step command ring)
+   * @param jackPlayhead A number of jack frames (potentially a very large number, number of jack frames since the server was most recently started)
+   * @param remainder The number of frames that were past for the jack playhead, compared to when the timer tick actually happened
+   * @return The timer tick that was valid for that frame
+   */
+  const quint64 timerTickForJackPlayhead(const quint64 &jackPlayhead, quint64 *remainder = nullptr) const;
+
+  /**
    * \brief Schedule an audio clip to have one or more commands run on it on the next tick of the timer
    * If a command with the associated clip is already scheduled at the position and the given midiNote you're attempting to schedule it into,
    * this function will change the existing to match any new settings (that is, things marked to be done on the command
