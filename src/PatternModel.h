@@ -136,6 +136,13 @@ class PatternModel : public NotesModel
      */
     Q_PROPERTY(int noteLength READ noteLength WRITE setNoteLength NOTIFY noteLengthChanged)
     /**
+     * \brief A value in percent of step length defining how far each odd step in the pattern will be offset during playback
+     * @minimum 0
+     * @maximum 99
+     * @default 0
+     */
+    Q_PROPERTY(int swing READ swing WRITE setSwing NOTIFY swingChanged)
+    /**
      * \brief The number of bars in the pattern which should be considered for playback
      * The minimum number is 1, and the maximum is bankLength
      * @default 1
@@ -380,6 +387,7 @@ public:
      * - externalMidiChannel
      * - defaultNoteDuration
      * - noteLength
+     * - swing
      * - availableBars
      * - bankOffset (and consequently bank)
      * - bankLength
@@ -478,6 +486,10 @@ public:
     void setNoteLength(int noteLength);
     int noteLength() const;
     Q_SIGNAL void noteLengthChanged();
+
+    void setSwing(int swing);
+    int swing() const;
+    Q_SIGNAL void swingChanged();
 
     void setAvailableBars(int availableBars);
     int availableBars() const;
