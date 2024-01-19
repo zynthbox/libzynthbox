@@ -312,6 +312,7 @@ public:
         beatSubdivision4 = beatSubdivision3 / 2;
         beatSubdivision5 = beatSubdivision4 / 2;
         beatSubdivision6 = beatSubdivision5 / 2;
+        patternTickToSyncTimerTick = beatSubdivision6;
     }
     ~Private() {
         for (int i = 0; i < NoteDataPoolSize; ++i) {
@@ -351,6 +352,7 @@ public:
     int beatSubdivision4{0};
     int beatSubdivision5{0};
     int beatSubdivision6{0};
+    int patternTickToSyncTimerTick{0};
 
     bool recordingLive{false};
     QList<NewNoteData*> recordingLiveNotes;
@@ -1558,13 +1560,10 @@ void addNoteToBuffer(juce::MidiBuffer &buffer, const Note *theNote, unsigned cha
 
 inline juce::MidiBuffer &PatternModel::Private::getOrCreateBuffer(QHash<int, juce::MidiBuffer> &collection, int position)
 {
-    // Since PatternModel operates internally at 32ppqn, let's adjust things so that they match that assumption
-    // We could probably make this follow the sequencer instead, but that would require changing some behaviours
-    const int realPosition{position * beatSubdivision6};
-    if (!collection.contains(realPosition)) {
-        collection[realPosition] = juce::MidiBuffer();
+    if (!collection.contains(position)) {
+        collection[position] = juce::MidiBuffer();
     }
-    return collection[realPosition];
+    return collection[position];
 }
 
 inline void PatternModel::Private::noteLengthDetails(int noteLength, qint64 &nextPosition, bool &relevantToUs, qint64 &noteDuration)
@@ -1629,7 +1628,6 @@ inline void PatternModel::Private::noteLengthDetails(int noteLength, qint64 &nex
 
 void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progressionLength) const
 {
-    static const int initialProgression{0};
     static const QLatin1String velocityString{"velocity"};
     static const QLatin1String delayString{"delay"};
     static const QLatin1String durationString{"duration"};
@@ -1655,14 +1653,13 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
         const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->channelIndex, d->partIndex) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
         qint64 noteDuration{0};
         bool relevantToUs{false};
-        // Since this happens at the /end/ of the cycle in a beat, this should be used to schedule beats for the next
-        // beat, not the current one. That is to say, prepare the next frame, not the current one (since those notes
-        // have already been played).
-        for (int progressionIncrement = initialProgression; progressionIncrement <= progressionLength; ++progressionIncrement) {
+        for (int progressionIncrement = 0; progressionIncrement <= progressionLength; ++progressionIncrement) {
             // check whether the sequencePosition + progressionIncrement matches our note length
             qint64 nextPosition = sequencePosition - playbackOffset + progressionIncrement;
             d->noteLengthDetails(d->noteLength, nextPosition, relevantToUs, noteDuration);
-            const qint64 swingOffset{noteDuration * d->swing / 100};
+            // Since the schedule operates at a higher subdivision than the pattern model, adjust to match
+            noteDuration = noteDuration * d->patternTickToSyncTimerTick;
+            const int schedulingIncrement{progressionIncrement * d->patternTickToSyncTimerTick};
 
             if (relevantToUs) {
                 // Get the next row/column combination, and schedule the previous one off, and the next one on
@@ -1673,10 +1670,13 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                 // need to clear it immediately, so that probability is also taken into account for the next
                 // time it's due for scheduling
                 bool clearPositionBufferImmediately{false};
+                // Swing is applied to every even step as counted by humans (so every uneven step as counted by our indices)
+                const qint64 swingOffset{nextPosition % 2 == 0 ? 0 : noteDuration * d->swing / 100};
+                // qDebug() << "Swing offset for" << nextPosition << "is" << swingOffset << "with swing" << d->swing << "and note duration" << noteDuration;
 
                 if (d->positionBuffers.contains(nextPosition + (d->bankOffset * d->width)) == false) {
                     QHash<int, juce::MidiBuffer> positionBuffers;
-                    auto subnoteSender = [this, &clearPositionBufferImmediately, swingOffset, noteDuration, progressionIncrement, &positionBuffers](const Note* subnote, const QVariantHash &metaHash, int positionAdjustment = 0) {
+                    auto subnoteSender = [this, &clearPositionBufferImmediately, swingOffset, noteDuration, schedulingIncrement, &positionBuffers](const Note* subnote, const QVariantHash &metaHash, int positionAdjustment = 0) {
                         bool sendNotes{true};
                         const int probability{metaHash.value(probabilityString, 100).toInt()};
                         if (probability < 100) {
@@ -1687,8 +1687,8 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                         }
                         if (sendNotes) {
                             const int velocity{metaHash.value(velocityString, 64).toInt()};
-                            const qint64 delay{metaHash.value(delayString, 0).toInt() + swingOffset};
-                            int duration{metaHash.value(durationString, noteDuration).toInt()};
+                            const qint64 delay{(metaHash.value(delayString, 0).toInt() + swingOffset + positionAdjustment) * d->patternTickToSyncTimerTick};
+                            int duration{metaHash.value(durationString, noteDuration / d->patternTickToSyncTimerTick).toInt() * d->patternTickToSyncTimerTick};
                             if (duration < 1) {
                                 duration = noteDuration;
                             }
@@ -1721,7 +1721,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                 if (ratchetProbability < 100) {
                                     clearPositionBufferImmediately = true;
                                 }
-                                int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(progressionIncrement));
+                                int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
                                 for (int ratchetIndex = 0; ratchetIndex < ratchetCount; ++ratchetIndex) {
                                     sendNotes = true;
                                     if (ratchetProbability < 100) {
@@ -1733,15 +1733,15 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                         if (ratchetIndex + 1 == ratchetCount) {
                                             ratchetDuration = ratchetLastDuration;
                                         }
-                                        addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, positionAdjustment + delay + (ratchetDelay * ratchetIndex)), subnote, velocity, true, avaialbleChannel);
-                                        addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, positionAdjustment + delay + (ratchetDelay * ratchetIndex) + ratchetDuration), subnote, velocity, false, avaialbleChannel);
+                                        addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay + (ratchetDelay * ratchetIndex)), subnote, velocity, true, avaialbleChannel);
+                                        addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay + (ratchetDelay * ratchetIndex) + ratchetDuration), subnote, velocity, false, avaialbleChannel);
                                         if (reuseChannel == false && ratchetIndex + 1 < ratchetCount) {
-                                            avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(progressionIncrement));
+                                            avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
                                         }
                                     }
                                 }
                             } else {
-                                const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(progressionIncrement));
+                                const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
                                 addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay), subnote, velocity, true, avaialbleChannel);
                                 addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay + duration), subnote, velocity, false, avaialbleChannel);
                             }
@@ -1765,7 +1765,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                         const QVariantHash &metaHash = meta[subnoteIndex].toHash();
                                         if (subnote) {
                                             if (metaHash.isEmpty()) {
-                                                const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(progressionIncrement));
+                                                const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
                                                 addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, swingOffset), subnote, 64, true, avaialbleChannel);
                                                 addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, swingOffset + noteDuration), subnote, 64, false, avaialbleChannel);
                                             } else {
@@ -1777,13 +1777,13 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                     for (const QVariant &subnoteVar : subnotes) {
                                         const Note *subnote = subnoteVar.value<Note*>();
                                         if (subnote) {
-                                            const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(progressionIncrement));
+                                            const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
                                             addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, swingOffset), subnote, 64, true, avaialbleChannel);
                                             addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, swingOffset + noteDuration), subnote, 64, false, avaialbleChannel);
                                         }
                                     }
                                 } else {
-                                    const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(progressionIncrement));
+                                    const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
                                     addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, swingOffset), note, 64, true, avaialbleChannel);
                                     addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, swingOffset + noteDuration), note, 64, false, avaialbleChannel);
                                 }
@@ -1822,7 +1822,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                             for (const juce::MidiMessageMetadata &juceMessage : qAsConst(position.value())) {
                                 d->midiMessageToClipCommands(&d->commandRing, juceMessage.data[0], juceMessage.data[1], juceMessage.data[2]);
                                 while (d->commandRing.readHead->processed == false) {
-                                    d->syncTimer->scheduleClipCommand(d->commandRing.read(), quint64(qMax(0, progressionIncrement + position.key())));
+                                    d->syncTimer->scheduleClipCommand(d->commandRing.read(), quint64(qMax(0, schedulingIncrement + position.key())));
                                 }
                             }
                         }
@@ -1837,7 +1837,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                         const QHash<int, juce::MidiBuffer> &positionBuffers = d->positionBuffers[nextPosition + (d->bankOffset * d->width)];
                         QHash<int, juce::MidiBuffer>::const_iterator position;
                         for (position = positionBuffers.constBegin(); position != positionBuffers.constEnd(); ++position) {
-                            d->syncTimer->scheduleMidiBuffer(position.value(), quint64(qMax(0, progressionIncrement + position.key())), d->midiChannel);
+                            d->syncTimer->scheduleMidiBuffer(position.value(), quint64(qMax(0, schedulingIncrement + position.key())), d->midiChannel);
                         }
                         break;
                     }
