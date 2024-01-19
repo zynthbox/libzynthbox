@@ -1143,22 +1143,28 @@ void SyncTimer::stop() {
     d->jackPlayhead = 0;
 
     // A touch of hackery to ensure we end immediately, and leave a clean state
-    // We want to fire off all the off notes immediately, and none of the on notes
-    juce::MidiBuffer onlyOffs[ZynthboxTrackCount];
+    // We want to fire off all the midi events we've got scheduled, except we want to make the on notes silent
+    juce::MidiBuffer midiBuffers[ZynthboxTrackCount];
     // We also want to fire off all the clip commands (so they happen, but without making noises)
     QList<ClipCommand*> clipCommands;
     // We also want to clean up the step, so timer commands still happen at the expected times, without the other two happening
+    const quint64 readIndex{d->stepReadHead->index};
     for (quint64 step = 0; step < StepRingCount; ++step) {
-        StepData *stepData = &d->stepRing[(step + d->stepReadHead->index) % StepRingCount];
+        StepData *stepData = &d->stepRing[(step + readIndex) % StepRingCount];
         if (!stepData->played) {
-            // First, collect all the queued midi messages, but in strict order, and only off notes...
+            stepData->played = true;
+            // First, collect all the queued midi messages
             for (int track = 0; track < ZynthboxTrackCount; ++track) {
                 for (const juce::MidiMessageMetadata& message : stepData->trackBuffer[track]) {
-                    if (message.getMessage().isNoteOff()) {
-                        onlyOffs[track].addEvent(message.getMessage(), 0);
+                    juce::MidiMessage midiMessage = message.getMessage();
+                    if (midiMessage.isNoteOn()) {
+                        // Just in case this is a note on message, still schedule it, but be vewy vewy quiet, we're hunting silence-wabbits
+                        // if you're wondering why not 0, it's because some things interpret that as an off note, and that's not actually what we're doing here
+                        midiMessage.setVelocity(0.01);
                     }
+                    // qDebug() << Q_FUNC_INFO << "track" << track << "step" << stepData->index << "adding at sample position" << message.samplePosition << ":" << QString::fromUtf8(message.getMessage().getDescription().toRawUTF8());
+                    midiBuffers[track].addEvent(midiMessage, 0);
                 }
-                stepData->trackBuffer[track].clear();
             }
             // Now for the clip commands
             for (ClipCommand *clipCommand : qAsConst(stepData->clipCommands)) {
@@ -1168,16 +1174,17 @@ void SyncTimer::stop() {
                 clipCommand->volume = 0;
                 clipCommands << clipCommand;
             }
-            stepData->clipCommands.clear();
         }
     }
     // And now everything has been marked as sent out, let's re-schedule the things that actually want to go out
     for (int track = 0; track < ZynthboxTrackCount; ++track) {
-        if (!onlyOffs[track].isEmpty()) {
-            sendMidiBufferImmediately(onlyOffs[track], track);
+        if (!midiBuffers[track].isEmpty()) {
+            d->missingBitsBuffer[track].addEvents(midiBuffers[track], 0, -1, d->missingBitsBuffer[track].getLastEventTime());
+            // qDebug() << Q_FUNC_INFO << "All the events for track" << track << ":";
+            // for (const juce::MidiMessageMetadata &message : midiBuffers[track]) {
+                // qDebug() << Q_FUNC_INFO << "sample position" << message.samplePosition << "has message" << QString::fromUtf8(message.getMessage().getDescription().toRawUTF8());
+            // }
         }
-        // Since we're doing a bit of jiggery-pokery with the order of things, we can expect there to be some off notes without matching on notes, so... let's just not do that
-        d->tracks[track].clearActivations();
     }
     for (ClipCommand *clipCommand : qAsConst(clipCommands)) {
         scheduleClipCommand(clipCommand, 0);
