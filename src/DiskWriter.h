@@ -7,9 +7,10 @@
 // that is one left and one right channel
 #define DISKWRITER_CHANNEL_COUNT 2
 
+class AudioLevelsChannel;
 class DiskWriter {
 public:
-    explicit DiskWriter();
+    explicit DiskWriter(AudioLevelsChannel *audioLevelsChannel);
     ~DiskWriter();
 
     void startRecording(const QString& fileName, double sampleRate = 44100, int bitRate = 32, int channelCount=DISKWRITER_CHANNEL_COUNT);
@@ -34,8 +35,9 @@ private:
     juce::File m_file;
     juce::TimeSliceThread m_backgroundThread{"AudioLevel Disk Recorder"}; // the thread that will write our audio data to disk
     std::unique_ptr<AudioFormatWriter::ThreadedWriter> m_threadedWriter; // the FIFO used to buffer the incoming data
-    double m_sampleRate = 0.0;
+    double m_sampleRate{0.0};
 
+    AudioLevelsChannel *m_audioLevelsChannel{nullptr};
     CriticalSection m_writerLock;
-    std::atomic<AudioFormatWriter::ThreadedWriter*> m_activeWriter { nullptr };
+    std::atomic<AudioFormatWriter::ThreadedWriter*> m_activeWriter{nullptr};
 };

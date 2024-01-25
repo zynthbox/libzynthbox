@@ -1,8 +1,10 @@
 #include "DiskWriter.h"
+#include "AudioLevelsChannel.h"
 
 #include <QDebug>
 
-DiskWriter::DiskWriter()
+DiskWriter::DiskWriter(AudioLevelsChannel *audioLevelsChannel)
+    : m_audioLevelsChannel(audioLevelsChannel)
 {
     m_backgroundThread.startThread();
 }
@@ -28,6 +30,10 @@ void DiskWriter::startRecording(const QString& fileName, double sampleRate, int 
                 // write the data to disk on our background thread.
                 m_threadedWriter.reset(new AudioFormatWriter::ThreadedWriter(writer, m_backgroundThread, 32768));
 
+                // Reset our thumbnail, so we don't carry over any old recording information and the like
+                m_audioLevelsChannel->m_thumbnail.reset(writer->getNumChannels(), writer->getSampleRate());
+                m_audioLevelsChannel->m_nextSampleNum = 0;
+
                 // And now, swap over our active writer pointer so that the audio callback will start using it..
                 const ScopedLock sl (m_writerLock);
                 m_activeWriter = m_threadedWriter.get();
@@ -43,6 +49,16 @@ void DiskWriter::processBlock(const float** inputChannelData, int numSamples) co
     if (m_activeWriter.load() != nullptr) {
         if (m_activeWriter.load()->write(inputChannelData, numSamples) == false) {
             qWarning() << Q_FUNC_INFO << "Attempted to write data, but did not have the space to do so. This will result in a glitchy recording, and means we should be using a larger buffer.";
+        }
+        // There's no reason to do the thumbnailery stuff if there's no listeners...
+        // If one dips in later, this will result in the thumbnail being out of
+        // sync, but we'd rather be light weight than purely correctly visualised
+        // for this particular case. For now, at least, we can easily revisit this.
+        if (m_audioLevelsChannel->m_thumbnailListenerCount > 0) {
+            // Create an AudioBuffer to wrap our incoming data, note that this does no allocations or copies, it simply references our input data
+            AudioBuffer<float> buffer (const_cast<float**> (inputChannelData), m_audioLevelsChannel->m_thumbnail.getNumChannels(), numSamples);
+            m_audioLevelsChannel->m_thumbnail.addBlock(m_audioLevelsChannel->m_nextSampleNum, buffer, 0, numSamples);
+            m_audioLevelsChannel->m_nextSampleNum += numSamples;
         }
     }
 }
