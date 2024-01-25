@@ -1,13 +1,15 @@
 #include "AudioLevelsChannel.h"
 #include "DiskWriter.h"
+#include "AudioLevels.h"
 
 #include <cmath>
 #include <QDebug>
 #include <QVariantList>
 
-AudioLevelsChannel::AudioLevelsChannel(jack_client_t *client, const QString &clientName)
+AudioLevelsChannel::AudioLevelsChannel(jack_client_t *client, const QString &clientName, juce::AudioFormatManager& formatManagerToUse, juce::AudioThumbnailCache& cacheToUse)
     : clientName(clientName)
-    , m_diskRecorder(new DiskWriter)
+    , m_diskRecorder(new DiskWriter(this))
+    , m_thumbnail(512, formatManagerToUse, cacheToUse)
 {
     jackClient = client;
     leftPort = jack_port_register(jackClient, QString("%1-left_in").arg(clientName).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput | JackPortIsTerminal, 0);
@@ -18,7 +20,6 @@ AudioLevelsChannel::AudioLevelsChannel(jack_client_t *client, const QString &cli
 AudioLevelsChannel::~AudioLevelsChannel()
 {
     delete m_diskRecorder;
-
 }
 
 int AudioLevelsChannel::process(jack_nframes_t nframes, jack_nframes_t current_frames, jack_nframes_t next_frames, jack_time_t /*current_usecs*/, jack_time_t /*next_usecs*/, float /*period_usecs*/)
@@ -58,6 +59,31 @@ int AudioLevelsChannel::process(jack_nframes_t nframes, jack_nframes_t current_f
 DiskWriter * AudioLevelsChannel::diskRecorder()
 {
     return m_diskRecorder;
+}
+
+juce::AudioThumbnail * AudioLevelsChannel::thumbnail()
+{
+    return &m_thumbnail;
+}
+
+void AudioLevelsChannel::addChangeListener(ChangeListener* listener)
+{
+    m_thumbnailListenerCount++;
+    m_thumbnail.addChangeListener(listener);
+}
+
+void AudioLevelsChannel::removeChangeListener(ChangeListener* listener)
+{
+    m_thumbnailListenerCount--;
+    if (m_thumbnailListenerCount < 0) {
+        qWarning() << Q_FUNC_INFO << this << "now has a negative amount of listeners, which means something has gone very wrong somewhere.";
+    }
+    m_thumbnail.removeChangeListener(listener);
+}
+
+bool AudioLevelsChannel::thumbnailHAnyListeners() const
+{
+    return m_thumbnailListenerCount > 0;
 }
 
 void AudioLevelsChannel::doRecordingHandling(jack_nframes_t nframes, jack_nframes_t current_frames, jack_nframes_t next_frames)

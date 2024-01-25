@@ -2,6 +2,7 @@
 
 #include "TimerCommand.h"
 
+#include "JUCEHeaders.h"
 #include <jack/jack.h>
 #include <QString>
 #include <limits.h>
@@ -11,10 +12,14 @@
 class DiskWriter;
 class alignas(128) AudioLevelsChannel {
 public:
-    explicit AudioLevelsChannel(jack_client_t *client, const QString &clientName);
+    explicit AudioLevelsChannel(jack_client_t *client, const QString &clientName, juce::AudioFormatManager& formatManagerToUse, juce::AudioThumbnailCache& cacheToUse);
     ~AudioLevelsChannel();
     int process(jack_nframes_t nframes, jack_nframes_t current_frames, jack_nframes_t next_frames, jack_time_t current_usecs, jack_time_t next_usecs, float period_usecs);
     DiskWriter* diskRecorder();
+    juce::AudioThumbnail *thumbnail();
+    void addChangeListener(ChangeListener* listener);
+    void removeChangeListener(ChangeListener* listener);
+    bool thumbnailHAnyListeners() const;
 
     jack_port_t *leftPort{nullptr};
     jack_default_audio_sample_t *leftBuffer{nullptr};
@@ -32,7 +37,11 @@ public:
     quint64 lastRecordingFrame{ULONG_LONG_MAX};
     TimerCommandRing startCommandsRing;
 private:
+    friend class DiskWriter;
     const float** recordingPassthroughBuffer{new const float* [2]};
     DiskWriter *m_diskRecorder{nullptr};
     inline void doRecordingHandling(jack_nframes_t nframes, jack_nframes_t current_frames, jack_nframes_t next_frames);
+    juce::AudioThumbnail m_thumbnail;
+    int m_thumbnailListenerCount{0};
+    int64 m_nextSampleNum{0};
 };
