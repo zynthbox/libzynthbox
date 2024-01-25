@@ -1,14 +1,16 @@
 /*
-  ==============================================================================
+    ==============================================================================
 
     ClipAudioSource.h
     Created: 19/8/2021
     Author:  Marco Martin <mart@kde.org>
+    Author:  Dan Leinir Turthra Jensen <admin@leinir.dk>
 
-  ==============================================================================
+    ==============================================================================
 */
 
 #include "WaveFormItem.h"
+#include "AudioLevels.h"
 
 #include <QPainter>
 #include <QDebug>
@@ -16,23 +18,28 @@
 
 WaveFormItem::WaveFormItem(QQuickItem *parent)
     : QQuickPaintedItem(parent),
-     // m_state (Stopped),
       m_juceGraphics(m_painterContext),
-      m_thumbnailCache (5),
-      m_thumbnail (512, m_formatManager, m_thumbnailCache)
-
+      m_thumbnail(512, AudioLevels::instance()->m_formatManager, AudioLevels::instance()->m_thumbnailsCache)
 {
     m_repaintTimer = new QTimer(this);
     m_repaintTimer->setSingleShot(true);
     m_repaintTimer->setInterval(200);
     connect(m_repaintTimer, &QTimer::timeout, this, [this]() {update();});
-    m_formatManager.registerBasicFormats();
+    m_rapidRepaintTimer = new QTimer(this);
+    m_rapidRepaintTimer->setSingleShot(true);
+    m_rapidRepaintTimer->setInterval(0);
+    connect(m_rapidRepaintTimer, &QTimer::timeout, this, &WaveFormItem::thumbnailChanged);
     m_thumbnail.addChangeListener(this);
 }
 
 WaveFormItem::~WaveFormItem()
 {
     m_thumbnail.removeChangeListener(this);
+    if (m_externalThumbnailChannel) {
+        m_externalThumbnailChannel->removeChangeListener(this);
+    } else if (m_externalThumbnail) {
+        m_externalThumbnail->removeChangeListener(this);
+    }
 }
 
 QString WaveFormItem::source() const
@@ -42,25 +49,58 @@ QString WaveFormItem::source() const
 
 void WaveFormItem::setSource(QString &source)
 {
-    if (source == m_source) {
-        return;
-    }
+    static const QLatin1String audioLevelsChannelUri{"audioLevelsChannel:/"};
+    static const QLatin1String captureUri{"audioLevelsChannel:/capture"};
+    static const QLatin1String globalUri{"audioLevelsChannel:/global"};
+    static const QLatin1String portsUri{"audioLevelsChannel:/ports"};
+    if (source != m_source) {
+        m_source = source;
+        Q_EMIT sourceChanged();
 
-    m_source = source;
+        if (m_externalThumbnailChannel) {
+            m_externalThumbnailChannel->removeChangeListener(this);
+            m_externalThumbnailChannel = nullptr;
+        } else if (m_externalThumbnail) {
+            m_externalThumbnail->removeChangeListener(this);
+        }
+        m_externalThumbnail = nullptr;
 
-    juce::File file(source.toUtf8().constData());
-    auto *reader = m_formatManager.createReaderFor(file);
+        if (m_source.startsWith(audioLevelsChannelUri)) {
+            if (m_source == captureUri) {
+                m_externalThumbnailChannel = AudioLevels::instance()->systemCaptureAudioLevelsChannel();
+            } else if(m_source == globalUri) {
+                m_externalThumbnailChannel = AudioLevels::instance()->globalAudioLevelsChannel();
+            } else if(m_source == portsUri) {
+                m_externalThumbnailChannel = AudioLevels::instance()->portsRecorderAudioLevelsChannel();
+            } else {
+                const int channelIndex = m_source.midRef(20).toInt();
+                m_externalThumbnailChannel = AudioLevels::instance()->audioLevelsChannel(channelIndex);
+            }
+        } else {
+            juce::File file(source.toUtf8().constData());
+            auto *reader = AudioLevels::instance()->m_formatManager.createReaderFor(file);
 
-    if (reader != nullptr) {
-        std::unique_ptr<juce::AudioFormatReaderSource> newSource(new juce::AudioFormatReaderSource(reader, true));
-        m_transportSource.setSource (newSource.get(), 0, nullptr, reader->sampleRate);
-        m_thumbnail.setSource(new juce::FileInputSource (file));
-        m_readerSource.reset (newSource.release());
+            if (reader != nullptr) {
+                std::unique_ptr<juce::AudioFormatReaderSource> newSource(new juce::AudioFormatReaderSource(reader, true));
+                m_thumbnail.setSource(new juce::FileInputSource(file));
+                m_readerSource.reset(newSource.release());
+            }
+        }
+
+        if (m_externalThumbnailChannel) {
+            m_externalThumbnailChannel->addChangeListener(this);
+            m_externalThumbnail = m_externalThumbnailChannel->thumbnail();
+        } else if (m_externalThumbnail) {
+            m_externalThumbnail->addChangeListener(this);
+        }
     }
 }
 
 qreal WaveFormItem::length() const
 {
+    if (m_externalThumbnail) {
+        return m_externalThumbnail->getTotalLength();
+    }
     return m_thumbnail.getTotalLength();
 }
 
@@ -77,7 +117,7 @@ void WaveFormItem::setColor(const QColor &color)
 
     m_color = color;
     m_painterContext.setQBrush(m_color);
-    emit colorChanged();
+    Q_EMIT colorChanged();
 }
 
 qreal WaveFormItem::start() const
@@ -92,8 +132,8 @@ void WaveFormItem::setStart(qreal start)
     }
 
     m_start = start;
-    emit startChanged();
-    update();
+    Q_EMIT startChanged();
+    QMetaObject::invokeMethod(m_repaintTimer, "start", Qt::QueuedConnection, Q_ARG(int, 1));
 }
 
 qreal WaveFormItem::end() const
@@ -108,44 +148,58 @@ void WaveFormItem::setEnd(qreal end)
     }
 
     m_end = end;
-    emit endChanged();
-    update();
+    Q_EMIT endChanged();
+    QMetaObject::invokeMethod(m_repaintTimer, "start", Qt::QueuedConnection, Q_ARG(int, 1));
 }
 
 void WaveFormItem::changeListenerCallback(juce::ChangeBroadcaster *source)
 {
-    if (source == &m_thumbnail) {
+    if (source == &m_thumbnail || (m_externalThumbnail && source == m_externalThumbnail)) {
         // qWarning() << "Thumbnail Source Changed. Repainting.";
-        QMetaObject::invokeMethod(this, "thumbnailChanged", Qt::QueuedConnection);
+        QMetaObject::invokeMethod(m_rapidRepaintTimer, "start", Qt::QueuedConnection);
     }
 }
 
 void WaveFormItem::thumbnailChanged()
 {
     m_start = 0;
-    m_end = m_thumbnail.getTotalLength();
+    if (m_externalThumbnail) {
+        m_end = m_externalThumbnail->getTotalLength();
+    } else {
+        m_end = m_thumbnail.getTotalLength();
+    }
 
-    emit startChanged();
-    emit endChanged();
-    emit sourceChanged();
-    emit lengthChanged();
+    Q_EMIT startChanged();
+    Q_EMIT endChanged();
+    Q_EMIT sourceChanged();
+    Q_EMIT lengthChanged();
     update();
 }
 
 void WaveFormItem::paint(QPainter *painter)
 {
     m_painterContext.setPainter(painter);
-    juce::Rectangle<int> thumbnailBounds (0, 0, width(), height());
-    m_thumbnail.drawChannel(m_juceGraphics,
-                            thumbnailBounds,
-                            m_start,                                    // start time
-                            qMin(m_end, m_thumbnail.getTotalLength()),             // end time
-                            0, // channel num
-                            1.0f);
-    if (!m_thumbnail.isFullyLoaded()) {
-        QMetaObject::invokeMethod(m_repaintTimer, "start");
+    const juce::Rectangle<int> thumbnailBounds (0, 0, width(), height());
+    // FIXME This only draws channel 0 (left)... maybe we should be checking if we've got two channels, and draw both if we do? ...in some clever way, or just stacked using the built-in function?
+    if (m_externalThumbnail) {
+        m_externalThumbnail->drawChannel(m_juceGraphics,
+                                         thumbnailBounds,
+                                         m_start,
+                                         qMin(m_end, m_externalThumbnail->getTotalLength()),
+                                         0,
+                                         1.0f);
+    } else {
+        m_thumbnail.drawChannel(m_juceGraphics,
+                                thumbnailBounds,
+                                m_start,                                    // start time
+                                qMin(m_end, m_thumbnail.getTotalLength()),  // end time
+                                0, // channel num
+                                1.0f);
+        if (!m_thumbnail.isFullyLoaded()) {
+            // qDebug() << Q_FUNC_INFO << m_source << "is not fully loaded yet, schedule a repaint...";
+            QMetaObject::invokeMethod(m_repaintTimer, "start", Qt::QueuedConnection);
+        }
     }
 }
 
 #include "moc_WaveFormItem.cpp"
-

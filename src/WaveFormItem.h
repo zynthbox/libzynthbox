@@ -1,11 +1,12 @@
 /*
-  ==============================================================================
+    ==============================================================================
 
     ClipAudioSource.h
     Created: 19/8/2021
     Author:  Marco Martin <mart@kde.org>
+    Author:  Dan Leinir Turthra Jensen <admin@leinir.dk>
 
-  ==============================================================================
+    ==============================================================================
 */
 
 #pragma once
@@ -14,10 +15,20 @@
 #include "QPainterContext.h"
 #include <QQuickPaintedItem>
 
+class AudioLevelsChannel;
 class WaveFormItem : public QQuickPaintedItem,
                      private juce::ChangeListener
 {
 Q_OBJECT
+    /**
+     * \brief The source (either a file, or an audioLevelsChannel uri) for what you want to see a thumbnail of
+     * If set to an audioLevelsChannel uri, you will be shown the thumbnail for the result of any ongoing recording.
+     * This uri is in the following form:
+     * * audioLevelsChannel:/(a number from 0 through 9) - for the sketchpad track at that index
+     * * audioLevelsChannel:/capture - for the system capture channel (nominally the "microphone" input)
+     * * audioLevelsChannel:/global - for the master output channel
+     * * audioLevelsChannel:/ports - the manual-set capture channel on AudioLevels (see AudioLevels::addRecordPort)
+     */
     Q_PROPERTY(QString source READ source WRITE setSource NOTIFY sourceChanged)
     Q_PROPERTY(qreal length READ length NOTIFY lengthChanged)
     Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY colorChanged)
@@ -57,16 +68,15 @@ Q_SIGNALS:
 private:
     QString m_source;
 
-    QTimer *m_repaintTimer;
+    QTimer *m_repaintTimer{nullptr};
+    QTimer *m_rapidRepaintTimer{nullptr};
     QPainterContext m_painterContext;
     juce::Graphics m_juceGraphics;
     QColor m_color;
     std::unique_ptr<juce::AudioFormatReaderSource> m_readerSource;
-    juce::AudioTransportSource m_transportSource;
-    juce::AudioFormatManager m_formatManager;
-    //TransportState m_state;
-    juce::AudioThumbnailCache m_thumbnailCache;
     juce::AudioThumbnail m_thumbnail;
+    juce::AudioThumbnail *m_externalThumbnail{nullptr};
+    AudioLevelsChannel *m_externalThumbnailChannel{nullptr};
     qreal m_start = 0;
     qreal m_end = 0;
 };
