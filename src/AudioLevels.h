@@ -11,6 +11,7 @@
 #pragma once
 
 #include "AudioLevelsChannel.h"
+#include "JUCEHeaders.h"
 
 #include <QObject>
 #include <QTimer>
@@ -244,6 +245,30 @@ public:
      */
     Q_INVOKABLE bool isRecording() const;
 
+    /**
+     * \brief Get the AudioLevelsChannel instance for the given sketchpad track
+     * @param sketchpadTrack The sketchpad track to get the AudioLevelsChannel for (0 through 9)
+     * @return The AudioLevelsChannel instance for the given sketchpad track, or a nullptr for an invalid track
+     */
+    AudioLevelsChannel *audioLevelsChannel(const int &sketchpadTrack) const;
+    /**
+     * \brief Get the AudioLevelsChannel instance for the system capture recorder
+     * @return The AudioLevelsChannel instance for the system capture recorder
+     */
+    AudioLevelsChannel *systemCaptureAudioLevelsChannel() const;
+    /**
+     * \brief Get the AudioLevelsChannel instance for the global output
+     * @return The AudioLevelsChannel instance for the global output
+     */
+    AudioLevelsChannel *globalAudioLevelsChannel() const;
+    /**
+     * \brief Get the AudioLevelsChannel instance for the ports recorder
+     * @return The AudioLevelsChannel instance for the ports recorder
+     */
+    AudioLevelsChannel *portsRecorderAudioLevelsChannel() const;
+
+    juce::AudioFormatManager m_formatManager;
+    juce::AudioThumbnailCache m_thumbnailsCache{100};
 Q_SIGNALS:
     void audioLevelsChanged();
     void recordGlobalPlaybackChanged();

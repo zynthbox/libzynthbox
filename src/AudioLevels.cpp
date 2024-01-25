@@ -14,6 +14,7 @@
 #include "JackThreadAffinitySetter.h"
 #include "SyncTimer.h"
 #include "TimerCommand.h"
+#include "ZynthboxBasics.h"
 
 #include <QDateTime>
 #include <QDebug>
@@ -138,6 +139,7 @@ AudioLevels::AudioLevels(QObject *parent)
         "Channel9",
         "Channel10",
     };
+    m_formatManager.registerBasicFormats();
     jack_status_t real_jack_status{};
     int result{0};
     d->jackClient = jack_client_open("AudioLevels", JackNullOption, &real_jack_status);
@@ -152,7 +154,7 @@ AudioLevels::AudioLevels(QObject *parent)
                 zl_set_jack_client_affinity(d->jackClient);
                 int channelIndex{0};
                 for (const QString &clientName : audioLevelClientNames) {
-                    AudioLevelsChannel *channel = new AudioLevelsChannel(d->jackClient, clientName);
+                    AudioLevelsChannel *channel = new AudioLevelsChannel(d->jackClient, clientName, m_formatManager, m_thumbnailsCache);
                     if (channelIndex == 0) {
                         d->jackClient = channel->jackClient;
                         d->connectPorts("system:capture_1", "AudioLevels:SystemCapture-left_in");
@@ -538,4 +540,28 @@ bool AudioLevels::isRecording() const
         }
     }
     return d->globalPlaybackWriter->isRecording() || d->portsRecorder->isRecording() || channelIsRecording;
+}
+
+AudioLevelsChannel * AudioLevels::audioLevelsChannel(const int& sketchpadTrack) const
+{
+    AudioLevelsChannel *instance{nullptr};
+    if (-1 < sketchpadTrack && sketchpadTrack < ZynthboxTrackCount) {
+        instance = d->audioLevelsChannels[sketchpadTrack + 3];
+    }
+    return instance;
+}
+
+AudioLevelsChannel * AudioLevels::systemCaptureAudioLevelsChannel() const
+{
+    return d->audioLevelsChannels[0];
+}
+
+AudioLevelsChannel * AudioLevels::globalAudioLevelsChannel() const
+{
+    return d->audioLevelsChannels[1];
+}
+
+AudioLevelsChannel * AudioLevels::portsRecorderAudioLevelsChannel() const
+{
+    return d->audioLevelsChannels[2];
 }
