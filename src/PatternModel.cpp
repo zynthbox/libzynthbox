@@ -23,6 +23,7 @@
 #include "Note.h"
 #include "SegmentHandler.h"
 #include "PlayfieldManager.h"
+#include "ZynthboxBasics.h"
 
 #include <QDateTime>
 #include <QDebug>
@@ -355,6 +356,11 @@ public:
     int patternTickToSyncTimerTick{0};
 
     bool recordingLive{false};
+    QString liveRecordingSource;
+    // First look at the external device index - if we're listening only to that, make sure we're doing that first
+    int liveRecordingSourceExternalDeviceIndex{-1};
+    // Then check the sketchpad track setting, and if that is set explicitly, handle that, otherwise just go with the pattern's own track
+    int liveRecordingSourceSketchpadTrack{-1};
     QList<NewNoteData*> recordingLiveNotes;
     NoteDataPoolEntry noteDataPool[128];
     NoteDataPoolEntry *noteDataPoolReadHead{nullptr};
@@ -1473,6 +1479,34 @@ bool PatternModel::recordLive() const
     return d->recordingLive;
 }
 
+void PatternModel::setLiveRecordingSource(const QString& newLiveRecordingSource)
+{
+    static const QLatin1String sketchpadTrackSource{"sketchpadTrack:"};
+    static const QLatin1String externalDeviceSource{"external:"};
+    if (d->liveRecordingSource != newLiveRecordingSource) {
+        d->liveRecordingSource = newLiveRecordingSource;
+        if (d->liveRecordingSource.startsWith(sketchpadTrackSource)) {
+            d->liveRecordingSourceExternalDeviceIndex = -1;
+            d->liveRecordingSourceSketchpadTrack = d->liveRecordingSource.midRef(15).toInt();
+            if (d->liveRecordingSourceSketchpadTrack < -2 || ZynthboxTrackCount > d->liveRecordingSourceSketchpadTrack) {
+                d->liveRecordingSourceSketchpadTrack = -1;
+            }
+        } else if (d->liveRecordingSource.startsWith(externalDeviceSource)) {
+            d->liveRecordingSourceSketchpadTrack = -1;
+            d->liveRecordingSourceSketchpadTrack = d->liveRecordingSource.midRef(9).toInt();
+        } else {
+            d->liveRecordingSourceExternalDeviceIndex = -1;
+            d->liveRecordingSourceSketchpadTrack = -1;
+        }
+        Q_EMIT liveRecordingSourceChanged();
+    }
+}
+
+QString PatternModel::liveRecordingSource() const
+{
+    return d->liveRecordingSource;
+}
+
 QObject *PatternModel::zlChannel() const
 {
     return d->zlSyncManager->zlChannel;
@@ -1895,7 +1929,10 @@ void PatternModel::handleSequenceStop()
 
 void PatternModel::handleMidiMessage(const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const double& timeStamp, const int& sketchpadTrack)
 {
-    if (sketchpadTrack == d->midiChannel) {
+    if (d->liveRecordingSourceExternalDeviceIndex == -1
+            ? d->liveRecordingSourceSketchpadTrack == -1 ? sketchpadTrack == d->midiChannel : sketchpadTrack == d->liveRecordingSourceSketchpadTrack
+            : true // TODO implement the live recording external device logic thing...
+        ) {
         // if we're recording live, and it's a note-on message, create a newnotedata and add to list of notes being recorded
         if (d->recordingLive && 0x8F < byte1 && byte1 < 0xA0) {
             // Belts and braces here - it shouldn't really happen (a hundred notes is kind of a lot to add in a single shot), but just in case...

@@ -253,6 +253,15 @@ class PatternModel : public NotesModel
      * @note This property will be changed to false when playback is stopped
      */
     Q_PROPERTY(bool recordLive READ recordLive WRITE setRecordLive NOTIFY recordLiveChanged)
+    /**
+     * \brief What source live recording should listen for midi events on (defaults to the current track, and is not persisted)
+     * This can be one of the following:
+     * * sketchpadTrack:-1 - for the "current" track (the default - will also be be used as fallback if given a value that is not supported)
+     * * sketchpadTrack:(0 through 9) - for a specific sketchpad track's output
+     * * external:(a device index) - for an external device with the given identifying index
+     * @default ""
+     */
+    Q_PROPERTY(QString liveRecordingSource READ liveRecordingSource WRITE setLiveRecordingSource NOTIFY liveRecordingSourceChanged)
 
     /**
      * \brief A reference to the sketchpad Channel object this Pattern is associated with
@@ -552,6 +561,9 @@ public:
     void setRecordLive(bool recordLive);
     bool recordLive() const;
     Q_SIGNAL void recordLiveChanged();
+    void setLiveRecordingSource(const QString &newLiveRecordingSource);
+    QString liveRecordingSource() const;
+    Q_SIGNAL void liveRecordingSourceChanged();
 
     QObject *zlChannel() const;
     void setZlChannel(QObject *zlChannel);
