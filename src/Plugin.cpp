@@ -50,6 +50,7 @@
 #include "SettingsContainer.h"
 #include "SegmentHandler.h"
 #include "MidiRouter.h"
+#include "MidiRouterDeviceModel.h"
 #include "SyncTimer.h"
 #include "ZLEngineBehaviour.h"
 #include "PlayfieldManager.h"
@@ -288,6 +289,7 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
     qmlRegisterUncreatableType<Note>(uri, 1, 0, "Note", "Use the getNote function on the main PlayGrid global object to get one of these");
     qmlRegisterUncreatableType<NotesModel>(uri, 1, 0, "NotesModel", "Use the getModel function on the main PlayGrid global object to get one of these");
     qmlRegisterUncreatableType<PatternModel>(uri, 1, 0, "PatternModel", "Use the getPatternModel function on the main PlayGrid global object to get one of these");
+    qmlRegisterUncreatableType<MidiRouterDeviceModel>(uri, 1, 0, "MidiRouterDeviceModel", "Use model on MidiRouter to get the devices model");
     qmlRegisterUncreatableType<SettingsContainer>(uri, 1, 0, "SettingsContainer", "This is for internal use only");
     qmlRegisterType<PlayGrid>(uri, 1, 0, "PlayGrid");
     qmlRegisterSingletonType<PlayGridManager>(uri, 1, 0, "PlayGridManager", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {

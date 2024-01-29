@@ -40,4 +40,7 @@
     </object-type>
     <object-type name="Plugin"></object-type>
     <object-type name="SyncTimer"></object-type>
+    <object-type name="MidiRouterDeviceModel">
+        <enum-type name="Roles" />
+    </object-type>
 </typesystem>

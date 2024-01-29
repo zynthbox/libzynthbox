@@ -34,6 +34,7 @@ target_sources(libzynthbox
         SequenceModel.cpp
         SettingsContainer.cpp
         PlayfieldManager.cpp
+        MidiRouterDeviceModel.cpp
 )
 target_compile_definitions(libzynthbox
     PUBLIC
