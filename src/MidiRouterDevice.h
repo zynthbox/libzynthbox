@@ -1,7 +1,8 @@
 #pragma once
 
+#include "MidiRouter.h"
+
 #include <jack/midiport.h>
-#include <QObject>
 #include <QFlags>
 
 class QString;
@@ -26,7 +27,7 @@ public:
         HardwareDeviceType = 0x8,
     };
     Q_DECLARE_FLAGS(DeviceTypes, DeviceType)
-    explicit MidiRouterDevice(jack_client_t *jackClient, QObject *parent = nullptr);
+    explicit MidiRouterDevice(jack_client_t *jackClient, MidiRouter *parent = nullptr);
     ~MidiRouterDevice() override;
 
     /**
@@ -87,6 +88,7 @@ public:
      * @param hardwareId The hardware ID for this device
      */
     void setHardwareId(const QString &hardwareId);
+    Q_SIGNAL void hardwareIdChanged();
     /**
      * \brief The hardware ID for this device (essentially our internal ID used to distinguish the device)
      * This is useful when a hardware device shows up as multiple devices with otherwise identical names. This
@@ -102,6 +104,7 @@ public:
      * @param zynthianId The string ID for this device
      */
     void setZynthianId(const QString &zynthianId);
+    Q_SIGNAL void zynthianIdChanged();
     /**
      * \brief The name we expect zynthian to know this device by
      * @return The zynthian ID of this device
@@ -112,6 +115,7 @@ public:
      * @param humanReadableName A new human-readable name for this device
      */
     void setHumanReadableName(const QString &humanReadableName);
+    Q_SIGNAL void humanReadableNameChanged();
     /**
      * \brief The human-readable name for this device
      * @return The human-readable name for this device
@@ -125,6 +129,7 @@ public:
      * @param portName The jack port's name (fully qualified)
      */
     void setInputPortName(const QString &portName);
+    Q_SIGNAL void inputPortNameChanged();
     /**
      * \brief The fully qualified jack name of the input port associated with this device
      */

@@ -1,6 +1,8 @@
 #include "MidiRouterDevice.h"
 #include "ZynthboxBasics.h"
 #include "DeviceMessageTranslations.h"
+#include "MidiRouter.h"
+#include "MidiRouterDeviceModel.h"
 #include "SyncTimer.h"
 
 #include <QString>
@@ -28,6 +30,7 @@ public:
             }
         }
     }
+    MidiRouter *router{nullptr};
     // Use this on any outgoing events, to ensure the event matches the device's master channel setup
     // Remember to call the function below after processing the event
     inline const void zynthboxToDevice(jack_midi_event_t *event) const;
@@ -72,13 +75,15 @@ public:
     jack_nframes_t mostRecentOutputTime{0};
 };
 
-MidiRouterDevice::MidiRouterDevice(jack_client_t *jackClient, QObject *parent)
+MidiRouterDevice::MidiRouterDevice(jack_client_t *jackClient, MidiRouter *parent)
     : QObject(parent)
     , d(new MidiRouterDevicePrivate)
 {
+    d->router = parent;
     DeviceMessageTranslations::load();
     d->jackClient = jackClient;
     setMidiChannelTargetTrack(-1, -1);
+    qobject_cast<MidiRouterDeviceModel*>(parent->model())->addDevice(this);
 }
 
 MidiRouterDevice::~MidiRouterDevice()
@@ -96,6 +101,7 @@ MidiRouterDevice::~MidiRouterDevice()
             }
         }
     }
+    qobject_cast<MidiRouterDeviceModel*>(d->router->model())->removeDevice(this);
     delete d;
     DeviceMessageTranslations::unload();
 }
@@ -253,6 +259,7 @@ void MidiRouterDevice::setHardwareId(const QString& hardwareId)
 {
     d->hardwareId = hardwareId;
     setObjectName(QString("%1/%2").arg(d->hardwareId).arg(d->zynthianId));
+    Q_EMIT hardwareIdChanged();
 }
 
 const QString & MidiRouterDevice::hardwareId() const
@@ -264,6 +271,7 @@ void MidiRouterDevice::setZynthianId(const QString& zynthianId)
 {
     d->zynthianId = zynthianId;
     setObjectName(QString("%1/%2").arg(d->hardwareId).arg(d->zynthianId));
+    Q_EMIT zynthianIdChanged();
 }
 
 const QString & MidiRouterDevice::zynthianId() const
@@ -280,6 +288,7 @@ void MidiRouterDevice::setHumanReadableName(const QString& humanReadableName)
         for (int channel = 0; channel < 16; ++channel) {
             d->masterChannel[channel] = masterChannel;
         }
+        Q_EMIT humanReadableNameChanged();
     }
 }
 
@@ -305,6 +314,7 @@ void MidiRouterDevice::setInputPortName(const QString& portName)
         if (d->inputPort == nullptr) {
             d->inputEnabled = false;
         }
+        Q_EMIT inputPortNameChanged();
     }
 }
 
