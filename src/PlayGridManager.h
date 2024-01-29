@@ -22,6 +22,8 @@
 #ifndef PLAYGRIDMANAGER_H
 #define PLAYGRIDMANAGER_H
 
+#include "MidiRouter.h"
+
 #include <QObject>
 #include <QCoreApplication>
 #include <QVariantMap>
@@ -284,7 +286,7 @@ public:
      */
     Q_INVOKABLE QObject* jsonToNote(const QString &json);
 
-    Q_SIGNAL void midiMessage(const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const double& timeStamp, const int& sketchpadTrack);
+    Q_SIGNAL void midiMessage(const MidiRouter::ListenerPort &port, const quint64 &timeStamp, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const int &sketchpadTrack, const QString &hardwareDeviceId);
     Q_INVOKABLE QVariantList mostRecentlyChangedNotes() const;
     Q_SIGNAL void mostRecentlyChangedNotesChanged();
     Q_INVOKABLE void updateNoteState(QVariantMap metadata);

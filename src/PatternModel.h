@@ -24,6 +24,7 @@
 
 #include "NotesModel.h"
 #include "SequenceModel.h"
+#include "MidiRouter.h"
 
 class ClipCommandRing;
 /**
@@ -254,7 +255,7 @@ class PatternModel : public NotesModel
      */
     Q_PROPERTY(bool recordLive READ recordLive WRITE setRecordLive NOTIFY recordLiveChanged)
     /**
-     * \brief What source live recording should listen for midi events on (defaults to the current track, and is not persisted)
+     * \brief What source live recording should listen for midi events on (defaults to the pattern's associated track, and is not persisted)
      * This can be one of the following:
      * * sketchpadTrack:-1 - for the "current" track (the default - will also be be used as fallback if given a value that is not supported)
      * * sketchpadTrack:(0 through 9) - for a specific sketchpad track's output
@@ -609,7 +610,7 @@ public:
      */
     void handleSequenceStop();
 
-    Q_SLOT void handleMidiMessage(const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const double& timeStamp, const int& sketchpadTrack);
+    Q_SLOT void handleMidiMessage(const MidiRouter::ListenerPort &port, const quint64 &timestamp, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const int& sketchpadTrack, const QString& hardwareDeviceId);
     void midiMessageToClipCommands(ClipCommandRing* listToPopulate, const int& samplerIndex, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3) const;
 private:
     friend class ZLPatternSynchronisationManager;

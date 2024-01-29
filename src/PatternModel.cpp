@@ -69,6 +69,9 @@ struct NewNoteData {
     int delay{0};
     int row{0};
     int column{0};
+    int sketchpadTrack{0};
+    QString hardwareDeviceId;
+    MidiRouter::ListenerPort port{MidiRouter::UnknownPort};
 };
 
 class ZLPatternSynchronisationManager : public QObject {
@@ -357,8 +360,8 @@ public:
 
     bool recordingLive{false};
     QString liveRecordingSource;
-    // First look at the external device index - if we're listening only to that, make sure we're doing that first
-    int liveRecordingSourceExternalDeviceIndex{-1};
+    // First look at the external device id - if we're listening only to that, make sure we're doing that first
+    QString liveRecordingSourceExternalDeviceId;
     // Then check the sketchpad track setting, and if that is set explicitly, handle that, otherwise just go with the pattern's own track
     int liveRecordingSourceSketchpadTrack{-1};
     QList<NewNoteData*> recordingLiveNotes;
@@ -1486,16 +1489,16 @@ void PatternModel::setLiveRecordingSource(const QString& newLiveRecordingSource)
     if (d->liveRecordingSource != newLiveRecordingSource) {
         d->liveRecordingSource = newLiveRecordingSource;
         if (d->liveRecordingSource.startsWith(sketchpadTrackSource)) {
-            d->liveRecordingSourceExternalDeviceIndex = -1;
+            d->liveRecordingSourceExternalDeviceId.clear();
             d->liveRecordingSourceSketchpadTrack = d->liveRecordingSource.midRef(15).toInt();
             if (d->liveRecordingSourceSketchpadTrack < -2 || ZynthboxTrackCount > d->liveRecordingSourceSketchpadTrack) {
                 d->liveRecordingSourceSketchpadTrack = -1;
             }
         } else if (d->liveRecordingSource.startsWith(externalDeviceSource)) {
             d->liveRecordingSourceSketchpadTrack = -1;
-            d->liveRecordingSourceSketchpadTrack = d->liveRecordingSource.midRef(9).toInt();
+            d->liveRecordingSourceExternalDeviceId = d->liveRecordingSource.mid(9);
         } else {
-            d->liveRecordingSourceExternalDeviceIndex = -1;
+            d->liveRecordingSourceExternalDeviceId.clear();
             d->liveRecordingSourceSketchpadTrack = -1;
         }
         Q_EMIT liveRecordingSourceChanged();
@@ -1927,11 +1930,17 @@ void PatternModel::handleSequenceStop()
     setRecordLive(false);
 }
 
-void PatternModel::handleMidiMessage(const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const double& timeStamp, const int& sketchpadTrack)
+void PatternModel::handleMidiMessage(const MidiRouter::ListenerPort &port, const quint64 &timestamp, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const int& sketchpadTrack, const QString& hardwareDeviceId)
 {
-    if (d->liveRecordingSourceExternalDeviceIndex == -1
-            ? d->liveRecordingSourceSketchpadTrack == -1 ? sketchpadTrack == d->midiChannel : sketchpadTrack == d->liveRecordingSourceSketchpadTrack
-            : true // TODO implement the live recording external device logic thing...
+    if (d->liveRecordingSourceExternalDeviceId.isEmpty()
+            ? d->liveRecordingSourceSketchpadTrack == -1
+                ? port == MidiRouter::ListenerPort::PassthroughPort
+                    ? sketchpadTrack == d->midiChannel
+                    : sketchpadTrack == d->liveRecordingSourceSketchpadTrack
+                : false
+            : port == MidiRouter::HardwareInPassthroughPort
+                ? d->liveRecordingSourceExternalDeviceId == hardwareDeviceId
+                : false
         ) {
         // if we're recording live, and it's a note-on message, create a newnotedata and add to list of notes being recorded
         if (d->recordingLive && 0x8F < byte1 && byte1 < 0xA0) {
@@ -1939,9 +1948,12 @@ void PatternModel::handleMidiMessage(const unsigned char &byte1, const unsigned 
             if (d->noteDataPoolReadHead->object) {
                 NewNoteData *newNote = d->noteDataPoolReadHead->object;
                 d->noteDataPoolReadHead = d->noteDataPoolReadHead->next;
-                newNote->timestamp = d->syncTimer->timerTickForJackPlayhead(timeStamp, &newNote->timestampOffset);
+                newNote->timestamp = d->syncTimer->timerTickForJackPlayhead(timestamp, &newNote->timestampOffset);
                 newNote->midiNote = byte2;
                 newNote->velocity = byte3;
+                newNote->sketchpadTrack = sketchpadTrack;
+                newNote->hardwareDeviceId = hardwareDeviceId;
+                newNote->port = port;
                 d->recordingLiveNotes << newNote;
             }
         }
@@ -1952,9 +1964,9 @@ void PatternModel::handleMidiMessage(const unsigned char &byte1, const unsigned 
             while (iterator.hasNext()) {
                 iterator.next();
                 newNote = iterator.value();
-                if (newNote->midiNote == byte2) {
+                if (newNote->midiNote == byte2 && newNote->port == port && newNote->sketchpadTrack == sketchpadTrack && newNote->hardwareDeviceId == hardwareDeviceId) {
                     iterator.remove();
-                    newNote->endTimestamp = d->syncTimer->timerTickForJackPlayhead(timeStamp, &newNote->endTimestampOffset);
+                    newNote->endTimestamp = d->syncTimer->timerTickForJackPlayhead(timestamp, &newNote->endTimestampOffset);
                     QMetaObject::invokeMethod(d->zlSyncManager, "addRecordedNote", Qt::QueuedConnection, Q_ARG(void*, newNote));
                     break;
                 }

@@ -202,7 +202,7 @@ public:
             hardwareInNoteActivations[i] = 0;
             hardwareOutNoteActivations[i] = 0;
         }
-        QObject::connect(midiRouter, &MidiRouter::noteChanged, q, [this](const MidiRouter::ListenerPort &port, const int &midiNote, const int &midiChannel, const int &velocity, const bool &setOn, const double &timeStamp, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const int &sketchpadTrack){ emitMidiMessage(port, timeStamp, midiNote, midiChannel, velocity, setOn, byte1, byte2, byte3, sketchpadTrack); }, Qt::DirectConnection);
+        QObject::connect(midiRouter, &MidiRouter::noteChanged, q, [this](const MidiRouter::ListenerPort &port, const int &/*midiNote*/, const int &/*midiChannel*/, const int &/*velocity*/, const bool &/*setOn*/, const quint64 &timestamp, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const int &sketchpadTrack, const QString& hardwareDeviceId){ emitMidiMessage(port, timestamp, byte1, byte2, byte3, sketchpadTrack, hardwareDeviceId); }, Qt::DirectConnection);
         QObject::connect(midiRouter, &MidiRouter::midiMessage, q, [this](int port, int size, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const int& sketchpadTrack, bool fromInternal ){ handleMidiMessage(port, size, byte1, byte2, byte3, sketchpadTrack, fromInternal); }, Qt::QueuedConnection);
         currentPlaygrids = {
             {"minigrid", 0}, // As these are sorted alphabetically, notesgrid for minigrid and
@@ -272,11 +272,8 @@ public:
 
     QFileSystemWatcher watcher;
 
-    void emitMidiMessage(const MidiRouter::ListenerPort &port, const double &timeStamp, const int &/*midiNote*/, const int &/*midiChannel*/, const int &/*velocity*/, const bool &/*setOn*/, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const int &sketchpadTrack) {
-        if (port == MidiRouter::PassthroughPort) {
-            // First notify all our friends of the thing (because they might like to know very quickly)
-            Q_EMIT q->midiMessage(byte1, byte2, byte3, timeStamp, sketchpadTrack);
-        }
+    void emitMidiMessage(const MidiRouter::ListenerPort &port, const quint64 &timestamp, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const int &sketchpadTrack, const QString& hardwareDeviceId) {
+        Q_EMIT q->midiMessage(port, timestamp, byte1, byte2, byte3, sketchpadTrack, hardwareDeviceId);
     }
 
     void handleMidiMessage(int port, int size, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const int& sketchpadTrack, bool /*fromInternal*/) {
