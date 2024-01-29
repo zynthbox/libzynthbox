@@ -1672,6 +1672,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
     static const QLatin1String ratchetStyleString{"ratchet-style"};
     static const QLatin1String ratchetCountString{"ratchet-count"};
     static const QLatin1String ratchetProbabilityString{"ratchet-probability"};
+    static const QLatin1String nextStepString{"next-step"};
     if (!d->zlSyncManager->channelMuted
         && (isPlaying()
             // Play any note if the pattern is set to sliced or trigger destination, since then it's not sending things through the midi graph
@@ -1687,10 +1688,11 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
             d->updateMostRecentStartTimestamp = false;
             d->mostRecentStartTimestamp = sequencePosition;
         }
-        const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->channelIndex, d->partIndex) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
         qint64 noteDuration{0};
         bool relevantToUs{false};
         for (int progressionIncrement = 0; progressionIncrement <= progressionLength; ++progressionIncrement) {
+            // As we might change the offset on some step, we'll need that in here
+            const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->channelIndex, d->partIndex) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
             // check whether the sequencePosition + progressionIncrement matches our note length
             qint64 nextPosition = sequencePosition - playbackOffset + progressionIncrement;
             d->noteLengthDetails(d->noteLength, nextPosition, relevantToUs, noteDuration);
@@ -1713,7 +1715,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
 
                 if (d->positionBuffers.contains(nextPosition + (d->bankOffset * d->width)) == false) {
                     QHash<int, juce::MidiBuffer> positionBuffers;
-                    auto subnoteSender = [this, &clearPositionBufferImmediately, swingOffset, noteDuration, schedulingIncrement, &positionBuffers](const Note* subnote, const QVariantHash &metaHash, int positionAdjustment = 0) {
+                    auto subnoteSender = [this, nextPosition, &clearPositionBufferImmediately, swingOffset, noteDuration, schedulingIncrement, &positionBuffers](const Note* subnote, const QVariantHash &metaHash, int positionAdjustment = 0) {
                         bool sendNotes{true};
                         const int probability{metaHash.value(probabilityString, 100).toInt()};
                         if (probability < 100) {
@@ -1723,64 +1725,77 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                             }
                         }
                         if (sendNotes) {
-                            const int velocity{metaHash.value(velocityString, 64).toInt()};
-                            const qint64 delay{(metaHash.value(delayString, 0).toInt() + swingOffset + positionAdjustment) * d->patternTickToSyncTimerTick};
-                            int duration{metaHash.value(durationString, noteDuration / d->patternTickToSyncTimerTick).toInt() * d->patternTickToSyncTimerTick};
-                            if (duration < 1) {
-                                duration = noteDuration;
+                            int nextStep{metaHash.value(nextStepString, 0).toInt()};
+                            if (nextStep > 0) {
+                                // Technically the steps are 0-indexed, but this makes displaying it a little easier, and it's inexpensive here anyway
+                                --nextStep;
+                                // Reset this clip's playfield offset by the distance from this clip to the clip we are asking to play next
+                                nextStep = (nextStep - nextPosition) * noteDuration;
+                                d->playfieldManager->setClipPlaystate(d->song, d->channelIndex, d->partIndex, PlayfieldManager::PlayingState, PlayfieldManager::CurrentPosition, d->playfieldManager->clipOffset(d->song, d->channelIndex, d->partIndex) + nextStep);
                             }
-                            const int ratchetCount{metaHash.value(ratchetCountString, 0).toInt()};
-                            if (ratchetCount > 0) {
-                                const int ratchetStyle{metaHash.value(ratchetStyleString, 0).toInt()};
-                                qint64 ratchetDelay{qMax(qint64(1), noteDuration / ratchetCount)};
-                                qint64 ratchetDuration{duration};
-                                qint64 ratchetLastDuration{duration};
-                                bool reuseChannel{false}; // This only works in choke modes, and will fail with overlap modes
-                                switch(ratchetStyle) {
-                                    case 3: // Split Length, Choke
-                                        ratchetDelay = qMax(1, duration / ratchetCount);
-                                        ratchetDuration = ratchetDelay;
-                                        reuseChannel = true;
-                                        break;
-                                    case 2: // Split Length, Overlap
-                                        ratchetDelay = qMax(1, duration / ratchetCount);
-                                        break;
-                                    case 1: // Split Step, Choke
-                                        ratchetDuration = ratchetDelay;
-                                        reuseChannel = true;
-                                        break;
-                                    case 0: // Split Step, Overlap
-                                    default:
-                                        // These are the default values, so just pass this through
-                                        break;
+                            const int velocity{metaHash.value(velocityString, 64).toInt()};
+                            if (velocity == 0) {
+                                sendNotes = false;
+                            }
+                            if (sendNotes) {
+                                const qint64 delay{(metaHash.value(delayString, 0).toInt() + swingOffset + positionAdjustment) * d->patternTickToSyncTimerTick};
+                                int duration{metaHash.value(durationString, noteDuration / d->patternTickToSyncTimerTick).toInt() * d->patternTickToSyncTimerTick};
+                                if (duration < 1) {
+                                    duration = noteDuration;
                                 }
-                                const int ratchetProbability{metaHash.value(ratchetProbabilityString, 100).toInt()};
-                                if (ratchetProbability < 100) {
-                                    clearPositionBufferImmediately = true;
-                                }
-                                int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
-                                for (int ratchetIndex = 0; ratchetIndex < ratchetCount; ++ratchetIndex) {
-                                    sendNotes = true;
+                                const int ratchetCount{metaHash.value(ratchetCountString, 0).toInt()};
+                                if (ratchetCount > 0) {
+                                    const int ratchetStyle{metaHash.value(ratchetStyleString, 0).toInt()};
+                                    qint64 ratchetDelay{qMax(qint64(1), noteDuration / ratchetCount)};
+                                    qint64 ratchetDuration{duration};
+                                    qint64 ratchetLastDuration{duration};
+                                    bool reuseChannel{false}; // This only works in choke modes, and will fail with overlap modes
+                                    switch(ratchetStyle) {
+                                        case 3: // Split Length, Choke
+                                            ratchetDelay = qMax(1, duration / ratchetCount);
+                                            ratchetDuration = ratchetDelay;
+                                            reuseChannel = true;
+                                            break;
+                                        case 2: // Split Length, Overlap
+                                            ratchetDelay = qMax(1, duration / ratchetCount);
+                                            break;
+                                        case 1: // Split Step, Choke
+                                            ratchetDuration = ratchetDelay;
+                                            reuseChannel = true;
+                                            break;
+                                        case 0: // Split Step, Overlap
+                                        default:
+                                            // These are the default values, so just pass this through
+                                            break;
+                                    }
+                                    const int ratchetProbability{metaHash.value(ratchetProbabilityString, 100).toInt()};
                                     if (ratchetProbability < 100) {
-                                        if (QRandomGenerator::global()->generateDouble() * 100 > ratchetProbability) {
-                                            sendNotes = false;
+                                        clearPositionBufferImmediately = true;
+                                    }
+                                    int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
+                                    for (int ratchetIndex = 0; ratchetIndex < ratchetCount; ++ratchetIndex) {
+                                        sendNotes = true;
+                                        if (ratchetProbability < 100) {
+                                            if (QRandomGenerator::global()->generateDouble() * 100 > ratchetProbability) {
+                                                sendNotes = false;
+                                            }
+                                        }
+                                        if (sendNotes) {
+                                            if (ratchetIndex + 1 == ratchetCount) {
+                                                ratchetDuration = ratchetLastDuration;
+                                            }
+                                            addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay + (ratchetDelay * ratchetIndex)), subnote, velocity, true, avaialbleChannel);
+                                            addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay + (ratchetDelay * ratchetIndex) + ratchetDuration), subnote, velocity, false, avaialbleChannel);
+                                            if (reuseChannel == false && ratchetIndex + 1 < ratchetCount) {
+                                                avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
+                                            }
                                         }
                                     }
-                                    if (sendNotes) {
-                                        if (ratchetIndex + 1 == ratchetCount) {
-                                            ratchetDuration = ratchetLastDuration;
-                                        }
-                                        addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay + (ratchetDelay * ratchetIndex)), subnote, velocity, true, avaialbleChannel);
-                                        addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay + (ratchetDelay * ratchetIndex) + ratchetDuration), subnote, velocity, false, avaialbleChannel);
-                                        if (reuseChannel == false && ratchetIndex + 1 < ratchetCount) {
-                                            avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
-                                        }
-                                    }
+                                } else {
+                                    const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
+                                    addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay), subnote, velocity, true, avaialbleChannel);
+                                    addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay + duration), subnote, velocity, false, avaialbleChannel);
                                 }
-                            } else {
-                                const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
-                                addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay), subnote, velocity, true, avaialbleChannel);
-                                addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay + duration), subnote, velocity, false, avaialbleChannel);
                             }
                         }
                     };
