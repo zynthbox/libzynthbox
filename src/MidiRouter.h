@@ -43,6 +43,11 @@ class MidiRouter : public QThread
      * This is as reported by Jack and updated regularly
      */
     Q_PROPERTY(float processingLoad READ processingLoad NOTIFY processingLoadChanged)
+    /**
+     * \brief A model which contains all the devices known to MidiRouter
+     * Use a FilterProxyModel to filter out any devices you don't want
+     */
+    Q_PROPERTY(QObject* model READ model NOTIFY modelChanged)
 public:
     static MidiRouter* instance() {
         static MidiRouter* instance{nullptr};
@@ -113,6 +118,9 @@ public:
     float processingLoad() const;
     Q_SIGNAL void processingLoadChanged();
 
+    QObject *model() const;
+    Q_SIGNAL void modelChanged();
+
     Q_SIGNAL void addedHardwareDevice(const QString &deviceId, const QString &humanReadableName);
     Q_SIGNAL void removedHardwareDevice(const QString &deviceId, const QString &humanReadableName);
 
@@ -136,8 +144,9 @@ public:
      * @param byte2 The second byte of the message
      * @param byte3 The third byte of the message
      * @param sketchpadTrack The sketchpad track the message arrived on
+     * @param hardwareDeviceId The device ID of the hardware device the event arrived on (this will only be valid if the event in fact arrived from a hardware device)
      */
-    Q_SIGNAL void noteChanged( MidiRouter::ListenerPort port, int midiNote, int midiChannel, int velocity, bool setOn, double timeStamp, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const int &sketchpadTrack);
+    Q_SIGNAL void noteChanged( MidiRouter::ListenerPort port, int midiNote, int midiChannel, int velocity, bool setOn, quint64 timestamp, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const int &sketchpadTrack, const QString &hardwareDeviceId);
     /**
      * \brief Fired whenever any midi message arrives
      * @param port The listener port that the message arrived on (you will likely want to filter on just managing PassthroughPort, unless you have a specific reason)

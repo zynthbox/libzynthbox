@@ -1,4 +1,5 @@
 #include "MidiRouter.h"
+#include "MidiRouterDeviceModel.h"
 
 #include "ZynthboxBasics.h"
 #include "JackPassthrough.h"
@@ -55,6 +56,7 @@ struct MidiListenerPort {
         unsigned char byte2{0};
         int size{0};
         int sketchpadTrack{0};
+        MidiRouterDevice *eventDevice{nullptr};
         double timeStamp{0};
         NoteMessage *next{nullptr};
         NoteMessage *previous{nullptr};
@@ -71,7 +73,7 @@ struct MidiListenerPort {
         writeHead = &messages[0];
     }
     ~MidiListenerPort() { }
-    inline void addMessage(const bool &fromInternal, const bool &isNoteMessage, const double &timeStampFrames, const double &timeStampUsecs, const jack_midi_event_t &event, const int rewriteChannel, const int sketchpadTrack)
+    inline void addMessage(const bool &fromInternal, const bool &isNoteMessage, const double &timeStampFrames, const double &timeStampUsecs, const jack_midi_event_t &event, const int rewriteChannel, const int sketchpadTrack, MidiRouterDevice *eventDevice)
     {
         NoteMessage &message = *writeHead;
         writeHead = writeHead->next;
@@ -84,6 +86,7 @@ struct MidiListenerPort {
         message.byte2 = event.size > 2 ? event.buffer[2] : 0;
         message.size = int(event.size);
         message.sketchpadTrack = sketchpadTrack;
+        message.eventDevice = eventDevice;
         message.submitted = false;
         if (identifier == MidiRouter::PassthroughPort) {
             MidiRecorder::instance()->handleMidiMessage(message.byte0, message.byte1, message.byte2, timeStampUsecs, sketchpadTrack);
@@ -181,6 +184,7 @@ public:
         externalOutListener.waitTime = 5;
         listenerPorts[3] = &externalOutListener;
         syncTimer = SyncTimer::instance();
+        devicesModel = new MidiRouterDeviceModel(q);
     };
     ~MidiRouterPrivate() {
         if (jackClient) {
@@ -193,6 +197,7 @@ public:
     };
 
     MidiRouter *q;
+    MidiRouterDeviceModel *devicesModel{nullptr};
     MidiRouterWatchdog *watchdog{new MidiRouterWatchdog};
     SyncTimer *syncTimer{nullptr};
     bool done{false};
@@ -343,9 +348,9 @@ public:
                         }
                         if (inputDeviceIsHardware) {
                             // qDebug() << Q_FUNC_INFO << "Hardware input message received for channel" << eventChannel << "of size" << event->size;
-                            hardwareInListener.addMessage(false, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack);
+                            hardwareInListener.addMessage(false, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
                         } else {
-                            internalPassthroughListener.addMessage(true, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack);
+                            internalPassthroughListener.addMessage(true, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
                         }
                         if (inputDeviceIsHardware == false && eventChannel == masterChannel) {
                             for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
@@ -356,7 +361,7 @@ public:
                         currentTrack = sketchpadTracks[sketchpadTrack];
                         switch (currentTrack->destination) {
                             case MidiRouter::ZynthianDestination:
-                                passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack);
+                                passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
                                 for (const int &zynthianChannel : currentTrack->zynthianChannels) {
                                     if (zynthianChannel == -1) {
                                         continue;
@@ -366,15 +371,15 @@ public:
                                 passthroughOutputPort->routerDevice->writeEventToOutput(*event);
                                 break;
                             case MidiRouter::SamplerDestination:
-                                passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack);
+                                passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
                                 currentTrack->routerDevice->writeEventToOutput(*event);
                                 passthroughOutputPort->routerDevice->writeEventToOutput(*event);
                                 break;
                             case MidiRouter::ExternalDestination:
                             {
                                 int externalChannel = (currentTrack->externalChannel == -1) ? currentTrack->trackIndex : currentTrack->externalChannel;
-                                passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack);
-                                externalOutListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, externalChannel, sketchpadTrack);
+                                passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
+                                externalOutListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, externalChannel, sketchpadTrack, eventDevice);
                                 if (!(inputDeviceIsHardware == false && eventChannel == masterChannel)) {
                                     // Since we've already done this above for master-channel events, don't write them again
                                     for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
@@ -395,7 +400,7 @@ public:
                         const bool isBeatClock = (byte0 == 0xf2 || byte0 == 0xf8 || byte0 == 0xfa || byte0 == 0xfb || byte0 == 0xfc);
                         const bool isTimecode = (byte0 == 0xf9);
                         if (inputDeviceIsHardware) {
-                            hardwareInListener.addMessage(false, false, timestamp, timestampUsecs, *event, eventChannel, currentSketchpadTrack);
+                            hardwareInListener.addMessage(false, false, timestamp, timestampUsecs, *event, eventChannel, currentSketchpadTrack, eventDevice);
                         }
                         for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
                             if (isBeatClock && device->sendBeatClock() == false) {
@@ -480,8 +485,7 @@ public:
                 static const QString ttyMidiPortName{"ttymidi:MIDI_"};
                 if (portName.startsWith(ttyMidiPortName)) {
                     humanReadableName = QString{"Midi 5-Pin"};
-                    zynthianId = portName;
-                    hardwareId = portName;
+                    hardwareId = zynthianId = ttyMidiPortName.left(ttyMidiPortName.length() - 1);
                 } else if (num_aliases > 0) {
                     int i;
                     for (i = 0; i < num_aliases; i++) {
@@ -539,12 +543,12 @@ public:
                     device->setInputPortName(inputPortName);
                     device->setInputEnabled(!disabledMidiInPorts.contains(device->zynthianId()));
                     connectPorts(portName, QString("ZLRouter:%1").arg(inputPortName));
-                    qDebug() << Q_FUNC_INFO << "Updated" << device->humanReadableName() << "input port" << device->inputPortName() << "enabled state to" << device->inputEnabled();
+                    qDebug() << Q_FUNC_INFO << "Updated" << device << device->humanReadableName() << "input port" << device->inputPortName() << "enabled state to" << device->inputEnabled();
                 } else if (jackPortFlags & JackPortIsInput) {
                     device->setOutputPortName(outputPortName);
                     device->setOutputEnabled(enabledMidiOutPorts.contains(device->zynthianId()));
                     connectPorts(QString("ZLRouter:%1").arg(outputPortName), portName);
-                    qDebug() << Q_FUNC_INFO << "Updated" << device->humanReadableName() << "output port" << device->outputPortName() << "enabled state to" << device->outputEnabled();
+                    qDebug() << Q_FUNC_INFO << "Updated" << device << device->humanReadableName() << "output port" << device->outputPortName() << "enabled state to" << device->outputEnabled();
                 }
                 if (connectedDevices.contains(device) == false) {
                     connectedDevices << device;
@@ -741,7 +745,7 @@ void MidiRouter::run() {
                     const int midiChannel = (message->byte0 & 0xf);
                     const int &midiNote = message->byte1;
                     const int &velocity = message->byte2;
-                    Q_EMIT noteChanged(listenerPort->identifier, midiNote, midiChannel, velocity, setOn, message->timeStamp, message->byte0, message->byte1, message->byte2, message->sketchpadTrack);
+                    Q_EMIT noteChanged(listenerPort->identifier, midiNote, midiChannel, velocity, setOn, message->timeStamp, message->byte0, message->byte1, message->byte2, message->sketchpadTrack, message->eventDevice->hardwareId());
                 }
                 Q_EMIT midiMessage(listenerPort->identifier, message->size, message->byte0, message->byte1, message->byte2, message->sketchpadTrack, message->fromInternal);
                 message->submitted = true;
@@ -758,6 +762,11 @@ float MidiRouter::processingLoad() const
 {
     // Jack returns a floating-point percent value, but we want it as a 0-1 floating point value
     return d->processingLoad / 100;
+}
+
+QObject * MidiRouter::model() const
+{
+    return d->devicesModel;
 }
 
 void MidiRouter::markAsDone() {
