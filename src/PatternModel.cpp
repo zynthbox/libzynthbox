@@ -1729,8 +1729,9 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                             if (nextStep > 0) {
                                 // Technically the steps are 0-indexed, but this makes displaying it a little easier, and it's inexpensive here anyway
                                 --nextStep;
-                                // Reset this clip's playfield offset by the distance from this clip to the clip we are asking to play next
-                                nextStep = (nextStep - nextPosition) * noteDuration;
+                                // Reset this clip's playfield offset by the distance from this clip to the clip we are asking to play
+                                // next (or, rather, move it forward to the end of the pattern, and then set it to the next step)
+                                nextStep = ((d->availableBars * d->width) - nextPosition + nextStep) * noteDuration;
                                 d->playfieldManager->setClipPlaystate(d->song, d->channelIndex, d->partIndex, PlayfieldManager::PlayingState, PlayfieldManager::CurrentPosition, d->playfieldManager->clipOffset(d->song, d->channelIndex, d->partIndex) + nextStep);
                             }
                             const int velocity{metaHash.value(velocityString, 64).toInt()};
