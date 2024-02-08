@@ -1822,7 +1822,12 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                                 addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, swingOffset), subnote, 64, true, avaialbleChannel);
                                                 addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, swingOffset + noteDuration), subnote, 64, false, avaialbleChannel);
                                             } else {
-                                                subnoteSender(subnote, metaHash);
+                                                const qint64 delay{metaHash.value(delayString, 0).toInt() + swingOffset};
+                                                // Only handle if the delay is zero or in the future (since if it's in
+                                                // the past, we'd be handling it twice, and at the wrong time)
+                                                if (delay >= 0) {
+                                                    subnoteSender(subnote, metaHash);
+                                                }
                                             }
                                         }
                                     }
