@@ -79,7 +79,7 @@ public:
      * @param position What position to set the state for (if set to CurrentPosition, we don't guarantee clip alignment)
      * @param offset Set the offset at the given position explicitly (only applies when setting CurrentPosition)
      */
-    Q_INVOKABLE void setClipPlaystate(const int &sketchpadSong, const int &sketchpadTrack, const int &clip, const PlaybackState &newState, const PlayfieldStatePosition &position = NextBarPosition, const qint64 &offset = 0);
+    Q_INVOKABLE void setClipPlaystate(const int &sketchpadSong, const int &sketchpadTrack, const int &clip, const PlaybackState &newState, const PlayfieldStatePosition &position = NextBarPosition, const qint64 &offset = -1);
 
     /**
      * \brief The current state of the given clip (optionally the scheduled one)

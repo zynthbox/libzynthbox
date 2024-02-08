@@ -34,9 +34,9 @@
 
 struct ClipState {
     ClipState() {}
-    void reset() {
+    void reset(qint64 resetOffset = 0) {
         state = PlayfieldManager::StoppedState;
-        offset = 0;
+        offset = resetOffset;
     }
     PlayfieldManager::PlaybackState state{PlayfieldManager::StoppedState};
     qint64 offset{0};
@@ -44,9 +44,9 @@ struct ClipState {
 
 struct TrackState {
     TrackState() {}
-    void reset() {
+    void reset(qint64 resetOffset = 0) {
         for (int part = 0; part < ZynthboxPartCount; ++part) {
-            clips[part].reset();
+            clips[part].reset(resetOffset);
         }
     }
     ClipState clips[ZynthboxPartCount];
@@ -54,9 +54,9 @@ struct TrackState {
 
 struct SongState {
     SongState() {}
-    void reset() {
+    void reset(qint64 resetOffset = 0) {
         for (int track = 0; track < ZynthboxTrackCount; ++track) {
-            tracks[track].reset();
+            tracks[track].reset(resetOffset);
         }
     }
     TrackState tracks[ZynthboxTrackCount];
@@ -64,9 +64,9 @@ struct SongState {
 
 struct SketchpadState {
     SketchpadState() {}
-    void reset() {
+    void reset(qint64 resetOffset = 0) {
         for (int song = 0; song < ZynthboxSongCount; ++song) {
-            songs[song].reset();
+            songs[song].reset(resetOffset);
         }
     }
     SongState songs[ZynthboxSongCount];
@@ -207,28 +207,38 @@ void PlayfieldManagerPrivate::handlePlayfieldStateChange(const int& songIndex, c
 {
     ClipState &currentClip = currentState.songs[songIndex].tracks[trackIndex].clips[clipIndex];
     ClipState &nextBarClip = nextBarState.songs[songIndex].tracks[trackIndex].clips[clipIndex];
-    if (currentClip.state != nextBarClip.state) {
+    const bool playbackStateDiffers{currentClip.state != nextBarClip.state};
+    const bool offsetNeedsAdjusting{nextBarClip.offset > -1};
+    if (playbackStateDiffers || offsetNeedsAdjusting) {
         currentClip.state = nextBarClip.state;
-        currentClip.offset = playhead;
+        if (offsetNeedsAdjusting) {
+            currentClip.offset = playhead + nextBarClip.offset;
+            nextBarClip.offset = -1;
+        }
         QMetaObject::invokeMethod(q, "playfieldStateChanged", Qt::QueuedConnection, Q_ARG(int, songIndex), Q_ARG(int, trackIndex), Q_ARG(int, clipIndex), Q_ARG(int, PlayfieldManager::CurrentPosition));
-        q->directPlayfieldStateChanged(songIndex, trackIndex, clipIndex, PlayfieldManager::CurrentPosition);
+        Q_EMIT q->directPlayfieldStateChanged(songIndex, trackIndex, clipIndex, PlayfieldManager::CurrentPosition);
         // Depending on the sketchpad track's type, we'll want to either outright start the
         // clip playing (if it's sample-looped), or just set the state (if it's midi, at which point
         // PatternModel handles the playback stuff)
         // Also, don't do this if we're in song mode (as that does its own clip scheduling)
         // qDebug() << Q_FUNC_INFO << "Updating" << songIndex << trackIndex << clipIndex << "to" << nextBarClip.state << "with destination" << zlSyncManager->destinations[songIndex][trackIndex];
         if (segmentHandler->songMode() == false && zlSyncManager->destinations[songIndex][trackIndex] == PatternModel::SampleLoopedDestination && zlSyncManager->sketches[songIndex][trackIndex][clipIndex] != nullptr) {
-            ClipCommand *clipCommand = syncTimer->getClipCommand();
-            clipCommand->startPlayback = currentClip.state == PlayfieldManager::PlayingState; // otherwise, the inversion below ensures it's a stop clip loop operation, and this function requires either a start or stop operation
-            clipCommand->stopPlayback = !clipCommand->startPlayback;
-            clipCommand->midiChannel = trackIndex;
-            clipCommand->clip = zlSyncManager->sketches[songIndex][trackIndex][clipIndex];
-            clipCommand->midiNote = 60;
-            clipCommand->changeVolume = true;
-            clipCommand->volume = 1.0; // this matches how the ClipAudioSource::Play function works
-            clipCommand->changeLooping = true;
-            clipCommand->looping = true;
-            syncTimer->scheduleClipCommand(clipCommand, 0);
+            if (playbackStateDiffers) {
+                ClipCommand *clipCommand = syncTimer->getClipCommand();
+                clipCommand->startPlayback = currentClip.state == PlayfieldManager::PlayingState; // otherwise, the inversion below ensures it's a stop clip loop operation, and this function requires either a start or stop operation
+                clipCommand->stopPlayback = !clipCommand->startPlayback;
+                clipCommand->midiChannel = trackIndex;
+                clipCommand->clip = zlSyncManager->sketches[songIndex][trackIndex][clipIndex];
+                clipCommand->midiNote = 60;
+                clipCommand->changeVolume = true;
+                clipCommand->volume = 1.0; // this matches how the ClipAudioSource::Play function works
+                clipCommand->changeLooping = true;
+                clipCommand->looping = true;
+                syncTimer->scheduleClipCommand(clipCommand, 0);
+            } else if (offsetNeedsAdjusting) {
+                // TODO We need a way for clip-command to reposition playback, so samples can do offset playback as well...
+                // That'll need doing above as well, if we're doing both at the same time, but offset adjusting can also happen at runtime, so...
+            }
         }
     }
 }
@@ -263,12 +273,12 @@ void PlayfieldManager::setClipPlaystate(const int& sketchpadSong, const int& ske
     // qDebug() << Q_FUNC_INFO << sketchpadSong << sketchpadTrack << clip << newState << position;
     if (-1 < sketchpadSong && sketchpadSong < ZynthboxSongCount && -1 < sketchpadTrack && sketchpadTrack < ZynthboxTrackCount && -1 < clip && clip < ZynthboxPartCount) {
         d->nextBarState.songs[sketchpadSong].tracks[sketchpadTrack].clips[clip].state = newState;
+        if (offset > -1) {
+            d->nextBarState.songs[sketchpadSong].tracks[sketchpadTrack].clips[clip].offset = offset;
+        }
         // If the position we want to change is the current one, then... we should handle the change immediately rather than wait for playback to catch up
         if (position == CurrentPosition) {
             d->handlePlayfieldStateChange(sketchpadSong, sketchpadTrack, clip);
-            if (offset > 0) {
-                d->currentState.songs[sketchpadSong].tracks[sketchpadTrack].clips[clip].offset = offset;
-            }
         } else {
             QMetaObject::invokeMethod(this, "playfieldStateChanged", Qt::QueuedConnection, Q_ARG(int, sketchpadSong), Q_ARG(int, sketchpadTrack), Q_ARG(int, clip), Q_ARG(int, position));
             Q_EMIT directPlayfieldStateChanged(sketchpadSong, sketchpadTrack, clip, position);
@@ -314,7 +324,7 @@ void PlayfieldManager::progressPlayback()
 void PlayfieldManager::stopPlayback()
 {
     d->playhead = 0;
-    d->nextBarState.reset();
+    d->nextBarState.reset(-1);
     d->currentState.reset();
 }
 
