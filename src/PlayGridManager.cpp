@@ -38,6 +38,7 @@
 #include "PlayfieldManager.h"
 
 #include <QQmlEngine>
+#include <QColor>
 #include <QDebug>
 #include <QDateTime>
 #include <QDir>
@@ -714,6 +715,45 @@ QObject* PlayGridManager::getSettingsStore(const QString& name)
         d->settingsContainers[name] = settings;
     }
     return settings;
+}
+
+const QColor & PlayGridManager::noteColor(const int& midiNote) const
+{
+    static const QColor colors[128]{
+            QColor::fromHsv(0, 80, 155), QColor::fromHsv(33, 90, 155), QColor::fromHsv(65, 100, 155), QColor::fromHsv(98, 110, 155), QColor::fromHsv(131, 120, 155),QColor::fromHsv(164, 130, 155),
+            QColor::fromHsv(196, 140, 155), QColor::fromHsv(229, 150, 155), QColor::fromHsv(262, 160, 155), QColor::fromHsv(295, 170, 155), QColor::fromHsv(327, 180, 155), QColor::fromHsv(359, 190, 155),
+
+            QColor::fromHsv(0, 80, 165), QColor::fromHsv(33, 90, 165), QColor::fromHsv(65, 100, 165), QColor::fromHsv(98, 110, 165), QColor::fromHsv(131, 120, 165),QColor::fromHsv(164, 130, 165),
+            QColor::fromHsv(196, 140, 165), QColor::fromHsv(229, 150, 165), QColor::fromHsv(262, 160, 165), QColor::fromHsv(295, 170, 165), QColor::fromHsv(327, 180, 165), QColor::fromHsv(359, 190, 165),
+
+            QColor::fromHsv(0, 80, 175), QColor::fromHsv(33, 90, 175), QColor::fromHsv(65, 100, 175), QColor::fromHsv(98, 110, 175), QColor::fromHsv(175, 120, 175),QColor::fromHsv(164, 130, 175),
+            QColor::fromHsv(196, 140, 175), QColor::fromHsv(229, 150, 175), QColor::fromHsv(262, 160, 175), QColor::fromHsv(295, 170, 175), QColor::fromHsv(327, 180, 175), QColor::fromHsv(359, 190, 175),
+
+            QColor::fromHsv(0, 80, 185), QColor::fromHsv(33, 90, 185), QColor::fromHsv(65, 100, 185), QColor::fromHsv(98, 110, 185), QColor::fromHsv(131, 120, 185),QColor::fromHsv(164, 130, 185),
+            QColor::fromHsv(196, 140, 185), QColor::fromHsv(229, 150, 185), QColor::fromHsv(262, 160, 185), QColor::fromHsv(295, 170, 185), QColor::fromHsv(327, 180, 185), QColor::fromHsv(359, 190, 185),
+
+            QColor::fromHsv(0, 80, 195), QColor::fromHsv(33, 90, 195), QColor::fromHsv(65, 100, 195), QColor::fromHsv(98, 110, 195), QColor::fromHsv(131, 120, 195),QColor::fromHsv(164, 130, 195),
+            QColor::fromHsv(196, 140, 195), QColor::fromHsv(229, 150, 195), QColor::fromHsv(262, 160, 195), QColor::fromHsv(295, 170, 195), QColor::fromHsv(327, 180, 195), QColor::fromHsv(359, 190, 195),
+
+            QColor::fromHsv(0, 80, 205), QColor::fromHsv(33, 90, 205), QColor::fromHsv(65, 100, 205), QColor::fromHsv(98, 110, 205), QColor::fromHsv(131, 120, 205),QColor::fromHsv(164, 130, 205),
+            QColor::fromHsv(196, 140, 205), QColor::fromHsv(229, 150, 205), QColor::fromHsv(262, 160, 205), QColor::fromHsv(295, 170, 205), QColor::fromHsv(327, 180, 205), QColor::fromHsv(359, 190, 205),
+
+            QColor::fromHsv(0, 80, 215), QColor::fromHsv(33, 90, 215), QColor::fromHsv(65, 100, 215), QColor::fromHsv(98, 110, 215), QColor::fromHsv(131, 120, 215),QColor::fromHsv(164, 130, 215),
+            QColor::fromHsv(196, 140, 215), QColor::fromHsv(229, 150, 215), QColor::fromHsv(262, 160, 215), QColor::fromHsv(295, 170, 215), QColor::fromHsv(327, 180, 215), QColor::fromHsv(359, 190, 215),
+
+            QColor::fromHsv(0, 80, 225), QColor::fromHsv(33, 90, 225), QColor::fromHsv(65, 100, 225), QColor::fromHsv(98, 110, 225), QColor::fromHsv(131, 120, 225),QColor::fromHsv(164, 130, 225),
+            QColor::fromHsv(196, 140, 225), QColor::fromHsv(229, 150, 225), QColor::fromHsv(262, 160, 225), QColor::fromHsv(295, 170, 225), QColor::fromHsv(327, 180, 225), QColor::fromHsv(359, 190, 225),
+
+            QColor::fromHsv(0, 80, 235), QColor::fromHsv(33, 90, 235), QColor::fromHsv(65, 100, 235), QColor::fromHsv(98, 110, 235), QColor::fromHsv(131, 120, 235),QColor::fromHsv(164, 130, 235),
+            QColor::fromHsv(196, 140, 235), QColor::fromHsv(229, 150, 235), QColor::fromHsv(262, 160, 235), QColor::fromHsv(295, 170, 235), QColor::fromHsv(327, 180, 235), QColor::fromHsv(359, 190, 235),
+
+            QColor::fromHsv(0, 80, 245), QColor::fromHsv(33, 90, 245), QColor::fromHsv(65, 100, 245), QColor::fromHsv(98, 110, 245), QColor::fromHsv(131, 120, 245),QColor::fromHsv(164, 130, 245),
+            QColor::fromHsv(196, 140, 245), QColor::fromHsv(229, 150, 245), QColor::fromHsv(262, 160, 245), QColor::fromHsv(295, 170, 245), QColor::fromHsv(327, 180, 245), QColor::fromHsv(359, 190, 245),
+
+            QColor::fromHsv(0, 80, 255), QColor::fromHsv(33, 90, 255), QColor::fromHsv(65, 100, 255), QColor::fromHsv(98, 110, 255), QColor::fromHsv(131, 120, 255),QColor::fromHsv(164, 130, 255),
+            QColor::fromHsv(196, 140, 255), QColor::fromHsv(229, 150, 255)
+    };
+    return colors[std::clamp(midiNote, 0, 127)];
 }
 
 QObject* PlayGridManager::getNamedInstance(const QString& name, const QString& qmlTypeName)

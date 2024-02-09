@@ -197,6 +197,14 @@ public:
     Q_INVOKABLE QObject* getNote(int midiNote, int sketchpadTrack = -1);
     Q_INVOKABLE QObject* getCompoundNote(const QVariantList &notes);
     Q_INVOKABLE QObject* getSettingsStore(const QString &name);
+
+    /**
+     * \brief Returns a colour representing the given midi note value
+     * @param midiNote A midi note value (will be clamped to 0 through 127)
+     * @return The colour representing the given note
+     */
+    Q_INVOKABLE const QColor &noteColor(const int &midiNote) const;
+
     /**
      * \brief Get a named instance of some QML type (newly created, or the same instance)
      * This will return the same instance for any named object you attempt to fetch. If an
