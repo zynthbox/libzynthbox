@@ -164,15 +164,15 @@ void PatternRunnable::run()
         bank = splitId[1].toInt();
     }
     if (pattern) {
-        int height = 12;
+        int height = 128;
         int width = pattern->width() * pattern->bankLength();
         img = QImage(width, height, QImage::Format_RGB32);
         // White dot for "got notes to play"
         static const QColor white{"white"};
         // Dark gray dot for "no note, but pattern is enabled"
-        static const QColor gray{160, 160, 160, 128};
+        static const QColor gray{"darkGray"};
         // Black dot for "bank is not within availableBars
-        static const QColor black{0, 0, 0, 64};
+        static const QColor black{"black"};
         img.fill(black);
         QPainter painter(&img);
         painter.fillRect(0, 0, pattern->availableBars() * pattern->width(), height, gray);
@@ -184,10 +184,19 @@ void PatternRunnable::run()
                         const QVariantList &subnotes = note->subnotes();
                         for (const QVariant &subnoteVar : subnotes) {
                             Note *subnote = subnoteVar.value<Note*>();
-                            // This really shouldn't happen, but let's make sure anyway...
-                            if (subnote->octave() < 12) {
-                                img.setPixelColor((row * pattern->width() + column), height - subnote->octave() - 1, white);
-                            }
+                            const int midiNote{subnote->midiNote()};
+                            const int yPos{height - midiNote - 1};
+                            const int xPos{(row * pattern->width() + column)};
+                            painter.setOpacity(0.5);
+                            painter.setPen(white);
+                            painter.drawLine(xPos, qMax(0, yPos - 3), xPos, qMin(127, yPos + 3));
+                            painter.drawLine(xPos, qMax(0, yPos - 2), xPos, qMin(127, yPos + 2));
+                            painter.drawLine(xPos, qMax(0, yPos - 1), xPos, qMin(127, yPos + 1));
+                        }
+                        for (const QVariant &subnoteVar : subnotes) {
+                            Note *subnote = subnoteVar.value<Note*>();
+                            const QColor &solid{white};
+                            img.setPixelColor((row * pattern->width() + column), height - subnote->midiNote() - 1, solid);
                         }
                     }
                 }
