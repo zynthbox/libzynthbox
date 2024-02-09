@@ -611,57 +611,62 @@ void SequenceModel::load(const QString &fileName)
 bool SequenceModel::save(const QString &fileName, bool exportOnly)
 {
     bool success = false;
-
-    QJsonObject sequenceObject;
-    sequenceObject["activePattern"] = activePattern();
-    sequenceObject["bpm"] = bpm();
-
-    QJsonDocument jsonDoc;
-    jsonDoc.setObject(sequenceObject);
-    QString data = jsonDoc.toJson();
-
-    QString saveToPath;
-    if (exportOnly) {
-        saveToPath = fileName;
+    if (d->isLoading) {
+        success = true;
     } else {
-        d->ensureFilePath(fileName);
-        saveToPath = d->filePath;
-    }
-    QDir sequenceLocation(saveToPath.left(saveToPath.lastIndexOf("/")));
-    QDir patternLocation(saveToPath.left(saveToPath.lastIndexOf("/")) + "/patterns");
-    if (sequenceLocation.exists() || sequenceLocation.mkpath(sequenceLocation.path())) {
-        QFile dataFile(saveToPath);
-        if (dataFile.open(QIODevice::WriteOnly) && dataFile.write(data.toUtf8())) {
-            dataFile.close();
-            if (patternLocation.exists() || patternLocation.mkpath(patternLocation.path())) {
-                bool hasAnyPattern{false};
-                // The filename for patterns is "part(trackIndex)(partLetter).pattern.json"
-                for (int i = 0; i < PATTERN_COUNT; ++i) {
-                    PatternModel *pattern = d->patternModelIterator[i];
-                    if (pattern) {
-                        QString patternIdentifier = QString::number(i + 1);
-                        if (pattern->channelIndex() > -1 && pattern->partIndex() > -1) {
-                            patternIdentifier = QString("%1%2").arg(QString::number(pattern->channelIndex() + 1)).arg(partNames[pattern->partIndex()]);
-                        }
-                        QString fileName = QString("%1/part%2.pattern.json").arg(patternLocation.path()).arg(patternIdentifier);
-                        QFile patternFile(fileName);
-                        if (pattern->hasNotes()) {
-                            pattern->exportToFile(fileName);
-                            hasAnyPattern = true;
-                        } else if (patternFile.exists()) {
-                            patternFile.remove();
+        QJsonObject sequenceObject;
+        sequenceObject["activePattern"] = activePattern();
+        sequenceObject["bpm"] = bpm();
+
+        QJsonDocument jsonDoc;
+        jsonDoc.setObject(sequenceObject);
+        QString data = jsonDoc.toJson();
+
+        QString saveToPath;
+        if (exportOnly) {
+            saveToPath = fileName;
+        } else {
+            d->ensureFilePath(fileName);
+            saveToPath = d->filePath;
+        }
+        QDir sequenceLocation(saveToPath.left(saveToPath.lastIndexOf("/")));
+        QDir patternLocation(saveToPath.left(saveToPath.lastIndexOf("/")) + "/patterns");
+        if (sequenceLocation.exists() || sequenceLocation.mkpath(sequenceLocation.path())) {
+            QFile dataFile(saveToPath);
+            if (dataFile.open(QIODevice::WriteOnly) && dataFile.write(data.toUtf8())) {
+                dataFile.close();
+                if (patternLocation.exists() || patternLocation.mkpath(patternLocation.path())) {
+                    bool hasAnyPattern{false};
+                    // The filename for patterns is "part(trackIndex)(partLetter).pattern.json"
+                    for (int i = 0; i < PATTERN_COUNT; ++i) {
+                        PatternModel *pattern = d->patternModelIterator[i];
+                        if (pattern) {
+                            QString patternIdentifier = QString::number(i + 1);
+                            if (pattern->channelIndex() > -1 && pattern->partIndex() > -1) {
+                                patternIdentifier = QString("%1%2").arg(QString::number(pattern->channelIndex() + 1)).arg(partNames[pattern->partIndex()]);
+                            }
+                            QString fileName = QString("%1/part%2.pattern.json").arg(patternLocation.path()).arg(patternIdentifier);
+                            QFile patternFile(fileName);
+                            if (pattern->hasNotes()) {
+                                pattern->exportToFile(fileName);
+                                hasAnyPattern = true;
+                            } else if (patternFile.exists()) {
+                                qDebug() << Q_FUNC_INFO << "Pattern" << patternIdentifier << "in sequence" << objectName() << "has no notes, but the file exists, so delete it";
+                                patternFile.remove();
+                            }
                         }
                     }
+                    if (hasAnyPattern == false) {
+                        // If we've not got any patterns, get rid of the container folder again, keep things nice and lean and clean
+                        qDebug() << Q_FUNC_INFO << "No patterns in sequence" << objectName() << "have notes, get rid of the sequences folder" << sequenceLocation.path();
+                        sequenceLocation.removeRecursively();
+                    }
                 }
-                if (hasAnyPattern == false) {
-                    // If we've not got any patterns, get rid of the container folder again, keep things nice and lean and clean
-                    sequenceLocation.removeRecursively();
-                }
+                success = true;
             }
-            success = true;
         }
+        setIsDirty(false);
     }
-    setIsDirty(false);
     return success;
 }
 
