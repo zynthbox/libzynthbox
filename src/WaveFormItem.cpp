@@ -77,6 +77,8 @@ void WaveFormItem::setSource(QString &source)
                 m_externalThumbnailChannel = AudioLevels::instance()->audioLevelsChannel(channelIndex);
             }
         } else {
+            m_thumbnail.clear();
+
             juce::File file(source.toUtf8().constData());
             auto *reader = AudioLevels::instance()->m_formatManager.createReaderFor(file);
 
