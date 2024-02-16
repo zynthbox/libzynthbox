@@ -16,7 +16,9 @@
 
 class MidiRouterDevicePrivate {
 public:
-    MidiRouterDevicePrivate () {
+    MidiRouterDevicePrivate (MidiRouterDevice *q)
+        : q(q)
+    {
         DeviceMessageTranslations::load();
         for (int channel = 0; channel < 16; ++channel) {
             acceptsChannel[channel] = true;
@@ -30,6 +32,7 @@ public:
             }
         }
     }
+    MidiRouterDevice *q{nullptr};
     MidiRouter *router{nullptr};
     // Use this on any outgoing events, to ensure the event matches the device's master channel setup
     // Remember to call the function below after processing the event
@@ -65,6 +68,7 @@ public:
     bool sendBeatClock{true};
     // Zynthbox' master channel
     int globalMaster{-1};
+    bool filterZynthianByChannel{false};
 
     jack_port_t *inputPort{nullptr};
     void *inputBuffer{nullptr};
@@ -77,7 +81,7 @@ public:
 
 MidiRouterDevice::MidiRouterDevice(jack_client_t *jackClient, MidiRouter *parent)
     : QObject(parent)
-    , d(new MidiRouterDevicePrivate)
+    , d(new MidiRouterDevicePrivate(this))
 {
     d->router = parent;
     DeviceMessageTranslations::load();
@@ -395,6 +399,16 @@ void MidiRouterDevice::setAcceptedMidiChannels(const QList<int>& acceptedMidiCha
     }
 }
 
+void MidiRouterDevice::setFilterZynthianOutputByChannel(const bool& filterZynthianByChannel)
+{
+    d->filterZynthianByChannel = filterZynthianByChannel;
+}
+
+bool MidiRouterDevice::filterZynthianOutputByChannel() const
+{
+    return d->filterZynthianByChannel;
+}
+
 void MidiRouterDevice::setDeviceDirection(const DeviceDirection& direction, const bool& supportsDirection)
 {
     d->direction.setFlag(direction, supportsDirection);
@@ -485,15 +499,15 @@ const void MidiRouterDevicePrivate::zynthboxToDevice(jack_midi_event_t* event) c
                 if (eventChannel > globalMaster) {
                     // Then it's between device master and global, so we move it down one channel
                     event->buffer[0] = byte0 - 1;
-                    // qDebug() << Q_FUNC_INFO << "Moving event down from" << eventChannel << "to" << eventChannel - 1 << "for byte0" << event->buffer[0];
+                    // qDebug() << Q_FUNC_INFO << q << "Moving event down from" << eventChannel << "to" << eventChannel - 1 << "for byte0" << event->buffer[0];
                 } else if (eventChannel < globalMaster) {
                     // Then it's between global and device master, so we move it up one channel
                     event->buffer[0] = byte0 + 1;
-                    // qDebug() << Q_FUNC_INFO << "Moving event up from" << eventChannel << "to" << eventChannel + 1 << "for byte0" << event->buffer[0];
+                    // qDebug() << Q_FUNC_INFO << q << "Moving event up from" << eventChannel << "to" << eventChannel + 1 << "for byte0" << event->buffer[0];
                 } else if (eventChannel == globalMaster) {
-                    // Then it's on the device master, and should be on the global master channel
+                    // Then it's on the global master, and should be on the device master channel
                     event->buffer[0] = byte0 - globalMaster + masterChannel;
-                    // qDebug() << Q_FUNC_INFO << "Moving event from" << globalMaster << "to device master" << masterChannel << "for byte0" << event->buffer[0];
+                    // qDebug() << Q_FUNC_INFO << q << "Moving event from global master" << globalMaster << "to device master" << masterChannel << "for byte0" << event->buffer[0];
                 }
             }
         }
@@ -516,15 +530,15 @@ const void MidiRouterDevicePrivate::deviceToZynthbox(jack_midi_event_t* event) c
                 if (eventChannel > masterChannel) {
                     // Then it's between device master and global, so we move it down one channel
                     event->buffer[0] = byte0 - 1;
-                    // qDebug() << Q_FUNC_INFO << "Moving event down from" << eventChannel << "to" << eventChannel - 1 << "for byte0" << event->buffer[0];
+                    // qDebug() << Q_FUNC_INFO << q << "Moving event down from" << eventChannel << "to" << eventChannel - 1 << "for byte0" << event->buffer[0];
                 } else if (eventChannel < masterChannel) {
                     // Then it's between global and device master, so we move it up one channel
                     event->buffer[0] = byte0 + 1;
-                    // qDebug() << Q_FUNC_INFO << "Moving event up from" << eventChannel << "to" << eventChannel + 1 << "for byte0" << event->buffer[0];
+                    // qDebug() << Q_FUNC_INFO << q << "Moving event up from" << eventChannel << "to" << eventChannel + 1 << "for byte0" << event->buffer[0];
                 } else if (eventChannel == masterChannel) {
                     // Then it's on the device master, and should be on the global master channel
                     event->buffer[0] = byte0 - masterChannel + globalMaster;
-                    // qDebug() << Q_FUNC_INFO << "Moving event from" << eventChannel << "to global master" << globalMaster << "for byte0" << event->buffer[0];
+                    // qDebug() << Q_FUNC_INFO << q << "Moving event from device master" << eventChannel << "to global master" << globalMaster << "for byte0" << event->buffer[0];
                 }
             }
         }

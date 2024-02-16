@@ -25,6 +25,7 @@ public:
         SynthType = 0x2,
         TimeCodeGeneratorType = 0x4,
         HardwareDeviceType = 0x8,
+        MasterTrackType = 0x16,
     };
     Q_DECLARE_FLAGS(DeviceTypes, DeviceType)
     explicit MidiRouterDevice(jack_client_t *jackClient, MidiRouter *parent = nullptr);
@@ -206,6 +207,19 @@ public:
      * @param acceptedMidiChannels The midi channels this device will accept notes on
      */
     void setAcceptedMidiChannels(const QList<int> &acceptedMidiChannels);
+
+    /**
+     * \brief Set to true if this device should filter output sent to zynthian destinations by the event's channel
+     * @param filterZynthianByChannel True if the device should filter before sending, false if not
+     */
+    void setFilterZynthianOutputByChannel(const bool &filterZynthianByChannel);
+    /**
+     * \brief Whether this device should filter output sent to zynthian destinations by the event's channel
+     * @note This will force all events with a channel coming from this device to be routed specifically and explicitly to the related zynthian output, whatever the current track is
+     * @return True if the device should filter events by matching the events channel to zynthian destinations' indices
+     * @default false
+     */
+    bool filterZynthianOutputByChannel() const;
 
     /**
      * \brief Mark the device as being (or not being) some type or another
