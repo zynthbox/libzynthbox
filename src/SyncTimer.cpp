@@ -64,15 +64,14 @@ struct alignas(64) StepData {
             // The clip commands, once sent out, become owned by SampelerSynth, so leave them alone
             timerCommands.clear();
             clipCommands.clear();
-            for (int track = 0; track < ZynthboxTrackCount; ++track) {
+            for (int track = 0; track < ZynthboxTrackCount + 1; ++track) {
                 trackBuffer[track].clear();
             }
             // midiBuffer.clear();
         }
     }
     void insertMidiBuffer(const juce::MidiBuffer &buffer, int sketchpadTrack);
-    // juce::MidiBuffer midiBuffer;
-    juce::MidiBuffer trackBuffer[ZynthboxTrackCount];
+    juce::MidiBuffer trackBuffer[ZynthboxTrackCount + 1];
     QList<ClipCommand*> clipCommands;
     QList<TimerCommand*> timerCommands;
 
@@ -318,7 +317,9 @@ public:
         }
     }
     quint64 noteActivations[16][128];
+    // The jack frame time after which a midi channel is available on this track
     quint64 channelAvailableAfter[16];
+    // Lets the track itself know what its index is (if left alone, the track will be assumed to be the master track)
     int index{-1};
 };
 
@@ -333,6 +334,9 @@ public:
             jackPort[track] = nullptr;
             tracks[track].index = track;
         }
+        jackPort[ZynthboxTrackCount] = nullptr;
+        tracks[ZynthboxTrackCount].index = -1;
+
         transportManager = TransportManager::instance(q);
         timerThread = new SyncTimerThread(q);
         int result = mlock(stepRing, sizeof(StepData) * StepRingCount);
@@ -416,10 +420,14 @@ public:
     /**
      * \brief Convert the given sketchpadTrack to a reasonable number (clamp and adjust for defaults)
      * @param sketchpadTrack An integer number
-     * @return If given a -1, value becomes the current track. Otherwise it the given value is clamped between 0 and ZynthboxTrackCount
+     * @return If given a -1, value becomes the current track. If given a -2, the master track is returned. Otherwise it the given value is clamped between 0 and ZynthboxTrackCount
      */
     inline const int sketchpadTrack(int sketchpadTrack) {
-        return sketchpadTrack == -1 ? currentTrack : std::clamp(sketchpadTrack, 0, ZynthboxTrackCount - 1);
+        return sketchpadTrack == -1
+            ? currentTrack
+            : sketchpadTrack == -2
+                ? ZynthboxTrackCount
+                : std::clamp(sketchpadTrack, 0, ZynthboxTrackCount - 1);
     }
 
     TimerCommandRing timerCommandsToDelete;
@@ -482,11 +490,10 @@ public:
     }
     quint64 recentlyRequestedBpm{120};
 
-    // The time after which a midi channel is available on a given track
-    SketchpadTrack tracks[ZynthboxTrackCount];
+    SketchpadTrack tracks[ZynthboxTrackCount + 1];
 
     jack_client_t* jackClient{nullptr};
-    jack_port_t* jackPort[ZynthboxTrackCount];
+    jack_port_t* jackPort[ZynthboxTrackCount + 1];
     quint64 jackPlayhead{0};
     quint64 jackCumulativePlayhead{0};
     // Used to calculate the quantized block rate BPM for the jack transport position's beats_per_minute field (jackBeatsPerMinute)
@@ -514,11 +521,11 @@ public:
     quint64 jackPlayheadReturn{0};
     quint64 jackSubbeatLengthInMicrosecondsReturn{0};
 
-    juce::MidiBuffer missingBitsBuffer[ZynthboxTrackCount];
+    juce::MidiBuffer missingBitsBuffer[ZynthboxTrackCount + 1];
     int process(jack_nframes_t nframes) {
         // const std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
-        void *buffer[ZynthboxTrackCount];
-        for (int track = 0; track < ZynthboxTrackCount; ++track) {
+        void *buffer[ZynthboxTrackCount + 1];
+        for (int track = 0; track < ZynthboxTrackCount + 1; ++track) {
             buffer[track] = jack_port_get_buffer(jackPort[track], nframes);
             jack_midi_clear_buffer(buffer[track]);
         }
@@ -572,7 +579,7 @@ public:
         jack_nframes_t firstAvailableFrame{0};
         jack_nframes_t relativePosition{0};
         int errorCode{0};
-        for (int track = 0; track < ZynthboxTrackCount; ++track) {
+        for (int track = 0; track < ZynthboxTrackCount + 1; ++track) {
             // In case there were any missing events from the last run... we do that first, and then we get onto the rest of the events
             // This is going to be an extremely rare case, and if it happens there's likely something more substantial wrong, but best safe.
             if (missingBitsBuffer[track].isEmpty() == false) {
@@ -615,7 +622,7 @@ public:
             if (!stepData->played) {
                 stepData->played = true;
                 // First, let's get the midi messages sent out
-                for (int track = 0; track < ZynthboxTrackCount; ++track) {
+                for (int track = 0; track < ZynthboxTrackCount + 1; ++track) {
                     if (writeBeatTick) {
                         jack_midi_event_write(buffer[track], relativePosition, &jackMidiBeatMessage, 1);
                     }
@@ -741,25 +748,24 @@ public:
                             break;
                         case TimerCommand::SendMidiMessageOperation:
                             {
-                                if (-1 < command->parameter && command->parameter < ZynthboxTrackCount) {
-                                    size_t size = 3;
-                                    const jack_midi_data_t message[3]{jack_midi_data_t(command->parameter2), jack_midi_data_t(command->parameter3), jack_midi_data_t(command->parameter4)};
-                                    if (-1 < command->parameter4 && command->parameter4 < 256) {
-                                        size = 3;
-                                    } else if (-1 < command->parameter3 && command->parameter3 < 256) {
-                                        size = 2;
-                                    } else {
-                                        size = 1;
-                                    }
-                                    errorCode = jack_midi_event_write(buffer[command->parameter], relativePosition, message, size);
-                                    if (errorCode == ENOBUFS) {
-                                        qWarning() << Q_FUNC_INFO << "Ran out of space while writing events - scheduling the event there's not enough space for to be fired first next round";
-                                        // Schedule the rest of the buffer for immediate dispatch on next go-around
-                                        missingBitsBuffer[command->parameter].addEvent(message, int(size), 0);
-                                    } else {
-                                        if (errorCode != 0) {
-                                            qWarning() << Q_FUNC_INFO << "Error writing midi event:" << -errorCode << strerror(-errorCode);
-                                        }
+                                const int trackIndex{sketchpadTrack(command->parameter)};
+                                size_t size = 3;
+                                const jack_midi_data_t message[3]{jack_midi_data_t(command->parameter2), jack_midi_data_t(command->parameter3), jack_midi_data_t(command->parameter4)};
+                                if (-1 < command->parameter4 && command->parameter4 < 256) {
+                                    size = 3;
+                                } else if (-1 < command->parameter3 && command->parameter3 < 256) {
+                                    size = 2;
+                                } else {
+                                    size = 1;
+                                }
+                                errorCode = jack_midi_event_write(buffer[trackIndex], relativePosition, message, size);
+                                if (errorCode == ENOBUFS) {
+                                    qWarning() << Q_FUNC_INFO << "Ran out of space while writing events - scheduling the event there's not enough space for to be fired first next round";
+                                    // Schedule the rest of the buffer for immediate dispatch on next go-around
+                                    missingBitsBuffer[trackIndex].addEvent(message, int(size), 0);
+                                } else {
+                                    if (errorCode != 0) {
+                                        qWarning() << Q_FUNC_INFO << "Error writing midi event:" << -errorCode << strerror(-errorCode);
                                     }
                                 }
                                 break;
@@ -967,7 +973,7 @@ void client_latency_callback(jack_latency_callback_mode_t mode, void *arg)
     if (mode == JackPlaybackLatency) {
         SyncTimerPrivate *d = static_cast<SyncTimerPrivate*>(arg);
         jack_latency_range_t range;
-        jack_port_get_latency_range (d->jackPort[0], JackPlaybackLatency, &range);
+        jack_port_get_latency_range(d->jackPort[ZynthboxTrackCount], JackPlaybackLatency, &range);
         if (range.max != d->jackLatency) {
             jack_nframes_t bufferSize = jack_get_buffer_size(d->jackClient);
             jack_nframes_t sampleRate = jack_get_sample_rate(d->jackClient);
@@ -997,7 +1003,8 @@ SyncTimer::SyncTimer(QObject *parent)
         for (int track = 0; track < ZynthboxTrackCount; ++track) {
             d->jackPort[track] = jack_port_register(d->jackClient, QString("Track%1").arg(track).toUtf8(), JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
         }
-        if (d->jackPort[0]) {
+        d->jackPort[ZynthboxTrackCount] = jack_port_register(d->jackClient, "MasterTrack", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+        if (d->jackPort[ZynthboxTrackCount]) {
             // Set the process callback.
             if (jack_set_process_callback(d->jackClient, client_process, static_cast<void*>(d)) == 0) {
                 jack_set_xrun_callback(d->jackClient, client_xrun, static_cast<void*>(d));
@@ -1007,7 +1014,7 @@ SyncTimer::SyncTimer(QObject *parent)
                     qInfo() << "Successfully created and set up the SyncTimer's Jack client";
                     zl_set_jack_client_affinity(d->jackClient);
                     jack_latency_range_t range;
-                    jack_port_get_latency_range (d->jackPort[0], JackPlaybackLatency, &range);
+                    jack_port_get_latency_range (d->jackPort[ZynthboxTrackCount], JackPlaybackLatency, &range);
                     jack_nframes_t bufferSize = jack_get_buffer_size(d->jackClient);
                     jack_nframes_t sampleRate = jack_get_sample_rate(d->jackClient);
                     d->jackLatency = (1000 * (double)qMax(bufferSize, range.max)) / (double)sampleRate;
@@ -1144,7 +1151,7 @@ void SyncTimer::stop() {
 
     // A touch of hackery to ensure we end immediately, and leave a clean state
     // We want to fire off all the midi events we've got scheduled, except we want to make the on notes silent
-    juce::MidiBuffer midiBuffers[ZynthboxTrackCount];
+    juce::MidiBuffer midiBuffers[ZynthboxTrackCount + 1];
     // We also want to fire off all the clip commands (so they happen, but without making noises)
     QList<ClipCommand*> clipCommands;
     // We also want to clean up the step, so timer commands still happen at the expected times, without the other two happening
@@ -1154,7 +1161,7 @@ void SyncTimer::stop() {
         if (!stepData->played) {
             stepData->played = true;
             // First, collect all the queued midi messages
-            for (int track = 0; track < ZynthboxTrackCount; ++track) {
+            for (int track = 0; track < ZynthboxTrackCount + 1; ++track) {
                 for (const juce::MidiMessageMetadata& message : stepData->trackBuffer[track]) {
                     juce::MidiMessage midiMessage = message.getMessage();
                     if (midiMessage.isNoteOn()) {
@@ -1177,7 +1184,7 @@ void SyncTimer::stop() {
         }
     }
     // And now everything has been marked as sent out, let's re-schedule the things that actually want to go out
-    for (int track = 0; track < ZynthboxTrackCount; ++track) {
+    for (int track = 0; track < ZynthboxTrackCount + 1; ++track) {
         if (!midiBuffers[track].isEmpty()) {
             d->missingBitsBuffer[track].addEvents(midiBuffers[track], 0, -1, d->missingBitsBuffer[track].getLastEventTime());
             // qDebug() << Q_FUNC_INFO << "All the events for track" << track << ":";

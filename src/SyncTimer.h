@@ -274,7 +274,7 @@ public:
    * @param velocity The velocity of the note (only matters if you're turning it on)
    * @param duration An optional duration for on notes (0 means don't schedule a release, higher will schedule an off at the durationth beat from the start of the note)
    * @param delay A delay in numbers of timer ticks counting from the current position
-   * @param sketchpadTrack The sketchpad track to schedule this to (-1 will send to the current track)
+   * @param sketchpadTrack The sketchpad track to schedule this to (-1 will send to the current track, -2 will send to the master track)
    */
   void scheduleNote(unsigned char midiNote, unsigned char midiChannel, bool setOn, unsigned char velocity, quint64 duration, quint64 delay, int sketchpadTrack = -1);
 
@@ -283,7 +283,7 @@ public:
    * @note This is not thread-safe in itself - when the timer is running, don't call this function outside of a callback
    * @param buffer The buffer that you wish to add to the schedule
    * @param delay The delay (if any) you wish to add
-   * @param sketchpadTrack The sketchpad track to schedule this to (-1 will send to the current track)
+   * @param sketchpadTrack The sketchpad track to schedule this to (-1 will send to the current track, -2 will send to the master track)
    */
   void scheduleMidiBuffer(const juce::MidiBuffer& buffer, quint64 delay, int sketchpadTrack = -1);
 
@@ -293,7 +293,7 @@ public:
    * @param midiChannel The channel you wish to change the given note on
    * @param setOn Whether or not you are turning the note on
    * @param velocity The velocity of the note (only matters if you're turning it on)
-   * @param sketchpadTrack The sketchpad track to send this to (-1 will send to the current track)
+   * @param sketchpadTrack The sketchpad track to send this to (-1 will send to the current track, -2 will send to the master track)
    */
   void sendNoteImmediately(unsigned char midiNote, unsigned char midiChannel, bool setOn, unsigned char velocity, int sketchpadTrack = -1);
 
@@ -303,14 +303,14 @@ public:
    * @param byte0 The first byte of the message
    * @param byte1 The second byte of the message
    * @param byte2 The third byte of the message
-   * @param sketchpadTrack The sketchpad track to send this to (-1 will send to the current track)
+   * @param sketchpadTrack The sketchpad track to send this to (-1 will send to the current track, -2 will send to the master track)
    */
   Q_INVOKABLE void sendMidiMessageImmediately(int size, int byte0, int byte1 = 0, int byte2 = 0, int sketchpadTrack = -1);
   /**
    * \brief Send a program change to the given channel (will be sent to all external devices)
    * @param midiChannel The midi channel to send the message to
    * @param program The new value (will be clamped to 0 through 127)
-   * @param sketchpadTrack The sketchpad track to send this to (-1 will send to the current track)
+   * @param sketchpadTrack The sketchpad track to send this to (-1 will send to the current track, -2 will send to the master track)
    */
   Q_INVOKABLE void sendProgramChangeImmediately(int midiChannel, int program, int sketchpadTrack = -1);
   /**
@@ -318,16 +318,28 @@ public:
    * @param midiChannel The midi channel to send the message to
    * @param control The control (a conceptual knob, will be clamped between to 0 through 127)
    * @param value The value of the control (will be clamped to 0 through 127)
-   * @param sketchpadTrack The sketchpad track to send this to (-1 will send to the current track)
+   * @param sketchpadTrack The sketchpad track to send this to (-1 will send to the current track, -2 will send to the master track)
    */
   Q_INVOKABLE void sendCCMessageImmediately(int midiChannel, int control, int value, int sketchpadTrack = -1);
 
   /**
    * \brief Send a set of midi messages out immediately (ensuring they go through the step sequencer output)
    * @param buffer The buffer that you wish to send out immediately
-   * @param sketchpadTrack The sketchpad track to send this to (-1 will send to the current track)
+   * @param sketchpadTrack The sketchpad track to send this to (-1 will send to the current track, -2 will send to the master track)
    */
   void sendMidiBufferImmediately(const juce::MidiBuffer& buffer, int sketchpadTrack = -1);
+
+  /**
+   * \brief A convenience getter which returns what should be used to schedule things onto the current track
+   * @return A value to be used to indicate the current track when performing scheduling operations
+   */
+  const int currentSketchpadTrack() const { return -1; };
+  /**
+   * \brief Convenience getter which returns what should be used to schedule things onto the master control track
+   * @see scheduleMidiBuffer
+   * @return A value to be used to indicate the master control track when performing scheduling operations
+   */
+  const int masterSketchpadTrack() const { return -2; };
 
   bool timerRunning();
   Q_SIGNAL void timerRunningChanged();
