@@ -1,4 +1,5 @@
-#pragma once
+#ifndef PYSIDE_BINDINGS_H
+#define PYSIDE_BINDINGS_H
 
 #define JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED 1
 
@@ -11,3 +12,5 @@
 #include <PlayfieldManager.h>
 #include <Plugin.h>
 #include <SyncTimer.h>
+
+#endif//PYSIDE_BINDINGS_H

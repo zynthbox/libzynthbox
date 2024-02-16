@@ -132,6 +132,9 @@ public:
         ExternalOutPort = 3,
     };
     Q_ENUM( ListenerPort )
+// Ouch not cool hack: https://forum.qt.io/topic/130255/shiboken-signals-don-t-work
+// Core message (by vberlier): Turns out Shiboken shouldn't do anything for signals and let PySide setup the signals using the MOC data. Shiboken generates bindings for signals as if they were plain methods and shadows the actual signals.
+#ifndef PYSIDE_BINDINGS_H
     /**
      * \brief Fired whenever a note has changed
      * @param port The listener port the message arrived on (you will likely want to filter on just managing PassthroughPort, unless you have a specific reason)
@@ -158,7 +161,7 @@ public:
      * @param fromInternal Whether the message arrived from an internal source
      */
     Q_SIGNAL void midiMessage(int port, int size, const unsigned char &byte1, const unsigned char &byte2, const unsigned char& byte3, const int &sketchpadTrack, bool fromInternal);
-
+#endif
 private:
     MidiRouterPrivate *d{nullptr};
 };
