@@ -215,7 +215,7 @@ void PlayfieldManagerPrivate::handlePlayfieldStateChange(const int& songIndex, c
             currentClip.offset = playhead + nextBarClip.offset;
             nextBarClip.offset = -1;
         }
-        QMetaObject::invokeMethod(q, "playfieldStateChanged", Qt::QueuedConnection, Q_ARG(int, songIndex), Q_ARG(int, trackIndex), Q_ARG(int, clipIndex), Q_ARG(int, PlayfieldManager::CurrentPosition));
+        QMetaObject::invokeMethod(q, "playfieldStateChanged", Qt::QueuedConnection, Q_ARG(int, songIndex), Q_ARG(int, trackIndex), Q_ARG(int, clipIndex), Q_ARG(int, PlayfieldManager::CurrentPosition), Q_ARG(int, currentClip.state));
         Q_EMIT q->directPlayfieldStateChanged(songIndex, trackIndex, clipIndex, PlayfieldManager::CurrentPosition);
         // Depending on the sketchpad track's type, we'll want to either outright start the
         // clip playing (if it's sample-looped), or just set the state (if it's midi, at which point
@@ -272,15 +272,20 @@ void PlayfieldManager::setClipPlaystate(const int& sketchpadSong, const int& ske
 {
     // qDebug() << Q_FUNC_INFO << sketchpadSong << sketchpadTrack << clip << newState << position;
     if (-1 < sketchpadSong && sketchpadSong < ZynthboxSongCount && -1 < sketchpadTrack && sketchpadTrack < ZynthboxTrackCount && -1 < clip && clip < ZynthboxPartCount) {
-        d->nextBarState.songs[sketchpadSong].tracks[sketchpadTrack].clips[clip].state = newState;
-        if (offset > -1) {
-            d->nextBarState.songs[sketchpadSong].tracks[sketchpadTrack].clips[clip].offset = offset;
+        ClipState &nextBarClip = d->nextBarState.songs[sketchpadSong].tracks[sketchpadTrack].clips[clip];
+        const bool playbackStateDiffers{nextBarClip.state != newState};
+        const bool offsetNeedsAdjusting{offset > -1};
+        if (playbackStateDiffers) {
+            nextBarClip.state = newState;
+        }
+        if (offsetNeedsAdjusting) {
+            nextBarClip.offset = offset;
         }
         // If the position we want to change is the current one, then... we should handle the change immediately rather than wait for playback to catch up
         if (position == CurrentPosition) {
             d->handlePlayfieldStateChange(sketchpadSong, sketchpadTrack, clip);
-        } else {
-            QMetaObject::invokeMethod(this, "playfieldStateChanged", Qt::QueuedConnection, Q_ARG(int, sketchpadSong), Q_ARG(int, sketchpadTrack), Q_ARG(int, clip), Q_ARG(int, position));
+        } else if (playbackStateDiffers || offsetNeedsAdjusting) {
+            QMetaObject::invokeMethod(this, "playfieldStateChanged", Qt::QueuedConnection, Q_ARG(int, sketchpadSong), Q_ARG(int, sketchpadTrack), Q_ARG(int, clip), Q_ARG(int, position), Q_ARG(int, newState));
             Q_EMIT directPlayfieldStateChanged(sketchpadSong, sketchpadTrack, clip, position);
         }
     }

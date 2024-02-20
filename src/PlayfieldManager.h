@@ -107,8 +107,9 @@ public:
      * @param sketchpadTrack The sketchpad track the clip is on
      * @param clip The clip in the track whose state has changed
      * @param position Which position has changed state (the value will be one of PlayfieldStatePosition)
+     * @param state The new state for the given position
      */
-    Q_SIGNAL void playfieldStateChanged(const int &sketchpadSong, const int &sketchpadTrack, const int &clip, const int &position);
+    Q_SIGNAL void playfieldStateChanged(const int &sketchpadSong, const int &sketchpadTrack, const int &clip, const int &position, const int &state);
 
     void startPlayback();
     void progressPlayback();
