@@ -54,6 +54,7 @@
 #include "SyncTimer.h"
 #include "ZLEngineBehaviour.h"
 #include "PlayfieldManager.h"
+#include "KeyScales.h"
 
 #include "Plugin.h"
 
@@ -234,6 +235,9 @@ void Plugin::initialize()
     qRegisterMetaType<WaveFormItem*>("WaveFormItem");
     qRegisterMetaType<Plugin*>("Plugin");
 
+    qDebug() << "Initialising KeyScales";
+    KeyScales::instance();
+
     qDebug() << "Initialising SyncTimer";
     SyncTimer::instance();
 
@@ -344,6 +348,13 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
         Plugin *plugin = instance();
         QQmlEngine::setObjectOwnership(plugin, QQmlEngine::CppOwnership);
         return plugin;
+    });
+    qmlRegisterSingletonType<KeyScales>(uri, 1, 0, "KeyScales", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
+        Q_UNUSED(engine)
+        Q_UNUSED(scriptEngine)
+        KeyScales *keyScales = KeyScales::instance();
+        QQmlEngine::setObjectOwnership(keyScales, QQmlEngine::CppOwnership);
+        return keyScales;
     });
     qmlRegisterType<WaveFormItem>(uri, 1, 0, "WaveFormItem");
 }
