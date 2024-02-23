@@ -51,6 +51,7 @@
 #include <QStandardPaths>
 #include <QSettings>
 #include <QTimer>
+#include "KeyScales.h"
 
 static const QString midiNoteNames[128]{
     "C-1", "C#-1", "D-1", "D#-1", "E-1", "F-1", "F#-1", "G-1", "G#-1", "A-1", "A#-1", "B-1",
@@ -842,6 +843,9 @@ QString PlayGridManager::modelToJson(const QObject* model) const
         modelObject["bankLength"] = patternModel->bankLength();
         modelObject["enabled"] = patternModel->enabled();
         modelObject["layerData"] = patternModel->layerData();
+        modelObject["scale"] = patternModel->scale();
+        modelObject["pitch"] = patternModel->pitch();
+        modelObject["octave"] = patternModel->octave();
         modelObject["gridModelStartNote"] = patternModel->gridModelStartNote();
         modelObject["gridModelEndNote"] = patternModel->gridModelEndNote();
         modelObject["hasNotes"] = patternModel->hasNotes();
@@ -930,6 +934,21 @@ void PlayGridManager::setModelFromJson(QObject* model, const QString& json)
                 pattern->setSwing(patternObject.value("swing").toInt());
             } else {
                 pattern->setSwing(0);
+            }
+            if (patternObject.contains("scale")) {
+                pattern->setScale(patternObject.value("scale").toInt());
+            } else {
+                pattern->setScale(KeyScales::ScaleChromatic);
+            }
+            if (patternObject.contains("pitch")) {
+                pattern->setPitch(patternObject.value("pitch").toInt());
+            } else {
+                pattern->setPitch(KeyScales::PitchC);
+            }
+            if (patternObject.contains("octave")) {
+                pattern->setOctave(patternObject.value("octave").toInt());
+            } else {
+                pattern->setOctave(KeyScales::Octave4);
             }
             pattern->endLongOperation();
         }

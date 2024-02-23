@@ -25,6 +25,7 @@
 #include "NotesModel.h"
 #include "SequenceModel.h"
 #include "MidiRouter.h"
+#include "KeyScales.h"
 
 class ClipCommandRing;
 /**
@@ -228,6 +229,25 @@ class PatternModel : public NotesModel
     Q_PROPERTY(bool isPlaying READ isPlaying NOTIFY isPlayingChanged)
 
     /**
+     * \brief The scale the pattern conceptually wants to use (not auto-enforced)
+     * @default KeyScales::ScaleChromatic
+     */
+    Q_PROPERTY(int scale READ scale WRITE setScale NOTIFY scaleChanged)
+    Q_PROPERTY(KeyScales::Scale scaleKey READ scaleKey NOTIFY scaleChanged)
+    /**
+     * \brief The pitch of the key the pattern conceptually wants to use
+     * @default KeyScales::KeyC
+     */
+    Q_PROPERTY(int pitch READ pitch WRITE setPitch NOTIFY pitchChanged)
+    Q_PROPERTY(KeyScales::Pitch pitch READ pitchKey NOTIFY pitchChanged)
+    /**
+     * \brief The octave of the key the pattern conceptually wants to use
+     * @default KeyScales::Octave4
+     */
+    Q_PROPERTY(int octave READ octave WRITE setOctave NOTIFY octaveChanged)
+    Q_PROPERTY(KeyScales::Octave octaveKey READ octaveKey NOTIFY octaveChanged)
+
+    /**
      * \brief The first note used to fill out the grid model
      * @default 48
      */
@@ -403,6 +423,9 @@ public:
      * - bankLength
      * - gridModelStartNote
      * - gridModelEndNote
+     * - scale
+     * - pitch
+     * - octave
      *
      * @param clearNotes If set to true, the function will also clear notes (otherwise it will leave those alone that fit inside the default height/width)
      */
@@ -550,6 +573,19 @@ public:
     QVariantList clipIds() const;
     Q_SIGNAL void clipIdsChanged();
     QObject *clipSliceNotes() const;
+
+    int scale() const;
+    KeyScales::Scale scaleKey() const;
+    void setScale(int scale);
+    Q_SIGNAL void scaleChanged();
+    int pitch() const;
+    KeyScales::Pitch pitchKey() const;
+    void setPitch(int pitch);
+    Q_SIGNAL void pitchChanged();
+    int octave() const;
+    KeyScales::Octave octaveKey() const;
+    void setOctave(int octave);
+    Q_SIGNAL void octaveChanged();
 
     int gridModelStartNote() const;
     void setGridModelStartNote(int gridModelStartNote);

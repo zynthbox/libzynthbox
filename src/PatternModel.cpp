@@ -20,6 +20,7 @@
  */
 
 #include "PatternModel.h"
+#include "KeyScales.h"
 #include "Note.h"
 #include "SegmentHandler.h"
 #include "PlayfieldManager.h"
@@ -414,6 +415,10 @@ public:
 
     PlayGridManager *playGridManager{nullptr};
 
+    KeyScales::Scale scale{KeyScales::ScaleChromatic};
+    KeyScales::Pitch pitch{KeyScales::PitchC};
+    KeyScales::Octave octave{KeyScales::Octave4};
+
     int gridModelStartNote{48};
     int gridModelEndNote{64};
     NotesModel *gridModel{nullptr};
@@ -557,6 +562,9 @@ PatternModel::PatternModel(SequenceModel* parent)
     connect(this, &PatternModel::bankOffsetChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::bankLengthChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::enabledChanged, this, &NotesModel::registerChange);
+    connect(this, &PatternModel::pitchChanged, this, &NotesModel::registerChange);
+    connect(this, &PatternModel::octaveChanged, this, &NotesModel::registerChange);
+    connect(this, &PatternModel::scaleChanged, this, &NotesModel::registerChange);
 
     connect(this, &QObject::objectNameChanged, this, &PatternModel::nameChanged);
     connect(this, &QObject::objectNameChanged, this, &PatternModel::thumbnailUrlChanged);
@@ -665,6 +673,9 @@ void PatternModel::cloneOther(PatternModel *otherPattern)
         setBankOffset(otherPattern->bankOffset());
         setBankLength(otherPattern->bankLength());
         setEnabled(otherPattern->enabled());
+        setScale(otherPattern->scale());
+        setOctave(otherPattern->octave());
+        setPitch(otherPattern->pitch());
 
         // Now clone all the notes
         for (int i = 0; i < rowCount(); ++i) {
@@ -872,6 +883,9 @@ void PatternModel::resetPattern(bool clearNotes)
     setGridModelStartNote(48);
     setGridModelEndNote(64);
     setWidth(16);
+    setPitch(KeyScales::PitchC);
+    setOctave(KeyScales::Octave4);
+    setScale(KeyScales::ScaleChromatic);
     if (clearNotes && hasNotes()) {
         setHeight(0);
     }
@@ -1366,6 +1380,69 @@ QObject *PatternModel::clipSliceNotes() const
         refilTimer->start();
     }
     return d->clipSliceNotes;
+}
+
+int PatternModel::scale() const
+{
+    return KeyScales::instance()->scaleEnumKeyToIndex(d->scale);
+}
+
+KeyScales::Scale PatternModel::scaleKey() const
+{
+    return d->scale;
+}
+
+void PatternModel::setScale(int scale)
+{
+    if (-1 < scale && scale < KeyScales::instance()->scaleNames().count()) {
+        KeyScales::Scale newScale = KeyScales::instance()->scaleIndexToEnumKey(scale);
+        if (d->scale != newScale) {
+            d->scale = newScale;
+            Q_EMIT scaleChanged();
+        }
+    }
+}
+
+int PatternModel::pitch() const
+{
+    return KeyScales::instance()->pitchEnumKeyToIndex(d->pitch);
+}
+
+KeyScales::Pitch PatternModel::pitchKey() const
+{
+    return d->pitch;
+}
+
+void PatternModel::setPitch(int pitch)
+{
+    if (-1 < pitch && pitch < KeyScales::instance()->pitchNames().count()) {
+        KeyScales::Pitch newPitch = KeyScales::instance()->pitchIndexToEnumKey(pitch);
+        if (d->pitch != newPitch) {
+            d->pitch = newPitch;
+            Q_EMIT pitchChanged();
+        }
+    }
+}
+
+int PatternModel::octave() const
+{
+    return KeyScales::instance()->octaveEnumKeyToIndex(d->octave);
+}
+
+KeyScales::Octave PatternModel::octaveKey() const
+{
+    return d->octave;
+}
+
+void PatternModel::setOctave(int octave)
+{
+    if (-1 < octave && octave < KeyScales::instance()->octaveNames().count()) {
+        KeyScales::Octave newOctave = KeyScales::instance()->octaveIndexToEnumKey(octave);
+        if (d->octave != newOctave) {
+            d->octave = newOctave;
+            Q_EMIT octaveChanged();
+        }
+    }
 }
 
 int PatternModel::gridModelStartNote() const
