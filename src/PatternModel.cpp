@@ -116,7 +116,7 @@ public:
                 connect(zlChannel, SIGNAL(chained_sounds_changed()), layerDataPuller, SLOT(start()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(recordingPopupActiveChanged()), this, SIGNAL(recordingPopupActiveChanged()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(mutedChanged()), this, SLOT(mutedChanged()), Qt::QueuedConnection);
-                connect(zlChannel, SIGNAL(samplePickingStyleChanged()), this, SLOT(samplePickingStyleChanged()), Qt::QueuedConnection);
+                connect(zlChannel, SIGNAL(samplePickingStyleChanged()), this, SLOT(updateSamples()), Qt::QueuedConnection);
                 q->setMidiChannel(zlChannel->property("id").toInt());
                 channelAudioTypeChanged();
                 externalMidiChannelChanged();
@@ -246,7 +246,13 @@ public Q_SLOTS:
             for (const int &slotIndex : qAsConst(slotIndices)) {
                 const QObject *sample = channelSamples[slotIndex].value<QObject*>();
                 if (sample) {
-                    clipIds << sample->property("cppObjId").toInt();
+                    static const int cppObjId{sample->property("cppObjId").toInt()};
+                    clipIds << cppObjId;
+                    if (samplePickingStyle == ClipAudioSource::SameOrFirstPickingStyle && cppObjId > -1 && slotIndex == q->partIndex()) {
+                        // In SameOrFirst, if there is a sample in the matches-me slot, ignore any sample that isn't that one
+                        // If there is no sample in that slot, we want to try all the others in order
+                        break;
+                    }
                 }
             }
         }
@@ -273,9 +279,6 @@ public Q_SLOTS:
             }
             MidiRouter::instance()->setZynthianChannels(q->channelIndex(), chainedSounds);
         }
-    }
-    void samplePickingStyleChanged() {
-        updateSamples();
     }
     void mutedChanged() {
         if (zlChannel) {
