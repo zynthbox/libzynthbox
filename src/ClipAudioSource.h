@@ -267,6 +267,14 @@ public:
   explicit ClipAudioSource(const char *filepath, bool muted = false, QObject *parent = nullptr);
   ~ClipAudioSource() override;
 
+  enum SamplePickingStyle {
+    SameOrFirstPickingStyle,
+    SamePickingStyle,
+    FirstPickingStyle,
+    AllPickingStyle,
+  };
+  Q_ENUM(SamplePickingStyle)
+
   void syncProgress();
   void setStartPosition(float startPositionInSeconds);
   float getStartPosition(int slice = -1) const;
