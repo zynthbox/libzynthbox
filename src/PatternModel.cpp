@@ -97,7 +97,7 @@ public:
     QTimer *layerDataPuller{nullptr};
 
     bool channelMuted{false};
-    bool channelOneToOnePlayback{false}; // Whether sample picking should be done equal to the clip position of the pattern (so pattern for clip a only plays samples in slot 1, and patterns for clip c only plays samples in slot 3)
+    ClipAudioSource::SamplePickingStyle samplePickingStyle{ClipAudioSource::SameOrFirstPickingStyle};
     void setZlChannel(QObject *newZlChannel)
     {
         if (zlChannel != newZlChannel) {
@@ -116,7 +116,7 @@ public:
                 connect(zlChannel, SIGNAL(chained_sounds_changed()), layerDataPuller, SLOT(start()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(recordingPopupActiveChanged()), this, SIGNAL(recordingPopupActiveChanged()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(mutedChanged()), this, SLOT(mutedChanged()), Qt::QueuedConnection);
-                connect(zlChannel, SIGNAL(channel_routing_style_changed()), this, SLOT(routingStyleChanged()), Qt::QueuedConnection);
+                connect(zlChannel, SIGNAL(samplePickingStyleChanged()), this, SLOT(samplePickingStyleChanged()), Qt::QueuedConnection);
                 q->setMidiChannel(zlChannel->property("id").toInt());
                 channelAudioTypeChanged();
                 externalMidiChannelChanged();
@@ -124,7 +124,6 @@ public:
                 selectedPartChanged();
                 layerDataPuller->start();
                 chainedSoundsChanged();
-                routingStyleChanged();
             }
             mutedChanged();
             Q_EMIT q->zlChannelChanged();
@@ -226,18 +225,29 @@ public Q_SLOTS:
         if (zlChannel && zlPart) {
             const QVariantList channelSamples = zlChannel->property("samples").toList();
             const QVariantList partSamples = zlPart->property("samples").toList();
-            int sampleIndex{0};
-            for (const QVariant& partSample : partSamples) {
-                int sampleCppId{-1};
-                // If we are in sample-trig mode, we want all five samples, otherwise we only want the equivalent sample to our associated part
-                if (q->noteDestination() == PatternModel::SampleTriggerDestination || sampleIndex == q->partIndex()) {
-                    const QObject *sample = channelSamples[partSample.toInt()].value<QObject*>();
-                    if (sample) {
-                        sampleCppId = sample->property("cppObjId").toInt();
-                    }
+            QList<int> slotIndices{0, 1, 2, 3, 4};
+            switch(samplePickingStyle) {
+                case ClipAudioSource::AllPickingStyle:
+                case ClipAudioSource::FirstPickingStyle:
+                    // All is well, just use them all, in order
+                    break;
+                case ClipAudioSource::SamePickingStyle:
+                    // Only use the equivalent slot to our own position
+                    slotIndices = {q->partIndex()};
+                    break;
+                case ClipAudioSource::SameOrFirstPickingStyle:
+                default:
+                    // Try our own slot first, and then try the others in order
+                    slotIndices.removeAll(q->partIndex());
+                    slotIndices.insert(0, q->partIndex());
+                    break;
+            }
+
+            for (const int &slotIndex : qAsConst(slotIndices)) {
+                const QObject *sample = channelSamples[slotIndex].value<QObject*>();
+                if (sample) {
+                    clipIds << sample->property("cppObjId").toInt();
                 }
-                clipIds << sampleCppId;
-                ++sampleIndex;
             }
         }
         q->setClipIds(clipIds);
@@ -264,12 +274,8 @@ public Q_SLOTS:
             MidiRouter::instance()->setZynthianChannels(q->channelIndex(), chainedSounds);
         }
     }
-    void routingStyleChanged() {
-        if (zlChannel) {
-            channelOneToOnePlayback = (zlChannel->property("channelRoutingStyle").toString() == "one-to-one");
-        } else {
-            channelOneToOnePlayback = false;
-        }
+    void samplePickingStyleChanged() {
+        updateSamples();
     }
     void mutedChanged() {
         if (zlChannel) {
@@ -450,10 +456,9 @@ public:
      * @param byte3 The third byte of a midi message
      */
     void midiMessageToClipCommands(ClipCommandRing *listToPopulate, const int &byte1, const int &byte2, const int &byte3) const {
-        int clipIndex{0};
         for (ClipAudioSource *clip : qAsConst(clips)) {
             // There must be a clip or it just doesn't matter, and then the note must fit inside the clip's keyzone
-            if (clip && clip->keyZoneStart() <= byte2 && byte2 <= clip->keyZoneEnd() && (zlSyncManager->channelOneToOnePlayback == false || clipIndex == partIndex)) {
+            if (clip && clip->keyZoneStart() <= byte2 && byte2 <= clip->keyZoneEnd()) {
                 ClipCommand *command = ClipCommand::channelCommand(clip, (byte1 & 0xf));
                 command->startPlayback = byte1 > 0x8F;
                 command->stopPlayback = byte1 < 0x90;
@@ -466,7 +471,7 @@ public:
                     command->volume = float(byte3) / float(127);
                 }
                 if (noteDestination == SampleSlicedDestination) {
-                    command->midiNote = 60;
+                    command->midiNote = 60; // TODO see scribble-notes on the topic of more powerful slice playback
                     command->changeSlice = true;
                     command->slice = clip->sliceForMidiNote(byte2);
                 } else {
@@ -475,9 +480,13 @@ public:
                     command->looping = clip->looping();
                 }
                 listToPopulate->write(command, 0);
+                // If our selection mode is a one-sample-only mode, bail now (that is,
+                // only AllPickingStyle wants us to pick more than one sample)
+                if (zlSyncManager->samplePickingStyle != ClipAudioSource::AllPickingStyle) {
+                    break;
+                }
             }
         }
-        ++clipIndex;
     }
 };
 
