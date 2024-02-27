@@ -655,9 +655,13 @@ int ClipAudioSource::keyZoneStart() const
 
 void ClipAudioSource::setKeyZoneStart(int keyZoneStart)
 {
+  keyZoneStart = std::clamp(keyZoneStart, -1, 127);
   if (d->keyZoneStart != keyZoneStart) {
     d->keyZoneStart = keyZoneStart;
     Q_EMIT keyZoneStartChanged();
+    if (d->keyZoneEnd < d->keyZoneStart) {
+      setKeyZoneEnd(d->keyZoneStart);
+    }
   }
 }
 
@@ -668,9 +672,13 @@ int ClipAudioSource::keyZoneEnd() const
 
 void ClipAudioSource::setKeyZoneEnd(int keyZoneEnd)
 {
+  keyZoneEnd = std::clamp(keyZoneEnd, -1, 127);
   if (d->keyZoneEnd != keyZoneEnd) {
     d->keyZoneEnd = keyZoneEnd;
     Q_EMIT keyZoneEndChanged();
+    if (d->keyZoneStart > d->keyZoneEnd) {
+      setKeyZoneStart(d->keyZoneEnd);
+    }
   }
 }
 
@@ -681,6 +689,7 @@ int ClipAudioSource::rootNote() const
 
 void ClipAudioSource::setRootNote(int rootNote)
 {
+  rootNote = std::clamp(rootNote, -1, 127);
   if (d->rootNote != rootNote) {
     d->rootNote = rootNote;
     Q_EMIT rootNoteChanged();
