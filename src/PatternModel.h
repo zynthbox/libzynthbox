@@ -239,7 +239,7 @@ class PatternModel : public NotesModel
      * @default KeyScales::KeyC
      */
     Q_PROPERTY(int pitch READ pitch WRITE setPitch NOTIFY pitchChanged)
-    Q_PROPERTY(KeyScales::Pitch pitch READ pitchKey NOTIFY pitchChanged)
+    Q_PROPERTY(KeyScales::Pitch pitchKey READ pitchKey NOTIFY pitchChanged)
     /**
      * \brief The octave of the key the pattern conceptually wants to use
      * @default KeyScales::Octave4
