@@ -54,7 +54,18 @@ class Plugin : public QObject {
      * \brief A list of the 10 lists. Each list contains 5 JackPasstrough clients to be used by each fx lane of a channel
      */
     Q_PROPERTY(QList<QList<JackPassthrough*>> fxPassthroughClients READ fxPassthroughClients CONSTANT)
-
+    /**
+     * \brief The amount of Songs in a Zynthbox Sketchpad
+     */
+    Q_PROPERTY(int sketchpadSongCount READ sketchpadSongCount CONSTANT)
+    /**
+     * \brief The amount of Tracks in a Zynthbox Song
+     */
+    Q_PROPERTY(int sketchpadTrackCount READ sketchpadTrackCount CONSTANT)
+    /**
+     * \brief The amount of Parts in a Zynthbox Track
+     */
+    Q_PROPERTY(int sketchpadPartCount READ sketchpadPartCount CONSTANT)
 public:
     static Plugin* instance();
 
@@ -77,6 +88,9 @@ public:
     QList<JackPassthrough*> synthPassthroughClients() const;
     QList<JackPassthrough*> channelPassthroughClients() const;
     QList<QList<JackPassthrough*>> fxPassthroughClients() const;
+    int sketchpadSongCount() const;
+    int sketchpadTrackCount() const;
+    int sketchpadPartCount() const;
 
     QQmlEngine *qmlEngine() const;
 private:

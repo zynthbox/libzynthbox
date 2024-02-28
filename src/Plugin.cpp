@@ -55,6 +55,7 @@
 #include "ZLEngineBehaviour.h"
 #include "PlayfieldManager.h"
 #include "KeyScales.h"
+#include "ZynthboxBasics.h"
 
 #include "Plugin.h"
 
@@ -397,6 +398,21 @@ QList<JackPassthrough *> Plugin::channelPassthroughClients() const
 QList<QList<JackPassthrough *>> Plugin::fxPassthroughClients() const
 {
     return m_fxPassthroughClients;
+}
+
+int Plugin::sketchpadSongCount() const
+{
+    return ZynthboxSongCount;
+}
+
+int Plugin::sketchpadTrackCount() const
+{
+    return ZynthboxTrackCount;
+}
+
+int Plugin::sketchpadPartCount() const
+{
+    return ZynthboxPartCount;
 }
 
 QQmlEngine * Plugin::qmlEngine() const
