@@ -30,6 +30,17 @@ class ClipAudioSource : public QObject {
     Q_OBJECT
     Q_PROPERTY(int id READ id WRITE setId NOTIFY idChanged)
     /**
+     * \brief The way in which SamplerSynth will perform playback
+     * @default NonLoopingPlaybackStyle
+     * Setting this to various modes will result in other properties changing as well
+     * For example, setting it to GranularLoopingPlaybackStyle or GranularOneshotPlaybackStyle
+     * will set the granular property to true, and setting it to OneshotPlaybackStyle or
+     * LoopingPlaybackStyle will set the granular property to false. Setting it to one of the Looping
+     * playback styles will set the looping property to true, and to false for the non-Looping styles.
+     */
+    Q_PROPERTY(PlaybackStyle playbackStyle READ playbackStyle WRITE setPlaybackStyle NOTIFY playbackStyleChanged)
+    Q_PROPERTY(QString playbackStyleLabel READ playbackStyleLabel NOTIFY playbackStyleChanged)
+    /**
      * \brief Whether or not this sample should be looped for playback (or single-shot so it auto-stops)
      * This can be overridden by the play function, where looping can be forced
      * @see ClipAudioSource::play(bool, int)
@@ -275,10 +286,25 @@ public:
   };
   Q_ENUM(SamplePickingStyle)
 
+  enum PlaybackStyle {
+    NonLoopingPlaybackStyle,
+    LoopingPlaybackStyle,
+    OneshotPlaybackStyle,
+    GranularNonLoopingPlaybackStyle,
+    GranularLoopingPlaybackStyle,
+  };
+  Q_ENUM(PlaybackStyle)
+
   void syncProgress();
   void setStartPosition(float startPositionInSeconds);
   float getStartPosition(int slice = -1) const;
   float getStopPosition(int slice = -1) const;
+
+  PlaybackStyle playbackStyle() const;
+  QString playbackStyleLabel() const;
+  void setPlaybackStyle(const PlaybackStyle &playbackStyle);
+  Q_SIGNAL void playbackStyleChanged();
+
   void setLooping(bool looping);
   bool looping() const;
   Q_SIGNAL void loopingChanged();
@@ -489,3 +515,4 @@ private:
   Private *d;
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ClipAudioSource)
 };
+Q_DECLARE_METATYPE(ClipAudioSource::PlaybackStyle)

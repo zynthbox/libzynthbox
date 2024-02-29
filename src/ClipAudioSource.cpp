@@ -64,6 +64,7 @@ public:
   float startPositionInSeconds = 0;
   float lengthInSeconds = -1;
   float lengthInBeats = -1;
+  ClipAudioSource::PlaybackStyle playbackStyle{ClipAudioSource::NonLoopingPlaybackStyle};
   bool looping{false};
   float loopDelta{0.0f};
   float gainDB{0.0f};
@@ -250,6 +251,69 @@ void ClipAudioSource::syncProgress() {
       /// TODO This really wants to be 16, so we can get to 60 updates per second, but that tears to all heck without compositing, so... for now
       // (tested with higher rates, but it tears, so while it looks like an arbitrary number, afraid it's as high as we can go)
       d->nextPositionUpdateTime = QDateTime::currentMSecsSinceEpoch() + 100; // 10 updates per second, this is loooow...
+    }
+  }
+}
+
+ClipAudioSource::PlaybackStyle ClipAudioSource::playbackStyle() const
+{
+  return d->playbackStyle;
+}
+
+QString ClipAudioSource::playbackStyleLabel() const
+{
+  switch (d->playbackStyle) {
+    case LoopingPlaybackStyle: {
+      static const QLatin1String label{"Looping"};
+      return label;
+      break; }
+    case OneshotPlaybackStyle: {
+      static const QLatin1String label{"One-shot"};
+      return label;
+      break; }
+    case GranularNonLoopingPlaybackStyle: {
+      static const QLatin1String label{"Granular Non-looping"};
+      return label;
+      break; }
+    case GranularLoopingPlaybackStyle: {
+      static const QLatin1String label{"Granular Looping"};
+      return label;
+      break; }
+    case NonLoopingPlaybackStyle:
+    default: {
+      static const QLatin1String label{"Non-looping"};
+      return label;
+      break; }
+  }
+}
+
+void ClipAudioSource::setPlaybackStyle(const PlaybackStyle& playbackStyle)
+{
+  if (d->playbackStyle != playbackStyle) {
+    d->playbackStyle = playbackStyle;
+    Q_EMIT playbackStyleChanged();
+    switch (playbackStyle) {
+      case LoopingPlaybackStyle:
+        setLooping(true);
+        setGranular(false);
+        break;
+      case OneshotPlaybackStyle:
+        setLooping(false);
+        setGranular(false);
+        break;
+      case GranularNonLoopingPlaybackStyle:
+        setLooping(false);
+        setGranular(true);
+        break;
+      case GranularLoopingPlaybackStyle:
+        setLooping(true);
+        setGranular(true);
+        break;
+      case NonLoopingPlaybackStyle:
+      default:
+        setLooping(false);
+        setGranular(false);
+        break;
     }
   }
 }
