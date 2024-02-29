@@ -121,7 +121,10 @@ using namespace std;
 using namespace std::chrono;
 
 Plugin::Plugin(QObject *parent)
-    : QObject(parent) {}
+    : QObject(parent)
+{
+    qRegisterMetaType<ClipAudioSource::PlaybackStyle>("ClipAudioSource::PlaybackStyle");
+}
 
 Plugin *Plugin::instance()
 {
@@ -291,6 +294,7 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
     engine->addImageProvider("pattern", new PatternImageProvider());
 
     qmlRegisterType<FilterProxy>(uri, 1, 0, "FilterProxy");
+    qmlRegisterUncreatableType<ClipAudioSource>(uri, 1, 0, "ClipAudioSource", "Use the getClipById fucntion to get these (they are held by sketchpad.clip, which has a .cppObjId property)");
     qmlRegisterUncreatableType<Note>(uri, 1, 0, "Note", "Use the getNote function on the main PlayGrid global object to get one of these");
     qmlRegisterUncreatableType<NotesModel>(uri, 1, 0, "NotesModel", "Use the getModel function on the main PlayGrid global object to get one of these");
     qmlRegisterUncreatableType<PatternModel>(uri, 1, 0, "PatternModel", "Use the getPatternModel function on the main PlayGrid global object to get one of these");
