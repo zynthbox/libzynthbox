@@ -462,27 +462,33 @@ public:
         for (ClipAudioSource *clip : qAsConst(clips)) {
             // There must be a clip or it just doesn't matter, and then the note must fit inside the clip's keyzone
             if (clip && clip->keyZoneStart() <= byte2 && byte2 <= clip->keyZoneEnd()) {
-                ClipCommand *command = ClipCommand::channelCommand(clip, (byte1 & 0xf));
-                command->startPlayback = byte1 > 0x8F;
-                command->stopPlayback = byte1 < 0x90;
-                if (command->startPlayback) {
-                    command->changeVolume = true;
-                    command->volume = float(byte3) / float(127);
-                }
-                if (command->stopPlayback) {
-                    // Don't actually set volume, just store the volume for velocity purposes... yes this is kind of a hack
-                    command->volume = float(byte3) / float(127);
-                }
-                if (noteDestination == SampleSlicedDestination) {
-                    command->midiNote = 60; // TODO see scribble-notes on the topic of more powerful slice playback
-                    command->changeSlice = true;
-                    command->slice = clip->sliceForMidiNote(byte2);
+                const bool stopPlayback{byte1 < 0x90};
+                if (clip->playbackStyle() == ClipAudioSource::OneshotPlaybackStyle && stopPlayback) {
+                    // if stop command and clip playback style is Oneshot, don't submit the stop command - just let it run out
+                    // to force one-shots to stop, all-notes-off is handled by SamplerSynth directly
                 } else {
-                    command->midiNote = byte2;
-                    command->changeLooping = true;
-                    command->looping = clip->looping();
+                    ClipCommand *command = ClipCommand::channelCommand(clip, (byte1 & 0xf));
+                    command->startPlayback = byte1 > 0x8F;
+                    command->stopPlayback = stopPlayback;
+                    if (command->startPlayback) {
+                        command->changeVolume = true;
+                        command->volume = float(byte3) / float(127);
+                    }
+                    if (command->stopPlayback) {
+                        // Don't actually set volume, just store the volume for velocity purposes... yes this is kind of a hack
+                        command->volume = float(byte3) / float(127);
+                    }
+                    if (noteDestination == SampleSlicedDestination) {
+                        command->midiNote = 60; // TODO see scribble-notes on the topic of more powerful slice playback
+                        command->changeSlice = true;
+                        command->slice = clip->sliceForMidiNote(byte2);
+                    } else {
+                        command->midiNote = byte2;
+                        command->changeLooping = true;
+                        command->looping = clip->looping();
+                    }
+                    listToPopulate->write(command, 0);
                 }
-                listToPopulate->write(command, 0);
                 // If our selection mode is a one-sample-only mode, bail now (that is,
                 // only AllPickingStyle wants us to pick more than one sample)
                 if (zlSyncManager->samplePickingStyle != ClipAudioSource::AllPickingStyle) {
