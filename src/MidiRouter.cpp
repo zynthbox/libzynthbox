@@ -223,6 +223,7 @@ public:
     MidiRouterDevice *zynthianOutputs[16];
     SketchpadTrackInfo *sketchpadTracks[ZynthboxTrackCount];
     SketchpadTrackInfo *passthroughOutputPort{nullptr};
+    MidiRouterDevice *currentTrackMirror{nullptr};
 
     MidiListenerPort passthroughListener;
     MidiListenerPort internalPassthroughListener;
@@ -268,6 +269,7 @@ public:
         }
 #endif
         passthroughOutputPort->routerDevice->processBegin(nframes);
+        currentTrackMirror->processBegin(nframes);
         for (SketchpadTrackInfo *track : qAsConst(sketchpadTracks)) {
             track->routerDevice->processBegin(nframes);
         }
@@ -381,11 +383,13 @@ public:
                                         }
                                         zynthianOutputs[zynthianChannel]->writeEventToOutput(*event);
                                     }
+                                    currentTrackMirror->writeEventToOutput(*event);
                                     passthroughOutputPort->routerDevice->writeEventToOutput(*event);
                                     break;
                                 case MidiRouter::SamplerDestination:
                                     passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
                                     currentTrack->routerDevice->writeEventToOutput(*event);
+                                    currentTrackMirror->writeEventToOutput(*event);
                                     passthroughOutputPort->routerDevice->writeEventToOutput(*event);
                                     break;
                                 case MidiRouter::ExternalDestination:
@@ -399,6 +403,7 @@ public:
                                             device->writeEventToOutput(*event, externalChannel);
                                         }
                                     }
+                                    currentTrackMirror->writeEventToOutput(*event);
                                     passthroughOutputPort->routerDevice->writeEventToOutput(*event);
                                     break;
                                 }
@@ -413,6 +418,7 @@ public:
                         const double timestampUsecs = current_usecs + (microsecondsPerFrame * double(event->time));
                         const bool isBeatClock = (byte0 == 0xf2 || byte0 == 0xf8 || byte0 == 0xfa || byte0 == 0xfb || byte0 == 0xfc);
                         const bool isTimecode = (byte0 == 0xf9);
+                        currentTrackMirror->writeEventToOutput(*event);
                         if (inputDeviceIsHardware) {
                             hardwareInListener.addMessage(false, false, timestamp, timestampUsecs, *event, eventChannel, currentSketchpadTrack, eventDevice);
                         }
@@ -462,6 +468,7 @@ public:
         for (SketchpadTrackInfo *track : qAsConst(sketchpadTracks)) {
             track->routerDevice->processEnd();
         }
+        currentTrackMirror->processEnd();
         passthroughOutputPort->routerDevice->processEnd();
 
         // std::chrono::duration<double, std::milli> ms_double = std::chrono::high_resolution_clock::now() - t1;
@@ -686,6 +693,10 @@ MidiRouter::MidiRouter(QObject *parent)
             d->passthroughOutputPort->routerDevice = new MidiRouterDevice(d->jackClient, this);
             d->passthroughOutputPort->routerDevice->setOutputPortName(d->passthroughOutputPort->portName.toUtf8());
             d->passthroughOutputPort->routerDevice->setOutputEnabled(true);
+            // Set up the current-track mirroring port
+            d->currentTrackMirror = new MidiRouterDevice(d->jackClient, this);
+            d->currentTrackMirror->setOutputPortName(QString{"CurrentTrackMirror"});
+            d->currentTrackMirror->setOutputEnabled(true);
 
             jack_set_port_registration_callback(d->jackClient, client_port_registration, static_cast<void*>(d));
             jack_set_client_registration_callback(d->jackClient, client_registration, static_cast<void*>(d));
