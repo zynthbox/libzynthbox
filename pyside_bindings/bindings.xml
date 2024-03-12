@@ -7,7 +7,7 @@
 
     <object-type name="AudioLevels"></object-type>
     <object-type name="ClipAudioSource">
-        <enum-type name="SamplePickingStyleChanged" />
+        <enum-type name="SamplePickingStyle" />
         <enum-type name="PlaybackStyle" />
     </object-type>
     <object-type name="JackPassthrough"></object-type>
@@ -43,6 +43,10 @@
     </object-type>
     <object-type name="Plugin"></object-type>
     <object-type name="SyncTimer"></object-type>
+    <object-type name="MidiRouterDevice">
+        <enum-type name="DeviceDirection" />
+        <enum-type name="DeviceType" />
+    </object-type>
     <object-type name="MidiRouterDeviceModel">
         <enum-type name="Roles" />
     </object-type>

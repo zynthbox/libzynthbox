@@ -6,6 +6,8 @@ set(generated_sources
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/clipaudiosource_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/jackpassthrough_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirouter_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirouterdevice_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirouterdevicemodel_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirecorder_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/playgridmanager_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/playfieldmanager_wrapper.cpp

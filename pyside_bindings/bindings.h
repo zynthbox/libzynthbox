@@ -7,6 +7,8 @@
 #include <ClipAudioSource.h>
 #include <JackPassthrough.h>
 #include <MidiRouter.h>
+#include <MidiRouterDevice.h>
+#include <MidiRouterDeviceModel.h>
 #include <MidiRecorder.h>
 #include <PlayGridManager.h>
 #include <PlayfieldManager.h>
