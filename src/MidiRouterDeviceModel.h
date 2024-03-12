@@ -12,6 +12,7 @@
 
 #include <QAbstractListModel>
 #include <QObject>
+#include <QSize>
 #include <memory>
 
 class MidiRouterDevice;
@@ -40,6 +41,7 @@ public:
 
     void addDevice(MidiRouterDevice* device);
     void removeDevice(MidiRouterDevice* device);
+    MidiRouterDevice *getDevice(const QString &hardwareId) const;
 private:
     std::unique_ptr<MidiRouterDeviceModelPrivate> d;
 };

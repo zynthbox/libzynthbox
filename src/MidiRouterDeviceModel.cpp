@@ -107,3 +107,15 @@ void MidiRouterDeviceModel::removeDevice(MidiRouterDevice* device)
         }
     }
 }
+
+MidiRouterDevice * MidiRouterDeviceModel::getDevice(const QString& hardwareId) const
+{
+    MidiRouterDevice* device{nullptr};
+    for (MidiRouterDevice *needle : qAsConst(d->devices)) {
+        if (needle->hardwareId() == hardwareId) {
+            device = needle;
+            break;
+        }
+    }
+    return device;
+}
