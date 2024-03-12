@@ -59,6 +59,7 @@ public:
     QObject *zlMetronomeManager{nullptr};
 
     int soloChannel{-1};
+    bool songIsLoading{false};
     void setZlSong(QObject *newZlSong) {
         if (zlSong != newZlSong) {
             if (zlSong) {
@@ -70,10 +71,12 @@ public:
                 setZlMetronomeManager(qvariant_cast<QObject *>(zlSong->property("metronomeManager")));
                 connect(zlSong, SIGNAL(__scenes_model_changed__()), this, SLOT(scenesModelChanged()), Qt::QueuedConnection);
                 connect(zlSong, SIGNAL(playChannelSoloChanged()), this, SLOT(playChannelSoloChanged()), Qt::QueuedConnection);
+                connect(zlSong, SIGNAL(isLoadingChanged()), this, SLOT(isLoadingChanged())); // Not queued, as we want this to be pretty precise
             }
             scenesModelChanged();
             currentMidiChannelChanged();
             playChannelSoloChanged();
+            isLoadingChanged();
         }
     }
 
@@ -131,6 +134,14 @@ public Q_SLOTS:
             soloChannel = zlSong->property("playChannelSolo").toInt();
         } else {
             soloChannel = -1;
+        }
+    }
+    void isLoadingChanged() {
+        if (zlSong) {
+            songIsLoading = zlSong->property("isLoading").toBool();
+            if (songIsLoading == false) {
+                q->setIsDirty(false); // As we've just got done loading the song we're a member of, we can assume that the data was recently loaded and actually fresh, so... mark self as not dirty
+            }
         }
     }
     void currentMidiChannelChanged() {
@@ -225,8 +236,16 @@ SequenceModel::SequenceModel(PlayGridManager* parent)
     QTimer *saveThrottle = new QTimer(this);
     saveThrottle->setSingleShot(true);
     saveThrottle->setInterval(1000);
-    connect(saveThrottle, &QTimer::timeout, this, [this](){ if (isDirty()) { save(); } });
-    connect(this, &SequenceModel::isDirtyChanged, saveThrottle, QOverload<>::of(&QTimer::start));
+    connect(saveThrottle, &QTimer::timeout, this, [this](){
+        if (isDirty() && d->zlSyncManager->songIsLoading == false) {
+            save();
+        }
+    });
+    connect(this, &SequenceModel::isDirtyChanged, this, [this, saveThrottle](){
+        if (isDirty() && d->zlSyncManager->songIsLoading == false) {
+            saveThrottle->start();
+        }
+    });
     connect(this, &SequenceModel::countChanged, this, [this](){
         d->updatePatternIterator();
     });
