@@ -12,6 +12,7 @@
 
 #include <QAbstractListModel>
 #include <QObject>
+#include <QVariant>
 #include <QSize>
 #include <memory>
 
@@ -23,6 +24,14 @@ class MidiRouterDeviceModelPrivate;
  */
 class MidiRouterDeviceModel : public QAbstractListModel {
     Q_OBJECT
+    /**
+     * \brief A list of objects containing information about all available audio in ports
+     */
+    Q_PROPERTY(QVariantList audioInSources READ audioInSources NOTIFY audioInSourcesChanged)
+    /**
+     * \brief A list of objects containing information about all available midi in ports
+     */
+    Q_PROPERTY(QVariantList midiInSources READ midiInSources NOTIFY midiInSourcesChanged)
 public:
     explicit MidiRouterDeviceModel(QObject *parent = nullptr);
     ~MidiRouterDeviceModel() override;
@@ -42,6 +51,13 @@ public:
     void addDevice(MidiRouterDevice* device);
     void removeDevice(MidiRouterDevice* device);
     MidiRouterDevice *getDevice(const QString &hardwareId) const;
+
+    QVariantList audioInSources() const;
+    Q_INVOKABLE int audioInSourceIndex(const QString &value) const;
+    Q_SIGNAL void audioInSourcesChanged();
+    QVariantList midiInSources() const;
+    Q_INVOKABLE int midiInSourceIndex(const QString &value) const;
+    Q_SIGNAL void midiInSourcesChanged();
 private:
     std::unique_ptr<MidiRouterDeviceModelPrivate> d;
 };
