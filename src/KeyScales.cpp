@@ -43,6 +43,26 @@ static const QHash<KeyScales::Pitch, QString> pitchNamesHash{
     {KeyScales::PitchBFlat, QString::fromUtf8("B♭")},
     {KeyScales::PitchB, QLatin1String{"B"}},
 };
+// NOTE The shorthand-to-key pairs here MUST remain stable across releases (as they are our persistence values)
+static const QHash<KeyScales::Pitch, QString> pitchShorthandHash{
+    {KeyScales::PitchC, QLatin1String{"c"}},
+    {KeyScales::PitchCSharp, QLatin1String{"csharp"}},
+    {KeyScales::PitchDFlat, QLatin1String("dflat")},
+    {KeyScales::PitchD, QLatin1String{"d"}},
+    {KeyScales::PitchDSharp, QLatin1String{"dsharp"}},
+    {KeyScales::PitchEFlat, QLatin1String("eflat")},
+    {KeyScales::PitchE, QLatin1String{"e"}},
+    {KeyScales::PitchF, QLatin1String{"f"}},
+    {KeyScales::PitchFSharp, QLatin1String{"fsharp"}},
+    {KeyScales::PitchGFlat, QLatin1String("gflat")},
+    {KeyScales::PitchG, QLatin1String{"g"}},
+    {KeyScales::PitchGSharp, QLatin1String{"gsharp"}},
+    {KeyScales::PitchAFlat, QLatin1String("asharp")},
+    {KeyScales::PitchA, QLatin1String{"a"}},
+    {KeyScales::PitchASharp, QLatin1String{"asharp"}},
+    {KeyScales::PitchBFlat, QLatin1String("bflat")},
+    {KeyScales::PitchB, QLatin1String{"b"}},
+};
 
 static const QHash<KeyScales::Pitch, int> pitchValuesHash{
     {KeyScales::PitchC, 0},
@@ -90,6 +110,20 @@ static const QHash<KeyScales::Scale, QString> scaleNamesHash{
     {KeyScales::ScaleLocrian, QLatin1String{"Locrian"}},
 };
 
+// NOTE The shorthand-to-key pairs here MUST remain stable across releases (as they are our persistence values)
+static const QHash<KeyScales::Scale, QString> scaleShorthandHash{
+    {KeyScales::ScaleChromatic, QLatin1String{"chromatic"}},
+    {KeyScales::ScaleIonian, QLatin1String{"ionian"}},
+    {KeyScales::ScaleMajor,  QLatin1String{"major"}},
+    {KeyScales::ScaleDorian, QLatin1String{"dorian"}},
+    {KeyScales::ScalePhrygian, QLatin1String{"phrygian"}},
+    {KeyScales::ScaleLydian, QLatin1String{"lydian"}},
+    {KeyScales::ScaleMixolydian, QLatin1String{"mixolydian"}},
+    {KeyScales::ScaleAeolian, QLatin1String{"aeolian"}},
+    {KeyScales::ScaleNaturalMinor,  QLatin1String{"natural Minor"}},
+    {KeyScales::ScaleLocrian, QLatin1String{"locrian"}},
+};
+
 static const int scaleCount{10};
 static const QHash<KeyScales::Scale, QList<int>> scaleIntervals{
     {KeyScales::ScaleChromatic, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}},
@@ -130,6 +164,20 @@ static const QHash<KeyScales::Octave, QString> octaveNamesHash{
     {KeyScales::Octave7, QLatin1String{"7"}},
     {KeyScales::Octave8, QLatin1String{"8"}},
     {KeyScales::Octave9, QLatin1String{"9"}},
+};
+// NOTE The shorthand-to-key pairs here MUST remain stable across releases (as they are our persistence values)
+static const QHash<KeyScales::Octave, QString> octaveShorthandHash{
+    {KeyScales::OctaveNegative1, QLatin1String{"octavenegative1"}},
+    {KeyScales::Octave0, QLatin1String{"octave0"}},
+    {KeyScales::Octave1, QLatin1String{"octave1"}},
+    {KeyScales::Octave2, QLatin1String{"octave2"}},
+    {KeyScales::Octave3, QLatin1String{"octave3"}},
+    {KeyScales::Octave4, QLatin1String{"octave4"}},
+    {KeyScales::Octave5, QLatin1String{"octave5"}},
+    {KeyScales::Octave6, QLatin1String{"octave6"}},
+    {KeyScales::Octave7, QLatin1String{"octave7"}},
+    {KeyScales::Octave8, QLatin1String{"octave8"}},
+    {KeyScales::Octave9, QLatin1String{"octave9"}},
 };
 
 class KeyScales::Private {
@@ -239,6 +287,23 @@ int KeyScales::pitchEnumKeyToIndex(const Pitch& entry) const
     return pitchIndices.indexOf(entry);
 }
 
+QString KeyScales::pitchShorthand(const Pitch& entry) const
+{
+    return pitchShorthandHash.value(entry);
+}
+
+KeyScales::Pitch KeyScales::pitchShorthandToKey(const QString& shorthand) const
+{
+    Pitch key{PitchC};
+    for (auto iterator = pitchShorthandHash.cbegin(), end = pitchShorthandHash.cend(); iterator != end; ++iterator) {
+        if (iterator.value() == shorthand) {
+            key = iterator.key();
+            break;
+        }
+    }
+    return key;
+}
+
 QString KeyScales::scaleName(const Scale& scale) const
 {
     return scaleNamesHash[scale];
@@ -247,6 +312,23 @@ QString KeyScales::scaleName(const Scale& scale) const
 QStringList KeyScales::scaleNames() const
 {
     return scaleNamesHash.values();
+}
+
+QString KeyScales::scaleShorthand(const Scale& entry) const
+{
+    return scaleShorthandHash.value(entry);
+}
+
+KeyScales::Scale KeyScales::scaleShorthandToKey(const QString& shorthand) const
+{
+    Scale key{ScaleChromatic};
+    for (auto iterator = scaleShorthandHash.cbegin(), end = scaleShorthandHash.cend(); iterator != end; ++iterator) {
+        if (iterator.value() == shorthand) {
+            key = iterator.key();
+            break;
+        }
+    }
+    return key;
 }
 
 KeyScales::Scale KeyScales::scaleIndexToEnumKey(const int& index) const
@@ -283,6 +365,23 @@ int KeyScales::octaveEnumKeyToIndex(const Octave& entry) const
 QStringList KeyScales::octaveNames() const
 {
     return octaveNamesHash.values();
+}
+
+QString KeyScales::octaveShorthand(const Octave& entry) const
+{
+    return octaveShorthandHash.value(entry);
+}
+
+KeyScales::Octave KeyScales::octaveShorthandToKey(const QString& shorthand) const
+{
+    Octave key{Octave4};
+    for (auto iterator = octaveShorthandHash.cbegin(), end = octaveShorthandHash.cend(); iterator != end; ++iterator) {
+        if (iterator.value() == shorthand) {
+            key = iterator.key();
+            break;
+        }
+    }
+    return key;
 }
 
 int KeyScales::midiPitchValue(const Pitch& pitch, const Octave &octave) const

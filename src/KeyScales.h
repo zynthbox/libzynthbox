@@ -67,6 +67,20 @@ public:
      * @see keyIndexToValue(int)
      */
     Q_INVOKABLE QStringList pitchNames() const;
+    /**
+     * \brief Get a string shorthand for the given pitch
+     * @note This is for persistence use and is guaranteed stable across releases
+     * @param entry The key of the entry you wish to get a stable shorthand for
+     * @return The shorthand for the given pitch entry
+     */
+    Q_INVOKABLE QString pitchShorthand(const Pitch &entry) const;
+    /**
+     * \brief Get the Pitch enumerator key for the given shorthand
+     * @see pitchShorthand(const Pitch&)
+     * @param shorthand The string shorthand which you want to get the enumerator key for
+     * @return The Pitch enumerator key for the given shorthand (or PitchC for an invalid or unknown shorthands)
+     */
+    Q_INVOKABLE Pitch pitchShorthandToKey(const QString &shorthand) const;
 
     /**
      * \brief A representation of the scales Zynthbox understands how to work with
@@ -109,6 +123,20 @@ public:
      * @see scaleIndexToValue(int)
      */
     Q_INVOKABLE QStringList scaleNames() const;
+    /**
+     * \brief Get a string shorthand for the given scale
+     * @note This is for persistence use and is guaranteed stable across releases
+     * @param entry The key of the entry you wish to get a stable shorthand for
+     * @return The shorthand for the given scale entry
+     */
+    Q_INVOKABLE QString scaleShorthand(const Scale &entry) const;
+    /**
+     * \brief Get the Scale enumerator key for the given shorthand
+     * @see scaleShorthand(const Scale&)
+     * @param shorthand The string shorthand which you want to get the enumerator key for
+     * @return The Scale enumerator key for the given shorthand (or ScaleChromatic for an invalid or unknown shorthands)
+     */
+    Q_INVOKABLE Scale scaleShorthandToKey(const QString &shorthand) const;
 
     // The logic here being that the octaves are defined by their offset from
     // the midi root note, and we have to make a choice on what that means. In
@@ -155,6 +183,21 @@ public:
      * @see octaveIndexToEnumKey(int)
      */
     Q_INVOKABLE QStringList octaveNames() const;
+    /**
+     * \brief Get a string shorthand for the given octave
+     * @note This is for persistence use and is guaranteed stable across releases
+     * @param entry The key of the entry you wish to get a stable shorthand for
+     * @return The shorthand for the given octave entry
+     */
+    Q_INVOKABLE QString octaveShorthand(const Octave &entry) const;
+    /**
+     * \brief Get the Octave enumerator key for the given shorthand
+     * @see pitchShorthand(const Octave&)
+     * @param shorthand The string shorthand which you want to get the enumerator key for
+     * @return The Octave enumerator key for the given shorthand (or Octave4 for an invalid or unknown shorthands)
+     */
+    Q_INVOKABLE Octave octaveShorthandToKey(const QString &shorthand) const;
+
     /**
      * \brief The octave the given note exists within
      * @param midiNote The note whose octave you wish to identify

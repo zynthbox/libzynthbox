@@ -1421,6 +1421,14 @@ void PatternModel::setScale(int scale)
     }
 }
 
+void PatternModel::setScaleKey(const KeyScales::Scale& scale)
+{
+    if (d->scale != scale) {
+        d->scale = scale;
+        Q_EMIT scaleChanged();
+    }
+}
+
 int PatternModel::pitch() const
 {
     return KeyScales::instance()->pitchEnumKeyToIndex(d->pitch);
@@ -1442,6 +1450,14 @@ void PatternModel::setPitch(int pitch)
     }
 }
 
+void PatternModel::setPitchKey(const KeyScales::Pitch& pitch)
+{
+    if (d->pitch != pitch) {
+        d->pitch = pitch;
+        Q_EMIT pitchChanged();
+    }
+}
+
 int PatternModel::octave() const
 {
     return KeyScales::instance()->octaveEnumKeyToIndex(d->octave);
@@ -1460,6 +1476,14 @@ void PatternModel::setOctave(int octave)
             d->octave = newOctave;
             Q_EMIT octaveChanged();
         }
+    }
+}
+
+void PatternModel::setOctaveKey(const KeyScales::Octave& octave)
+{
+    if (d->octave != octave) {
+        d->octave = octave;
+        Q_EMIT octaveChanged();
     }
 }
 

@@ -577,14 +577,17 @@ public:
     int scale() const;
     KeyScales::Scale scaleKey() const;
     void setScale(int scale);
+    void setScaleKey(const KeyScales::Scale &scale);
     Q_SIGNAL void scaleChanged();
     int pitch() const;
     KeyScales::Pitch pitchKey() const;
     void setPitch(int pitch);
+    void setPitchKey(const KeyScales::Pitch &pitch);
     Q_SIGNAL void pitchChanged();
     int octave() const;
     KeyScales::Octave octaveKey() const;
     void setOctave(int octave);
+    void setOctaveKey(const KeyScales::Octave &octave);
     Q_SIGNAL void octaveChanged();
 
     int gridModelStartNote() const;

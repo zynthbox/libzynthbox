@@ -843,9 +843,9 @@ QString PlayGridManager::modelToJson(const QObject* model) const
         modelObject["bankLength"] = patternModel->bankLength();
         modelObject["enabled"] = patternModel->enabled();
         modelObject["layerData"] = patternModel->layerData();
-        modelObject["scale"] = patternModel->scale();
-        modelObject["pitch"] = patternModel->pitch();
-        modelObject["octave"] = patternModel->octave();
+        modelObject["scale"] = KeyScales::instance()->scaleShorthand(patternModel->scaleKey());
+        modelObject["pitch"] = KeyScales::instance()->pitchShorthand(patternModel->pitchKey());
+        modelObject["octave"] = KeyScales::instance()->octaveShorthand(patternModel->octaveKey());
         modelObject["gridModelStartNote"] = patternModel->gridModelStartNote();
         modelObject["gridModelEndNote"] = patternModel->gridModelEndNote();
         modelObject["hasNotes"] = patternModel->hasNotes();
@@ -936,17 +936,17 @@ void PlayGridManager::setModelFromJson(QObject* model, const QString& json)
                 pattern->setSwing(0);
             }
             if (patternObject.contains("scale")) {
-                pattern->setScale(patternObject.value("scale").toInt());
+                pattern->setScaleKey(KeyScales::instance()->scaleShorthandToKey(patternObject.value("scale").toString()));
             } else {
-                pattern->setScale(KeyScales::ScaleChromatic);
+                pattern->setScaleKey(KeyScales::ScaleChromatic);
             }
             if (patternObject.contains("pitch")) {
-                pattern->setPitch(patternObject.value("pitch").toInt());
+                pattern->setPitch(KeyScales::instance()->pitchShorthandToKey(patternObject.value("pitch").toString()));
             } else {
                 pattern->setPitch(KeyScales::PitchC);
             }
             if (patternObject.contains("octave")) {
-                pattern->setOctave(patternObject.value("octave").toInt());
+                pattern->setOctave(KeyScales::instance()->octaveShorthandToKey(patternObject.value("octave").toString()));
             } else {
                 pattern->setOctave(KeyScales::Octave4);
             }
