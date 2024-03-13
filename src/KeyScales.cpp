@@ -433,7 +433,13 @@ QString KeyScales::pitchName(const Pitch& pitch) const
 
 QStringList KeyScales::pitchNames() const
 {
-    return pitchNamesHash.values();
+    static QStringList names;
+    if (names.length() == 0) {
+        for (int index = 0; index < pitchIndices.length(); ++index) {
+            names << pitchNamesHash[pitchIndices[index]];
+        }
+    }
+    return names;
 }
 
 KeyScales::Pitch KeyScales::pitchIndexToEnumKey(const int& index) const
@@ -473,7 +479,13 @@ QString KeyScales::scaleName(const Scale& scale) const
 
 QStringList KeyScales::scaleNames() const
 {
-    return scaleNamesHash.values();
+    static QStringList names;
+    if (names.length() == 0) {
+        for (int index = 0; index < scaleIndices.length(); ++index) {
+            names << scaleNamesHash[scaleIndices[index]];
+        }
+    }
+    return names;
 }
 
 QString KeyScales::scaleShorthand(const Scale& entry) const
@@ -526,7 +538,13 @@ int KeyScales::octaveEnumKeyToIndex(const Octave& entry) const
 
 QStringList KeyScales::octaveNames() const
 {
-    return octaveNamesHash.values();
+    static QStringList names;
+    if (names.length() == 0) {
+        for (int index = 0; index < octaveIndices.length(); ++index) {
+            names << octaveNamesHash[octaveIndices[index]];
+        }
+    }
+    return names;
 }
 
 QString KeyScales::octaveShorthand(const Octave& entry) const
