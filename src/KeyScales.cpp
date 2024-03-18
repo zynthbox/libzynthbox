@@ -85,172 +85,183 @@ static const QHash<KeyScales::Pitch, int> pitchValuesHash{
 };
 
 static const QList<KeyScales::Scale> scaleIndices{
+    KeyScales::ScaleAdonaiMalak,
+    KeyScales::ScaleAeolian,
+    KeyScales::ScaleAlgerian,
+    KeyScales::ScaleAugmented,
+    KeyScales::ScaleBeebopDominant,
+    KeyScales::ScaleBlues,
     KeyScales::ScaleChromatic,
-    KeyScales::ScaleIonian,
-    KeyScales::ScaleMajor,
     KeyScales::ScaleDorian,
     KeyScales::ScaleDoubleHarmonic,
     KeyScales::ScaleEnigmatic,
     KeyScales::ScaleFlamenco,
     KeyScales::ScaleGypsy,
     KeyScales::ScaleHalfDiminished,
-    KeyScales::ScaleHarmonicMinor,
     KeyScales::ScaleHarmonicMajor,
+    KeyScales::ScaleHarmonicMinor,
     KeyScales::ScaleHarmonics,
     KeyScales::ScaleHirajoshi,
     KeyScales::ScaleHungarianMajor,
     KeyScales::ScaleHungarianMinor,
     KeyScales::ScaleIn,
     KeyScales::ScaleInsen,
+    KeyScales::ScaleIonian,
     KeyScales::ScaleIstrian,
     KeyScales::ScaleIwato,
-    KeyScales::ScalePhrygian,
-    KeyScales::ScalePhrygianDominant,
     KeyScales::ScaleLydian,
     KeyScales::ScaleLydianAugmented,
     KeyScales::ScaleLydianDiminished,
     KeyScales::ScaleLydianDominant,
+    KeyScales::ScaleLocrian,
+    KeyScales::ScaleMajor,
     KeyScales::ScaleMajorBebop,
     KeyScales::ScaleMajorLocrian,
     KeyScales::ScaleMajorPentatonic,
     KeyScales::ScaleMelodicMinorAscending,
     KeyScales::ScaleMelodicMinorDescending,
+    KeyScales::ScaleMelodicMinorAscendingDescending,
+    KeyScales::ScaleMelodicMinorDescendingAscending,
     KeyScales::ScaleMinorPentatonic,
     KeyScales::ScaleMixolydian,
-    KeyScales::ScaleAdonaiMalak,
+    KeyScales::ScaleNaturalMinor,
     KeyScales::ScaleNeopolitanMajor,
     KeyScales::ScaleNeopolitanMinor,
     KeyScales::ScalePersian,
+    KeyScales::ScalePhrygian,
+    KeyScales::ScalePhrygianDominant,
     KeyScales::ScalePrometheus,
+    KeyScales::ScaleSuperLocrian,
     KeyScales::ScaleTritone,
     KeyScales::ScaleTwoSemitoneTritone,
     KeyScales::ScaleUkranianDorian,
     KeyScales::ScaleWholeTone,
-    KeyScales::ScaleYo,
-    KeyScales::ScaleAeolian,
-    KeyScales::ScaleNaturalMinor,
-    KeyScales::ScaleLocrian,
-    KeyScales::ScaleSuperLocrian,
-    KeyScales::ScaleAlgerian,
-    KeyScales::ScaleBeebopDominant,
-    KeyScales::ScaleBlues,
+    KeyScales::ScaleYo
 };
 
 static const QHash<KeyScales::Scale, QString> scaleNamesHash{
+    {KeyScales::ScaleAdonaiMalak, QLatin1String{"Adonai Malak"}},
+    {KeyScales::ScaleAeolian, QLatin1String{"Aeolian"}},
+    {KeyScales::ScaleAlgerian, QLatin1String{"Algerian"}},
+    {KeyScales::ScaleAugmented, QLatin1String{"Augmented"}},
+    {KeyScales::ScaleBeebopDominant, QLatin1String{"Beebop Dominant"}},
+    {KeyScales::ScaleBlues, QLatin1String{"Blues"}},
     {KeyScales::ScaleChromatic, QLatin1String{"Chromatic"}},
-    {KeyScales::ScaleIonian, QLatin1String{"Ionian"}},
-    {KeyScales::ScaleMajor,  QLatin1String{"Major"}},
     {KeyScales::ScaleDorian, QLatin1String{"Dorian"}},
     {KeyScales::ScaleDoubleHarmonic, QLatin1String{"Double Harmonic"}},
     {KeyScales::ScaleEnigmatic, QLatin1String{"Enigmatic"}},
     {KeyScales::ScaleFlamenco, QLatin1String{"Flamenco"}},
     {KeyScales::ScaleGypsy, QLatin1String{"'Gypsy'"}},
     {KeyScales::ScaleHalfDiminished, QLatin1String{"Half Diminished"}},
-    {KeyScales::ScaleHarmonicMinor, QLatin1String{"Harmonic Minor"}},
     {KeyScales::ScaleHarmonicMajor, QLatin1String{"Harmonic Major"}},
+    {KeyScales::ScaleHarmonicMinor, QLatin1String{"Harmonic Minor"}},
     {KeyScales::ScaleHarmonics, QLatin1String{"Harmonics"}},
     {KeyScales::ScaleHirajoshi, QLatin1String{"Hirajoshi"}},
     {KeyScales::ScaleHungarianMajor, QLatin1String{"Hungarian Major"}},
     {KeyScales::ScaleHungarianMinor, QLatin1String{"Hungarian Minor"}},
     {KeyScales::ScaleIn, QLatin1String{"In (Sakura Pentatonic)"}},
     {KeyScales::ScaleInsen, QLatin1String{"Insen"}},
+    {KeyScales::ScaleIonian, QLatin1String{"Ionian"}},
     {KeyScales::ScaleIstrian, QLatin1String{"Istrian"}},
     {KeyScales::ScaleIwato, QLatin1String{"Iwato"}},
-    {KeyScales::ScalePhrygian, QLatin1String{"Phrygian"}},
-    {KeyScales::ScalePhrygianDominant, QLatin1String{"Phrygian Dominant"}},
     {KeyScales::ScaleLydian, QLatin1String{"Lydian"}},
     {KeyScales::ScaleLydianAugmented, QLatin1String{"Lydian Augmented"}},
     {KeyScales::ScaleLydianDiminished, QLatin1String{"Lydian Diminished"}},
     {KeyScales::ScaleLydianDominant, QLatin1String{"Lydian Dominant"}},
+    {KeyScales::ScaleLocrian, QLatin1String{"Locrian"}},
+    {KeyScales::ScaleMajor,  QLatin1String{"Major"}},
     {KeyScales::ScaleMajorBebop, QLatin1String{"Major Bebop"}},
     {KeyScales::ScaleMajorLocrian, QLatin1String{"Major Locrian"}},
     {KeyScales::ScaleMajorPentatonic, QLatin1String{"Major Pentatonic"}},
     {KeyScales::ScaleMelodicMinorAscending, QLatin1String{"Melodic Minor Ascending"}},
     {KeyScales::ScaleMelodicMinorDescending, QLatin1String{"Melodic Minor Descending"}},
+    {KeyScales::ScaleMelodicMinorAscendingDescending, QLatin1String{"Melodic Minor Ascending then Descending"}},
+    {KeyScales::ScaleMelodicMinorDescendingAscending, QLatin1String{"Melodic Minor Descending then Ascending"}},
     {KeyScales::ScaleMinorPentatonic, QLatin1String{"Minor Pentatonic"}},
     {KeyScales::ScaleMixolydian, QLatin1String{"Mixolydian"}},
-    {KeyScales::ScaleAdonaiMalak, QLatin1String{"Adonai Malak"}},
+    {KeyScales::ScaleNaturalMinor,  QLatin1String{"Natural Minor"}},
     {KeyScales::ScaleNeopolitanMajor, QLatin1String{"Neopolitan Major"}},
     {KeyScales::ScaleNeopolitanMinor, QLatin1String{"Neopolitan Minor"}},
     {KeyScales::ScalePersian, QLatin1String{"Persian"}},
+    {KeyScales::ScalePhrygian, QLatin1String{"Phrygian"}},
+    {KeyScales::ScalePhrygianDominant, QLatin1String{"Phrygian Dominant"}},
     {KeyScales::ScalePrometheus, QLatin1String{"Prometheus"}},
+    {KeyScales::ScaleSuperLocrian, QLatin1String{"Super Locrian"}},
     {KeyScales::ScaleTritone, QLatin1String{"Tritone"}},
     {KeyScales::ScaleTwoSemitoneTritone, QLatin1String{"Two Semi-tone Tritone"}},
     {KeyScales::ScaleUkranianDorian, QLatin1String{"Ukranian Dorian"}},
     {KeyScales::ScaleWholeTone, QLatin1String{"Whole Tone"}},
     {KeyScales::ScaleYo, QLatin1String{"Yo"}},
-    {KeyScales::ScaleAeolian, QLatin1String{"Aeolian"}},
-    {KeyScales::ScaleNaturalMinor,  QLatin1String{"Natural Minor"}},
-    {KeyScales::ScaleLocrian, QLatin1String{"Locrian"}},
-    {KeyScales::ScaleSuperLocrian, QLatin1String{"Super Locrian"}},
-    {KeyScales::ScaleAugmented, QLatin1String{"Augmented"}},
-    {KeyScales::ScaleAlgerian, QLatin1String{"Algerian"}},
-    {KeyScales::ScaleBeebopDominant, QLatin1String{"Beebop Dominant"}},
-    {KeyScales::ScaleBlues, QLatin1String{"Blues"}},
 };
 
 // NOTE The shorthand-to-key pairs here MUST remain stable across releases (as they are our persistence values)
 static const QHash<KeyScales::Scale, QString> scaleShorthandHash{
+    {KeyScales::ScaleAdonaiMalak, QLatin1String{"adonaimalak"}},
+    {KeyScales::ScaleAeolian, QLatin1String{"aeolian"}},
+    {KeyScales::ScaleAlgerian, QLatin1String{"algerian"}},
+    {KeyScales::ScaleAugmented, QLatin1String{"augmented"}},
+    {KeyScales::ScaleBeebopDominant, QLatin1String{"beebopdominant"}},
+    {KeyScales::ScaleBlues, QLatin1String{"blues"}},
     {KeyScales::ScaleChromatic, QLatin1String{"chromatic"}},
-    {KeyScales::ScaleIonian, QLatin1String{"ionian"}},
-    {KeyScales::ScaleMajor,  QLatin1String{"major"}},
     {KeyScales::ScaleDorian, QLatin1String{"dorian"}},
     {KeyScales::ScaleDoubleHarmonic, QLatin1String{"doubleharmonic"}},
     {KeyScales::ScaleEnigmatic, QLatin1String{"enigmatic"}},
     {KeyScales::ScaleFlamenco, QLatin1String{"flamenco"}},
     {KeyScales::ScaleGypsy, QLatin1String{"gypsy"}},
     {KeyScales::ScaleHalfDiminished, QLatin1String{"halfdiminished"}},
-    {KeyScales::ScaleHarmonicMinor, QLatin1String{"harmonicminor"}},
     {KeyScales::ScaleHarmonicMajor, QLatin1String{"harmonicmajor"}},
+    {KeyScales::ScaleHarmonicMinor, QLatin1String{"harmonicminor"}},
     {KeyScales::ScaleHarmonics, QLatin1String{"harmonics"}},
     {KeyScales::ScaleHirajoshi, QLatin1String{"hirajoshi"}},
     {KeyScales::ScaleHungarianMajor, QLatin1String{"hungarianmajor"}},
     {KeyScales::ScaleHungarianMinor, QLatin1String{"hungarianminor"}},
     {KeyScales::ScaleIn, QLatin1String{"in"}},
     {KeyScales::ScaleInsen, QLatin1String{"insen"}},
+    {KeyScales::ScaleIonian, QLatin1String{"ionian"}},
     {KeyScales::ScaleIstrian, QLatin1String{"istrian"}},
     {KeyScales::ScaleIwato, QLatin1String{"iwato"}},
-    {KeyScales::ScalePhrygian, QLatin1String{"phrygian"}},
-    {KeyScales::ScalePhrygianDominant, QLatin1String{"phrygiandominant"}},
     {KeyScales::ScaleLydian, QLatin1String{"lydian"}},
     {KeyScales::ScaleLydianAugmented, QLatin1String{"lydianaugmented"}},
     {KeyScales::ScaleLydianDiminished, QLatin1String{"lydiandiminished"}},
     {KeyScales::ScaleLydianDominant, QLatin1String{"lydiandominant"}},
+    {KeyScales::ScaleLocrian, QLatin1String{"locrian"}},
+    {KeyScales::ScaleMajor,  QLatin1String{"major"}},
     {KeyScales::ScaleMajorBebop, QLatin1String{"majorbebop"}},
     {KeyScales::ScaleMajorLocrian, QLatin1String{"majorlocrian"}},
     {KeyScales::ScaleMajorPentatonic, QLatin1String{"majorpentatonic"}},
     {KeyScales::ScaleMelodicMinorAscending, QLatin1String{"melodicminorascending"}},
     {KeyScales::ScaleMelodicMinorDescending, QLatin1String{"melodicminordescending"}},
+    {KeyScales::ScaleMelodicMinorAscendingDescending, QLatin1String{"melodicminorascendingdescending"}},
+    {KeyScales::ScaleMelodicMinorDescendingAscending, QLatin1String{"melodicminordescendingascending"}},
     {KeyScales::ScaleMinorPentatonic, QLatin1String{"minorpentatonic"}},
     {KeyScales::ScaleMixolydian, QLatin1String{"mixolydian"}},
-    {KeyScales::ScaleAdonaiMalak, QLatin1String{"adonaimalak"}},
+    {KeyScales::ScaleNaturalMinor,  QLatin1String{"naturalminor"}},
     {KeyScales::ScaleNeopolitanMajor, QLatin1String{"neopolitanmajor"}},
     {KeyScales::ScaleNeopolitanMinor, QLatin1String{"neopolitanminor"}},
     {KeyScales::ScalePersian, QLatin1String{"persian"}},
+    {KeyScales::ScalePhrygian, QLatin1String{"phrygian"}},
+    {KeyScales::ScalePhrygianDominant, QLatin1String{"phrygiandominant"}},
     {KeyScales::ScalePrometheus, QLatin1String{"prometheus"}},
+    {KeyScales::ScaleSuperLocrian, QLatin1String{"superlocrian"}},
     {KeyScales::ScaleTritone, QLatin1String{"tritone"}},
     {KeyScales::ScaleTwoSemitoneTritone, QLatin1String{"twosemitonetritone"}},
     {KeyScales::ScaleUkranianDorian, QLatin1String{"ukraniandorian"}},
     {KeyScales::ScaleWholeTone, QLatin1String{"wholetone"}},
     {KeyScales::ScaleYo, QLatin1String{"yo"}},
-    {KeyScales::ScaleAeolian, QLatin1String{"aeolian"}},
-    {KeyScales::ScaleNaturalMinor,  QLatin1String{"natural Minor"}},
-    {KeyScales::ScaleLocrian, QLatin1String{"locrian"}},
-    {KeyScales::ScaleSuperLocrian, QLatin1String{"superlocrian"}},
-    {KeyScales::ScaleAugmented, QLatin1String{"augmented"}},
-    {KeyScales::ScaleAlgerian, QLatin1String{"algerian"}},
-    {KeyScales::ScaleBeebopDominant, QLatin1String{"beebopdominant"}},
-    {KeyScales::ScaleBlues, QLatin1String{"blues"}},
 };
 
-static const int scaleCount{50};
+static const int scaleCount{52};
 // These are stored so that, given a root note, you can add these intervals in order to get the
 // next pitch (and conversely, starting from a root note, you can rotate through backwards
 // starting at the last entry in the list to complete the scale downwards)
 static const QHash<KeyScales::Scale, QList<int>> scaleIntervals{
+    {KeyScales::ScaleAdonaiMalak, {2, 2, 1, 2, 2, 1, 2}}, // 0,2,4,5,7,9,10
+    {KeyScales::ScaleAeolian, {2, 1, 2, 2, 1, 2, 2}}, // 0,2,3,5,7,8,10
+    {KeyScales::ScaleAlgerian, {2,1,3,1,1,3,1,2,1,2,2,1,3,1}}, // alternates between two different types of octave layout (nominally W, H, WH, H, H, WH, H, with every second octave being W, H, W, W, H, WH, H instead) // 0,2,3,6,7,9,11,12,14,15,17
+    {KeyScales::ScaleAugmented, {3,1,3,1,3,2}}, // 0,3,4,7,8,11
+    {KeyScales::ScaleBeebopDominant, {2, 2, 1, 2, 2, 1, 1, 1}}, // 0,2,4,5,7,9,10,11
+    {KeyScales::ScaleBlues, {3, 2, 1, 1, 3, 2}}, // 0,3,5,6,7,10
     {KeyScales::ScaleChromatic, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}}, // 0,1,2,3,4,5,6,7,8,9,10,11
-    {KeyScales::ScaleIonian, {2, 2, 1, 2, 2, 2, 1}}, // 0,2,4,5,7,9,11
-    {KeyScales::ScaleMajor, {2, 2, 1, 2, 2, 2, 1}}, // 0,2,4,5,7,9,11
     {KeyScales::ScaleDorian, {2, 1, 2, 2, 2, 1, 2}}, // 0,2,3,5,7,9,10
     {KeyScales::ScaleDoubleHarmonic, {1, 3, 1, 2, 1, 3, 1}}, // 0,1,4,5,7,8,11
     {KeyScales::ScaleEnigmatic, {1, 3, 2, 2, 2, 1, 1}}, // 0,1,4,6,8,10,11
@@ -265,39 +276,37 @@ static const QHash<KeyScales::Scale, QList<int>> scaleIntervals{
     {KeyScales::ScaleHungarianMinor, {2, 1, 3, 1, 1, 3, 1}}, // 0,2,3,6,7,8,11
     {KeyScales::ScaleIn, {1, 4, 2, 1, 4}}, // 0,1,5,7,8
     {KeyScales::ScaleInsen, {1, 4, 2, 3, 2}}, // 0,1,5,7,10
+    {KeyScales::ScaleIonian, {2, 2, 1, 2, 2, 2, 1}}, // 0,2,4,5,7,9,11
     {KeyScales::ScaleIstrian, {1, 2, 1, 2, 1, 5}}, // 0,1,3,4,6,7
     {KeyScales::ScaleIwato, {1, 4, 1, 4, 2}}, // 0,1,5,6,10
-    {KeyScales::ScalePhrygian, {1, 2, 2, 2, 1, 2, 2}}, // 0,1,3,5,7,8,10
-    {KeyScales::ScalePhrygianDominant, {1, 3, 1, 2, 1, 2, 2}}, // 0,1,4,5,7,8,10
     {KeyScales::ScaleLydian, {2, 2, 2, 1, 2, 2, 1}}, // 0,2,4,6,7,9,11
     {KeyScales::ScaleLydianAugmented, {2, 2, 2, 2, 1, 2, 1}}, // 0,2,4,6,8,9,11
     {KeyScales::ScaleLydianDiminished, {2, 1, 3, 1, 2, 2, 1}}, // 0,2,3,6,7,9,11
     {KeyScales::ScaleLydianDominant, {2, 2, 2, 1, 2, 1, 2}}, // 0,2,4,6,7,9,10
+    {KeyScales::ScaleLocrian, {1, 2, 2, 1, 2, 2, 2}}, // 0,1,3,5,6,8,10
+    {KeyScales::ScaleMajor, {2, 2, 1, 2, 2, 2, 1}}, // 0,2,4,5,7,9,11
     {KeyScales::ScaleMajorBebop, {2, 2, 1, 2, 1, 1, 2, 1}}, // 0,2,4,5,7,(8),9,11
-    {KeyScales::ScaleMajorPentatonic, {2, 2, 3, 2, 3}}, // 0,2,4,7,9
     {KeyScales::ScaleMajorLocrian, {2, 2, 1, 1, 2, 2, 2}}, // 0,2,4,5,6,8,10
+    {KeyScales::ScaleMajorPentatonic, {2, 2, 3, 2, 3}}, // 0,2,4,7,9
     {KeyScales::ScaleMelodicMinorAscending, {2, 1, 2, 2, 2, 2, 1}}, // 0,2,3,5,7,9,11
     {KeyScales::ScaleMelodicMinorDescending, {2, 1, 2, 2, 1, 2, 2}}, // 12,10,8,7,5,3,2
+    {KeyScales::ScaleMelodicMinorAscendingDescending, {2, 1, 2, 2, 2, 2, 1, 2, 1, 2, 2, 1, 2, 2}}, // 0,2,3,5,7,9,11
+    {KeyScales::ScaleMelodicMinorDescendingAscending, {2, 1, 2, 2, 1, 2, 2, 2, 1, 2, 2, 2, 2, 1}}, // 12,10,8,7,5,3,2
     {KeyScales::ScaleMinorPentatonic, {3, 2, 2, 3, 2}}, // 0,3,5,7,10
     {KeyScales::ScaleMixolydian, {2, 2, 1, 2, 2, 1, 2}}, // 0,2,4,5,7,9,10
-    {KeyScales::ScaleAdonaiMalak, {2, 2, 1, 2, 2, 1, 2}}, // 0,2,4,5,7,9,10
+    {KeyScales::ScaleNaturalMinor,  {2, 1, 2, 2, 1, 2, 2}}, // 0,2,3,5,7,8,10
     {KeyScales::ScaleNeopolitanMajor, {1, 2, 2, 2, 2, 2, 1}}, // 0,1,3,5,7,9,11
     {KeyScales::ScaleNeopolitanMinor, {1, 2, 2, 2, 1, 3, 1}}, // 0,1,3,5,7,8,11
     {KeyScales::ScalePersian, {1, 3, 1, 1, 2, 3, 1}}, // 0,1,4,5,6,8,11
+    {KeyScales::ScalePhrygian, {1, 2, 2, 2, 1, 2, 2}}, // 0,1,3,5,7,8,10
+    {KeyScales::ScalePhrygianDominant, {1, 3, 1, 2, 1, 2, 2}}, // 0,1,4,5,7,8,10
     {KeyScales::ScalePrometheus, {2, 2, 2, 3, 1, 2}}, // 0,2,4,6,9,10
+    {KeyScales::ScaleSuperLocrian, {1,2,1,2,2,2,2}}, // 0,1,3,4,6,8,10
     {KeyScales::ScaleTritone, {1, 3, 2, 1, 3, 2}}, // 0,1,4,6,7,10
     {KeyScales::ScaleTwoSemitoneTritone, {1, 1, 4, 1, 1, 4}}, // 0,1,2,6,7,8
     {KeyScales::ScaleUkranianDorian, {2, 1, 3, 1, 2, 1, 2}}, // 0,2,3,6,7,9,10
     {KeyScales::ScaleWholeTone, {2, 2, 2, 2, 2, 2}}, // 0,2,4,6,8,10
     {KeyScales::ScaleYo, {3, 2, 2, 3, 2}}, // 0,3,5,7,10
-    {KeyScales::ScaleAeolian, {2, 1, 2, 2, 1, 2, 2}}, // 0,2,3,5,7,8,10
-    {KeyScales::ScaleNaturalMinor,  {2, 1, 2, 2, 1, 2, 2}}, // 0,2,3,5,7,8,10
-    {KeyScales::ScaleLocrian, {1, 2, 2, 1, 2, 2, 2}}, // 0,1,3,5,6,8,10
-    {KeyScales::ScaleSuperLocrian, {1,2,1,2,2,2,2}}, // 0,1,3,4,6,8,10
-    {KeyScales::ScaleAugmented, {3,1,3,1,3,2}}, // 0,3,4,7,8,11
-    {KeyScales::ScaleAlgerian, {2,1,3,1,1,3,1,2,1,2,2,1,3,1}}, // alternates between two different types of octave layout (nominally W, H, WH, H, H, WH, H, with every second octave being W, H, W, W, H, WH, H instead) // 0,2,3,6,7,9,11,12,14,15,17
-    {KeyScales::ScaleBeebopDominant, {2, 2, 1, 2, 2, 1, 1, 1}}, // 0,2,4,5,7,9,10,11
-    {KeyScales::ScaleBlues, {3, 2, 1, 1, 3, 2}}, // 0,3,5,6,7,10
 };
 
 static const QList<KeyScales::Octave> octaveIndices{
