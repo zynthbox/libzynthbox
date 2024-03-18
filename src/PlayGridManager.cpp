@@ -941,14 +941,14 @@ void PlayGridManager::setModelFromJson(QObject* model, const QString& json)
                 pattern->setScaleKey(KeyScales::ScaleChromatic);
             }
             if (patternObject.contains("pitch")) {
-                pattern->setPitch(KeyScales::instance()->pitchShorthandToKey(patternObject.value("pitch").toString()));
+                pattern->setPitchKey(KeyScales::instance()->pitchShorthandToKey(patternObject.value("pitch").toString()));
             } else {
-                pattern->setPitch(KeyScales::PitchC);
+                pattern->setPitchKey(KeyScales::PitchC);
             }
             if (patternObject.contains("octave")) {
-                pattern->setOctave(KeyScales::instance()->octaveShorthandToKey(patternObject.value("octave").toString()));
+                pattern->setOctaveKey(KeyScales::instance()->octaveShorthandToKey(patternObject.value("octave").toString()));
             } else {
-                pattern->setOctave(KeyScales::Octave4);
+                pattern->setOctaveKey(KeyScales::Octave4);
             }
             pattern->endLongOperation();
         }
