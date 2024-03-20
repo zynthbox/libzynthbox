@@ -561,15 +561,25 @@ public:
                     }
                 }
                 if (jackPortFlags & JackPortIsOutput) {
+                    bool currentState{device->inputEnabled()};
+                    bool portIsUnknown{device->inputPortName().isEmpty()};
                     device->setInputPortName(inputPortName);
                     device->setInputEnabled(!disabledMidiInPorts.contains(device->zynthianId()));
                     connectPorts(portName, QString("ZLRouter:%1").arg(inputPortName));
-                    qDebug() << Q_FUNC_INFO << "Updated" << device << device->humanReadableName() << "input port" << device->inputPortName() << "enabled state to" << device->inputEnabled();
+                    if (portIsUnknown || currentState != device->inputEnabled()) {
+                        // Only debug this out if there's a change or the device is new
+                        qDebug() << Q_FUNC_INFO << "Updated" << device << device->humanReadableName() << "input port" << device->inputPortName() << "enabled state to" << device->inputEnabled();
+                    }
                 } else if (jackPortFlags & JackPortIsInput) {
+                    bool currentState{device->outputEnabled()};
+                    bool portIsUnknown{device->outputPortName().isEmpty()};
                     device->setOutputPortName(outputPortName);
                     device->setOutputEnabled(enabledMidiOutPorts.contains(device->zynthianId()));
                     connectPorts(QString("ZLRouter:%1").arg(outputPortName), portName);
-                    qDebug() << Q_FUNC_INFO << "Updated" << device << device->humanReadableName() << "output port" << device->outputPortName() << "enabled state to" << device->outputEnabled();
+                    if (portIsUnknown || currentState != device->outputEnabled()) {
+                        // Only debug this out if there's a change or the device is new
+                        qDebug() << Q_FUNC_INFO << "Updated" << device << device->humanReadableName() << "output port" << device->outputPortName() << "enabled state to" << device->outputEnabled();
+                    }
                 }
                 if (connectedDevices.contains(device) == false) {
                     connectedDevices << device;
