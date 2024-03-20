@@ -761,7 +761,7 @@ void SamplerSynth::setChannelEnabled(const int &channel, const bool &enabled) co
 {
     if (channel > -2 && channel < 10) {
         if (d->channels[channel + 1]->enabled != enabled) {
-            qDebug() << "Setting SamplerSynth channel" << channel << "to" << (enabled ? "enabled" : "disabled");
+            // qDebug() << "Setting SamplerSynth channel" << channel << "to" << (enabled ? "enabled" : "disabled");
             d->channels[channel + 1]->enabled = enabled;
         }
     }
