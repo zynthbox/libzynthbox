@@ -24,7 +24,7 @@
 #include "SyncTimer.h"
 #include "Plugin.h"
 
-#define DEBUG_CLIP true
+#define DEBUG_CLIP false
 #define IF_DEBUG_CLIP if (DEBUG_CLIP)
 
 using namespace std;
