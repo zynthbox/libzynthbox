@@ -59,7 +59,7 @@ public:
     QObject *zlMetronomeManager{nullptr};
 
     int soloChannel{-1};
-    bool songIsLoading{false};
+    bool songIsLoading{true};
     void setZlSong(QObject *newZlSong) {
         if (zlSong != newZlSong) {
             if (zlSong) {
@@ -71,15 +71,15 @@ public:
                 setZlMetronomeManager(qvariant_cast<QObject *>(zlSong->property("metronomeManager")));
                 connect(zlSong, SIGNAL(__scenes_model_changed__()), this, SLOT(scenesModelChanged()), Qt::QueuedConnection);
                 connect(zlSong, SIGNAL(playChannelSoloChanged()), this, SLOT(playChannelSoloChanged()), Qt::QueuedConnection);
-                connect(zlSong, SIGNAL(isLoadingChanged()), this, SLOT(isLoadingChanged())); // Not queued, as we want this to be pretty precise
+                connect(zlSong, SIGNAL(isLoadingChanged()), this, SLOT(isLoadingChanged()), Qt::QueuedConnection);
             }
             scenesModelChanged();
             currentMidiChannelChanged();
             playChannelSoloChanged();
-            isLoadingChanged();
         }
     }
 
+    int sketchpadLoadingInProgress{true};
     void setZlMetronomeManager(QObject *newZlMetronomeManager) {
         if (zlMetronomeManager != newZlMetronomeManager) {
             if (zlMetronomeManager) {
@@ -89,6 +89,7 @@ public:
             if (zlMetronomeManager) {
                 connect(zlMetronomeManager, SIGNAL(recordSoloChanged()), this, SLOT(recordSoloChanged()), Qt::QueuedConnection);
                 connect(zlMetronomeManager, SIGNAL(isRecordingChanged()), this, SLOT(isRecordingChanged()), Qt::QueuedConnection);
+                connect(zlMetronomeManager, SIGNAL(sketchpadLoadingInProgressChanged()), this, SLOT(isLoadingChanged()), Qt::QueuedConnection);
             }
             recordSoloChanged();
             isRecordingChanged();
@@ -137,11 +138,13 @@ public Q_SLOTS:
         }
     }
     void isLoadingChanged() {
+        if (zlMetronomeManager) {
+            sketchpadLoadingInProgress = zlMetronomeManager->property("sketchpadLoadingInProgress").toBool();
+            q->setIsDirty(false);
+        }
         if (zlSong) {
             songIsLoading = zlSong->property("isLoading").toBool();
-            if (songIsLoading == false) {
-                q->setIsDirty(false); // As we've just got done loading the song we're a member of, we can assume that the data was recently loaded and actually fresh, so... mark self as not dirty
-            }
+            q->setIsDirty(false); // As we are either loading, or just got done loading the song, we're a member of, we can assume that the data was recently loaded and actually fresh, so... mark self as not dirty
         }
     }
     void currentMidiChannelChanged() {
@@ -237,12 +240,12 @@ SequenceModel::SequenceModel(PlayGridManager* parent)
     saveThrottle->setSingleShot(true);
     saveThrottle->setInterval(1000);
     connect(saveThrottle, &QTimer::timeout, this, [this](){
-        if (isDirty() && d->zlSyncManager->songIsLoading == false) {
+        if (isDirty() && d->zlSyncManager->songIsLoading == false && d->zlSyncManager->sketchpadLoadingInProgress == false) {
             save();
         }
     });
     connect(this, &SequenceModel::isDirtyChanged, this, [this, saveThrottle](){
-        if (isDirty() && d->zlSyncManager->songIsLoading == false) {
+        if (isDirty() && d->zlSyncManager->songIsLoading == false && d->zlSyncManager->sketchpadLoadingInProgress == false) {
             saveThrottle->start();
         }
     });
@@ -530,11 +533,6 @@ void SequenceModel::load(const QString &fileName)
         // First, load the patterns from disk
         QDir dir(QString("%1/patterns").arg(d->filePath.left(d->filePath.lastIndexOf("/"))));
         QFileInfoList entries = dir.entryInfoList({"*.pattern.json"}, QDir::Files, QDir::NoSort);
-        if (entries.count() == 1) {
-            d->playGridManager->taskMessage(QString("Loading 1 pattern"));
-        } else if (entries.count() > 1) {
-            d->playGridManager->taskMessage(QString("Loading %1 patterns").arg(entries.count()));
-        }
         QCollator collator;
         collator.setNumericMode(true);
         std::sort(entries.begin(), entries.end(), [&](const QFileInfo &file1, const QFileInfo &file2){ return collator.compare(file1.absoluteFilePath(), file2.absoluteFilePath()) < 0; });
@@ -715,6 +713,7 @@ QObject* SequenceModel::song() const
 void SequenceModel::setSong(QObject* song)
 {
     if (d->song != song) {
+        setIsDirty(false); // just in case, let's just sort of... not cause any saving after loading
         if (d->song) {
             d->song->disconnect(this);
         }
@@ -727,17 +726,7 @@ void SequenceModel::setSong(QObject* song)
         load();
         Q_EMIT songChanged();
         d->zlSyncManager->setZlSong(song);
-        int patternsWithNotes{0};
-        for (int patternIndex = 0; patternIndex < PATTERN_COUNT; ++patternIndex) {
-            if (d->patternModelIterator[patternIndex]->hasNotes()) {
-                ++patternsWithNotes;
-            }
-        }
-        if (patternsWithNotes == 1) {
-            d->playGridManager->taskMessage(QString("Loaded %1 pattern").arg(patternsWithNotes));
-        } else if (patternsWithNotes > 1) {
-            d->playGridManager->taskMessage(QString("Loaded %1 patterns").arg(patternsWithNotes));
-        }
+        setIsDirty(false); // just in case, let's just sort of... not cause any saving after loading
     }
 }
 
