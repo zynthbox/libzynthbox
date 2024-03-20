@@ -28,9 +28,13 @@ public:
 
     ClipAudioSource *clip{nullptr};
 
+    bool loadingSoundDataPostponed{false};
     void loadSoundData() {
         if (QFileInfo(clip->getPlaybackFile().getFile().getFullPathName().toRawUTF8()).exists()) {
-            qDebug() << Q_FUNC_INFO << "Loading sound data for" << clip->getFilePath();
+            if (loadingSoundDataPostponed) {
+                qDebug() << Q_FUNC_INFO << "Loading sound data for" << clip->getFilePath();
+                loadingSoundDataPostponed = false;
+            }
             AudioFormatReader *format{nullptr};
             juce::File file = clip->getPlaybackFile().getFile();
             tracktion_engine::AudioFileInfo fileInfo = clip->getPlaybackFile().getInfo();
@@ -58,6 +62,7 @@ public:
             }
         } else {
             qDebug() << Q_FUNC_INFO << "Postponing loading sound data for" << clip->getFilePath() << "100ms as the playback file is not there yet...";
+            loadingSoundDataPostponed = true;
             soundLoader.start(100);
         }
     }
