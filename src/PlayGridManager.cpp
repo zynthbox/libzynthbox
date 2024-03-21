@@ -253,7 +253,7 @@ public:
     QStringList hardwareOutActiveNotes;
     int internalPassthroughNoteActivations[128];
 
-    int currentMidiChannel{-1};
+    int currentMidiChannel{0};
 
     std::vector<unsigned char> midiMessage;
     MidiRouter* midiRouter{MidiRouter::instance()};
