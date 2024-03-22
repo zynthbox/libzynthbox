@@ -305,6 +305,102 @@ struct alignas(32) NoteDataPoolEntry {
     NoteDataPoolEntry *next{nullptr};
 };
 
+#define ProbabilitySequenceMax 8
+// The options available for probability based playback
+static const QList<QList<double>> probabilitySequences{
+    {1}, // 100% (the default, really just here to take up space and avoid having to off-by-one some stuff
+    {0.9}, // 90%
+    {0.8}, // 80%
+    {0.7}, // 70%
+    {0.6}, // 60%
+    {0.5}, // 50%
+    {0.4}, // 40%
+    {0.3}, // 30%
+    {0.2}, // 20%
+    {0.1}, // 10%
+    {1}, // Same As Previous - Will use the most recently evaluated probability result for the same pattern (that is, not the most recently scheduled note)
+    {1, 0}, // Play 1, Skip 1
+    {1, 0.5}, // Play 1, 50% Next
+    {1, 0, 0}, // Play 1, Skip 2
+    {1, 0, 0, 0}, // Play 1, Skip 3
+    {1, 0, 0, 0, 0}, // Play 1, Skip 4
+    {1, 0, 0, 0, 0, 0}, // Play 1, Skip 5
+    {1, 0, 0, 0, 0, 0, 0}, // Play 1, Skip 6
+    {1, 0, 0, 0, 0, 0, 0, 0}, // Play 1, Skip 7
+    {0, 1}, // Skip 1, Play 1
+    {0.5, 1}, // 50% One, 100% Next
+    {0, 0, 1}, // Skip 2, Play 1
+    {0, 0, 0, 1}, // Skip 3, Play 1
+    {0, 0, 0, 0, 1}, // Skip 4, Play 1
+    {0, 0, 0, 0, 0, 1}, // Skip 5, Play 1
+    {0, 0, 0, 0, 0, 0, 1}, // Skip 6, Play 1
+    {0, 0, 0, 0, 0, 0, 0, 1}, // Skip 7, Play 1
+    {1, 1, 0}, // Play 2, Skip 1
+    {1, 1, 0, 0}, // Play 2, Skip 2
+    {1, 1, 0, 0, 0}, // Play 2, Skip 3
+    {0, 1, 1}, // Skip 1, Play 2
+    {0, 0, 1, 1}, // Skip 2, Play 2
+    {0, 0, 0, 1, 1}, // Skip 3, Play 2
+    {1, 1, 1, 0}, // Play 3, Skip 1
+    {1, 1, 1, 0, 0}, // Play 3, Skip 2
+    {1, 1, 1, 0, 0, 0}, // Play 3, Skip 3
+    {0, 1, 1, 1}, // Skip 1, Play 3
+    {0, 0, 1, 1, 1}, // Skip 2, Play 3
+    {0, 0, 0, 1, 1, 1}, // Skip 3, Play 3
+    {1, 1, 1, 1, 0}, // Play 4, Skip 1
+    {1, 1, 1, 1, 0, 0}, // Play 4, Skip 2
+    {1, 1, 1, 1, 0, 0, 0}, // Play 4, Skip 3
+    {1, 1, 1, 1, 0, 0, 0, 0}, // Play 4, Skip 4
+    {1, 1, 1, 1, 1, 0}, // Play 5, Skip 1
+    {1, 1, 1, 1, 1, 1, 0}, // Play 6, Skip 1
+    {1, 1, 1, 1, 1, 1, 1, 0}, // Play 7, Skip 1
+};
+/**
+ * \brief Tiny class for handling progressing through the steps of a "probability" sequence
+ * This could eventually serve as the basis for an arpegiator implementation, but that's later
+ */
+class ProbabilitySequence {
+public:
+    ProbabilitySequence() {
+        steps[0] = 1;
+        length = 1;
+    }
+    ~ProbabilitySequence() {}
+
+    /**
+     * \brief Get the probability result of the next step and progress playback
+     * This will increase the current step by one (or wrap), and calculate the
+     * probability for that step, returning whether the step should play or not.
+     * @return Whether the next step in the sequence should play
+     */
+    bool nextStep() {
+        ++current;
+        if (current == length) {
+            current = 0;
+        }
+        if (steps[current] == 0) {
+            return false;
+        } else if (steps[current] == 1) {
+            return true;
+        }
+        return QRandomGenerator::global()->generateDouble() < steps[current];
+    }
+    void reset() {
+        current = length - 1;
+    }
+    void setSequence(const QList<double> sequence) {
+        length = qMin(ProbabilitySequenceMax, sequence.length());
+        current = length - 1;
+        for (int position = 0; position < length; ++position) {
+            steps[position] = sequence[position];
+        }
+    }
+private:
+    double steps[ProbabilitySequenceMax];
+    int length{0};
+    int current{0};
+};
+
 class PatternModel::Private {
 public:
     Private(PatternModel *q) : q(q) {
@@ -378,6 +474,30 @@ public:
     NoteDataPoolEntry noteDataPool[128];
     NoteDataPoolEntry *noteDataPoolReadHead{nullptr};
     NoteDataPoolEntry *noteDataPoolWriteHead{nullptr};
+
+    // This contains a hash of probability sequences for each entry on each step in the sequence.
+    // It is cleared when stopping playback, and will be filled during playback per-step-entry
+    QHash<int, QHash<int, ProbabilitySequence> > probabilitySequences;
+    ProbabilitySequence &getOrCreateProbabilitySequence(int stepPosition, int stepEntry, int probabilityValue) {
+        if (probabilitySequences.contains(stepPosition)) {
+            if (probabilitySequences[stepPosition].contains(stepEntry)) {
+                return probabilitySequences[stepPosition][stepEntry];
+            }
+        } else {
+            // Insert an empty has to make sure we've got something to insert the step data into
+            probabilitySequences.insert(stepPosition, {});
+        }
+        // If we got to here, we know implicitly that the step entry doesn't
+        // exist, either it failed in the first return above, or the step
+        // didn't exist at all, making this safe.
+        probabilitySequences[stepPosition].insert(stepEntry, {});
+        return probabilitySequences[stepPosition][stepEntry];
+    }
+    // If true, the most recent result was to play the step entry, otherwise it will be false
+    // It is cleared when stopping playback, and will be true until the first probability
+    // calculation returns false.
+    // nb: this documents intent, and is used by the Same As Previous probability option
+    bool mostRecentProbabilityResult{true};
 
     // This bunch of lists is equivalent to the data found in each note, and is
     // stored per-position (index in the outer is row * width + column). The
@@ -1834,14 +1954,15 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
 
                 if (d->positionBuffers.contains(nextPosition + (d->bankOffset * d->width)) == false) {
                     QHash<int, juce::MidiBuffer> positionBuffers;
-                    auto subnoteSender = [this, nextPosition, &clearPositionBufferImmediately, swingOffset, noteDuration, schedulingIncrement, &positionBuffers](const Note* subnote, const QVariantHash &metaHash, int positionAdjustment = 0) {
+                    auto subnoteSender = [this, nextPosition, &clearPositionBufferImmediately, swingOffset, noteDuration, schedulingIncrement, &positionBuffers](const Note* subnote, const QVariantHash &metaHash, int positionAdjustment, int subnoteIndex) {
                         bool sendNotes{true};
-                        const int probability{metaHash.value(probabilityString, 100).toInt()};
-                        if (probability < 100) {
+                        const int probability{metaHash.value(probabilityString, 0).toInt()};
+                        if (probability > 0) {
                             clearPositionBufferImmediately = true;
-                            if (QRandomGenerator::global()->generateDouble() * 100 > probability) {
-                                sendNotes = false;
+                            if (probability != 10) { // 10 is the Same As Previous option (meaning simply use whatever the most recent probability result was for this pattern)
+                                sendNotes = d->mostRecentProbabilityResult = d->getOrCreateProbabilitySequence(nextPosition, subnoteIndex, probability).nextStep();
                             }
+                            sendNotes = d->mostRecentProbabilityResult;
                         }
                         if (sendNotes) {
                             int nextStep{metaHash.value(nextStepString, 0).toInt()};
@@ -1896,7 +2017,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                     for (int ratchetIndex = 0; ratchetIndex < ratchetCount; ++ratchetIndex) {
                                         sendNotes = true;
                                         if (ratchetProbability < 100) {
-                                            if (QRandomGenerator::global()->generateDouble() * 100 > ratchetProbability) {
+                                            if (QRandomGenerator::global()->generateDouble() * 100 < ratchetProbability) {
                                                 sendNotes = false;
                                             }
                                         }
@@ -1945,7 +2066,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                                 // Only handle if the delay is zero or in the future (since if it's in
                                                 // the past, we'd be handling it twice, and at the wrong time)
                                                 if (delay >= 0) {
-                                                    subnoteSender(subnote, metaHash);
+                                                    subnoteSender(subnote, metaHash, 0, subnoteIndex);
                                                 }
                                             }
                                         }
@@ -1975,7 +2096,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                             if (!metaHash.isEmpty() && metaHash.contains(delayString)) {
                                                 const qint64 delay{metaHash.value(delayString, 0).toInt() + swingOffset};
                                                 if (delay < 0) {
-                                                    subnoteSender(subnote, metaHash, positionAdjustment);
+                                                    subnoteSender(subnote, metaHash, positionAdjustment, subnoteIndex);
                                                 }
                                             }
                                         }
@@ -2067,6 +2188,8 @@ void PatternModel::updateSequencePosition(qint64 sequencePosition)
 
 void PatternModel::handleSequenceStop()
 {
+    d->probabilitySequences.clear();
+    d->mostRecentProbabilityResult = true;
     setRecordLive(false);
 }
 
