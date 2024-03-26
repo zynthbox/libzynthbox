@@ -59,7 +59,6 @@ public:
     QObject *zlMetronomeManager{nullptr};
 
     int soloChannel{-1};
-    bool songIsLoading{true};
     void setZlSong(QObject *newZlSong) {
         if (zlSong != newZlSong) {
             if (zlSong) {
@@ -76,10 +75,10 @@ public:
             scenesModelChanged();
             currentMidiChannelChanged();
             playChannelSoloChanged();
+            isLoadingChanged();
         }
     }
 
-    int sketchpadLoadingInProgress{true};
     void setZlMetronomeManager(QObject *newZlMetronomeManager) {
         if (zlMetronomeManager != newZlMetronomeManager) {
             if (zlMetronomeManager) {
@@ -93,6 +92,7 @@ public:
             }
             recordSoloChanged();
             isRecordingChanged();
+            isLoadingChanged();
         }
     }
 
@@ -138,14 +138,7 @@ public Q_SLOTS:
         }
     }
     void isLoadingChanged() {
-        if (zlMetronomeManager) {
-            sketchpadLoadingInProgress = zlMetronomeManager->property("sketchpadLoadingInProgress").toBool();
-            q->setIsDirty(false);
-        }
-        if (zlSong) {
-            songIsLoading = zlSong->property("isLoading").toBool();
-            q->setIsDirty(false); // As we are either loading, or just got done loading the song, we're a member of, we can assume that the data was recently loaded and actually fresh, so... mark self as not dirty
-        }
+        q->setIsDirty(false); // As we are either loading, or just got done loading the song, we're a member of, we can assume that the data was recently loaded and actually fresh, so... mark self as not dirty
     }
     void currentMidiChannelChanged() {
         if (zlSong) {
@@ -240,12 +233,12 @@ SequenceModel::SequenceModel(PlayGridManager* parent)
     saveThrottle->setSingleShot(true);
     saveThrottle->setInterval(1000);
     connect(saveThrottle, &QTimer::timeout, this, [this](){
-        if (isDirty() && d->zlSyncManager->songIsLoading == false && d->zlSyncManager->sketchpadLoadingInProgress == false) {
+        if (isDirty()) {
             save();
         }
     });
     connect(this, &SequenceModel::isDirtyChanged, this, [this, saveThrottle](){
-        if (isDirty() && d->zlSyncManager->songIsLoading == false && d->zlSyncManager->sketchpadLoadingInProgress == false) {
+        if (isDirty()) {
             saveThrottle->start();
         }
     });
@@ -648,12 +641,20 @@ bool SequenceModel::save(const QString &fileName, bool exportOnly)
         }
         QDir sequenceLocation(saveToPath.left(saveToPath.lastIndexOf("/")));
         QDir patternLocation(saveToPath.left(saveToPath.lastIndexOf("/")) + "/patterns");
-        if (sequenceLocation.exists() || sequenceLocation.mkpath(sequenceLocation.path())) {
+        bool hasAnyPattern{false};
+        for (int i = 0; i < PATTERN_COUNT; ++i) {
+            PatternModel *pattern = d->patternModelIterator[i];
+            if (pattern) {
+                if (pattern->hasNotes()) {
+                    hasAnyPattern = true;
+                }
+            }
+        }
+        if (sequenceLocation.exists() || (hasAnyPattern && sequenceLocation.mkpath(sequenceLocation.path()))) {
             QFile dataFile(saveToPath);
             if (dataFile.open(QIODevice::WriteOnly) && dataFile.write(data.toUtf8())) {
                 dataFile.close();
                 if (patternLocation.exists() || patternLocation.mkpath(patternLocation.path())) {
-                    bool hasAnyPattern{false};
                     // The filename for patterns is "part(trackIndex)(partLetter).pattern.json"
                     for (int i = 0; i < PATTERN_COUNT; ++i) {
                         PatternModel *pattern = d->patternModelIterator[i];
@@ -666,7 +667,6 @@ bool SequenceModel::save(const QString &fileName, bool exportOnly)
                             QFile patternFile(fileName);
                             if (pattern->hasNotes()) {
                                 pattern->exportToFile(fileName);
-                                hasAnyPattern = true;
                             } else if (patternFile.exists()) {
                                 qDebug() << Q_FUNC_INFO << "Pattern" << patternIdentifier << "in sequence" << objectName() << "has no notes, but the file exists, so delete it";
                                 patternFile.remove();
