@@ -307,7 +307,7 @@ struct alignas(32) NoteDataPoolEntry {
 
 #define ProbabilitySequenceMax 8
 // The options available for probability based playback
-static const QList<QList<double>> probabilitySequences{
+static const QList<QList<double>> probabilitySequenceData{
     {1}, // 100% (the default, really just here to take up space and avoid having to off-by-one some stuff
     {0.9}, // 90%
     {0.8}, // 80%
@@ -491,6 +491,7 @@ public:
         // exist, either it failed in the first return above, or the step
         // didn't exist at all, making this safe.
         probabilitySequences[stepPosition].insert(stepEntry, {});
+        probabilitySequences[stepPosition][stepEntry].setSequence(probabilitySequenceData[probabilityValue]);
         return probabilitySequences[stepPosition][stepEntry];
     }
     // If true, the most recent result was to play the step entry, otherwise it will be false
