@@ -86,7 +86,7 @@ public:
      * \brief A representation of the scales Zynthbox understands how to work with
      */
     enum Scale {
-        ScaleAdonaiMalak,
+        ScaleAdonaiMalakh,
         ScaleAeolian,
         ScaleAlgerian,
         ScaleAugmented,
