@@ -250,7 +250,7 @@ static const QHash<KeyScales::Scale, QString> scaleShorthandHash{
     {KeyScales::ScaleYo, QLatin1String{"yo"}},
 };
 
-static const int scaleCount{52};
+#define scaleCount 52
 // These are stored so that, given a root note, you can add these intervals in order to get the
 // next pitch (and conversely, starting from a root note, you can rotate through backwards
 // starting at the last entry in the list to complete the scale downwards)
@@ -355,8 +355,6 @@ class KeyScales::Private {
 public:
     Private() {
         QHashIterator<KeyScales::Scale, QList<int>> scaleIntervalIterator{scaleIntervals};
-        nearestNote.reserve(scaleCount);
-        allNotes.reserve(scaleCount);
         while (scaleIntervalIterator.hasNext()) {
             scaleIntervalIterator.next();
             const KeyScales::Scale &scaleName = scaleIntervalIterator.key();
@@ -368,9 +366,7 @@ public:
             for (int rootNote = 0; rootNote < 128; ++rootNote) {
                 // The lists being created here are
                 // - the nearest note (that is, what should a given note become if forced onto the scale/root)
-                QList<int> scaleRootNearestNote;
-                scaleRootNearestNote.reserve(128);
-                // - the notes which exist in the scale
+                // - the notes which exist in the scale, for which we use a convenience QList, as it makes building the list a bit easier
                 QList<int> scaleRootAllNotes;
                 scaleRootAllNotes.reserve(128);
                 // We start by creating the list of notes that exist in the scale
@@ -403,22 +399,25 @@ public:
                 int anyNote{0};
                 for (const int &scaleNote : qAsConst(scaleRootAllNotes)) {
                     while (anyNote <= scaleNote) {
-                        scaleRootNearestNote << scaleNote;
+                        nearestNote[scaleName][rootNote][anyNote] = scaleNote;
                         ++anyNote;
                     }
                 }
                 // And finally, add these lists to our scale data
-                scaleNearestNote[rootNote] = scaleRootNearestNote;
-                scaleAllNotes[rootNote] = scaleRootAllNotes;
+                for (int index = 0; index < scaleRootAllNotes.count(); ++index) {
+                    allNotes[scaleName][rootNote][index] = scaleRootAllNotes[index];
+                }
+                // And fill out the array, for good measure
+                for (int index = scaleRootAllNotes.count(); index < 128; ++index) {
+                    allNotes[scaleName][rootNote][index] = scaleRootAllNotes.constLast();
+                }
             }
-            nearestNote[scaleName] = scaleNearestNote;
-            allNotes[scaleName] = scaleAllNotes;
         }
     }
     // Pre-calculated table of what the nearest note is for any valid midi note, for a given root note, in the known scales
-    QHash<KeyScales::Scale, QHash<int, QList<int>>> nearestNote;
+    int nearestNote[scaleCount][128][128]{{{0}}};
     // Pre-calculated table of all notes in a scale, for any given root note, in the known scales
-    QHash<KeyScales::Scale, QHash<int, QList<int>>> allNotes;
+    int allNotes[scaleCount][128][128]{{{0}}};
 };
 
 KeyScales::KeyScales(QObject* parent)
@@ -592,14 +591,22 @@ int KeyScales::onScaleNote(const int& midiNote, const Scale& scale, const Pitch&
 
 int KeyScales::transposeNote(const int& midiNote, const int& steps, const Scale& scale, const Pitch& pitch, const Octave& octave) const
 {
+    // qDebug() << Q_FUNC_INFO << midiNote << steps << scale << pitch << octave;
     int transposedNote{onScaleNote(midiNote, scale, pitch, octave)};
-    int scaleIntervalPosition = d->allNotes[scale][std::clamp(octave + pitchValuesHash[pitch], 0, 127)].indexOf(transposedNote);
+    int scaleIntervalPosition{0};
+    for (; scaleIntervalPosition < 128; ++scaleIntervalPosition) {
+        if (d->allNotes[scale][std::clamp(octave + pitchValuesHash[pitch], 0, 127)][scaleIntervalPosition] == transposedNote) {
+            break;
+        }
+    }
+    // qDebug() << "Transposed note" << transposedNote << "is at position" << scaleIntervalPosition << "in" << d->allNotes[scale][std::clamp(octave + pitchValuesHash[pitch], 0, 127)];
     int currentStep{0};
     const QList<int> &scaleInterval = scaleIntervals[scale];
     const int intervalCount{scaleInterval.count()};
     if (steps > 0) {
         while (currentStep < steps) {
             transposedNote = transposedNote + scaleInterval[scaleIntervalPosition];
+            // qDebug() << "Increased transposed note by" << scaleInterval[scaleIntervalPosition];
             ++scaleIntervalPosition;
             if (scaleIntervalPosition == intervalCount) {
                 scaleIntervalPosition = 0;
@@ -610,18 +617,26 @@ int KeyScales::transposeNote(const int& midiNote, const int& steps, const Scale&
         while (currentStep > steps) {
             --scaleIntervalPosition;
             transposedNote = transposedNote - scaleInterval[scaleIntervalPosition];
+            // qDebug() << "Decreased transposed note by" << scaleInterval[scaleIntervalPosition];
             if (scaleIntervalPosition < 0) {
                 scaleIntervalPosition = intervalCount - 1;
             }
             --currentStep;
         }
     }
+    // qDebug() << "Resulting in transposed note" << std::clamp(transposedNote, 0, 127);
     return std::clamp(transposedNote, 0, 127);
 }
 
 bool KeyScales::midiNoteOnScale(const int& midiNote, const Scale& scale, const Pitch& pitch, const Octave& octave) const
 {
-    const bool returnVal = d->allNotes[scale][std::clamp(octave + pitchValuesHash[pitch], 0, 127)].contains(midiNote);
+    bool returnVal{false};
+    for (int index = 0; index < 128; ++index) {
+        if (d->allNotes[scale][std::clamp(octave + pitchValuesHash[pitch], 0, 127)][index] == midiNote) {
+            returnVal = true;
+            break;
+        }
+    }
     // qDebug() << Q_FUNC_INFO << midiNote << scale << pitch << octave << returnVal << d->allNotes[scale][std::clamp(octave + pitchValuesHash[pitch], 0, 127)];
     return returnVal;
 }
