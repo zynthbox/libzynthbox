@@ -494,6 +494,16 @@ public:
         probabilitySequences[stepPosition][stepEntry].setSequence(probabilitySequenceData[probabilityValue]);
         return probabilitySequences[stepPosition][stepEntry];
     }
+    void invalidateProbabilityPosition(int row, int column, int stepEntry) {
+        const int basePosition = (row * width) + column;
+        if (probabilitySequences.contains(basePosition)) {
+            if (stepEntry > -1) {
+                probabilitySequences.remove(basePosition);
+            } else if (probabilitySequences[basePosition].contains(stepEntry)) {
+                probabilitySequences[basePosition].remove(stepEntry);
+            }
+        }
+    }
     // If true, the most recent result was to play the step entry, otherwise it will be false
     // It is cleared when stopping playback, and will be true until the first probability
     // calculation returns false.
@@ -971,6 +981,9 @@ void PatternModel::setSubnoteMetadata(int row, int column, int subnote, const QS
             }
             metadata[subnote] = noteMetadata;
         }
+        if (key == "probability") {
+            d->invalidateProbabilityPosition(row, column, subnote);
+        }
         setMetadata(row, column, metadata);
     }
 }
@@ -999,6 +1012,7 @@ QVariant PatternModel::subnoteMetadata(int row, int column, int subnote, const Q
 void PatternModel::setNote(int row, int column, QObject* note)
 {
     d->invalidatePosition(row, column);
+    d->invalidateProbabilityPosition(row, column, -1);
     NotesModel::setNote(row, column, note);
 }
 
