@@ -397,7 +397,10 @@ public:
                 }
                 // We then run through that list, and add them in turn (and any that might be missing) to the nearest note lookup
                 int anyNote{0};
+                int noteIndex{0};
                 for (const int &scaleNote : qAsConst(scaleRootAllNotes)) {
+                    noteIndices[scaleName][rootNote][scaleNote] = noteIndex;
+                    ++noteIndex;
                     while (anyNote <= scaleNote) {
                         nearestNote[scaleName][rootNote][anyNote] = scaleNote;
                         ++anyNote;
@@ -418,6 +421,8 @@ public:
     int nearestNote[scaleCount][128][128]{{{0}}};
     // Pre-calculated table of all notes in a scale, for any given root note, in the known scales
     int allNotes[scaleCount][128][128]{{{0}}};
+    // Pre-calculated table of the indices in allNotes of for any given note
+    int noteIndices[scaleCount][128][128]{{{-1}}};
 };
 
 KeyScales::KeyScales(QObject* parent)
@@ -591,15 +596,21 @@ int KeyScales::onScaleNote(const int& midiNote, const Scale& scale, const Pitch&
 
 int KeyScales::transposeNote(const int& midiNote, const int& steps, const Scale& scale, const Pitch& pitch, const Octave& octave) const
 {
-    int transposedNote{onScaleNote(midiNote, scale, pitch, octave)};
-    int scaleIntervalPosition{0};
-    for (; scaleIntervalPosition < 128; ++scaleIntervalPosition) {
-        if (d->allNotes[scale][std::clamp(octave + pitchValuesHash[pitch], 0, 127)][scaleIntervalPosition] == transposedNote) {
-            break;
-        }
+    int remainingSteps{steps};
+    int transposedNote{midiNote};
+    const int rootNote{std::clamp(octave + pitchValuesHash[pitch], 0, 127)};
+    // If the note is NOT on scale, perform the first transposition step as moving it onto the scale (either up or down, depending on step direction)
+    if (d->noteIndices[scale][rootNote][midiNote] == -1) {
+        transposedNote = onScaleNote(midiNote, scale, pitch, octave);
+        // onScaleNote returns the next step upward, so if we're asking for downward movement, we need to move down by one step extra (so moving one step up, we've now done that and remainingSteps goes from 1 to 0)
+        // If we are moving upward, we need to move one step less (so moving an extra step down, meaning remainingSteps goes from -1 to -2)
+        // The result here is that the remaining steps should be adjusted by -1 for both cases
+        --remainingSteps;
     }
-    // qDebug() << Q_FUNC_INFO << midiNote << steps << scale << pitch << octave << "Closest on-scale note to our origin note" << transposedNote << "is at position" << scaleIntervalPosition << "in" << d->allNotes[scale][std::clamp(octave + pitchValuesHash[pitch], 0, 127)] << "meaning our transposed note should be" << d->allNotes[scale][std::clamp(octave + pitchValuesHash[pitch], 0, 127)][std::clamp(scaleIntervalPosition + steps, 0, 127)];
-    return d->allNotes[scale][std::clamp(octave + pitchValuesHash[pitch], 0, 127)][std::clamp(scaleIntervalPosition + steps, 0, 127)];
+    // If the note is on scale and there are still steps to be performed, do normal transposition
+    int scaleNoteIndex{d->noteIndices[scale][rootNote][transposedNote]};
+    // qDebug() << Q_FUNC_INFO << midiNote << steps << scale << pitch << octave << "Closest on-scale note to our origin note" << midiNote << "is" << transposedNote << "at position" << scaleNoteIndex << "meaning our transposed note should be" << d->allNotes[scale][rootNote][std::clamp(scaleNoteIndex + remainingSteps, 0, 127)];
+    return d->allNotes[scale][rootNote][std::clamp(scaleNoteIndex + remainingSteps, 0, 127)];
 }
 
 bool KeyScales::midiNoteOnScale(const int& midiNote, const Scale& scale, const Pitch& pitch, const Octave& octave) const

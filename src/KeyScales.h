@@ -270,6 +270,7 @@ public:
     Q_INVOKABLE int onScaleNote(const int &midiNote, const Scale& scale = ScaleChromatic, const Pitch &pitch = PitchC, const Octave &octave = Octave4) const;
     /**
      * \brief Transpose a note by the given number of steps along the given scale and root note information
+     * @note If the given note is not on-scale, the first step will be considered moving it onto the scale
      * @param midiNote The note that you wish to transpose (this will be clamped to within the allowed midi note range of 0 through 127)
      * @param steps The number of steps along the scale that the note should be transposed
      * @param scale The scale to use for the transposition operation
