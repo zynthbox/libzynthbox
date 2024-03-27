@@ -591,7 +591,6 @@ int KeyScales::onScaleNote(const int& midiNote, const Scale& scale, const Pitch&
 
 int KeyScales::transposeNote(const int& midiNote, const int& steps, const Scale& scale, const Pitch& pitch, const Octave& octave) const
 {
-    // qDebug() << Q_FUNC_INFO << midiNote << steps << scale << pitch << octave;
     int transposedNote{onScaleNote(midiNote, scale, pitch, octave)};
     int scaleIntervalPosition{0};
     for (; scaleIntervalPosition < 128; ++scaleIntervalPosition) {
@@ -599,33 +598,8 @@ int KeyScales::transposeNote(const int& midiNote, const int& steps, const Scale&
             break;
         }
     }
-    // qDebug() << "Transposed note" << transposedNote << "is at position" << scaleIntervalPosition << "in" << d->allNotes[scale][std::clamp(octave + pitchValuesHash[pitch], 0, 127)];
-    int currentStep{0};
-    const QList<int> &scaleInterval = scaleIntervals[scale];
-    const int intervalCount{scaleInterval.count()};
-    if (steps > 0) {
-        while (currentStep < steps) {
-            transposedNote = transposedNote + scaleInterval[scaleIntervalPosition];
-            // qDebug() << "Increased transposed note by" << scaleInterval[scaleIntervalPosition];
-            ++scaleIntervalPosition;
-            if (scaleIntervalPosition == intervalCount) {
-                scaleIntervalPosition = 0;
-            }
-            ++currentStep;
-        }
-    } else if (steps < 0) {
-        while (currentStep > steps) {
-            --scaleIntervalPosition;
-            transposedNote = transposedNote - scaleInterval[scaleIntervalPosition];
-            // qDebug() << "Decreased transposed note by" << scaleInterval[scaleIntervalPosition];
-            if (scaleIntervalPosition < 0) {
-                scaleIntervalPosition = intervalCount - 1;
-            }
-            --currentStep;
-        }
-    }
-    // qDebug() << "Resulting in transposed note" << std::clamp(transposedNote, 0, 127);
-    return std::clamp(transposedNote, 0, 127);
+    // qDebug() << Q_FUNC_INFO << midiNote << steps << scale << pitch << octave << "Closest on-scale note to our origin note" << transposedNote << "is at position" << scaleIntervalPosition << "in" << d->allNotes[scale][std::clamp(octave + pitchValuesHash[pitch], 0, 127)] << "meaning our transposed note should be" << d->allNotes[scale][std::clamp(octave + pitchValuesHash[pitch], 0, 127)][std::clamp(scaleIntervalPosition + steps, 0, 127)];
+    return d->allNotes[scale][std::clamp(octave + pitchValuesHash[pitch], 0, 127)][std::clamp(scaleIntervalPosition + steps, 0, 127)];
 }
 
 bool KeyScales::midiNoteOnScale(const int& midiNote, const Scale& scale, const Pitch& pitch, const Octave& octave) const
