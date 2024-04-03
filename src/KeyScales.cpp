@@ -83,6 +83,20 @@ static const QHash<KeyScales::Pitch, int> pitchValuesHash{
     {KeyScales::PitchBFlat, 10},
     {KeyScales::PitchB, 11},
 };
+static const KeyScales::Pitch pitchForMidiValue[12]{
+    KeyScales::PitchC,
+    KeyScales::PitchDFlat,
+    KeyScales::PitchD,
+    KeyScales::PitchDSharp,
+    KeyScales::PitchE,
+    KeyScales::PitchF,
+    KeyScales::PitchFSharp,
+    KeyScales::PitchG,
+    KeyScales::PitchGSharp,
+    KeyScales::PitchA,
+    KeyScales::PitchASharp,
+    KeyScales::PitchB
+};
 
 static const QList<KeyScales::Scale> scaleIndices{
     KeyScales::ScaleAdonaiMalakh,
@@ -485,6 +499,11 @@ KeyScales::Pitch KeyScales::pitchShorthandToKey(const QString& shorthand) const
     return key;
 }
 
+KeyScales::Pitch KeyScales::midiNoteToPitch(const int& midiNote) const
+{
+    return pitchForMidiValue[std::clamp(midiNote, 0, 127) % 12];
+}
+
 QString KeyScales::scaleName(const Scale& scale) const
 {
     return scaleNamesHash[scale];
@@ -582,11 +601,16 @@ int KeyScales::midiPitchValue(const Pitch& pitch, const Octave &octave) const
     return std::clamp(pitchValuesHash[pitch] + octave, 0, 127);
 }
 
+QString KeyScales::midiNoteName(const int& midiNote) const
+{
+    return QString::fromUtf8("%1%2").arg(pitchName(midiNoteToPitch(midiNote))).arg(octaveName(midiNoteToOctave(midiNote)));
+}
+
 KeyScales::Octave KeyScales::midiNoteToOctave(const int& midiNote) const
 {
-    static const QMetaEnum octaveNameMeta = staticMetaObject.enumerator(staticMetaObject.indexOfEnumerator("Octave"));
-    const int octaveValue = 12 * (std::clamp(midiNote, 0, 127) % 12);
-    return static_cast<KeyScales::Octave>(octaveNameMeta.value(octaveValue));
+    // static const QMetaEnum octaveNameMeta = staticMetaObject.enumerator(staticMetaObject.indexOfEnumerator("Octave"));
+    const int octaveValue = 12 * (std::clamp(midiNote, 0, 127) / 12);
+    return static_cast<KeyScales::Octave>(octaveValue);
 }
 
 int KeyScales::onScaleNote(const int& midiNote, const Scale& scale, const Pitch& pitch, const Octave& octave) const

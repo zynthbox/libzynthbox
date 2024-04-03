@@ -81,6 +81,12 @@ public:
      * @return The Pitch enumerator key for the given shorthand (or PitchC for an invalid or unknown shorthands)
      */
     Q_INVOKABLE Pitch pitchShorthandToKey(const QString &shorthand) const;
+    /**
+     * \brief Get the Pitch enumerator key for a given midi note
+     * @param midiNote The midi note you want to get the Pitch enumerator key for (will be clamped to within the midi note value range)
+     * @return The Pitch enumerator key for the given shorthand
+     */
+    Q_INVOKABLE Pitch midiNoteToPitch(const int &midiNote) const;
 
     /**
      * \brief A representation of the scales Zynthbox understands how to work with
@@ -258,6 +264,13 @@ public:
      * @return The midi note value for the given pitch
      */
     Q_INVOKABLE int midiPitchValue(const Pitch &pitch, const Octave &octave = OctaveNegative1) const;
+
+    /**
+     * \brief Convenience function for getting the proper name of a given midi note
+     * @param midiNote The midi note to get a name for (it will be clamped to the midi note range)
+     * @return The name of the given midi note
+     */
+    Q_INVOKABLE QString midiNoteName(const int &midiNote) const;
 
     /**
      * \brief Returns the nearest upward on-scale note to the given note, based on the given scale and root note information
