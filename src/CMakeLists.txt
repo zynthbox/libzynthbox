@@ -36,6 +36,7 @@ target_sources(libzynthbox
         PlayfieldManager.cpp
         MidiRouterDeviceModel.cpp
         KeyScales.cpp
+        Chords.cpp
 )
 target_compile_definitions(libzynthbox
     PUBLIC

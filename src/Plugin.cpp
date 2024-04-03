@@ -55,6 +55,7 @@
 #include "ZLEngineBehaviour.h"
 #include "PlayfieldManager.h"
 #include "KeyScales.h"
+#include "Chords.h"
 #include "ZynthboxBasics.h"
 
 #include "Plugin.h"
@@ -242,6 +243,9 @@ void Plugin::initialize()
     qDebug() << "Initialising KeyScales";
     KeyScales::instance();
 
+    qDebug() << "Initialising Chords";
+    Chords::instance();
+
     qDebug() << "Initialising SyncTimer";
     SyncTimer::instance();
 
@@ -360,6 +364,13 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
         KeyScales *keyScales = KeyScales::instance();
         QQmlEngine::setObjectOwnership(keyScales, QQmlEngine::CppOwnership);
         return keyScales;
+    });
+    qmlRegisterSingletonType<Chords>(uri, 1, 0, "Chords", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
+        Q_UNUSED(engine)
+        Q_UNUSED(scriptEngine)
+        Chords *chords = Chords::instance();
+        QQmlEngine::setObjectOwnership(chords, QQmlEngine::CppOwnership);
+        return chords;
     });
     qmlRegisterType<WaveFormItem>(uri, 1, 0, "WaveFormItem");
 }
