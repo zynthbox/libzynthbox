@@ -56,6 +56,7 @@
 #include "PlayfieldManager.h"
 #include "KeyScales.h"
 #include "Chords.h"
+#include "ProcessWrapper.h"
 #include "ZynthboxBasics.h"
 
 #include "Plugin.h"
@@ -239,6 +240,7 @@ void Plugin::initialize()
     qRegisterMetaType<SyncTimer*>("SyncTimer");
     qRegisterMetaType<WaveFormItem*>("WaveFormItem");
     qRegisterMetaType<Plugin*>("Plugin");
+    qRegisterMetaType<ProcessWrapper*>("ProcessWrapper");
 
     qDebug() << "Initialising KeyScales";
     KeyScales::instance();
@@ -305,6 +307,7 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
     qmlRegisterUncreatableType<MidiRouterDeviceModel>(uri, 1, 0, "MidiRouterDeviceModel", "Use model on MidiRouter to get the devices model");
     qmlRegisterUncreatableType<SettingsContainer>(uri, 1, 0, "SettingsContainer", "This is for internal use only");
     qmlRegisterType<PlayGrid>(uri, 1, 0, "PlayGrid");
+    qmlRegisterType<ProcessWrapper>(uri, 1, 0, "ProcessWrapper");
     qmlRegisterSingletonType<PlayGridManager>(uri, 1, 0, "PlayGridManager", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
         Q_UNUSED(scriptEngine)
         PlayGridManager *playGridManager = PlayGridManager::instance();

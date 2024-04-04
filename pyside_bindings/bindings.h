@@ -13,6 +13,7 @@
 #include <PlayGridManager.h>
 #include <PlayfieldManager.h>
 #include <Plugin.h>
+#include <ProcessWrapper.h>
 #include <SyncTimer.h>
 
 #endif//PYSIDE_BINDINGS_H

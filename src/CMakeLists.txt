@@ -37,6 +37,7 @@ target_sources(libzynthbox
         MidiRouterDeviceModel.cpp
         KeyScales.cpp
         Chords.cpp
+        ProcessWrapper.cpp
 )
 target_compile_definitions(libzynthbox
     PUBLIC

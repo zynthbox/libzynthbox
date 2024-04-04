@@ -42,6 +42,9 @@
         <enum-type name="PlayfieldStatePosition" />
     </object-type>
     <object-type name="Plugin"></object-type>
+    <object-type name="ProcessWrapper">
+        <enum-type name="ProcessState" />
+    </object-type>
     <object-type name="SyncTimer"></object-type>
     <object-type name="MidiRouterDevice">
         <enum-type name="DeviceDirection" />
