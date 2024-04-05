@@ -12,6 +12,7 @@ public:
         processKiller.setSingleShot(true);
         processKiller.callOnTimeout([this](){
             if (process) {
+                qDebug() << Q_FUNC_INFO << "Process did not shut down gracefully in time, killing...";
                 process->kill();
             }
         });
@@ -51,6 +52,7 @@ public:
         }
     }
     void handleFinished(const int &/*exitCode*/, const QProcess::ExitStatus &exitStatus) {
+        qDebug() << Q_FUNC_INFO << "Process has exited";
         processKiller.stop();
         process->deleteLater();
         process = nullptr;
@@ -90,6 +92,9 @@ ProcessWrapper::ProcessWrapper(QObject* parent)
 
 ProcessWrapper::~ProcessWrapper()
 {
+    if (d->process) {
+        stop(0);
+    }
     delete d;
 }
 
@@ -111,7 +116,7 @@ void ProcessWrapper::start(const QString& executable, const QStringList& paramet
     d->parameters = parameters;
     d->process->setProgram(executable);
     d->process->setArguments(parameters);
-    d->process->startDetached();
+    d->process->start();
 }
 
 void ProcessWrapper::stop(const int& timeout)
@@ -119,7 +124,6 @@ void ProcessWrapper::stop(const int& timeout)
     if (d->process) {
         d->state = StoppingState;
         Q_EMIT stateChanged();
-        // TODO Request stop and then handle that happening
         d->performRestart = false;
         d->process->terminate();
         d->processKiller.start(timeout);
@@ -129,10 +133,11 @@ void ProcessWrapper::stop(const int& timeout)
 QString ProcessWrapper::call(const QByteArray& function)
 {
     if (d->process) {
+        qDebug() << Q_FUNC_INFO << "Writing" << function << "to the process";
         d->process->write(function);
-        qDebug() << Q_FUNC_INFO << "Wrote" << function << "and now waiting for that to be acknowledged";
+        qDebug() << Q_FUNC_INFO << "Write completed, now waiting for that to be acknowledged";
         d->process->waitForBytesWritten();
-        qDebug() << Q_FUNC_INFO << "Waited for the function to be written, now waiting for ready read";
+        qDebug() << Q_FUNC_INFO << "Function was written, now waiting for ready read";
         d->process->waitForReadyRead();
         qDebug() << Q_FUNC_INFO << "Waited for ready read and now have the following standard output:" << d->standardOutput;
         return d->standardOutput;
