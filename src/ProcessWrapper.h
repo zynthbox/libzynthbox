@@ -4,6 +4,7 @@
 
 /**
  * \brief A way to start, stop, and interact with external processes which have a call/output command-line style interface
+ * @note As this uses the QProcess asynchronous API primarily, it requires a Qt event loop to be running (such as a QCoreApplication)
  */
 class ProcessWrapper : public QObject {
     Q_OBJECT
