@@ -12,7 +12,7 @@ public:
         processKiller.setSingleShot(true);
         processKiller.callOnTimeout([this](){
             if (process) {
-                qDebug() << Q_FUNC_INFO << "Process did not shut down gracefully in time, killing...";
+                qDebug() << Q_FUNC_INFO << "Process" << executable << "did not shut down gracefully in time, killing...";
                 process->kill();
             }
         });
@@ -52,7 +52,7 @@ public:
         }
     }
     void handleFinished(const int &/*exitCode*/, const QProcess::ExitStatus &exitStatus) {
-        qDebug() << Q_FUNC_INFO << "Process has exited";
+        // qDebug() << Q_FUNC_INFO << "Process has exited";
         processKiller.stop();
         process->deleteLater();
         process = nullptr;
@@ -133,13 +133,13 @@ void ProcessWrapper::stop(const int& timeout)
 QString ProcessWrapper::call(const QByteArray& function)
 {
     if (d->process) {
-        qDebug() << Q_FUNC_INFO << "Writing" << function << "to the process";
+        // qDebug() << Q_FUNC_INFO << "Writing" << function << "to the process";
         d->process->write(function);
-        qDebug() << Q_FUNC_INFO << "Write completed, now waiting for that to be acknowledged";
+        // qDebug() << Q_FUNC_INFO << "Write completed, now waiting for that to be acknowledged";
         d->process->waitForBytesWritten();
-        qDebug() << Q_FUNC_INFO << "Function was written, now waiting for ready read";
+        // qDebug() << Q_FUNC_INFO << "Function was written, now waiting for ready read";
         d->process->waitForReadyRead();
-        qDebug() << Q_FUNC_INFO << "Waited for ready read and now have the following standard output:" << d->standardOutput;
+        // qDebug() << Q_FUNC_INFO << "Waited for ready read and now have the following standard output:" << d->standardOutput;
         return d->standardOutput;
     }
     return {};
