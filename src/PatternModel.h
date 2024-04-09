@@ -138,10 +138,14 @@ class PatternModel : public NotesModel
      */
     Q_PROPERTY(int noteLength READ noteLength WRITE setNoteLength NOTIFY noteLengthChanged)
     /**
-     * \brief A value in percent of step length defining how far each odd step in the pattern will be offset during playback
-     * @minimum 0
+     * \brief A value in percent of step length defining how far each even step in the pattern will be offset during playback
+     * @note If this is set to 0, the value will in fact be set to 0 (being the logical "reset" position)
+     * 0 being concurrent with previous step (not a possible position, but it would be that position if it were)
+     * 50 being the un-shifted position
+     * 100 being concurrent with next step (not a possible position, but it would be that position if it were)
+     * @minimum 1
      * @maximum 99
-     * @default 0
+     * @default 50
      */
     Q_PROPERTY(int swing READ swing WRITE setSwing NOTIFY swingChanged)
     /**

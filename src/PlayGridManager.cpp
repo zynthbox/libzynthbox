@@ -933,7 +933,7 @@ void PlayGridManager::setModelFromJson(QObject* model, const QString& json)
             if (patternObject.contains("swing")) {
                 pattern->setSwing(patternObject.value("swing").toInt());
             } else {
-                pattern->setSwing(0);
+                pattern->setSwing(50);
             }
             if (patternObject.contains("scale")) {
                 pattern->setScaleKey(KeyScales::instance()->scaleShorthandToKey(patternObject.value("scale").toString()));

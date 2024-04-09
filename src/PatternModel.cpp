@@ -401,6 +401,53 @@ private:
     int current{0};
 };
 
+struct StepData {
+    // positionBuffers contains commands for the given position, with the key being
+    // the on-position delay (so that iterating over the hash gives the scheduling
+    // delay for that buffer, and the buffer).
+    QHash<int, juce::MidiBuffer> positionBuffers;
+    // This contains a hash of probability sequences for each entry on the step.
+    // It is cleared when stopping playback, and will be filled during playback
+    // per-step-entry (where appropriate, none will exist for entries without
+    // probability)
+    QHash<int, ProbabilitySequence> probabilitySequences;
+    // The amount of offset this step would use for swing purposes (that is, the
+    // calculated offset value, rather than the setting, which is a percentage)
+    int swingOffset{0};
+    // Whether or not this step's data has been constructed by the playback routine
+    bool isValid{false};
+    void clear() {
+        positionBuffers.clear();
+        probabilitySequences.clear();
+        swingOffset = 0;
+        isValid = false;
+    }
+    void updateSwing(double noteDuration, double swingValue) {
+        swingOffset = (2 * noteDuration * swingValue / 100.0) - noteDuration;
+        // qDebug() << Q_FUNC_INFO << noteDuration << swingValue << swingOffset;
+    }
+    juce::MidiBuffer &getOrCreateBuffer(int position) {
+        if (!positionBuffers.contains(position)) {
+            positionBuffers[position] = juce::MidiBuffer();
+        }
+        return positionBuffers[position];
+    }
+    ProbabilitySequence &getOrCreateProbabilitySequence(int stepEntry, int probabilityValue) {
+        if (probabilitySequences.contains(stepEntry)) {
+            return probabilitySequences[stepEntry];
+        }
+        probabilitySequences[stepEntry].setSequence(probabilitySequenceData[probabilityValue]);
+        return probabilitySequences[stepEntry];
+    }
+    void invalidateProbabilityPosition(int stepEntry) {
+        if (stepEntry > -1) {
+            probabilitySequences.clear();
+        } else if (probabilitySequences.contains(stepEntry)) {
+            probabilitySequences.remove(stepEntry);
+        }
+    }
+};
+
 class PatternModel::Private {
 public:
     Private(PatternModel *q) : q(q) {
@@ -454,7 +501,6 @@ public:
     bool updateMostRecentStartTimestamp{true};
     qint64 mostRecentStartTimestamp{0};
 
-    juce::MidiBuffer &getOrCreateBuffer(QHash<int, juce::MidiBuffer> &collection, int position);
     void noteLengthDetails(int noteLength, qint64 &nextPosition, bool &relevantToUs, qint64 &noteDuration);
     int beatSubdivision{0};
     int beatSubdivision2{0};
@@ -475,56 +521,32 @@ public:
     NoteDataPoolEntry *noteDataPoolReadHead{nullptr};
     NoteDataPoolEntry *noteDataPoolWriteHead{nullptr};
 
-    // This contains a hash of probability sequences for each entry on each step in the sequence.
-    // It is cleared when stopping playback, and will be filled during playback per-step-entry
-    QHash<int, QHash<int, ProbabilitySequence> > probabilitySequences;
-    ProbabilitySequence &getOrCreateProbabilitySequence(int stepPosition, int stepEntry, int probabilityValue) {
-        if (probabilitySequences.contains(stepPosition)) {
-            if (probabilitySequences[stepPosition].contains(stepEntry)) {
-                return probabilitySequences[stepPosition][stepEntry];
-            }
-        } else {
-            // Insert an empty has to make sure we've got something to insert the step data into
-            probabilitySequences.insert(stepPosition, {});
-        }
-        // If we got to here, we know implicitly that the step entry doesn't
-        // exist, either it failed in the first return above, or the step
-        // didn't exist at all, making this safe.
-        probabilitySequences[stepPosition].insert(stepEntry, {});
-        probabilitySequences[stepPosition][stepEntry].setSequence(probabilitySequenceData[probabilityValue]);
-        return probabilitySequences[stepPosition][stepEntry];
-    }
-    void invalidateProbabilityPosition(int row, int column, int stepEntry) {
-        const int basePosition = (row * width) + column;
-        if (probabilitySequences.contains(basePosition)) {
-            if (stepEntry > -1) {
-                probabilitySequences.remove(basePosition);
-            } else if (probabilitySequences[basePosition].contains(stepEntry)) {
-                probabilitySequences[basePosition].remove(stepEntry);
-            }
-        }
-    }
     // If true, the most recent result was to play the step entry, otherwise it will be false
     // It is cleared when stopping playback, and will be true until the first probability
     // calculation returns false.
     // nb: this documents intent, and is used by the Same As Previous probability option
     bool mostRecentProbabilityResult{true};
 
-    // This bunch of lists is equivalent to the data found in each note, and is
-    // stored per-position (index in the outer is row * width + column). The
-    // must be cleared on any change of the notes (which should always be done
-    // through setNote and setMetadata to ensure this). If they are not cleared
-    // on changes, what ends up sent to SyncTimer during playback will not match
-    // what the model contains. So, remember your pattern hygiene and clean your
-    // buffers!
-    // The inner hash contains commands for the given position, with the key being
-    // the on-position delay (so that iterating over the hash gives the scheduling
-    // delay for that buffer, and the buffer).
-    QHash<int, QHash<int, juce::MidiBuffer> > positionBuffers;
+    // These contain the generated information per step, stored per-pisition (that
+    // is, the key of each entry is rot * width + column). The position must be cleared
+    // on any change made to the step (which should always be done through stetNote and
+    // setMetadata which both ensure that this happens). If they are not cleared on all
+    // changes, what ends up sent to SyncTimer during playback will not match what the
+    // model contains. So, remember your pattern hygiene and clean your buffers!
+    QHash<int, StepData> stepData;
+    StepData &getOrCreateStepData(int position) {
+        if (!stepData.contains(position)) {
+            stepData[position] = StepData();
+        }
+        return stepData[position];
+    }
+
     // Handy variable in case we want to adjust how far ahead we're looking sometime
-    // in the future (right now it's one step ahead, but we could look further if we
-    // wanted to)
-    static const int lookaheadAmount{2};
+    // in the future - we look two steps ahead (3 because it's a < comparison), as
+    // we need to consider both swing and delay being at their minimum amounts, which
+    // puts the thing being considered at the position of the previous previous step.
+    static const int lookaheadAmount{3};
+
     /**
      * \brief Invalidates the position buffers relevant to the given position
      * If you give -1 for the two position indicators, the entire list of buffers
@@ -536,13 +558,35 @@ public:
      */
    void invalidatePosition(int row = -1, int column = -1) {
         if (row == -1 || column == -1) {
-            positionBuffers.clear();
+            stepData.clear();
         } else {
             const int basePosition = (row * width) + column;
             for (int subsequentNoteIndex = 0; subsequentNoteIndex < lookaheadAmount; ++subsequentNoteIndex) {
                 // We clear backwards, just because might as well (by subtracting the subsequentNoteIndex from our base position)
                 int ourPosition = (basePosition - subsequentNoteIndex) % (availableBars * width);
-                positionBuffers.remove(ourPosition);
+                stepData.remove(ourPosition);
+            }
+        }
+    }
+    /**
+     * \brief Invalidates only the probability sequencer on the position buffers relevant to the given position
+     * If you give -1 for the two position indicators, the entire list of buffers
+     * will be invalidated.
+     * @param row The row of the position to invalidate
+     * @param column The column of the position to invalidate
+     */
+   void invalidateProbabilities(int row = -1, int column = -1) {
+        if (row == -1 || column == -1) {
+            QHash<int, StepData>::iterator stepDataIterator;
+            for (stepDataIterator = stepData.begin(); stepDataIterator != stepData.end(); ++stepDataIterator) {
+                stepDataIterator.value().probabilitySequences.clear();
+            }
+        } else {
+            const int basePosition = (row * width) + column;
+            for (int subsequentNoteIndex = 0; subsequentNoteIndex < lookaheadAmount; ++subsequentNoteIndex) {
+                // We clear backwards, just because might as well (by subtracting the subsequentNoteIndex from our base position)
+                int ourPosition = (basePosition - subsequentNoteIndex) % (availableBars * width);
+                stepData[ourPosition].probabilitySequences.clear();
             }
         }
     }
@@ -982,7 +1026,12 @@ void PatternModel::setSubnoteMetadata(int row, int column, int subnote, const QS
             metadata[subnote] = noteMetadata;
         }
         if (key == "probability") {
-            d->invalidateProbabilityPosition(row, column, subnote);
+            const int stepPosition{row * width() + column};
+            if (d->stepData.contains(stepPosition)) {
+                d->stepData[stepPosition].invalidateProbabilityPosition(subnote);
+            }
+        } else if (key == "delay") {
+            d->invalidatePosition();
         }
         setMetadata(row, column, metadata);
     }
@@ -1012,7 +1061,6 @@ QVariant PatternModel::subnoteMetadata(int row, int column, int subnote, const Q
 void PatternModel::setNote(int row, int column, QObject* note)
 {
     d->invalidatePosition(row, column);
-    d->invalidateProbabilityPosition(row, column, -1);
     NotesModel::setNote(row, column, note);
 }
 
@@ -1029,7 +1077,7 @@ void PatternModel::resetPattern(bool clearNotes)
     setExternalMidiChannel(-1);
     setDefaultNoteDuration(0);
     setNoteLength(3);
-    setSwing(0);
+    setSwing(50);
     setAvailableBars(1);
     setBankOffset(0);
     setBankLength(8);
@@ -1281,7 +1329,11 @@ int PatternModel::noteLength() const
 void PatternModel::setSwing(int swing)
 {
     if (d->swing != swing) {
-        d->swing = swing;
+        if (swing == 0) {
+            d->swing = 50;
+        } else {
+            d->swing = std::clamp(swing, 1, 99);
+        }
         // Invalidate all positions (as swing might be scheduled in a previous step due to microtiming settings for the individual step/note)
         d->invalidatePosition();
         Q_EMIT swingChanged();
@@ -1849,14 +1901,6 @@ void addNoteToBuffer(juce::MidiBuffer &buffer, const Note *theNote, unsigned cha
     buffer.addEvent(note, 3, onOrOff);
 }
 
-inline juce::MidiBuffer &PatternModel::Private::getOrCreateBuffer(QHash<int, juce::MidiBuffer> &collection, int position)
-{
-    if (!collection.contains(position)) {
-        collection[position] = juce::MidiBuffer();
-    }
-    return collection[position];
-}
-
 inline void PatternModel::Private::noteLengthDetails(int noteLength, qint64 &nextPosition, bool &relevantToUs, qint64 &noteDuration)
 {
     // Potentially it'd be tempting to try and optimise this manually to use bitwise operators,
@@ -1962,20 +2006,18 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                 // If we have any kind of probability involved in this step (including the look-ahead), we'll
                 // need to clear it immediately, so that probability is also taken into account for the next
                 // time it's due for scheduling
-                bool clearPositionBufferImmediately{false};
-                // Swing is applied to every even step as counted by humans (so every uneven step as counted by our indices)
-                const qint64 swingOffset{nextPosition % 2 == 0 ? 0 : noteDuration * d->swing / 100};
+                bool invalidateStepImmediately{false};
                 // qDebug() << "Swing offset for" << nextPosition << "is" << swingOffset << "with swing" << d->swing << "and note duration" << noteDuration;
 
-                if (d->positionBuffers.contains(nextPosition + (d->bankOffset * d->width)) == false) {
-                    QHash<int, juce::MidiBuffer> positionBuffers;
-                    auto subnoteSender = [this, nextPosition, &clearPositionBufferImmediately, swingOffset, noteDuration, schedulingIncrement, &positionBuffers](const Note* subnote, const QVariantHash &metaHash, int positionAdjustment, int subnoteIndex) {
+                StepData &stepData = d->getOrCreateStepData(nextPosition + (d->bankOffset * d->width));
+                if (stepData.isValid == false) {
+                    auto subnoteSender = [this, nextPosition, &invalidateStepImmediately, noteDuration, schedulingIncrement, &stepData](const Note* subnote, const QVariantHash &metaHash, const qint64 &delay, StepData &noteStepData, int subnoteIndex) {
                         bool sendNotes{true};
                         const int probability{metaHash.value(probabilityString, 0).toInt()};
                         if (probability > 0) {
-                            clearPositionBufferImmediately = true;
+                            invalidateStepImmediately = true;
                             if (probability != 10) { // 10 is the Same As Previous option (meaning simply use whatever the most recent probability result was for this pattern)
-                                sendNotes = d->mostRecentProbabilityResult = d->getOrCreateProbabilitySequence(nextPosition, subnoteIndex, probability).nextStep();
+                                sendNotes = d->mostRecentProbabilityResult = noteStepData.getOrCreateProbabilitySequence(subnoteIndex, probability).nextStep();
                             }
                             sendNotes = d->mostRecentProbabilityResult;
                         }
@@ -1994,7 +2036,6 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                 sendNotes = false;
                             }
                             if (sendNotes) {
-                                const qint64 delay{(metaHash.value(delayString, 0).toInt() + swingOffset + positionAdjustment) * d->patternTickToSyncTimerTick};
                                 int duration{metaHash.value(durationString, noteDuration / d->patternTickToSyncTimerTick).toInt() * d->patternTickToSyncTimerTick};
                                 if (duration < 1) {
                                     duration = noteDuration;
@@ -2026,7 +2067,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                     }
                                     const int ratchetProbability{metaHash.value(ratchetProbabilityString, 100).toInt()};
                                     if (ratchetProbability < 100) {
-                                        clearPositionBufferImmediately = true;
+                                        invalidateStepImmediately = true;
                                     }
                                     int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
                                     for (int ratchetIndex = 0; ratchetIndex < ratchetCount; ++ratchetIndex) {
@@ -2040,8 +2081,8 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                             if (ratchetIndex + 1 == ratchetCount) {
                                                 ratchetDuration = ratchetLastDuration;
                                             }
-                                            addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay + (ratchetDelay * ratchetIndex)), subnote, velocity, true, avaialbleChannel);
-                                            addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay + (ratchetDelay * ratchetIndex) + ratchetDuration), subnote, velocity, false, avaialbleChannel);
+                                            addNoteToBuffer(stepData.getOrCreateBuffer(delay + (ratchetDelay * ratchetIndex)), subnote, velocity, true, avaialbleChannel);
+                                            addNoteToBuffer(stepData.getOrCreateBuffer(delay + (ratchetDelay * ratchetIndex) + ratchetDuration), subnote, velocity, false, avaialbleChannel);
                                             if (reuseChannel == false && ratchetIndex + 1 < ratchetCount) {
                                                 avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
                                             }
@@ -2049,70 +2090,69 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                     }
                                 } else {
                                     const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
-                                    addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay), subnote, velocity, true, avaialbleChannel);
-                                    addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, delay + duration), subnote, velocity, false, avaialbleChannel);
+                                    addNoteToBuffer(stepData.getOrCreateBuffer(delay), subnote, velocity, true, avaialbleChannel);
+                                    addNoteToBuffer(stepData.getOrCreateBuffer(delay + duration), subnote, velocity, false, avaialbleChannel);
                                 }
                             }
                         }
                     };
                     // Do a lookup for any notes after this position that want playing before their step (currently
-                    // just looking ahead one step, we could probably afford to do a bunch, but one for now)
-                    for (int subsequentNoteIndex = 0; subsequentNoteIndex < d->lookaheadAmount; ++subsequentNoteIndex) {
-                        const int ourPosition = (nextPosition + subsequentNoteIndex) % (d->availableBars * d->width);
+                    // just looking ahead two steps, accounting for delay and swing both adjusting one step backwards)
+                    for (int subsequentStepIndex = 0; subsequentStepIndex < d->lookaheadAmount; ++subsequentStepIndex) {
+                        const int ourPosition = (nextPosition + subsequentStepIndex) % (d->availableBars * d->width);
+                        StepData &subsequentStep = d->getOrCreateStepData(ourPosition);
+                        // Swing is applied to every even step as counted by humans (so every uneven step as counted by our indices)
+                        subsequentStep.updateSwing(noteDuration, ourPosition % 2 == 0 ? 50 : d->swing);
                         const int row = (ourPosition / d->width) % d->availableBars;
                         const int column = ourPosition - (row * d->width);
                         const Note *note = qobject_cast<const Note*>(getNote(row + d->bankOffset, column));
                         if (note) {
                             const QVariantList &subnotes = note->subnotes();
                             const QVariantList &meta = getMetadata(row + d->bankOffset, column).toList();
-                            // The first note we want to treat to all the things
-                            if (subsequentNoteIndex == 0) {
+                            // The first step (that is, the "current" step) we want to treat to all the things
+                            if (subsequentStepIndex == 0) {
+                                // qDebug() << Q_FUNC_INFO << "Step: Position" << ourPosition;
                                 if (meta.count() == subnotes.count()) {
                                     for (int subnoteIndex = 0; subnoteIndex < subnotes.count(); ++subnoteIndex) {
                                         const Note *subnote = subnotes[subnoteIndex].value<Note*>();
                                         const QVariantHash &metaHash = meta[subnoteIndex].toHash();
                                         if (subnote) {
-                                            if (metaHash.isEmpty()) {
-                                                const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
-                                                addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, swingOffset), subnote, 64, true, avaialbleChannel);
-                                                addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, swingOffset + noteDuration), subnote, 64, false, avaialbleChannel);
-                                            } else {
-                                                const qint64 delay{metaHash.value(delayString, 0).toInt() + swingOffset};
-                                                // Only handle if the delay is zero or in the future (since if it's in
-                                                // the past, we'd be handling it twice, and at the wrong time)
-                                                if (delay >= 0) {
-                                                    subnoteSender(subnote, metaHash, 0, subnoteIndex);
-                                                }
+                                            const qint64 delay{(metaHash.value(delayString, 0).toInt() * d->patternTickToSyncTimerTick) + subsequentStep.swingOffset};
+                                            // Only handle if the delay is zero or in the future (since if it's in
+                                            // the past, we'd be handling it twice, and at the wrong time)
+                                            // qDebug() << Q_FUNC_INFO << "Delay is" << delay;
+                                            if (delay >= 0) {
+                                                subnoteSender(subnote, metaHash, delay, subsequentStep, subnoteIndex);
                                             }
                                         }
                                     }
                                 } else if (subnotes.count() > 0) {
                                     for (const QVariant &subnoteVar : subnotes) {
                                         const Note *subnote = subnoteVar.value<Note*>();
-                                        if (subnote) {
+                                        if (subnote && subsequentStep.swingOffset >= 0) {
                                             const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
-                                            addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, swingOffset), subnote, 64, true, avaialbleChannel);
-                                            addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, swingOffset + noteDuration), subnote, 64, false, avaialbleChannel);
+                                            addNoteToBuffer(stepData.getOrCreateBuffer(subsequentStep.swingOffset), subnote, 64, true, avaialbleChannel);
+                                            addNoteToBuffer(stepData.getOrCreateBuffer(subsequentStep.swingOffset + noteDuration), subnote, 64, false, avaialbleChannel);
                                         }
                                     }
-                                } else {
+                                } else if (subsequentStep.swingOffset >= 0) {
                                     const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
-                                    addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, swingOffset), note, 64, true, avaialbleChannel);
-                                    addNoteToBuffer(d->getOrCreateBuffer(positionBuffers, swingOffset + noteDuration), note, 64, false, avaialbleChannel);
+                                    addNoteToBuffer(stepData.getOrCreateBuffer(subsequentStep.swingOffset), note, 64, true, avaialbleChannel);
+                                    addNoteToBuffer(stepData.getOrCreateBuffer(subsequentStep.swingOffset + noteDuration), note, 64, false, avaialbleChannel);
                                 }
-                            // The lookahead notes only need handling if, and only if, there is matching meta, and the delay is negative (as in, position before that step)
+                            // The lookahead notes only need handling if, and only if, there is matching meta (or negative swing), and the delay+swing is negative (that meaning, the position of the entry is before that step)
                             } else {
-                                if (meta.count() == subnotes.count()) {
-                                    const int positionAdjustment = subsequentNoteIndex * noteDuration;
+                                // qDebug() << Q_FUNC_INFO << "Step: Subsequent" << subsequentStepIndex;
+                                if (meta.count() == subnotes.count() || subsequentStep.swingOffset < 0) {
+                                    const qint64 positionAdjustment{subsequentStepIndex * noteDuration};
                                     for (int subnoteIndex = 0; subnoteIndex < subnotes.count(); ++subnoteIndex) {
                                         const Note *subnote = subnotes[subnoteIndex].value<Note*>();
                                         const QVariantHash &metaHash = meta[subnoteIndex].toHash();
                                         if (subnote) {
-                                            if (!metaHash.isEmpty() && metaHash.contains(delayString)) {
-                                                const qint64 delay{metaHash.value(delayString, 0).toInt() + swingOffset};
-                                                if (delay < 0) {
-                                                    subnoteSender(subnote, metaHash, positionAdjustment, subnoteIndex);
-                                                }
+                                            const qint64 delay{(metaHash.value(delayString, 0).toInt() * d->patternTickToSyncTimerTick) + subsequentStep.swingOffset};
+                                            // qDebug() << Q_FUNC_INFO << "Delay is" << delay;
+                                            if (delay < 0) {
+                                                subnoteSender(subnote, metaHash, positionAdjustment +  delay, subsequentStep, subnoteIndex);
                                             }
                                         }
                                     }
@@ -2120,7 +2160,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                             }
                         }
                     }
-                    d->positionBuffers[nextPosition + (d->bankOffset * d->width)] = positionBuffers;
+                    stepData.isValid = true;
                 }
                 switch (d->noteDestination) {
                     case PatternModel::SampleLoopedDestination:
@@ -2129,9 +2169,9 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                     case PatternModel::SampleTriggerDestination:
                     case PatternModel::SampleSlicedDestination:
                     {
-                        const QHash<int, juce::MidiBuffer> &positionBuffers = d->positionBuffers[nextPosition + (d->bankOffset * d->width)];
+                        const StepData &stepData = d->getOrCreateStepData(nextPosition + (d->bankOffset * d->width));
                         QHash<int, juce::MidiBuffer>::const_iterator position;
-                        for (position = positionBuffers.constBegin(); position != positionBuffers.constEnd(); ++position) {
+                        for (position = stepData.positionBuffers.constBegin(); position != stepData.positionBuffers.constEnd(); ++position) {
                             for (const juce::MidiMessageMetadata &juceMessage : qAsConst(position.value())) {
                                 d->midiMessageToClipCommands(&d->commandRing, juceMessage.data[0], juceMessage.data[1], juceMessage.data[2]);
                                 while (d->commandRing.readHead->processed == false) {
@@ -2147,15 +2187,15 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                     case PatternModel::SynthDestination:
                     default:
                     {
-                        const QHash<int, juce::MidiBuffer> &positionBuffers = d->positionBuffers[nextPosition + (d->bankOffset * d->width)];
+                        const StepData &stepData = d->getOrCreateStepData(nextPosition + (d->bankOffset * d->width));
                         QHash<int, juce::MidiBuffer>::const_iterator position;
-                        for (position = positionBuffers.constBegin(); position != positionBuffers.constEnd(); ++position) {
+                        for (position = stepData.positionBuffers.constBegin(); position != stepData.positionBuffers.constEnd(); ++position) {
                             d->syncTimer->scheduleMidiBuffer(position.value(), quint64(qMax(0, schedulingIncrement + position.key())), d->midiChannel);
                         }
                         break;
                     }
                 }
-                if (clearPositionBufferImmediately) {
+                if (invalidateStepImmediately) {
                     for (int subsequentNoteIndex = 0; subsequentNoteIndex < d->lookaheadAmount; ++subsequentNoteIndex) {
                         const int ourPosition = (nextPosition + subsequentNoteIndex) % (d->availableBars * d->width);
                         const int row = (ourPosition / d->width) % d->availableBars;
@@ -2203,7 +2243,7 @@ void PatternModel::updateSequencePosition(qint64 sequencePosition)
 
 void PatternModel::handleSequenceStop()
 {
-    d->probabilitySequences.clear();
+    d->invalidateProbabilities();
     d->mostRecentProbabilityResult = true;
     setRecordLive(false);
 }
