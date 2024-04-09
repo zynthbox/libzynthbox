@@ -224,10 +224,6 @@ public:
             chordNode = nullptr;
         }
         if (startPosition > searchFrom || chordNode == nullptr) {
-            if (searchFrom > 0) {
-                // If we have stray notes past the first note in the list, we're creating a polychord description
-                nameList.prepend(QString::fromUtf8("—"));
-            }
             if (startPosition == searchFrom + 1 || searchFrom == numberOfNotes - 1) {
                 // Then we have precisely one non-chord note at the start of the list, so add that to the name list
                 nameList.prepend(KeyScales::instance()->midiNoteName(actualNotes[searchFrom] + firstNote));
@@ -237,10 +233,6 @@ public:
             // qDebug() << Q_FUNC_INFO << "Position" << searchFrom << "has stray notes" << nameList.constLast();
         }
         if (chordNode) {
-            if (startPosition > 0) {
-                // If we have a chord past the first note in the list, we're creating a polychord description
-                nameList.prepend(QString::fromUtf8("—"));
-            }
             nameList.prepend(nameChord(chordNode, nameType, firstNote + actualNotes[startPosition]));
             const int nextStartPosition{startPosition + chordNode->notes.length()};
             // qDebug() << Q_FUNC_INFO << "Position" << startPosition << "has chord" << nameList.constLast() << chordNode->fullName << "of length" << chordNode->notes.length() << "and next start position is" << nextStartPosition << "with" << numberOfNotes << "notes";
