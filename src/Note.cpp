@@ -205,12 +205,12 @@ void Note::setOn(int velocity)
     d->internalOnChannel = d->syncTimer->nextAvailableChannel(d->sketchpadTrack);
     registerOn(d->internalOnChannel);
     if (d->midiNote < 128) {
-        d->syncTimer->sendNoteImmediately(d->midiNote, d->internalOnChannel, true, velocity, d->sketchpadTrack);
+        d->syncTimer->sendNoteImmediately(d->midiNote, d->internalOnChannel, true, std::clamp(velocity, 1, 127), d->sketchpadTrack);
     }
     for (const QVariant &note : qAsConst(d->subnotes)) {
         const Note* subnote = note.value<Note*>();
         if (subnote) {
-            d->syncTimer->sendNoteImmediately(subnote->midiNote(), d->internalOnChannel, true, velocity, d->sketchpadTrack);
+            d->syncTimer->sendNoteImmediately(subnote->midiNote(), d->internalOnChannel, true, std::clamp(velocity, 1, 127), d->sketchpadTrack);
         }
     }
 }
