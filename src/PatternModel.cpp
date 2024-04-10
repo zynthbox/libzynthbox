@@ -637,13 +637,13 @@ public:
         for (ClipAudioSource *clip : qAsConst(clips)) {
             // There must be a clip or it just doesn't matter, and then the note must fit inside the clip's keyzone
             if (clip && clip->keyZoneStart() <= byte2 && byte2 <= clip->keyZoneEnd()) {
-                const bool stopPlayback{byte1 < 0x90};
+                const bool stopPlayback{byte1 < 0x90 || byte3 == 0};
                 if (clip->playbackStyle() == ClipAudioSource::OneshotPlaybackStyle && stopPlayback) {
                     // if stop command and clip playback style is Oneshot, don't submit the stop command - just let it run out
                     // to force one-shots to stop, all-notes-off is handled by SamplerSynth directly
                 } else {
                     ClipCommand *command = ClipCommand::channelCommand(clip, (byte1 & 0xf));
-                    command->startPlayback = byte1 > 0x8F;
+                    command->startPlayback = !stopPlayback;
                     command->stopPlayback = stopPlayback;
                     if (command->startPlayback) {
                         command->changeVolume = true;
@@ -2260,8 +2260,8 @@ void PatternModel::handleMidiMessage(const MidiRouter::ListenerPort &port, const
                 ? d->liveRecordingSourceExternalDeviceId == hardwareDeviceId
                 : false
         ) {
-        // if we're recording live, and it's a note-on message, create a newnotedata and add to list of notes being recorded
-        if (d->recordingLive && 0x8F < byte1 && byte1 < 0xA0) {
+        // if we're recording live, and it's a note-on message, create a newnotedata and add to list of notes being recorded (byte3 > 0 because velocity 0 is how some gear sends a note off message)
+        if (d->recordingLive && 0x8F < byte1 && byte1 < 0xA0 && byte3 > 0) {
             // Belts and braces here - it shouldn't really happen (a hundred notes is kind of a lot to add in a single shot), but just in case...
             if (d->noteDataPoolReadHead->object) {
                 NewNoteData *newNote = d->noteDataPoolReadHead->object;
@@ -2276,7 +2276,8 @@ void PatternModel::handleMidiMessage(const MidiRouter::ListenerPort &port, const
             }
         }
         // if note-off, check whether there's a matching on note, and if there is, add that note with velocity, delay, and duration as appropriate for current time and step
-        if (d->recordingLiveNotes.count() > 0 && 0x7F < byte1 && byte1 < 0x90) {
+        // either any note off message, or a note on message with velocity 0 should be considered a note off by convention
+        if (d->recordingLiveNotes.count() > 0 && ((0x7F < byte1 && byte1 < 0x90) || (0x8F < byte1 && byte1 < 0xA0 && byte3 == 0))) {
             QMutableListIterator<NewNoteData*> iterator(d->recordingLiveNotes);
             NewNoteData *newNote{nullptr};
             while (iterator.hasNext()) {

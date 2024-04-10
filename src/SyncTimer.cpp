@@ -951,7 +951,8 @@ void StepData::insertMidiBuffer(const juce::MidiBuffer &buffer, int sketchpadTra
     for (const juce::MidiMessageMetadata &message : buffer) {
         if (message.numBytes == 3 && 0x7F < message.data[0] && message.data[0] < 0xA0) {
             const int channel{message.data[0] & 0xf};
-            if (message.data[0] < 0x90) {
+            // either any note off message, or a note on message with velocity 0 should be considered a note off by convention
+            if (message.data[0] < 0x90 || message.data[2] == 0) {
                 d->tracks[sketchpadTrack].registerDeactivation(channel, message.data[1], timestamp);
             } else {
                 d->tracks[sketchpadTrack].registerActivation(channel, message.data[1]);

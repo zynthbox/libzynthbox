@@ -340,7 +340,8 @@ public:
                         if (0x7F < byte0 && byte0 < 0xA0) {
                             const int &midiNote = event->buffer[1];
                             isNoteMessage = true;
-                            if ((byte0 >= 0x90)) { // this is a note on message
+                            // either any note off message, or a note on message with velocity 0 should be considered a note off by convention
+                            if (byte0 >= 0x90 && event->buffer[2] > 0) { // this is a note on message
                                 eventDevice->setNoteActive(sketchpadTrack, eventChannel, midiNote, true);
                                 sketchpadTrack = eventDevice->noteActivationTrack(eventChannel, midiNote);
                             } else {
@@ -789,7 +790,7 @@ void MidiRouter::run() {
             MidiListenerPort::NoteMessage *message = listenerPort->readHead;
             while (!message->submitted) {
                 if (message->isNoteMessage) {
-                    const bool setOn = (message->byte0 >= 0x90);
+                    const bool setOn = (message->byte0 >= 0x90 && message->byte2 > 0);
                     const int midiChannel = (message->byte0 & 0xf);
                     const int &midiNote = message->byte1;
                     const int &velocity = message->byte2;

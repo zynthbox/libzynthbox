@@ -285,7 +285,7 @@ public:
                     if (0x79 < byte1 && byte1 < 0xA0) {
                         static const QLatin1String note_on{"note_on"};
                         static const QLatin1String note_off{"note_off"};
-                        const bool setOn{0x8F < byte1};
+                        const bool setOn{0x8F < byte1 && byte3 > 0};
                         const int midiChannel = (byte1 & 0xF);
                         const qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
                         QVariantMap metadata;
@@ -337,7 +337,7 @@ public:
             case MidiRouter::InternalPassthroughPort:
                 if (size == 3) {
                     if (0x79 < byte1 && byte1 < 0xA0) {
-                        const bool setOn{0x8F < byte1};
+                        const bool setOn{0x8F < byte1 && byte3 > 0};
                         internalPassthroughNoteActivations[byte2] = setOn ? 1 : 0;
                         internalPassthroughActiveNotesUpdater->start();
                     }
@@ -346,7 +346,7 @@ public:
             case MidiRouter::HardwareInPassthroughPort:
                 if (size == 3) {
                     if (0x79 < byte1 && byte1 < 0xA0) {
-                        const bool setOn{0x8F < byte1};
+                        const bool setOn{0x8F < byte1 && byte3 > 0};
                         hardwareInNoteActivations[byte2] = setOn ? 1 : 0;
                         hardwareInActiveNotesUpdater->start();
                     }
@@ -355,7 +355,7 @@ public:
             case MidiRouter::ExternalOutPort:
                 if (size == 3) {
                     if (0x79 < byte1 && byte1 < 0xA0) {
-                        const bool setOn{0x8F < byte1};
+                        const bool setOn{0x8F < byte1 && byte3 > 0};
                         hardwareOutNoteActivations[byte2] = setOn ? 1 : 0;
                         hardwareOutActiveNotesUpdater->start();
                     }
