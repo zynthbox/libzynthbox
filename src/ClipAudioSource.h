@@ -346,9 +346,9 @@ public:
    * @param forceLooping Plays with looping, and also force stops playback on the same lane/channel. This will override the sample's loop setting
    * @param midiChannel Pick the SketchPad track to play on
    */
-  void play(bool forceLooping = true, int midiChannel = -1);
+  Q_INVOKABLE void play(bool forceLooping = true, int midiChannel = -1);
   // Midi channel logic as play(), except defaulting to stop all the things everywhere
-  void stop(int midiChannel = -3);
+  Q_INVOKABLE void stop(int midiChannel = -3);
   float getDuration() const;
   const char *getFileName() const;
   const char *getFilePath() const;
