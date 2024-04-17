@@ -57,7 +57,7 @@ static const QHash<KeyScales::Pitch, QString> pitchShorthandHash{
     {KeyScales::PitchGFlat, QLatin1String("gflat")},
     {KeyScales::PitchG, QLatin1String{"g"}},
     {KeyScales::PitchGSharp, QLatin1String{"gsharp"}},
-    {KeyScales::PitchAFlat, QLatin1String("asharp")},
+    {KeyScales::PitchAFlat, QLatin1String("aflat")},
     {KeyScales::PitchA, QLatin1String{"a"}},
     {KeyScales::PitchASharp, QLatin1String{"asharp"}},
     {KeyScales::PitchBFlat, QLatin1String("bflat")},
