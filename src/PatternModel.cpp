@@ -378,6 +378,7 @@ public:
         if (current == length) {
             current = 0;
         }
+        // qDebug() << Q_FUNC_INFO << steps << "New current is" << current << "with value" << steps[current];
         if (steps[current] == 0) {
             return false;
         } else if (steps[current] == 1) {
@@ -433,10 +434,10 @@ struct StepData {
         return positionBuffers[position];
     }
     ProbabilitySequence &getOrCreateProbabilitySequence(int stepEntry, int probabilityValue) {
-        if (probabilitySequences.contains(stepEntry)) {
-            return probabilitySequences[stepEntry];
+        if (!probabilitySequences.contains(stepEntry)) {
+            probabilitySequences.insert(stepEntry, ProbabilitySequence());
+            probabilitySequences[stepEntry].setSequence(probabilitySequenceData[probabilityValue]);
         }
-        probabilitySequences[stepEntry].setSequence(probabilitySequenceData[probabilityValue]);
         return probabilitySequences[stepEntry];
     }
     void invalidateProbabilityPosition(int stepEntry) {
@@ -549,7 +550,7 @@ public:
 
     /**
      * \brief Invalidates the position buffers relevant to the given position
-     * If you give -1 for the two position indicators, the entire list of buffers
+     * If you give -1 for the two position indicators, the entire list of steps
      * will be invalidated.
      * This function is required to ensure that all buffers the position could
      * have an impact on (including those which are before it) are invalidated.
@@ -569,8 +570,32 @@ public:
         }
     }
     /**
-     * \brief Invalidates only the probability sequencer on the position buffers relevant to the given position
+     * \brief Invalidates only the note buffers on the position buffers relevant to the given position
      * If you give -1 for the two position indicators, the entire list of buffers
+     * will be invalidated
+     * @param row The row of the position to invalidate
+     * @param column The column of the position to invalidate
+     */
+    void invalidateNotes(int row = -1, int column = -1) {
+        if (row == -1 || column == -1) {
+            QHash<int, StepData>::iterator stepDataIterator;
+            for (stepDataIterator = stepData.begin(); stepDataIterator != stepData.end(); ++stepDataIterator) {
+                stepDataIterator.value().positionBuffers.clear();
+                stepDataIterator.value().isValid = false;
+            }
+        } else {
+            const int basePosition = (row * width) + column;
+            for (int subsequentNoteIndex = 0; subsequentNoteIndex < lookaheadAmount; ++subsequentNoteIndex) {
+                // We clear backwards, just because might as well (by subtracting the subsequentNoteIndex from our base position)
+                int ourPosition = (basePosition - subsequentNoteIndex) % (availableBars * width);
+                stepData[ourPosition].positionBuffers.clear();
+                stepData[ourPosition].isValid = false;
+            }
+        }
+    }
+    /**
+     * \brief Invalidates only the probability sequencer on the position buffers relevant to the given position
+     * If you give -1 for the two position indicators, the entire list of sequences
      * will be invalidated.
      * @param row The row of the position to invalidate
      * @param column The column of the position to invalidate
@@ -2006,18 +2031,19 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                 // If we have any kind of probability involved in this step (including the look-ahead), we'll
                 // need to clear it immediately, so that probability is also taken into account for the next
                 // time it's due for scheduling
-                bool invalidateStepImmediately{false};
+                bool invalidateNoteBuffersImmediately{false};
                 // qDebug() << "Swing offset for" << nextPosition << "is" << swingOffset << "with swing" << d->swing << "and note duration" << noteDuration;
 
                 StepData &stepData = d->getOrCreateStepData(nextPosition + (d->bankOffset * d->width));
                 if (stepData.isValid == false) {
-                    auto subnoteSender = [this, nextPosition, &invalidateStepImmediately, noteDuration, schedulingIncrement, &stepData](const Note* subnote, const QVariantHash &metaHash, const qint64 &delay, StepData &noteStepData, int subnoteIndex) {
+                    auto subnoteSender = [this, nextPosition, &invalidateNoteBuffersImmediately, noteDuration, schedulingIncrement, &stepData](const Note* subnote, const QVariantHash &metaHash, const qint64 &delay, StepData &noteStepData, int subnoteIndex) {
                         bool sendNotes{true};
+                        // qDebug() << Q_FUNC_INFO << "Preparing note" << subnote << "at index" << subnoteIndex << "with meta hash" << metaHash;
                         const int probability{metaHash.value(probabilityString, 0).toInt()};
                         if (probability > 0) {
-                            invalidateStepImmediately = true;
+                            invalidateNoteBuffersImmediately = true;
                             if (probability != 10) { // 10 is the Same As Previous option (meaning simply use whatever the most recent probability result was for this pattern)
-                                sendNotes = d->mostRecentProbabilityResult = noteStepData.getOrCreateProbabilitySequence(subnoteIndex, probability).nextStep();
+                                d->mostRecentProbabilityResult = noteStepData.getOrCreateProbabilitySequence(subnoteIndex, probability).nextStep();
                             }
                             sendNotes = d->mostRecentProbabilityResult;
                         }
@@ -2067,7 +2093,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                     }
                                     const int ratchetProbability{metaHash.value(ratchetProbabilityString, 100).toInt()};
                                     if (ratchetProbability < 100) {
-                                        invalidateStepImmediately = true;
+                                        invalidateNoteBuffersImmediately = true;
                                     }
                                     int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
                                     for (int ratchetIndex = 0; ratchetIndex < ratchetCount; ++ratchetIndex) {
@@ -2195,12 +2221,12 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                         break;
                     }
                 }
-                if (invalidateStepImmediately) {
+                if (invalidateNoteBuffersImmediately) {
                     for (int subsequentNoteIndex = 0; subsequentNoteIndex < d->lookaheadAmount; ++subsequentNoteIndex) {
                         const int ourPosition = (nextPosition + subsequentNoteIndex) % (d->availableBars * d->width);
                         const int row = (ourPosition / d->width) % d->availableBars;
                         const int column = ourPosition - (row * d->width);
-                        d->invalidatePosition(row, column);
+                        d->invalidateNotes(row, column);
                     }
                 }
             }
