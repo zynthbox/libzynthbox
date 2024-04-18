@@ -546,7 +546,6 @@ void SequenceModel::load(const QString &fileName)
             const int trackIndex{match.captured(1).toInt() - 1};
             const QString partName{match.captured(2)};
             const int partIndex = partNames.indexOf(partName);
-            Q_UNUSED(trackIndex)
 //             qDebug() << "Loading pattern track" << trackIndex + 1 << "part" << partName << "for sequence" << this << "from file" << absolutePath;
             while (actualIndex < (trackIndex * ZynthboxPartCount) + partIndex) {
                 // then we're missing some patterns, which is not great and we should deal with that so we don't end up with holes in the model...
