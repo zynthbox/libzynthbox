@@ -56,6 +56,7 @@ public:
 
     PlayfieldManager *playfieldManager{nullptr};
     qint64 playhead{0};
+    int playheadSegment{0};
     QHash<qint64, QList<TimerCommand*> > playlist;
     QList<ClipAudioSource*> runningLoops;
 
@@ -74,7 +75,7 @@ public:
             clipCommand->looping = true;
             command->operation = TimerCommand::ClipCommandOperation;
             command->dataParameter = clipCommand;
-            qDebug() << Q_FUNC_INFO << "Added clip command to timer command:" << command->dataParameter << clipCommand << "Start playback?" << clipCommand->startPlayback << "Stop playback?" << clipCommand->stopPlayback << clipCommand->midiChannel << clipCommand->midiNote << clipCommand->clip;
+            // qDebug() << Q_FUNC_INFO << "Added clip command to timer command:" << command->dataParameter << clipCommand << "Start playback?" << clipCommand->startPlayback << "Stop playback?" << clipCommand->stopPlayback << clipCommand->midiChannel << clipCommand->midiNote << clipCommand->clip;
         }
     }
 
@@ -83,7 +84,7 @@ public:
             ++playhead;
             // Instead of using cumulative beat, we keep this one in hand so we don't have to juggle offsets of we start somewhere uneven
             if (playlist.contains(playhead)) {
-                qDebug() << Q_FUNC_INFO << "Playhead is now at" << playhead << "and we have things to do";
+                // qDebug() << Q_FUNC_INFO << "Playhead is now at" << playhead << "and we have things to do";
                 const QList<TimerCommand*> commands = playlist[playhead];
                 for (TimerCommand* command : commands) {
                     if (command->operation == TimerCommand::StartClipLoopOperation || command->operation == TimerCommand::StopClipLoopOperation) {
@@ -94,7 +95,7 @@ public:
                         ensureTimerClipCommand(command);
                     }
                     if (command->operation == TimerCommand::StartPartOperation || command->operation == TimerCommand::StopPartOperation) {
-                        qDebug() << Q_FUNC_INFO << "Handling part start/stop operation immediately" << command;
+                        // qDebug() << Q_FUNC_INFO << "Handling part start/stop operation immediately" << command;
                         handleTimerCommand(command);
                     } else if (command->operation == TimerCommand::StopPlaybackOperation) {
                         // Disconnect the global sequences, as we want them to stop making noises immediately
@@ -102,13 +103,15 @@ public:
                             sequence->disconnectSequencePlayback();
                             sequence->resetSequence();
                         }
-                        qDebug() << Q_FUNC_INFO << "Scheduled stop command" << command;
+                        // qDebug() << Q_FUNC_INFO << "Scheduled stop command" << command;
                         syncTimer->scheduleTimerCommand(0, TimerCommand::cloneTimerCommand(command));
                     } else {
-                        qDebug() << Q_FUNC_INFO << "Scheduled" << command << command->operation;
+                        // qDebug() << Q_FUNC_INFO << "Scheduled" << command << command->operation;
                         syncTimer->scheduleTimerCommand(0, TimerCommand::cloneTimerCommand(command));
                     }
                 }
+                ++playheadSegment;
+                Q_EMIT q->playheadSegmentChanged();
             }
             Q_EMIT q->playheadChanged();
         }
@@ -134,11 +137,11 @@ public:
         // position to the new one and handle them all - but only
         // if the new position's actually different to the old one
         if (newPosition != playhead) {
-            qDebug() << Q_FUNC_INFO << "Moving playhead from" << playhead << "to" << newPosition;
+            // qDebug() << Q_FUNC_INFO << "Moving playhead from" << playhead << "to" << newPosition;
             int direction = (playhead > newPosition) ? -1 : 1;
             while (playhead != newPosition) {
                 playhead = playhead + direction;
-//                 qDebug() << Q_FUNC_INFO << "Moved playhead to" << playhead;
+                // qDebug() << Q_FUNC_INFO << "Moved playhead to" << playhead;
                 if (playlist.contains(playhead)) {
                     const QList<TimerCommand*> commands = playlist[playhead];
                     if (commands.count() > 0) {
@@ -172,6 +175,8 @@ public:
                             }
                         }
                     }
+                    playheadSegment = playheadSegment + direction;
+                    Q_EMIT q->playheadSegmentChanged();
                 }
             }
         }
@@ -196,7 +201,7 @@ public:
     QList<QObject*> zlChannels;
 
     void setZlSong(QObject *newZlSong) {
-//         qDebug() << "Setting new song" << newZlSong;
+        // qDebug() << "Setting new song" << newZlSong;
         if (zlSong != newZlSong) {
             if (zlSong) {
                 zlSong->disconnect(this);
@@ -212,7 +217,7 @@ public:
     }
 
     void setZLSketchesModel(QObject *newZLSketchesModel) {
-//         qDebug() << Q_FUNC_INFO << "Setting new sketches model:" << newZLSketchesModel;
+        // qDebug() << Q_FUNC_INFO << "Setting new sketches model:" << newZLSketchesModel;
         if (zlSketchesModel != newZLSketchesModel) {
             if (zlSketchesModel) {
                 zlSketchesModel->disconnect(this);
@@ -261,7 +266,7 @@ public:
                     zlChannels << channel;
                 }
             }
-//             qDebug() << Q_FUNC_INFO << "Updated channels, we now keep a hold of" << zlChannels.count();
+            // qDebug() << Q_FUNC_INFO << "Updated channels, we now keep a hold of" << zlChannels.count();
         }
     }
 public Q_SLOTS:
@@ -293,12 +298,12 @@ public Q_SLOTS:
             qint64 segmentPosition{0};
             QList<QObject*> clipsInPrevious;
             int segmentCount = zLSegmentsModel->property("count").toInt();
-            qDebug() << Q_FUNC_INFO << "Working with" << segmentCount << "segments...";
+            // qDebug() << Q_FUNC_INFO << "Working with" << segmentCount << "segments...";
             for (int segmentIndex = 0; segmentIndex < segmentCount; ++segmentIndex) {
                 QObject *segment{nullptr};
                 QMetaObject::invokeMethod(zLSegmentsModel, "get_segment", Qt::DirectConnection, Q_RETURN_ARG(QObject*, segment), Q_ARG(int, segmentIndex));
                 if (segment) {
-                    qDebug() << Q_FUNC_INFO <<  "Working on segment at index" << segmentIndex;
+                    // qDebug() << Q_FUNC_INFO <<  "Working on segment at index" << segmentIndex;
                     QList<TimerCommand*> commands;
                     QVariantList clips = segment->property("clips").toList();
                     const QVariantList restartClipsData = segment->property("restartClips").toList();
@@ -313,7 +318,7 @@ public Q_SLOTS:
                         // Set the playback offset if: Either we explicitly get asked to restart the clip, Or the clip wasn't in the previous segment
                         const bool shouldResetPlaybackposition{restartClips.contains(clip) || !clipsInPrevious.contains(clip)};
                         if (shouldResetPlaybackposition || !clipsInPrevious.contains(clip)) {
-                            qDebug() << Q_FUNC_INFO << "The clip" << clip << "was not in the previous segment, so we should start playing it";
+                            // qDebug() << Q_FUNC_INFO << "The clip" << clip << "was not in the previous segment, so we should start playing it";
                             // If the clip was not there in the previous step, that means we should turn it on
                             TimerCommand* command = new TimerCommand; // This does not need to use the pool, as we might make a LOT of these, and also don't do so during playback time.
                             command->parameter = clip->property("row").toInt();
@@ -331,12 +336,12 @@ public Q_SLOTS:
                             }
                             commands << command;
                         } else {
-                            qDebug() << Q_FUNC_INFO << "Clip was already in the previous segment, leaving in";
+                            // qDebug() << Q_FUNC_INFO << "Clip was already in the previous segment, leaving in";
                         }
                     }
                     for (QObject *clip : clipsInPrevious) {
                         if (!includedClips.contains(clip) || restartClips.contains(clip)) {
-                            qDebug() << Q_FUNC_INFO << "The clip" << clip << "was in the previous segment but not in this one, so we should stop playing that clip";
+                            // qDebug() << Q_FUNC_INFO << "The clip" << clip << "was in the previous segment but not in this one, so we should stop playing that clip";
                             // If the clip was in the previous step, but not in this step, that means it
                             // should be turned off when reaching this position
                             TimerCommand* command = new TimerCommand; // This does not need to use the pool, as we might make a LOT of these, and also don't do so during playback time.
@@ -365,15 +370,15 @@ public Q_SLOTS:
                     qWarning() << Q_FUNC_INFO << "Failed to get segment" << segmentIndex;
                 }
                 if (stopAfter > 0 && segmentPosition >= stopAfter) {
-                    qDebug() << Q_FUNC_INFO <<  "Stopping after the segment at index" << segmentIndex << "as we'll be stopping playback after" << stopAfter;
+                    // qDebug() << Q_FUNC_INFO <<  "Stopping after the segment at index" << segmentIndex << "as we'll be stopping playback after" << stopAfter;
                     break;
                 }
             }
-            qDebug() << Q_FUNC_INFO << "Done processing segments, adding the final stops for any ongoing clips, and the timer stop command";
+            // qDebug() << Q_FUNC_INFO << "Done processing segments, adding the final stops for any ongoing clips, and the timer stop command";
             // Run through the clipsInPrevious segment and add commands to stop them all
             QList<TimerCommand*> commands;
             for (QObject *clip : clipsInPrevious) {
-                qDebug() << Q_FUNC_INFO << "The clip" << clip << "was in the final segment, so we should stop playing that clip at the end of playback";
+                // qDebug() << Q_FUNC_INFO << "The clip" << clip << "was in the final segment, so we should stop playing that clip at the end of playback";
                 TimerCommand* command = new TimerCommand; // This does not need to use the pool, as we might make a LOT of these, and also don't do so during playback time.
                 command->parameter = clip->property("row").toInt();
                 const QObject *channelObject = zlChannels.at(command->parameter);
@@ -469,6 +474,11 @@ qint64 SegmentHandler::duration() const
     return d->duration;
 }
 
+int SegmentHandler::playheadSegment() const
+{
+    return d->playheadSegment;
+}
+
 void SegmentHandler::startPlayback(qint64 startOffset, quint64 duration)
 {
     d->songMode = true;
@@ -481,6 +491,7 @@ void SegmentHandler::startPlayback(qint64 startOffset, quint64 duration)
     }
     // If we're starting with a new playfield anyway, we want to ensure the first movement also catches that first position, so start counting for the playhead at a logical -1 position with nothing on it
     d->playhead = -1;
+    d->playheadSegment = -1;
     d->movePlayhead(startOffset, true);
     if (d->duration > 0) {
         if (duration > 0) {
@@ -495,7 +506,7 @@ void SegmentHandler::startPlayback(qint64 startOffset, quint64 duration)
             if (sequence) {
                 sequence->prepareSequencePlayback();
             } else {
-                qDebug() << Q_FUNC_INFO << "Sequence in object" << object << "was apparently not a SequenceModel, and playback could not be prepared";
+                qWarning() << Q_FUNC_INFO << "Sequence in object" << object << "was apparently not a SequenceModel, and playback could not be prepared";
             }
         }
         d->playGridManager->hookUpTimer();
