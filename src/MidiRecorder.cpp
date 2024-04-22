@@ -402,57 +402,53 @@ bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorde
     if (settings.testFlag(ClearPatternBeforeApplying)) {
         patternModel->clear();
     }
-    if (settings.testFlag(LimitToPatternChannel)) {
-        acceptChannel << patternModel->midiChannel();
-    } else {
-        if (settings.testFlag(ApplyChannel0)) {
-            acceptChannel << 0;
-        }
-        if (settings.testFlag(ApplyChannel1)) {
-            acceptChannel << 1;
-        }
-        if (settings.testFlag(ApplyChannel2)) {
-            acceptChannel << 2;
-        }
-        if (settings.testFlag(ApplyChannel3)) {
-            acceptChannel << 3;
-        }
-        if (settings.testFlag(ApplyChannel4)) {
-            acceptChannel << 4;
-        }
-        if (settings.testFlag(ApplyChannel5)) {
-            acceptChannel << 5;
-        }
-        if (settings.testFlag(ApplyChannel6)) {
-            acceptChannel << 6;
-        }
-        if (settings.testFlag(ApplyChannel7)) {
-            acceptChannel << 7;
-        }
-        if (settings.testFlag(ApplyChannel8)) {
-            acceptChannel << 8;
-        }
-        if (settings.testFlag(ApplyChannel9)) {
-            acceptChannel << 9;
-        }
-        if (settings.testFlag(ApplyChannel10)) {
-            acceptChannel << 10;
-        }
-        if (settings.testFlag(ApplyChannel11)) {
-            acceptChannel << 11;
-        }
-        if (settings.testFlag(ApplyChannel12)) {
-            acceptChannel << 12;
-        }
-        if (settings.testFlag(ApplyChannel13)) {
-            acceptChannel << 13;
-        }
-        if (settings.testFlag(ApplyChannel14)) {
-            acceptChannel << 14;
-        }
-        if (settings.testFlag(ApplyChannel15)) {
-            acceptChannel << 15;
-        }
+    if (settings.testFlag(ApplyChannel0)) {
+        acceptChannel << 0;
+    }
+    if (settings.testFlag(ApplyChannel1)) {
+        acceptChannel << 1;
+    }
+    if (settings.testFlag(ApplyChannel2)) {
+        acceptChannel << 2;
+    }
+    if (settings.testFlag(ApplyChannel3)) {
+        acceptChannel << 3;
+    }
+    if (settings.testFlag(ApplyChannel4)) {
+        acceptChannel << 4;
+    }
+    if (settings.testFlag(ApplyChannel5)) {
+        acceptChannel << 5;
+    }
+    if (settings.testFlag(ApplyChannel6)) {
+        acceptChannel << 6;
+    }
+    if (settings.testFlag(ApplyChannel7)) {
+        acceptChannel << 7;
+    }
+    if (settings.testFlag(ApplyChannel8)) {
+        acceptChannel << 8;
+    }
+    if (settings.testFlag(ApplyChannel9)) {
+        acceptChannel << 9;
+    }
+    if (settings.testFlag(ApplyChannel10)) {
+        acceptChannel << 10;
+    }
+    if (settings.testFlag(ApplyChannel11)) {
+        acceptChannel << 11;
+    }
+    if (settings.testFlag(ApplyChannel12)) {
+        acceptChannel << 12;
+    }
+    if (settings.testFlag(ApplyChannel13)) {
+        acceptChannel << 13;
+    }
+    if (settings.testFlag(ApplyChannel14)) {
+        acceptChannel << 14;
+    }
+    if (settings.testFlag(ApplyChannel15)) {
+        acceptChannel << 15;
     }
 
     // work out how many microseconds we've got per step in the given pattern

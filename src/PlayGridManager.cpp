@@ -833,7 +833,8 @@ QString PlayGridManager::modelToJson(const QObject* model) const
         modelObject["height"] = patternModel->height();
         modelObject["width"] = patternModel->width();
         modelObject["noteDestination"] = int(patternModel->noteDestination());
-        modelObject["midiChannel"] = patternModel->midiChannel();
+        // This is informational for displaying in other places (like webconf), and not actually used internally
+        modelObject["sketchpadTrack"] = modelObject["midiChannel"] = patternModel->sketchpadTrack();
         modelObject["defaultNoteDuration"] = patternModel->defaultNoteDuration();
         modelObject["noteLength"] = patternModel->noteLength();
         modelObject["swing"] = patternModel->swing();
@@ -893,7 +894,6 @@ void PlayGridManager::setModelFromJson(QObject* model, const QString& json)
             setModelFromJson(model, patternObject.value("notes").toString());
             pattern->setHeight(patternObject.value("height").toInt());
             pattern->setWidth(patternObject.value("width").toInt());
-            pattern->setMidiChannel(patternObject.value("midiChannel").toInt());
             pattern->setNoteLength(patternObject.value("noteLength").toInt());
             pattern->setAvailableBars(patternObject.value("availableBars").toInt());
             pattern->setActiveBar(patternObject.value("activeBar").toInt());

@@ -159,7 +159,7 @@ public:
 
     enum ApplicatorSetting {
         NoFlags = 0x0,
-        LimitToPatternChannel = 0x1,
+        UnusedApplicatorSetting = 0x1, ///@< This used to be something else, but that setting no longer makes sense, so now there's space...
         ClearPatternBeforeApplying = 0x2,
         ApplyChannel0 = 0x4,
         ApplyChannel1 = 0x8,

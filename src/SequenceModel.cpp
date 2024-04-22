@@ -282,7 +282,7 @@ QVariant SequenceModel::data(const QModelIndex& index, int role) const
                 result.setValue(model->name());
                 break;
             case LayerRole:
-                result.setValue(model->midiChannel());
+                result.setValue(model->sketchpadTrack());
                 break;
             case BankRole:
                 result.setValue(model->bank());
@@ -328,7 +328,7 @@ QObject *SequenceModel::getByPart(int channelIndex, int partIndex) const
 {
     QObject *pattern{nullptr};
     for (PatternModel *needle : d->patternModelIterator) {
-        if (needle && needle->channelIndex() == channelIndex && needle->partIndex() == partIndex) {
+        if (needle && needle->sketchpadTrack() == channelIndex && needle->partIndex() == partIndex) {
             pattern = needle;
             break;
         }
@@ -345,7 +345,6 @@ void SequenceModel::insertPattern(PatternModel* pattern, int row)
             dataChanged(index, index);
         }
     };
-    connect(pattern, &PatternModel::midiChannelChanged, this, updatePattern);
     connect(pattern, &PatternModel::objectNameChanged, this, updatePattern);
     connect(pattern, &PatternModel::bankOffsetChanged, this, updatePattern);
     connect(pattern, &PatternModel::playingColumnChanged, this, updatePattern);
@@ -554,7 +553,7 @@ void SequenceModel::load(const QString &fileName)
                 PatternModel *model = qobject_cast<PatternModel*>(playGridManager()->getPatternModel(QString("%1-%2%3").arg(sequenceName).arg(QString::number(intermediaryTrackIndex + 1)).arg(intermediaryPartName), this));
                 model->startLongOperation();
                 model->resetPattern(true);
-                model->setChannelIndex(intermediaryTrackIndex);
+                model->setSketchpadTrack(intermediaryTrackIndex);
                 model->setPartIndex(actualIndex % ZynthboxPartCount);
                 insertPattern(model);
                 model->endLongOperation();
@@ -564,7 +563,7 @@ void SequenceModel::load(const QString &fileName)
             PatternModel *model = qobject_cast<PatternModel*>(playGridManager()->getPatternModel(QString("%1-%2%3").arg(sequenceName).arg(QString::number(trackIndex + 1)).arg(partName), this));
             model->startLongOperation();
             model->resetPattern(true);
-            model->setChannelIndex(trackIndex);
+            model->setSketchpadTrack(trackIndex);
             model->setPartIndex(partIndex);
             insertPattern(model);
             if (entry.exists()) {
@@ -593,7 +592,7 @@ void SequenceModel::load(const QString &fileName)
             PatternModel *model = qobject_cast<PatternModel*>(playGridManager()->getPatternModel(QString("%1-%2%3").arg(sequenceName).arg(QString::number(intermediaryChannelIndex + 1)).arg(intermediaryPartName), this));
             model->startLongOperation();
             model->resetPattern(true);
-            model->setChannelIndex(intermediaryChannelIndex);
+            model->setSketchpadTrack(intermediaryChannelIndex);
             model->setPartIndex(i % ZynthboxPartCount);
             insertPattern(model);
             model->endLongOperation();
@@ -659,8 +658,8 @@ bool SequenceModel::save(const QString &fileName, bool exportOnly)
                         PatternModel *pattern = d->patternModelIterator[i];
                         if (pattern) {
                             QString patternIdentifier = QString::number(i + 1);
-                            if (pattern->channelIndex() > -1 && pattern->partIndex() > -1) {
-                                patternIdentifier = QString("%1%2").arg(QString::number(pattern->channelIndex() + 1)).arg(partNames[pattern->partIndex()]);
+                            if (pattern->sketchpadTrack() > -1 && pattern->partIndex() > -1) {
+                                patternIdentifier = QString("%1%2").arg(QString::number(pattern->sketchpadTrack() + 1)).arg(partNames[pattern->partIndex()]);
                             }
                             QString fileName = QString("%1/part%2.pattern.json").arg(patternLocation.path()).arg(patternIdentifier);
                             QFile patternFile(fileName);
@@ -845,7 +844,7 @@ void SequenceModel::advanceSequence()
         } else {
             for (int i = 0; i < PATTERN_COUNT; ++i) {
                 const PatternModel *pattern = d->patternModelIterator[i];
-                if (pattern && (d->zlSyncManager->soloChannel == -1 || d->zlSyncManager->soloChannel == pattern->channelIndex())) {
+                if (pattern && (d->zlSyncManager->soloChannel == -1 || d->zlSyncManager->soloChannel == pattern->sketchpadTrack())) {
                     pattern->handleSequenceAdvancement(cumulativeBeat, sequenceProgressionLength);
                 }
             }

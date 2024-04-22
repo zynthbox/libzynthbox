@@ -117,7 +117,6 @@ public:
                 connect(zlChannel, SIGNAL(recordingPopupActiveChanged()), this, SIGNAL(recordingPopupActiveChanged()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(mutedChanged()), this, SLOT(mutedChanged()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(samplePickingStyleChanged()), this, SLOT(updateSamples()), Qt::QueuedConnection);
-                q->setMidiChannel(zlChannel->property("id").toInt());
                 channelAudioTypeChanged();
                 externalMidiChannelChanged();
                 updateSamples();
@@ -190,7 +189,7 @@ public Q_SLOTS:
         const QString channelAudioType = zlChannel->property("channelAudioType").toString();
         TimerCommand* timerCommand = syncTimer->getTimerCommand();
         timerCommand->operation = TimerCommand::SamplerChannelEnabledStateOperation;
-        timerCommand->parameter = q->channelIndex();
+        timerCommand->parameter = q->sketchpadTrack();
         if (channelAudioType == sampleTrig) {
             q->setNoteDestination(PatternModel::SampleTriggerDestination);
             timerCommand->parameter2 = true;
@@ -277,7 +276,7 @@ public Q_SLOTS:
                 }
                 ++index;
             }
-            MidiRouter::instance()->setZynthianChannels(q->channelIndex(), chainedSounds);
+            MidiRouter::instance()->setZynthianChannels(q->sketchpadTrack(), chainedSounds);
         }
     }
     void mutedChanged() {
@@ -484,7 +483,6 @@ public:
     QHash<QString, qint64> lastSavedTimes;
     int width{16};
     PatternModel::NoteDestination noteDestination{PatternModel::SynthDestination};
-    int midiChannel{15};
     int externalMidiChannel{-1};
     QString layerData;
     int defaultNoteDuration{0};
@@ -619,7 +617,7 @@ public:
     SyncTimer* syncTimer{nullptr};
     SequenceModel *sequence;
     int song{0}; // This is just... always zero at the moment, but maybe this would be the global sequence id or something like that?
-    int channelIndex{-1};
+    int sketchpadTrack{-1};
     int partIndex{-1};
 
     PlayGridManager *playGridManager{nullptr};
@@ -714,12 +712,12 @@ PatternModel::PatternModel(SequenceModel* parent)
     auto updateIsPlaying = [this](){
         bool isPlaying{false};
         if (d->segmentHandler->songMode()) {
-            isPlaying = d->playfieldManager->clipPlaystate(d->song, d->channelIndex, d->partIndex) == PlayfieldManager::PlayingState;
+            isPlaying = d->playfieldManager->clipPlaystate(d->song, d->sketchpadTrack, d->partIndex) == PlayfieldManager::PlayingState;
         } else if (d->sequence && d->sequence->isPlaying()) {
             if (d->sequence->soloPattern() > -1) {
                 isPlaying = (d->sequence->soloPatternObject() == this);
             } else {
-                isPlaying = d->playfieldManager->clipPlaystate(d->song, d->channelIndex, d->partIndex) == PlayfieldManager::PlayingState;
+                isPlaying = d->playfieldManager->clipPlaystate(d->song, d->sketchpadTrack, d->partIndex) == PlayfieldManager::PlayingState;
             }
         } else {
             isPlaying = false;
@@ -733,7 +731,7 @@ PatternModel::PatternModel(SequenceModel* parent)
         }
     };
     connect(d->playfieldManager, &PlayfieldManager::directPlayfieldStateChanged, this, [this,updateIsPlaying](int song, int track, int part){
-        if (d->sequence && song == d->song && track == d->channelIndex && part == d->partIndex) {
+        if (d->sequence && song == d->song && track == d->sketchpadTrack && part == d->partIndex) {
             updateIsPlaying();
         }
     }, Qt::DirectConnection);
@@ -747,7 +745,7 @@ PatternModel::PatternModel(SequenceModel* parent)
         // This is to ensure that when the current sound changes and we have no midi channel, we will schedule
         // the notes that are expected of us
         connect(d->sequence->playGridManager(), &PlayGridManager::currentMidiChannelChanged, this, [this](){
-            if (d->midiChannel == 15 && d->sequence->playGridManager()->currentMidiChannel() > -1) {
+            if (d->sketchpadTrack == -1 && d->sequence->playGridManager()->currentMidiChannel() > -1) {
                 d->invalidatePosition();
             }
         });
@@ -771,7 +769,6 @@ PatternModel::PatternModel(SequenceModel* parent)
     setHeight(16);
 
     connect(this, &PatternModel::noteDestinationChanged, this, &NotesModel::registerChange);
-    connect(this, &PatternModel::midiChannelChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::layerDataChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::noteLengthChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::swingChanged, this, &NotesModel::registerChange);
@@ -798,7 +795,7 @@ PatternModel::PatternModel(SequenceModel* parent)
     midiChannelUpdater->setInterval(100);
     midiChannelUpdater->setSingleShot(true);
     connect(midiChannelUpdater, &QTimer::timeout, this, [this](){
-        int actualChannel = d->noteDestination == PatternModel::ExternalDestination && d->externalMidiChannel > -1 ? d->externalMidiChannel : d->midiChannel;
+        int actualChannel = d->noteDestination == PatternModel::ExternalDestination && d->externalMidiChannel > -1 ? d->externalMidiChannel : d->sketchpadTrack;
         MidiRouter::RoutingDestination routerDestination{MidiRouter::ZynthianDestination};
         switch(d->noteDestination) {
             case PatternModel::SampleSlicedDestination:
@@ -816,11 +813,11 @@ PatternModel::PatternModel(SequenceModel* parent)
         }
         if (zlChannel() && zlChannel()->property("recordingPopupActive").toBool()) {
             // Recording Popup is active. Do connect midi channel to allow recording even if channel mode is trig/slice
-            MidiRouter::instance()->setSkechpadTrackDestination(d->midiChannel, MidiRouter::ZynthianDestination, actualChannel == d->midiChannel ? -1 : actualChannel);
+            MidiRouter::instance()->setSkechpadTrackDestination(d->sketchpadTrack, MidiRouter::ZynthianDestination, actualChannel == d->sketchpadTrack ? -1 : actualChannel);
         } else {
-            MidiRouter::instance()->setSkechpadTrackDestination(d->midiChannel, routerDestination, actualChannel == d->midiChannel ? -1 : actualChannel);
+            MidiRouter::instance()->setSkechpadTrackDestination(d->sketchpadTrack, routerDestination, actualChannel == d->sketchpadTrack ? -1 : actualChannel);
         }
-        if (d->previouslyUpdatedMidiChannel != d->midiChannel) {
+        if (d->previouslyUpdatedMidiChannel != d->sketchpadTrack) {
             startLongOperation();
             for (int row = 0; row < rowCount(); ++row) {
                 for (int column = 0; column < columnCount(createIndex(row, 0)); ++column) {
@@ -832,10 +829,10 @@ PatternModel::PatternModel(SequenceModel* parent)
                             for (const QVariant &subnote :oldCompound->subnotes()) {
                                 Note *oldNote = subnote.value<Note*>();
                                 if (oldNote) {
-                                    newSubnotes << QVariant::fromValue<QObject*>(playGridManager()->getNote(oldNote->midiNote(), d->midiChannel));
+                                    newSubnotes << QVariant::fromValue<QObject*>(playGridManager()->getNote(oldNote->midiNote(), d->sketchpadTrack));
                                 } else {
                                     // This really shouldn't happen - spit out a warning and slap in something unknown so we keep the order intact
-                                    newSubnotes << QVariant::fromValue<QObject*>(playGridManager()->getNote(0, d->midiChannel));
+                                    newSubnotes << QVariant::fromValue<QObject*>(playGridManager()->getNote(0, d->sketchpadTrack));
                                     qWarning() << "Failed to convert a subnote value which must be a Note object to a Note object - something clearly isn't right.";
                                 }
                             }
@@ -846,10 +843,9 @@ PatternModel::PatternModel(SequenceModel* parent)
             }
             endLongOperation();
             d->invalidatePosition();
-            d->previouslyUpdatedMidiChannel = d->midiChannel;
+            d->previouslyUpdatedMidiChannel = d->sketchpadTrack;
         }
     });
-    connect(this, &PatternModel::midiChannelChanged, midiChannelUpdater, QOverload<>::of(&QTimer::start));
     connect(this, &PatternModel::externalMidiChannelChanged, midiChannelUpdater, QOverload<>::of(&QTimer::start));
     connect(this, &PatternModel::noteDestinationChanged, midiChannelUpdater, QOverload<>::of(&QTimer::start));
     connect(d->zlSyncManager, &ZLPatternSynchronisationManager::recordingPopupActiveChanged, midiChannelUpdater, QOverload<>::of(&QTimer::start));
@@ -858,13 +854,13 @@ PatternModel::PatternModel(SequenceModel* parent)
     connect(SyncTimer::instance(), &SyncTimer::clipCommandSent, this, [this](ClipCommand *clipCommand){
         for (ClipAudioSource *needle : qAsConst(d->clips)) {
             if (needle && needle == clipCommand->clip) {
-                Note *note = qobject_cast<Note*>(PlayGridManager::instance()->getNote(clipCommand->midiNote, d->midiChannel));
+                Note *note = qobject_cast<Note*>(PlayGridManager::instance()->getNote(clipCommand->midiNote, d->sketchpadTrack));
                 if (note) {
                     if (clipCommand->stopPlayback) {
-                        note->registerOff(d->midiChannel);
+                        note->registerOff(d->sketchpadTrack);
                     }
                     if (clipCommand->startPlayback) {
-                        note->registerOn(d->midiChannel);
+                        note->registerOn(d->sketchpadTrack);
                     }
                 }
                 break;
@@ -935,8 +931,8 @@ int PatternModel::addSubnote(int row, int column, QObject* note)
 
         // Ensure the note is correct according to our midi channel settings
         Note *newNote = qobject_cast<Note*>(note);
-        if (newNote->sketchpadTrack() != d->midiChannel) {
-            newNote = qobject_cast<Note*>(playGridManager()->getNote(newNote->midiNote(), d->midiChannel));
+        if (newNote->sketchpadTrack() != d->sketchpadTrack) {
+            newNote = qobject_cast<Note*>(playGridManager()->getNote(newNote->midiNote(), d->sketchpadTrack));
         }
 
         subnotes.append(QVariant::fromValue<QObject*>(newNote));
@@ -962,8 +958,8 @@ void PatternModel::insertSubnote(int row, int column, int subnoteIndex, QObject 
 
         // Ensure the note is correct according to our midi channel settings
         Note *newNote = qobject_cast<Note*>(note);
-        if (newNote->sketchpadTrack() != d->midiChannel) {
-            newNote = qobject_cast<Note*>(playGridManager()->getNote(newNote->midiNote(), d->midiChannel));
+        if (newNote->sketchpadTrack() != d->sketchpadTrack) {
+            newNote = qobject_cast<Note*>(playGridManager()->getNote(newNote->midiNote(), d->sketchpadTrack));
         }
 
         subnotes.insert(actualPosition, QVariant::fromValue<QObject*>(newNote));
@@ -995,8 +991,8 @@ int PatternModel::insertSubnoteSorted(int row, int column, QObject* note)
         }
 
         // Ensure the note is correct according to our midi channel settings
-        if (newNote->sketchpadTrack() != d->midiChannel) {
-            newNote = qobject_cast<Note*>(playGridManager()->getNote(newNote->midiNote(), d->midiChannel));
+        if (newNote->sketchpadTrack() != d->sketchpadTrack) {
+            newNote = qobject_cast<Note*>(playGridManager()->getNote(newNote->midiNote(), d->sketchpadTrack));
         }
 
         subnotes.insert(newPosition, QVariant::fromValue<QObject*>(newNote));
@@ -1190,16 +1186,16 @@ QObject* PatternModel::sequence() const
     return d->sequence;
 }
 
-int PatternModel::channelIndex() const
+int PatternModel::sketchpadTrack() const
 {
-    return d->channelIndex;
+    return d->sketchpadTrack;
 }
 
-void PatternModel::setChannelIndex(int channelIndex)
+void PatternModel::setSketchpadTrack(int sketchpadTrack)
 {
-    if (d->channelIndex != channelIndex) {
-        d->channelIndex = channelIndex;
-        Q_EMIT channelIndexChanged();
+    if (d->sketchpadTrack != sketchpadTrack) {
+        d->sketchpadTrack = sketchpadTrack;
+        Q_EMIT sketchpadTrackChanged();
     }
 }
 
@@ -1250,7 +1246,7 @@ void PatternModel::setNoteDestination(const PatternModel::NoteDestination &noteD
         for (int midiChannel = 1; midiChannel < 17; ++midiChannel) {
             buffer.addEvent(juce::MidiMessage::allNotesOff(midiChannel), 0);
         }
-        SyncTimer::instance()->sendMidiBufferImmediately(buffer, d->midiChannel);
+        SyncTimer::instance()->sendMidiBufferImmediately(buffer, d->sketchpadTrack);
         d->noteDestination = noteDestination;
         Q_EMIT noteDestinationChanged();
     }
@@ -1282,20 +1278,6 @@ void PatternModel::setHeight(int height)
 int PatternModel::height() const
 {
     return rowCount();
-}
-
-void PatternModel::setMidiChannel(int midiChannel)
-{
-    int actualChannel = qMin(qMax(-1, midiChannel), 15);
-    if (d->midiChannel != actualChannel) {
-        d->midiChannel = actualChannel;
-        Q_EMIT midiChannelChanged();
-    }
-}
-
-int PatternModel::midiChannel() const
-{
-    return d->midiChannel;
 }
 
 void PatternModel::setExternalMidiChannel(int externalMidiChannel)
@@ -1593,7 +1575,7 @@ QObject *PatternModel::clipSliceNotes() const
                     if (i == notesToFit.count()) {
                         break;
                     }
-                    notes << QVariant::fromValue<QObject*>(PlayGridManager::instance()->getNote(notesToFit[i], d->midiChannel));
+                    notes << QVariant::fromValue<QObject*>(PlayGridManager::instance()->getNote(notesToFit[i], d->sketchpadTrack));
                     metadata << QVariantMap{{"displayText", QVariant::fromValue<QString>(noteTitles[i])}};
                     ++i;
                 }
@@ -1606,7 +1588,7 @@ QObject *PatternModel::clipSliceNotes() const
         refilTimer->setSingleShot(true);
         connect(refilTimer, &QTimer::timeout, d->gridModel, fillClipSliceNotes);
         connect(this, &PatternModel::clipIdsChanged, refilTimer, QOverload<>::of(&QTimer::start));
-        connect(this, &PatternModel::midiChannelChanged, refilTimer, QOverload<>::of(&QTimer::start));
+        connect(this, &PatternModel::sketchpadTrackChanged, refilTimer, QOverload<>::of(&QTimer::start));
         refilTimer->start();
     }
     return d->clipSliceNotes;
@@ -1730,7 +1712,7 @@ QObject *PatternModel::gridModel() const
     if (!d->gridModel) {
         d->gridModel = qobject_cast<NotesModel*>(PlayGridManager::instance()->getNotesModel(objectName() + " - Grid Model"));
         auto rebuildGridModel = [this](){
-            // qDebug() << "Rebuilding" << d->gridModel << "for destination" << d->noteDestination << "for channel" << d->midiChannel;
+            // qDebug() << "Rebuilding" << d->gridModel << "for destination" << d->noteDestination << "for track" << d->sketchpadTrack;
             d->gridModel->startLongOperation();
             QList<int> notesToFit;
             for (int note = d->gridModelStartNote; note <= d->gridModelEndNote; ++note) {
@@ -1746,7 +1728,7 @@ QObject *PatternModel::gridModel() const
                     if (i == notesToFit.count()) {
                         break;
                     }
-                    Note* note = qobject_cast<Note*>(PlayGridManager::instance()->getNote(notesToFit[i], d->midiChannel));
+                    Note* note = qobject_cast<Note*>(PlayGridManager::instance()->getNote(notesToFit[i], d->sketchpadTrack));
                     notes << QVariant::fromValue<QObject*>(note);
                     QList<ClipAudioSource*> clips = d->clipsForMidiNote(note->midiNote());
                     if (noteDestination() == SampleTriggerDestination) {
@@ -1780,7 +1762,7 @@ QObject *PatternModel::gridModel() const
         refilTimer->setInterval(100);
         refilTimer->setSingleShot(true);
         connect(refilTimer, &QTimer::timeout, d->gridModel, rebuildGridModel);
-        connect(this, &PatternModel::midiChannelChanged, refilTimer, QOverload<>::of(&QTimer::start));
+        connect(this, &PatternModel::sketchpadTrackChanged, refilTimer, QOverload<>::of(&QTimer::start));
         connect(this, &PatternModel::gridModelStartNoteChanged, refilTimer, QOverload<>::of(&QTimer::start));
         connect(this, &PatternModel::gridModelEndNoteChanged, refilTimer, QOverload<>::of(&QTimer::start));
         // To ensure we also update when the clips for each position change
@@ -2000,10 +1982,6 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
         && (isPlaying()
             // Play any note if the pattern is set to sliced or trigger destination, since then it's not sending things through the midi graph
             && (d->noteDestination == PatternModel::SampleSlicedDestination || d->noteDestination == PatternModel ::SampleTriggerDestination
-                // Don't play notes on channel 15, because that's the control channel, and we don't want patterns to play to that
-                || (d->midiChannel > -1 && d->midiChannel < 15)
-                // And if we're playing midi, but don't have a good channel of our own, if the current channel is good, use that
-                || d->playGridManager->currentMidiChannel() > -1
             )
         )
     ) {
@@ -2015,7 +1993,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
         bool relevantToUs{false};
         for (int progressionIncrement = 0; progressionIncrement <= progressionLength; ++progressionIncrement) {
             // As we might change the offset on some step, we'll need that in here
-            const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->channelIndex, d->partIndex) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
+            const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->sketchpadTrack, d->partIndex) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
             // check whether the sequencePosition + progressionIncrement matches our note length
             qint64 nextPosition = sequencePosition - playbackOffset + progressionIncrement;
             d->noteLengthDetails(d->noteLength, nextPosition, relevantToUs, noteDuration);
@@ -2055,7 +2033,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                 // Reset this clip's playfield offset by the distance from this clip to the clip we are asking to play
                                 // next (or, rather, move it forward to the end of the pattern, and then set it to the next step)
                                 nextStep = ((d->availableBars * d->width) - nextPosition + nextStep) * noteDuration;
-                                d->playfieldManager->setClipPlaystate(d->song, d->channelIndex, d->partIndex, PlayfieldManager::PlayingState, PlayfieldManager::CurrentPosition, d->playfieldManager->clipOffset(d->song, d->channelIndex, d->partIndex) + nextStep);
+                                d->playfieldManager->setClipPlaystate(d->song, d->sketchpadTrack, d->partIndex, PlayfieldManager::PlayingState, PlayfieldManager::CurrentPosition, d->playfieldManager->clipOffset(d->song, d->sketchpadTrack, d->partIndex) + nextStep);
                             }
                             const int velocity{metaHash.value(velocityString, 64).toInt()};
                             if (velocity == 0) {
@@ -2095,7 +2073,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                     if (ratchetProbability < 100) {
                                         invalidateNoteBuffersImmediately = true;
                                     }
-                                    int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
+                                    int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->sketchpadTrack, quint64(schedulingIncrement));
                                     for (int ratchetIndex = 0; ratchetIndex < ratchetCount; ++ratchetIndex) {
                                         sendNotes = true;
                                         if (ratchetProbability < 100) {
@@ -2110,12 +2088,12 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                             addNoteToBuffer(stepData.getOrCreateBuffer(delay + (ratchetDelay * ratchetIndex)), subnote, velocity, true, avaialbleChannel);
                                             addNoteToBuffer(stepData.getOrCreateBuffer(delay + (ratchetDelay * ratchetIndex) + ratchetDuration), subnote, velocity, false, avaialbleChannel);
                                             if (reuseChannel == false && ratchetIndex + 1 < ratchetCount) {
-                                                avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
+                                                avaialbleChannel = d->syncTimer->nextAvailableChannel(d->sketchpadTrack, quint64(schedulingIncrement));
                                             }
                                         }
                                     }
                                 } else {
-                                    const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
+                                    const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->sketchpadTrack, quint64(schedulingIncrement));
                                     addNoteToBuffer(stepData.getOrCreateBuffer(delay), subnote, velocity, true, avaialbleChannel);
                                     addNoteToBuffer(stepData.getOrCreateBuffer(delay + duration), subnote, velocity, false, avaialbleChannel);
                                 }
@@ -2156,13 +2134,13 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                     for (const QVariant &subnoteVar : subnotes) {
                                         const Note *subnote = subnoteVar.value<Note*>();
                                         if (subnote && subsequentStep.swingOffset >= 0) {
-                                            const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
+                                            const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->sketchpadTrack, quint64(schedulingIncrement));
                                             addNoteToBuffer(stepData.getOrCreateBuffer(subsequentStep.swingOffset), subnote, 64, true, avaialbleChannel);
                                             addNoteToBuffer(stepData.getOrCreateBuffer(subsequentStep.swingOffset + noteDuration), subnote, 64, false, avaialbleChannel);
                                         }
                                     }
                                 } else if (subsequentStep.swingOffset >= 0) {
-                                    const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->midiChannel, quint64(schedulingIncrement));
+                                    const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->sketchpadTrack, quint64(schedulingIncrement));
                                     addNoteToBuffer(stepData.getOrCreateBuffer(subsequentStep.swingOffset), note, 64, true, avaialbleChannel);
                                     addNoteToBuffer(stepData.getOrCreateBuffer(subsequentStep.swingOffset + noteDuration), note, 64, false, avaialbleChannel);
                                 }
@@ -2216,7 +2194,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                         const StepData &stepData = d->getOrCreateStepData(nextPosition + (d->bankOffset * d->width));
                         QHash<int, juce::MidiBuffer>::const_iterator position;
                         for (position = stepData.positionBuffers.constBegin(); position != stepData.positionBuffers.constEnd(); ++position) {
-                            d->syncTimer->scheduleMidiBuffer(position.value(), quint64(qMax(0, schedulingIncrement + position.key())), d->midiChannel);
+                            d->syncTimer->scheduleMidiBuffer(position.value(), quint64(qMax(0, schedulingIncrement + position.key())), d->sketchpadTrack);
                         }
                         break;
                     }
@@ -2239,13 +2217,10 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
 void PatternModel::updateSequencePosition(qint64 sequencePosition)
 {
     // Don't play notes on channel 15, because that's the control channel, and we don't want patterns to play to that
-    if ((isPlaying()
-            && (d->noteDestination == PatternModel::SampleSlicedDestination || d->noteDestination == PatternModel ::SampleTriggerDestination
-            || (d->midiChannel > -1 && d->midiChannel < 15)
-            || d->playGridManager->currentMidiChannel() > -1))
+    if ((isPlaying() && (d->noteDestination == PatternModel::SampleSlicedDestination || d->noteDestination == PatternModel ::SampleTriggerDestination))
         || sequencePosition == 0
     ) {
-        const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->channelIndex, d->partIndex) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
+        const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->sketchpadTrack, d->partIndex) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
         bool relevantToUs{false};
         qint64 nextPosition{sequencePosition - playbackOffset};
         qint64 noteDuration{0};
@@ -2279,7 +2254,7 @@ void PatternModel::handleMidiMessage(const MidiRouter::ListenerPort &port, const
     if (d->liveRecordingSourceExternalDeviceId.isEmpty()
             ? d->liveRecordingSourceSketchpadTrack == -1
                 ? port == MidiRouter::ListenerPort::PassthroughPort
-                    ? sketchpadTrack == d->midiChannel
+                    ? sketchpadTrack == d->sketchpadTrack
                     : sketchpadTrack == d->liveRecordingSourceSketchpadTrack
                 : false
             : port == MidiRouter::HardwareInPassthroughPort
@@ -2322,7 +2297,7 @@ void PatternModel::handleMidiMessage(const MidiRouter::ListenerPort &port, const
 
 void PatternModel::midiMessageToClipCommands(ClipCommandRing *listToPopulate, const int &samplerIndex, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3) const
 {
-    if (samplerIndex == d->midiChannel && (!d->sequence || (d->sequence->shouldMakeSounds() && (d->sequence->soloPatternObject() == this || d->enabled)))
+    if (samplerIndex == d->sketchpadTrack && (!d->sequence || (d->sequence->shouldMakeSounds() && (d->sequence->soloPatternObject() == this || d->enabled)))
         // But also, don't make sounds unless we're sample-triggering or slicing (otherwise the synths will handle it)
         && (d->noteDestination == SampleTriggerDestination || d->noteDestination == SampleSlicedDestination)) {
             d->midiMessageToClipCommands(listToPopulate, byte1, byte2, byte3);
@@ -2386,7 +2361,7 @@ void ZLPatternSynchronisationManager::addRecordedNote(void *recordedNote)
     }
     // If we didn't find one there already, /then/ we can create one
     if (subnoteIndex == -1) {
-        subnoteIndex = q->addSubnote(newNote->row, newNote->column, q->playGridManager()->getNote(newNote->midiNote, q->midiChannel()));
+        subnoteIndex = q->addSubnote(newNote->row, newNote->column, q->playGridManager()->getNote(newNote->midiNote, q->sketchpadTrack()));
         // qDebug() << Q_FUNC_INFO << "Didn't find a subnote with this midi note to change values on, created a new subnote at subnote index" << subnoteIndex;
     } else {
         // Check whether this is what we already know about, and if it is, abort the changes

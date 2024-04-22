@@ -46,9 +46,9 @@ class PatternModel : public NotesModel
      */
     Q_PROPERTY(QObject* sequence READ sequence CONSTANT)
     /**
-     * \brief The index of the channel this model is associated with
+     * \brief The index of the sketchpad track this model is associated with
      */
-    Q_PROPERTY(int channelIndex READ channelIndex NOTIFY channelIndexChanged)
+    Q_PROPERTY(int sketchpadTrack READ sketchpadTrack NOTIFY sketchpadTrackChanged)
     /**
      * \brief The index of the part inside this pattern's associated channel associates this pattern with
      */
@@ -87,23 +87,8 @@ class PatternModel : public NotesModel
      */
     Q_PROPERTY(int height READ height WRITE setHeight NOTIFY heightChanged)
     /**
-     * \brief The midi channel used by all notes in this pattern
-     * This is potentially an expensive operation, as it will replace all notes in the model with ones matching the newly set channel
-     * @note When adding and removing notes to the model, they will be checked (and changed to fit)
-     * The range for this property is 0-15 (and any attempt to set it outside of that value will be clamped)
-     * @note Setting the midi channel to 15 will cause no notes to be played (as this is considered a control channel and not for notes)
-     * @default 15
-     */
-    Q_PROPERTY(int midiChannel READ midiChannel WRITE setMidiChannel NOTIFY midiChannelChanged)
-    /**
-     * \brief The layer associated with this pattern
-     * @note This is currently an alias of the midiChannel property, but this will likely change (so that midiChannel becomes
-     *       more like a convenience alias for the layer's midiChannel property, but for now...)
-     */
-    Q_PROPERTY(int layer READ midiChannel WRITE setMidiChannel NOTIFY midiChannelChanged)
-    /**
      * \brief The midi channel used to send notes to specifically when the note destination is set to ExternalDestination
-     * @default -1 (which will be interpreted as "the same as midiChannel")
+     * @default -1 (which will be interpreted as "the same as sketchpadTrack")
      */
     Q_PROPERTY(int externalMidiChannel READ externalMidiChannel WRITE setExternalMidiChannel NOTIFY externalMidiChannelChanged)
     /*
@@ -461,27 +446,27 @@ public:
 
     QObject* sequence() const;
     /**
-     * \brief The index of the logical channel this pattern belongs to
-     * @return The index of the logical channel this pattern belongs to (-1 if not assigned)
+     * \brief The index of the sketchpad track this pattern belongs to
+     * @return The index of the sketchpad track this pattern belongs to (-1 if not assigned)
      */
-    int channelIndex() const;
+    int sketchpadTrack() const;
     /**
-     * \brief Set the index of the logical channel this pattern belongs to
+     * \brief Set the index of the sketchpad track this pattern belongs to
      * @note This value is not checked, and multiple pattern objects might have the same value (though usually won't)
-     * @param channelIndex The index of the logical channel this pattern belongs to
+     * @param sketchpadTrack The index of the sketchpad track this pattern belongs to
      */
-    void setChannelIndex(int channelIndex);
-    Q_SIGNAL void channelIndexChanged();
+    void setSketchpadTrack(int sketchpadTrack);
+    Q_SIGNAL void sketchpadTrackChanged();
     /**
-     * \brief The index of the part of the logical channel this pattern belongs to
-     * @return The index of the part of the logical channel this pattern belongs to (-1 if note assigned)
+     * \brief The index of the part of the sketchpad track this pattern belongs to
+     * @return The index of the part of the sketchpad track this pattern belongs to (-1 if note assigned)
      */
     int partIndex() const;
     QString partName() const;
     /**
-     * \brief Set the index of the part of the logical channel this pattern belongs to
+     * \brief Set the index of the part of the sketchpad track this pattern belongs to
      * @note This value is not checked and multiple patterns in the same channel can carry the same index (though usually won't)
-     * @param The index of the part of the logical channel this pattern belongs to
+     * @param The index of the part of the sketchpad track this pattern belongs to
      */
     void setPartIndex(int partIndex);
     Q_SIGNAL void partIndexChanged();
@@ -503,10 +488,6 @@ public:
     int height() const;
     void setHeight(int height);
     Q_SIGNAL void heightChanged();
-
-    void setMidiChannel(int midiChannel);
-    int midiChannel() const;
-    Q_SIGNAL void midiChannelChanged();
 
     void setExternalMidiChannel(int externalMidiChannel);
     int externalMidiChannel() const;
