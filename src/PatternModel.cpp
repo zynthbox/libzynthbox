@@ -1978,13 +1978,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
     static const QLatin1String ratchetCountString{"ratchet-count"};
     static const QLatin1String ratchetProbabilityString{"ratchet-probability"};
     static const QLatin1String nextStepString{"next-step"};
-    if (!d->zlSyncManager->channelMuted
-        && (isPlaying()
-            // Play any note if the pattern is set to sliced or trigger destination, since then it's not sending things through the midi graph
-            && (d->noteDestination == PatternModel::SampleSlicedDestination || d->noteDestination == PatternModel ::SampleTriggerDestination
-            )
-        )
-    ) {
+    if (!d->zlSyncManager->channelMuted && isPlaying()) {
         if (d->updateMostRecentStartTimestamp) {
             d->updateMostRecentStartTimestamp = false;
             d->mostRecentStartTimestamp = sequencePosition;
@@ -2217,9 +2211,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
 void PatternModel::updateSequencePosition(qint64 sequencePosition)
 {
     // Don't play notes on channel 15, because that's the control channel, and we don't want patterns to play to that
-    if ((isPlaying() && (d->noteDestination == PatternModel::SampleSlicedDestination || d->noteDestination == PatternModel ::SampleTriggerDestination))
-        || sequencePosition == 0
-    ) {
+    if (isPlaying() || sequencePosition == 0) {
         const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->sketchpadTrack, d->partIndex) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
         bool relevantToUs{false};
         qint64 nextPosition{sequencePosition - playbackOffset};
