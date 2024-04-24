@@ -95,6 +95,15 @@ public:
     void setZynthianSynthAcceptedChannels(int zynthianChannel, const QList<int> &acceptedMidiChannels);
 
     /**
+     * \brief Set the keyzone information for the Zynthian synth at the given index
+     * @param zynthianChannel The index of the Zynthian synth to set up the keyzone for
+     * @param keyZoneStart The first accepted note for the given synth
+     * @param keyZoneEnd The last accepted note for the given synth
+     * @param rootNote The note that should be considered C4 by this synth (that is, how much notes will be transposed by, compared to the default value of 60)
+     */
+    Q_INVOKABLE void setZynthianSynthKeyzones(int zynthianChannel, int keyZoneStart = 0, int keyZoneEnd = 127, int rootNote = 60);
+
+    /**
      * \brief Call this function to reload the midi routing configuration and set ports back up
      */
     Q_SLOT void reloadConfiguration();

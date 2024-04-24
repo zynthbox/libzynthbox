@@ -199,6 +199,13 @@ public:
     void setAcceptsNote(const int &note, bool accepted = true);
 
     /**
+     * \brief Sets the amount by which notes sent to the device will be transposed
+     * @note This happens during event writing, and values outside the range will be clamped rather than sent
+     * @param transposeAmount The amount by which notes get transposed (default is 0, value will be clamped to +/- 127)
+     */
+    void setTransposeAmount(int transposeAmount = 0);
+
+    /**
      * \brief Set the channels which this device will accept
      * Any note which arrives on a different channel will be moved to one of the given channels
      * There is no guarantee of an even spread here (in essence, an unaccepted channel will be

@@ -873,6 +873,21 @@ void MidiRouter::setZynthianSynthAcceptedChannels(int zynthianChannel, const QLi
     }
 }
 
+void MidiRouter::setZynthianSynthKeyzones(int zynthianChannel, int keyZoneStart, int keyZoneEnd, int rootNote)
+{
+    if (-1 < zynthianChannel && zynthianChannel < 16) {
+        QList<int> notes;
+        for (int note = keyZoneStart; note < keyZoneEnd + 1; ++note) {
+            // This might look a bit weird - but, we use -1;-1 as the range for "just don't do anything for this slot"
+            if (-1 < note && note < 128) {
+                notes << note;
+            }
+        }
+        d->zynthianOutputs[zynthianChannel]->setAcceptedNotes(notes);
+        d->zynthianOutputs[zynthianChannel]->setTransposeAmount(rootNote - 60);
+    }
+}
+
 void MidiRouter::setExpressiveSplitPoint(const int& splitPoint)
 {
     if (d->expressiveSplitPoint != std::clamp(splitPoint, -1, 15)) {

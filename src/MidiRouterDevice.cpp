@@ -41,6 +41,7 @@ public:
     // Also use this after calling the above and processing outgoing events
     inline const void deviceToZynthbox(jack_midi_event_t *event) const;
 
+    int transposeAmount{0};
     int acceptsNote[128];
     int acceptsChannel[16];
     int lastAcceptedChannel{15};
@@ -153,6 +154,8 @@ void MidiRouterDevice::writeEventToOutput(jack_midi_event_t& event, int outputCh
             outputChannel = d->lastAcceptedChannel;
             event.buffer[0] = event.buffer[0] - eventChannel + outputChannel;
         }
+        const jack_midi_data_t untransposedNote{event.buffer[1]};
+        event.buffer[1] = std::clamp(int(event.buffer[1]) + d->transposeAmount, 0, 127);
         int errorCode = jack_midi_event_write(d->outputBuffer, event.time, event.buffer, event.size);
         if (errorCode == -EINVAL) {
             // If the error invalid happens, we should likely assume the event was out of order for whatever reason, and just schedule it at the same time as the most recently scheduled event
@@ -161,6 +164,7 @@ void MidiRouterDevice::writeEventToOutput(jack_midi_event_t& event, int outputCh
             #endif
             errorCode = jack_midi_event_write(d->outputBuffer, d->mostRecentOutputTime, event.buffer, event.size);
         }
+        event.buffer[1] = untransposedNote;
         if (errorCode != 0) {
             if (errorCode == -ENOBUFS) {
                 qWarning() << Q_FUNC_INFO << "Ran out of space while writing events!";
@@ -387,6 +391,11 @@ void MidiRouterDevice::setAcceptedNotes(const QList<int> notes, bool accepted, b
 void MidiRouterDevice::setAcceptsNote(const int& note, bool accepted)
 {
     d->acceptsNote[std::clamp(note, 0, 127)] = accepted;
+}
+
+void MidiRouterDevice::setTransposeAmount(int transposeAmount)
+{
+    d->transposeAmount = transposeAmount;
 }
 
 void MidiRouterDevice::setAcceptedMidiChannels(const QList<int>& acceptedMidiChannels)
