@@ -492,6 +492,8 @@ void SegmentHandler::startPlayback(qint64 startOffset, quint64 duration)
     // If we're starting with a new playfield anyway, we want to ensure the first movement also catches that first position, so start counting for the playhead at a logical -1 position with nothing on it
     d->playhead = -1;
     d->playheadSegment = -1;
+    // Since SegmentHandler works directly on the current data, ensure PlayfieldManager is in a correctly stopped state before operating on it
+    PlayfieldManager::instance()->stopPlayback();
     d->movePlayhead(startOffset, true);
     if (d->duration > 0) {
         if (duration > 0) {
@@ -527,6 +529,7 @@ void SegmentHandler::stopPlayback()
     }
     d->playGridManager->stopMetronome();
     d->movePlayhead(-1, true);
+    PlayfieldManager::instance()->stopPlayback();
     d->songMode = false;
     Q_EMIT songModeChanged();
 }
