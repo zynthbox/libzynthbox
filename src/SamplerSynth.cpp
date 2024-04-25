@@ -752,8 +752,9 @@ void SamplerSynth::handleClipCommand(ClipCommand *clipCommand, quint64 currentTi
         } else {
             qWarning() << Q_FUNC_INFO << "Big problem! Attempted to add a clip command to the queue, but we've not handled the one that's already in the queue.";
         }
-    } else {
-        qWarning() << Q_FUNC_INFO << "Unknown clip" << clipCommand->clip << "or unacceptable midi channel" << clipCommand->midiChannel;
+    // } else {
+        // Since debugging things out will attempt to read data out of the object, and the thing might've disappeared, so... let's probably avoid that
+        // qWarning() << Q_FUNC_INFO << "Unknown clip" << clipCommand->clip << "or unacceptable midi channel" << clipCommand->midiChannel;
     }
 }
 
