@@ -79,6 +79,7 @@ public:
         : q(q)
     {
         barLength = syncTimer->getMultiplier() * 4;
+        nextBarState.reset(-1);
     }
     ~PlayfieldManagerPrivate() {}
     PlayfieldManager *q{nullptr};
