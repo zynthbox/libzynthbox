@@ -49,7 +49,7 @@ public:
         : QObject(parent)
         , q(parent)
     {
-        connect(q, &SequenceModel::sceneIndexChanged, this, &ZLSequenceSynchronisationManager::selectedTrackIndexChanged, Qt::QueuedConnection);
+        connect(q, &SequenceModel::sceneIndexChanged, this, &ZLSequenceSynchronisationManager::selectedSketchpadSongIndexChanged, Qt::QueuedConnection);
         // This actually means current /channel/ changed, the channel index and our current midi channel are the same number
         connect(q->playGridManager(), &PlayGridManager::currentMidiChannelChanged, this, &ZLSequenceSynchronisationManager::currentMidiChannelChanged, Qt::QueuedConnection);
     };
@@ -103,25 +103,25 @@ public:
             }
             zlScenesModel = newZlScenesModel;
             if (zlScenesModel) {
-                connect(zlScenesModel, SIGNAL(selected_track_index_changed()), this, SLOT(selectedTrackIndexChanged()), Qt::QueuedConnection);
-                selectedTrackIndexChanged();
+                connect(zlScenesModel, SIGNAL(selected_sketchpad_song_index_changed()), this, SLOT(selectedSketchpadSongIndexChanged()), Qt::QueuedConnection);
+                selectedSketchpadSongIndexChanged();
             }
         }
     }
 
     void updateShouldMakeSounds() {
         if (zlMetronomeManager && zlScenesModel) {
-            const int selectedTrackIndex = zlScenesModel->property("selectedTrackIndex").toInt();
+            const int selectedSketchpadSongIndex = zlScenesModel->property("selectedSketchpadSongIndex").toInt();
             const bool isRecording = zlMetronomeManager->property("isRecording").toBool();
             const bool recordSolo = zlMetronomeManager->property("recordSolo").toBool();
-            q->setShouldMakeSounds(selectedTrackIndex == q->sceneIndex() && (!isRecording or (isRecording && !recordSolo)));
+            q->setShouldMakeSounds(selectedSketchpadSongIndex == q->sceneIndex() && (!isRecording or (isRecording && !recordSolo)));
         }
     }
 public Q_SLOTS:
     void scenesModelChanged() {
         setZlScenesModel(zlSong->property("scenesModel").value<QObject*>());
     }
-    void selectedTrackIndexChanged() {
+    void selectedSketchpadSongIndexChanged() {
         updateShouldMakeSounds();
     }
     void isRecordingChanged() {
