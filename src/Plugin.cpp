@@ -24,6 +24,7 @@
 #include <iostream>
 #include <chrono>
 #include <jack/jack.h>
+#include <QCoreApplication>
 #include <QDebug>
 #include <QTimer>
 #include <QtQml/qqml.h>
@@ -171,6 +172,9 @@ void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QS
 
 void Plugin::initialize()
 {
+    QCoreApplication::setOrganizationName("zynthbox");
+    QCoreApplication::setApplicationName("libzynthbox");
+
     // qInstallMessageHandler(myMessageOutput);
     qDebug() << "libzynthbox Initialisation Started";
     juceEventLoop.start();
