@@ -464,11 +464,18 @@ public:
         noteDataPoolReadHead = noteDataPoolWriteHead = noteDataPool;
 
         beatSubdivision = syncTimer->getMultiplier();
+        beatSubdivision0 = beatSubdivision * 2;
+        beatSubdivisionNeg1 = beatSubdivision * 2;
         beatSubdivision2 = beatSubdivision / 2;
         beatSubdivision3 = beatSubdivision2 / 2;
         beatSubdivision4 = beatSubdivision3 / 2;
         beatSubdivision5 = beatSubdivision4 / 2;
         beatSubdivision6 = beatSubdivision5 / 2;
+        // beatSubdivision3 is the "one note length" measure
+        beatSubdivisionFiveQuarter = beatSubdivision3 * 5 / 4;
+        beatSubdivisionThreeQuarter = beatSubdivision3 * 3 / 4;
+        beatSubdivisionThird = beatSubdivision3 / 3;
+        beatSubdivisionTriple = beatSubdivision3 * 3;
         patternTickToSyncTimerTick = beatSubdivision6;
     }
     ~Private() {
@@ -501,6 +508,12 @@ public:
     qint64 mostRecentStartTimestamp{0};
 
     void noteLengthDetails(int noteLength, qint64 &nextPosition, bool &relevantToUs, qint64 &noteDuration);
+    int beatSubdivisionNeg1{0};
+    int beatSubdivisionThreeQuarter{0};
+    int beatSubdivisionFiveQuarter{0};
+    int beatSubdivisionThird{0};
+    int beatSubdivisionTriple{0};
+    int beatSubdivision0{0};
     int beatSubdivision{0};
     int beatSubdivision2{0};
     int beatSubdivision3{0};
@@ -1913,11 +1926,38 @@ inline void PatternModel::Private::noteLengthDetails(int noteLength, qint64 &nex
     // Potentially it'd be tempting to try and optimise this manually to use bitwise operators,
     // but GCC already does that for you at -O2, so don't bother :)
     switch (noteLength) {
+    case -1:
+        if (nextPosition % beatSubdivisionNeg1 == 0) {
+            relevantToUs = true;
+            nextPosition = nextPosition / beatSubdivisionNeg1;
+            noteDuration = 64;
+        } else {
+            relevantToUs = false;
+        }
+        break;
+    case 0:
+        if (nextPosition % beatSubdivision0 == 0) {
+            relevantToUs = true;
+            nextPosition = nextPosition / beatSubdivision0;
+            noteDuration = 64;
+        } else {
+            relevantToUs = false;
+        }
+        break;
     case 1:
         if (nextPosition % beatSubdivision == 0) {
             relevantToUs = true;
             nextPosition = nextPosition / beatSubdivision;
             noteDuration = 32;
+        } else {
+            relevantToUs = false;
+        }
+        break;
+    case 8:
+        if (nextPosition % beatSubdivisionThird == 0) {
+            relevantToUs = true;
+            nextPosition = nextPosition / beatSubdivisionThird;
+            noteDuration = 24;
         } else {
             relevantToUs = false;
         }
@@ -1931,6 +1971,15 @@ inline void PatternModel::Private::noteLengthDetails(int noteLength, qint64 &nex
             relevantToUs = false;
         }
         break;
+    case 7:
+        if (nextPosition % beatSubdivisionThreeQuarter == 0) {
+            relevantToUs = true;
+            nextPosition = nextPosition / beatSubdivisionThreeQuarter;
+            noteDuration = 12;
+        } else {
+            relevantToUs = false;
+        }
+        break;
     case 3:
         if (nextPosition % beatSubdivision3 == 0) {
             relevantToUs = true;
@@ -1940,11 +1989,29 @@ inline void PatternModel::Private::noteLengthDetails(int noteLength, qint64 &nex
             relevantToUs = false;
         }
         break;
+    case 9:
+        if (nextPosition % beatSubdivisionFiveQuarter == 0) {
+            relevantToUs = true;
+            nextPosition = nextPosition / beatSubdivisionFiveQuarter;
+            noteDuration = 6;
+        } else {
+            relevantToUs = false;
+        }
+        break;
     case 4:
         if (nextPosition % beatSubdivision4 == 0) {
             relevantToUs = true;
             nextPosition = nextPosition / beatSubdivision4;
             noteDuration = 4;
+        } else {
+            relevantToUs = false;
+        }
+        break;
+    case 10:
+        if (nextPosition % beatSubdivisionTriple == 0) {
+            relevantToUs = true;
+            nextPosition = nextPosition / beatSubdivisionTriple;
+            noteDuration = 3;
         } else {
             relevantToUs = false;
         }
