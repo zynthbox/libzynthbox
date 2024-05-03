@@ -496,6 +496,7 @@ public:
     int noteLength{3};
     int swing{0};
     int availableBars{1};
+    int patternLength{16};
     int activeBar{0};
     int bankOffset{0};
     int bankLength{8};
@@ -575,7 +576,7 @@ public:
             const int basePosition = (row * width) + column;
             for (int subsequentNoteIndex = 0; subsequentNoteIndex < lookaheadAmount; ++subsequentNoteIndex) {
                 // We clear backwards, just because might as well (by subtracting the subsequentNoteIndex from our base position)
-                int ourPosition = (basePosition - subsequentNoteIndex) % (availableBars * width);
+                int ourPosition = (basePosition - subsequentNoteIndex) % patternLength;
                 stepData.remove(ourPosition);
             }
         }
@@ -598,7 +599,7 @@ public:
             const int basePosition = (row * width) + column;
             for (int subsequentNoteIndex = 0; subsequentNoteIndex < lookaheadAmount; ++subsequentNoteIndex) {
                 // We clear backwards, just because might as well (by subtracting the subsequentNoteIndex from our base position)
-                int ourPosition = (basePosition - subsequentNoteIndex) % (availableBars * width);
+                int ourPosition = (basePosition - subsequentNoteIndex) % patternLength;
                 stepData[ourPosition].positionBuffers.clear();
                 stepData[ourPosition].isValid = false;
             }
@@ -621,7 +622,7 @@ public:
             const int basePosition = (row * width) + column;
             for (int subsequentNoteIndex = 0; subsequentNoteIndex < lookaheadAmount; ++subsequentNoteIndex) {
                 // We clear backwards, just because might as well (by subtracting the subsequentNoteIndex from our base position)
-                int ourPosition = (basePosition - subsequentNoteIndex) % (availableBars * width);
+                int ourPosition = (basePosition - subsequentNoteIndex) % patternLength;
                 stepData[ourPosition].probabilitySequences.clear();
             }
         }
@@ -785,7 +786,7 @@ PatternModel::PatternModel(SequenceModel* parent)
     connect(this, &PatternModel::layerDataChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::noteLengthChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::swingChanged, this, &NotesModel::registerChange);
-    connect(this, &PatternModel::availableBarsChanged, this, &NotesModel::registerChange);
+    connect(this, &PatternModel::patternLengthChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::activeBarChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::bankOffsetChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::bankLengthChanged, this, &NotesModel::registerChange);
@@ -895,7 +896,7 @@ void PatternModel::cloneOther(PatternModel *otherPattern)
         setHeight(otherPattern->height());
         setLayerData(otherPattern->layerData());
         setNoteLength(otherPattern->noteLength());
-        setAvailableBars(otherPattern->availableBars());
+        setPatternLength(otherPattern->patternLength());
         setActiveBar(otherPattern->activeBar());
         setBankOffset(otherPattern->bankOffset());
         setBankLength(otherPattern->bankLength());
@@ -1112,7 +1113,7 @@ void PatternModel::resetPattern(bool clearNotes)
     setDefaultNoteDuration(0);
     setNoteLength(3);
     setSwing(50);
-    setAvailableBars(1);
+    setPatternLength(16);
     setBankOffset(0);
     setBankLength(8);
     setGridModelStartNote(48);
@@ -1365,20 +1366,26 @@ int PatternModel::swing() const
     return d->swing;
 }
 
-void PatternModel::setAvailableBars(int availableBars)
+int PatternModel::availableBars() const
 {
-    int adjusted = qMin(qMax(1, availableBars), bankLength());
-    if (d->availableBars != adjusted) {
-        d->availableBars = adjusted;
-        Q_EMIT availableBarsChanged();
+    return d->availableBars;
+}
+
+void PatternModel::setPatternLength(const int& patternLength)
+{
+    int adjusted = qMin(qMax(1, patternLength), bankLength() * d->width);
+    if (d->patternLength != adjusted) {
+        d->patternLength = adjusted;
+        d->availableBars = ((d->patternLength - 1) / d->width) + 1;
+        Q_EMIT patternLengthChanged();
         // Ensure that we don't have an active bar that's outside our available range
         setActiveBar(qMin(d->activeBar, d->availableBars - 1));
     }
 }
 
-int PatternModel::availableBars() const
+int PatternModel::patternLength() const
 {
-    return d->availableBars;
+    return d->patternLength;
 }
 
 void PatternModel::setActiveBar(int activeBar)
@@ -1438,7 +1445,7 @@ void PatternModel::setBankLength(int bankLength)
         d->bankLength = bankLength;
         Q_EMIT bankLengthChanged();
         // Ensure that the available bars are not outside the number of bars available in a bank
-        setAvailableBars(d->availableBars);
+        setPatternLength(d->patternLength);
     }
 }
 
@@ -2064,9 +2071,9 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
 
             if (relevantToUs) {
                 // Get the next row/column combination, and schedule the previous one off, and the next one on
-                // squish nextPosition down to fit inside our available range (d->availableBars * d->width)
+                // squish nextPosition down to fit inside our available range d->patternLength
                 // start + (numberToBeWrapped - start) % (limit - start)
-                nextPosition = nextPosition % (d->availableBars * d->width);
+                nextPosition = nextPosition % d->patternLength;
                 // If we have any kind of probability involved in this step (including the look-ahead), we'll
                 // need to clear it immediately, so that probability is also taken into account for the next
                 // time it's due for scheduling
@@ -2093,7 +2100,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                 --nextStep;
                                 // Reset this clip's playfield offset by the distance from this clip to the clip we are asking to play
                                 // next (or, rather, move it forward to the end of the pattern, and then set it to the next step)
-                                nextStep = ((d->availableBars * d->width) - nextPosition + nextStep) * noteDuration;
+                                nextStep = (d->patternLength - nextPosition + nextStep) * noteDuration;
                                 d->playfieldManager->setClipPlaystate(d->song, d->sketchpadTrack, d->partIndex, PlayfieldManager::PlayingState, PlayfieldManager::CurrentPosition, d->playfieldManager->clipOffset(d->song, d->sketchpadTrack, d->partIndex) + nextStep);
                             }
                             const int velocity{metaHash.value(velocityString, 64).toInt()};
@@ -2164,7 +2171,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                     // Do a lookup for any notes after this position that want playing before their step (currently
                     // just looking ahead two steps, accounting for delay and swing both adjusting one step backwards)
                     for (int subsequentStepIndex = 0; subsequentStepIndex < d->lookaheadAmount; ++subsequentStepIndex) {
-                        const int ourPosition = (nextPosition + subsequentStepIndex) % (d->availableBars * d->width);
+                        const int ourPosition = (nextPosition + subsequentStepIndex) % d->patternLength;
                         StepData &subsequentStep = d->getOrCreateStepData(ourPosition);
                         // Swing is applied to every even step as counted by humans (so every uneven step as counted by our indices)
                         subsequentStep.updateSwing(noteDuration, ourPosition % 2 == 0 ? 50 : d->swing);
@@ -2262,7 +2269,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                 }
                 if (invalidateNoteBuffersImmediately) {
                     for (int subsequentNoteIndex = 0; subsequentNoteIndex < d->lookaheadAmount; ++subsequentNoteIndex) {
-                        const int ourPosition = (nextPosition + subsequentNoteIndex) % (d->availableBars * d->width);
+                        const int ourPosition = (nextPosition + subsequentNoteIndex) % d->patternLength;
                         const int row = (ourPosition / d->width) % d->availableBars;
                         const int column = ourPosition - (row * d->width);
                         d->invalidateNotes(row, column);
@@ -2286,7 +2293,7 @@ void PatternModel::updateSequencePosition(qint64 sequencePosition)
         d->noteLengthDetails(d->noteLength, nextPosition, relevantToUs, noteDuration);
 
         if (relevantToUs) {
-            nextPosition = nextPosition % (d->availableBars * d->width);
+            nextPosition = nextPosition % d->patternLength;
             int row = (nextPosition / d->width) % d->availableBars;
             int column = nextPosition - (row * d->width);
             d->playingRow = row + d->bankOffset;

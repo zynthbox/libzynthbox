@@ -138,7 +138,13 @@ class PatternModel : public NotesModel
      * The minimum number is 1, and the maximum is bankLength
      * @default 1
      */
-    Q_PROPERTY(int availableBars READ availableBars WRITE setAvailableBars NOTIFY availableBarsChanged)
+    Q_PROPERTY(int availableBars READ availableBars NOTIFY patternLengthChanged)
+    /**
+     * \brief The number of steps in the pattern which should be considered for playback
+     * The minimum number is 1, and the maximum is bankLength * width
+     * @default 16 (equivalent to bankLength)
+     */
+    Q_PROPERTY(int patternLength READ patternLength WRITE setPatternLength NOTIFY patternLengthChanged)
     /**
      * \brief Which bar (row) should be considered current
      * This will be clamped to the available range (the lowest value is 0, maximum is height-1)
@@ -407,7 +413,7 @@ public:
      * - defaultNoteDuration
      * - noteLength
      * - swing
-     * - availableBars
+     * - patternLength
      * - bankOffset (and consequently bank)
      * - bankLength
      * - gridModelStartNote
@@ -509,9 +515,10 @@ public:
     int swing() const;
     Q_SIGNAL void swingChanged();
 
-    void setAvailableBars(int availableBars);
     int availableBars() const;
-    Q_SIGNAL void availableBarsChanged();
+    void setPatternLength(const int &patternLength);
+    int patternLength() const;
+    Q_SIGNAL void patternLengthChanged();
 
     void setActiveBar(int activeBar);
     int activeBar() const;

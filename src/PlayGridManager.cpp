@@ -838,7 +838,7 @@ QString PlayGridManager::modelToJson(const QObject* model) const
         modelObject["defaultNoteDuration"] = patternModel->defaultNoteDuration();
         modelObject["noteLength"] = patternModel->noteLength();
         modelObject["swing"] = patternModel->swing();
-        modelObject["availableBars"] = patternModel->availableBars();
+        modelObject["patternLength"] = patternModel->patternLength();
         modelObject["activeBar"] = patternModel->activeBar();
         modelObject["bankOffset"] = patternModel->bankOffset();
         modelObject["bankLength"] = patternModel->bankLength();
@@ -895,7 +895,11 @@ void PlayGridManager::setModelFromJson(QObject* model, const QString& json)
             pattern->setHeight(patternObject.value("height").toInt());
             pattern->setWidth(patternObject.value("width").toInt());
             pattern->setNoteLength(patternObject.value("noteLength").toInt());
-            pattern->setAvailableBars(patternObject.value("availableBars").toInt());
+            if (patternObject.contains("patternLength")) {
+                pattern->setPatternLength(patternObject.value("patternLength").toInt());
+            } else {
+                pattern->setPatternLength(patternObject.value("availableBars").toInt() * pattern->width());
+            }
             pattern->setActiveBar(patternObject.value("activeBar").toInt());
             pattern->setBankOffset(patternObject.value("bankOffset").toInt());
             pattern->setBankLength(patternObject.value("bankLength").toInt());
