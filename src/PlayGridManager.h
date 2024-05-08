@@ -60,7 +60,6 @@ class PlayGridManager : public QObject
      */
     Q_PROPERTY(int sequenceEditorIndex READ sequenceEditorIndex NOTIFY sequenceEditorIndexChanged)
 
-    Q_PROPERTY(QVariantMap dashboardModels READ dashboardModels NOTIFY dashboardModelsChanged)
     /**
      * \brief A way to set the pitch shift value (between -8192 and 8191, 0 being no shift)
      */
@@ -88,10 +87,6 @@ class PlayGridManager : public QObject
      */
     Q_PROPERTY(QStringList hardwareOutActiveNotes READ hardwareOutActiveNotes NOTIFY hardwareOutActiveNotesChanged)
 
-    /**
-     * \brief The global instance of Sketchpad' session dashboard
-     */
-    Q_PROPERTY(QObject* zlDashboard READ zlDashboard WRITE setZlDashboard NOTIFY zlDashboardChanged)
     /**
      * \brief The global instance of the core Sketchpad gui control object
      */
@@ -130,12 +125,6 @@ public:
     QVariantMap currentPlaygrids() const;
     Q_SIGNAL void currentPlaygridsChanged();
     Q_INVOKABLE void setCurrentPlaygrid(const QString &section, int index);
-
-    QVariantMap dashboardModels() const;
-    Q_SIGNAL void dashboardModelsChanged();
-    Q_INVOKABLE void pickDashboardModelItem(QObject* model, int index);
-    Q_SIGNAL void dashboardItemPicked(QObject* model, int index);
-    void registerDashboardModel(const QString &playgrid, QObject* model);
 
     int pitch() const;
     void setPitch(int pitch);
@@ -308,10 +297,6 @@ public:
     Q_SIGNAL void hardwareInActiveNotesChanged();
     QStringList hardwareOutActiveNotes() const;
     Q_SIGNAL void hardwareOutActiveNotesChanged();
-
-    QObject *zlDashboard() const;
-    void setZlDashboard(QObject *zlDashboard);
-    Q_SIGNAL void zlDashboardChanged();
 
     QObject *zlSketchpad() const;
     void setZlSketchpad(QObject *zlSketchpad);

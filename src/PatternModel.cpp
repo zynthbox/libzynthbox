@@ -93,7 +93,6 @@ public:
     QObject *zlChannel{nullptr};
     QObject *zlPart{nullptr};
     QObject *zlScene{nullptr};
-    QObject *zlDashboard{nullptr};
     QTimer *layerDataPuller{nullptr};
 
     bool channelMuted{false};
@@ -161,19 +160,6 @@ public:
         }
     }
 
-    void setZlDashboard(QObject *newZlDashboard) {
-        if (zlDashboard != newZlDashboard) {
-            if (zlDashboard) {
-                zlDashboard->disconnect(this);
-            }
-            zlDashboard = newZlDashboard;
-            if (zlDashboard) {
-                connect(zlDashboard, SIGNAL(selected_channel_changed()), this, SLOT(selectedPartChanged()), Qt::QueuedConnection);
-                selectedPartChanged();
-            }
-        }
-    }
-
     Q_SIGNAL void recordingPopupActiveChanged();
 
 public Q_SLOTS:
@@ -213,10 +199,9 @@ public Q_SLOTS:
     }
     void selectedPartChanged() {
         SequenceModel *sequence = qobject_cast<SequenceModel*>(q->sequence());
-        if (sequence && zlChannel && zlDashboard) {
-            const int channelId{zlDashboard->property("selectedChannel").toInt()};
+        if (sequence && zlChannel) {
             const int selectedPart{zlChannel->property("selectedPart").toInt()};
-            sequence->setActiveChannel(channelId, selectedPart);
+            sequence->setActiveChannel(PlayGridManager::instance()->currentMidiChannel(), selectedPart);
         }
     }
     void updateSamples() {
@@ -453,7 +438,7 @@ public:
     Private(PatternModel *q) : q(q) {
         playGridManager = PlayGridManager::instance();
         playfieldManager = PlayfieldManager::instance();
-        syncTimer = qobject_cast<SyncTimer*>(playGridManager->syncTimer());
+        syncTimer = SyncTimer::instance();
 
         NoteDataPoolEntry* noteDataPrevious{&noteDataPool[NoteDataPoolSize - 1]};
         for (quint64 i = 0; i < NoteDataPoolSize; ++i) {
@@ -1885,19 +1870,6 @@ QObject *PatternModel::zlScene() const
 void PatternModel::setZlScene(QObject *zlScene)
 {
     d->zlSyncManager->setZlScene(zlScene);
-}
-
-QObject *PatternModel::zlDashboard() const
-{
-    return d->zlSyncManager->zlDashboard;
-}
-
-void PatternModel::setZlDashboard(QObject *zlDashboard)
-{
-    if (d->zlSyncManager->zlDashboard != zlDashboard) {
-        d->zlSyncManager->setZlDashboard(zlDashboard);
-        Q_EMIT zlDashboardChanged();
-    }
 }
 
 int PatternModel::playingRow() const

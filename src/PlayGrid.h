@@ -51,19 +51,6 @@ class PlayGrid : public QQuickItem
      * @default false
      */
     Q_PROPERTY(bool isSequencer READ isSequencer WRITE setIsSequencer NOTIFY isSequencerChanged)
-    /**
-     * \brief If defined, a model which should be used to display items in the Dashboard's Patterns column
-     *
-     * This model must have at least a role named "text", which is the display text shown as the
-     * title for the listview's item on the Dashboard.
-     *
-     * You should consider using getNamedInstance for this model, to ensure that it is synchronised correctly
-     * across PlayGrid instances.
-     *
-     * @see PlayGridManager::dashboardItemPicked
-     * @see getNamedInstance()
-     */
-    Q_PROPERTY(QObject* dashboardModel READ dashboardModel WRITE setDashboardModel NOTIFY dashboardModelChanged)
 
     /**
      * \brief A way to set the pitch shift value (between -8192 and 8191, 0 being no shift)
@@ -270,10 +257,6 @@ public:
     bool isSequencer() const;
     void setIsSequencer(bool isSequencer);
     Q_SIGNAL void isSequencerChanged();
-
-    QObject *dashboardModel() const;
-    void setDashboardModel(QObject *model);
-    Q_SIGNAL void dashboardModelChanged();
 
     int pitch() const;
     void setPitch(int pitch);

@@ -83,21 +83,7 @@ public:
     {
     };
     PlayGridManager *q{nullptr};
-    QObject *zlDashboard{nullptr};
     QObject *zlSketchpad{nullptr};
-
-    void setZlDashboard(QObject *newZlDashboard) {
-        if (zlDashboard != newZlDashboard) {
-            if (zlDashboard) {
-                zlDashboard->disconnect(this);
-            }
-            zlDashboard = newZlDashboard;
-            if (zlDashboard) {
-                connect(zlDashboard, SIGNAL(selected_channel_changed()), this, SLOT(selectedChannelChanged()), Qt::QueuedConnection);
-                selectedChannelChanged();
-            }
-        }
-    }
     void setZlSketchpad(QObject *newZlSketchpad) {
         if (zlSketchpad != newZlSketchpad) {
             if (zlSketchpad) {
@@ -105,14 +91,16 @@ public:
             }
             zlSketchpad = newZlSketchpad;
             if (zlSketchpad) {
+                connect(zlSketchpad, SIGNAL(selected_track_id_changed()), this, SLOT(selectedChannelChanged()), Qt::QueuedConnection);
+                selectedChannelChanged();
             }
         }
     }
 public Q_SLOTS:
     void selectedChannelChanged() {
-        if (zlDashboard) {
-            const int selectedChannel = zlDashboard->property("selectedChannel").toInt();
-            q->setCurrentMidiChannel(selectedChannel);
+        if (zlSketchpad) {
+            const int selectedTrackId = zlSketchpad->property("selectedTrackId").toInt();
+            q->setCurrentMidiChannel(selectedTrackId);
             SyncTimer::instance()->sendProgramChangeImmediately(MidiRouter::instance()->masterChannel(), 64);
         }
     }
@@ -228,7 +216,6 @@ public:
     QStringList playgrids;
     QVariantMap currentPlaygrids;
     QString preferredSequencer;
-    QVariantMap dashboardModels;
     int pitch{0};
     int modulation{0};
     QHash<QString, SequenceModel*> sequenceModels;
@@ -494,28 +481,6 @@ void PlayGridManager::setCurrentPlaygrid(const QString& section, int index)
     if (!d->currentPlaygrids.contains(section) || d->currentPlaygrids[section] != index) {
         d->currentPlaygrids[section] = index;
         Q_EMIT currentPlaygridsChanged();
-    }
-}
-
-QVariantMap PlayGridManager::dashboardModels() const
-{
-    return d->dashboardModels;
-}
-
-void PlayGridManager::pickDashboardModelItem(QObject* model, int index)
-{
-    Q_EMIT dashboardItemPicked(model, index);
-}
-
-void PlayGridManager::registerDashboardModel(const QString &playgrid, QObject* model)
-{
-    if (!d->dashboardModels.contains(playgrid)) {
-        d->dashboardModels[playgrid] = QVariant::fromValue<QObject*>(model);
-        connect(model, &QObject::destroyed, this, [this, playgrid](){
-            d->dashboardModels.remove(playgrid);
-            Q_EMIT dashboardModelsChanged();
-        });
-        Q_EMIT dashboardModelsChanged();
     }
 }
 
@@ -1072,19 +1037,6 @@ void PlayGridManager::midiMessageToClipCommands(ClipCommandRing *listToPopulate,
     }
 }
 
-QObject *PlayGridManager::zlDashboard() const
-{
-    return d->zlSyncManager->zlDashboard;
-}
-
-void PlayGridManager::setZlDashboard(QObject *zlDashboard)
-{
-    if (d->zlSyncManager->zlDashboard != zlDashboard) {
-        d->zlSyncManager->setZlDashboard(zlDashboard);
-        Q_EMIT zlDashboardChanged();
-    }
-}
-
 QObject * PlayGridManager::zlSketchpad() const
 {
     return d->zlSyncManager->zlSketchpad;
@@ -1120,6 +1072,11 @@ void PlayGridManager::scheduleNote(unsigned char midiNote, unsigned char midiCha
     if (d->syncTimer /*&& midiChannel >= 0*/ && midiChannel <= 15) {
         d->syncTimer->scheduleNote(midiNote, midiChannel, setOn, velocity, duration, delay);
     }
+}
+
+QObject * PlayGridManager::syncTimer()
+{
+    return d->syncTimer;
 }
 
 void PlayGridManager::handleMetronomeTick(int beat)
@@ -1187,11 +1144,6 @@ int PlayGridManager::metronomeBeat64th() const
 int PlayGridManager::metronomeBeat128th() const
 {
     return d->metronomeBeat128th;
-}
-
-QObject* PlayGridManager::syncTimer()
-{
-    return d->syncTimer;
 }
 
 void hookUpAndMaybeStartTimer(PlayGridManager* pgm, bool startTimer = false)
