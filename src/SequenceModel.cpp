@@ -692,7 +692,7 @@ void SequenceModel::clear()
         if (pattern) {
             pattern->clear();
             pattern->setLayerData("");
-            pattern->setNoteLength(3);
+            pattern->setStepLength(24);
             pattern->setPatternLength(pattern->width());
             pattern->setActiveBar(0);
             pattern->setBankOffset(0);

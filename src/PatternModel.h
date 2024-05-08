@@ -111,17 +111,11 @@ class PatternModel : public NotesModel
      */
     Q_PROPERTY(int defaultNoteDuration READ defaultNoteDuration WRITE setDefaultNoteDuration NOTIFY defaultNoteDurationChanged)
     /**
-     * \brief The duration of a note in the pattern (the subdivision used to determine the speed of playback)
-     * Values from 1 through 6, which each translate to the following:
-     * 1: quarter
-     * 2: half
-     * 3: normal
-     * 4: double
-     * 5: quadruple
-     * 6: octuple
-     * @default 3
+     * \brief The duration of a single step in 96th of a beat (384th of a bar)
+     * @see nextStepLengthStep(double, int)
+     * @default 24.0
      */
-    Q_PROPERTY(int noteLength READ noteLength WRITE setNoteLength NOTIFY noteLengthChanged)
+    Q_PROPERTY(double stepLength READ stepLength WRITE setStepLength NOTIFY stepLengthChanged)
     /**
      * \brief A value in percent of step length defining how far each even step in the pattern will be offset during playback
      * @note If this is set to 0, the value will in fact be set to 0 (being the logical "reset" position)
@@ -411,7 +405,7 @@ public:
      * - height
      * - externalMidiChannel
      * - defaultNoteDuration
-     * - noteLength
+     * - stepLength
      * - swing
      * - patternLength
      * - bankOffset (and consequently bank)
@@ -507,9 +501,25 @@ public:
     int defaultNoteDuration() const;
     Q_SIGNAL void defaultNoteDurationChanged();
 
-    void setNoteLength(int noteLength);
-    int noteLength() const;
-    Q_SIGNAL void noteLengthChanged();
+    void setStepLength(const double &stepLength);
+    double stepLength() const;
+    Q_SIGNAL void stepLengthChanged();
+    /**
+     * \brief Get a reasonable human-readable name for the given step length
+     * @param stepLength The interval you wish to get a human-readable name for
+     * @return A human-readable name for the given step length
+     */
+    Q_INVOKABLE QString stepLengthName(const double &stepLength) const;
+    /**
+     * \brief The next item in the given direction from the given starting point on a list of pre-defined step lengths
+     * If the starting point is a known step, the next step will be returned. If it is between two steps in the
+     * list, the nearest step in the given direction is given. If the starting point is outside the range of the
+     * list, the starting point itself will be returned.
+     * @param startingPoint Some number (which should reasonably be the current value of a pattern's stepLength property)
+     * @param direction A positive value to go up in the list, and zero or negative to go down
+     * @return The next step in the list from the given position
+     */
+    Q_INVOKABLE double nextStepLengthStep(const double &startingPoint, const int &direction) const;
 
     void setSwing(int swing);
     int swing() const;

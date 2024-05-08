@@ -462,21 +462,7 @@ public:
             noteDataPrevious = &noteDataPool[i];
         }
         noteDataPoolReadHead = noteDataPoolWriteHead = noteDataPool;
-
-        beatSubdivision = syncTimer->getMultiplier();
-        beatSubdivision0 = beatSubdivision * 2;
-        beatSubdivisionNeg1 = beatSubdivision * 2;
-        beatSubdivision2 = beatSubdivision / 2;
-        beatSubdivision3 = beatSubdivision2 / 2;
-        beatSubdivision4 = beatSubdivision3 / 2;
-        beatSubdivision5 = beatSubdivision4 / 2;
-        beatSubdivision6 = beatSubdivision5 / 2;
-        // beatSubdivision3 is the "one note length" measure
-        beatSubdivisionFiveQuarter = beatSubdivision3 * 5 / 4;
-        beatSubdivisionThreeQuarter = beatSubdivision3 * 3 / 4;
-        beatSubdivisionThird = beatSubdivision3 / 3;
-        beatSubdivisionTriple = beatSubdivision3 * 3;
-        patternTickToSyncTimerTick = beatSubdivision6;
+        patternTickToSyncTimerTick = syncTimer->getMultiplier() / 32;
     }
     ~Private() {
         for (int i = 0; i < NoteDataPoolSize; ++i) {
@@ -493,7 +479,7 @@ public:
     int externalMidiChannel{-1};
     QString layerData;
     int defaultNoteDuration{0};
-    int noteLength{3};
+    float stepLength{24.0};
     int swing{0};
     int availableBars{1};
     int patternLength{16};
@@ -509,18 +495,6 @@ public:
     qint64 mostRecentStartTimestamp{0};
 
     void noteLengthDetails(int noteLength, qint64 &nextPosition, bool &relevantToUs, qint64 &noteDuration);
-    int beatSubdivisionNeg1{0};
-    int beatSubdivisionThreeQuarter{0};
-    int beatSubdivisionFiveQuarter{0};
-    int beatSubdivisionThird{0};
-    int beatSubdivisionTriple{0};
-    int beatSubdivision0{0};
-    int beatSubdivision{0};
-    int beatSubdivision2{0};
-    int beatSubdivision3{0};
-    int beatSubdivision4{0};
-    int beatSubdivision5{0};
-    int beatSubdivision6{0};
     int patternTickToSyncTimerTick{0};
 
     bool recordingLive{false};
@@ -784,7 +758,7 @@ PatternModel::PatternModel(SequenceModel* parent)
 
     connect(this, &PatternModel::noteDestinationChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::layerDataChanged, this, &NotesModel::registerChange);
-    connect(this, &PatternModel::noteLengthChanged, this, &NotesModel::registerChange);
+    connect(this, &PatternModel::stepLengthChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::swingChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::patternLengthChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::activeBarChanged, this, &NotesModel::registerChange);
@@ -895,7 +869,7 @@ void PatternModel::cloneOther(PatternModel *otherPattern)
         setWidth(otherPattern->width());
         setHeight(otherPattern->height());
         setLayerData(otherPattern->layerData());
-        setNoteLength(otherPattern->noteLength());
+        setStepLength(otherPattern->stepLength());
         setPatternLength(otherPattern->patternLength());
         setActiveBar(otherPattern->activeBar());
         setBankOffset(otherPattern->bankOffset());
@@ -1111,7 +1085,7 @@ void PatternModel::resetPattern(bool clearNotes)
     setNoteDestination(PatternModel::SynthDestination);
     setExternalMidiChannel(-1);
     setDefaultNoteDuration(0);
-    setNoteLength(3);
+    setStepLength(24);
     setSwing(50);
     setPatternLength(16);
     setBankOffset(0);
@@ -1333,18 +1307,58 @@ int PatternModel::defaultNoteDuration() const
     return d->defaultNoteDuration;
 }
 
-void PatternModel::setNoteLength(int noteLength)
+void PatternModel::setStepLength(const double& stepLength)
 {
-    if (d->noteLength != noteLength) {
-        d->noteLength = noteLength;
+    // 384 * 16 == 6144
+    double adjusted = std::clamp(stepLength, 1.0, 6144.0);
+    if (d->stepLength != adjusted) {
+        d->stepLength = adjusted;
         d->invalidatePosition();
-        Q_EMIT noteLengthChanged();
+        Q_EMIT stepLengthChanged();
     }
 }
 
-int PatternModel::noteLength() const
+double PatternModel::stepLength() const
 {
-    return d->noteLength;
+    return d->stepLength;
+}
+
+QString PatternModel::stepLengthName(const double& stepLength) const
+{
+    static const QMap<double, QString> lengthNames{{384, "4"}, {288, "3"}, {192, "2"}, {168, "7/4"}, {160, "5/3"}, {144, "3/2"}, {128, "4/3"}, {120, "5/4"}, {96, "1"}, {64, "2/3"}, {48, "1/2"}, {32, "1/3"}, {24, "1/4"}, {16, "1/6"}, {12, "1/8"}, {8, "1/12"}, {6, "1/16"}, {4, "1/24"}, {3, "1/32"}, {2, "1/48"}, {1, "1/96"}};
+    if (lengthNames.contains(stepLength)) {
+        return lengthNames[stepLength];
+    } else if (stepLength > 96) {
+        const int beatCount{int(stepLength) / 96};
+        return QString::fromUtf8("%1♩%2/96").arg(beatCount).arg(int(stepLength - (beatCount * 96)) % 96);
+    }
+    return QString::fromUtf8("%1/96").arg(stepLength);
+}
+
+double PatternModel::nextStepLengthStep(const double &startingPoint, const int& direction) const
+{
+    static const QList<double> stepLengthSteps{1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 288, 384};
+    double returnValue = startingPoint;
+    if (direction > 0) {
+        // Increasing the step position to the next nearest upward position (or self if there isn't one)
+        int index{0};
+        while (index < stepLengthSteps.count() - 1 && stepLengthSteps[index] <= startingPoint) {
+            ++index;
+        }
+        if (returnValue < stepLengthSteps[index]) {
+            returnValue = stepLengthSteps[index];
+        }
+    } else {
+        // Decreasing the step position to the next nearest downward position (or self if there isn't one)
+        int index{stepLengthSteps.count() - 1};
+        while (index > 0 && stepLengthSteps[index] >= startingPoint) {
+            --index;
+        }
+        if (returnValue > stepLengthSteps[index]) {
+            returnValue = stepLengthSteps[index];
+        }
+    }
+    return returnValue;
 }
 
 void PatternModel::setSwing(int swing)
@@ -1928,117 +1942,14 @@ void addNoteToBuffer(juce::MidiBuffer &buffer, const Note *theNote, unsigned cha
     buffer.addEvent(note, 3, onOrOff);
 }
 
-inline void PatternModel::Private::noteLengthDetails(int noteLength, qint64 &nextPosition, bool &relevantToUs, qint64 &noteDuration)
+inline void PatternModel::Private::noteLengthDetails(int stepLength, qint64 &nextPosition, bool &relevantToUs, qint64 &noteDuration)
 {
-    // Potentially it'd be tempting to try and optimise this manually to use bitwise operators,
-    // but GCC already does that for you at -O2, so don't bother :)
-    switch (noteLength) {
-    case -1:
-        if (nextPosition % beatSubdivisionNeg1 == 0) {
-            relevantToUs = true;
-            nextPosition = nextPosition / beatSubdivisionNeg1;
-            noteDuration = 64;
-        } else {
-            relevantToUs = false;
-        }
-        break;
-    case 0:
-        if (nextPosition % beatSubdivision0 == 0) {
-            relevantToUs = true;
-            nextPosition = nextPosition / beatSubdivision0;
-            noteDuration = 64;
-        } else {
-            relevantToUs = false;
-        }
-        break;
-    case 1:
-        if (nextPosition % beatSubdivision == 0) {
-            relevantToUs = true;
-            nextPosition = nextPosition / beatSubdivision;
-            noteDuration = 32;
-        } else {
-            relevantToUs = false;
-        }
-        break;
-    case 8:
-        if (nextPosition % beatSubdivisionThird == 0) {
-            relevantToUs = true;
-            nextPosition = nextPosition / beatSubdivisionThird;
-            noteDuration = 24;
-        } else {
-            relevantToUs = false;
-        }
-        break;
-    case 2:
-        if (nextPosition % beatSubdivision2 == 0) {
-            relevantToUs = true;
-            nextPosition = nextPosition / beatSubdivision2;
-            noteDuration = 16;
-        } else {
-            relevantToUs = false;
-        }
-        break;
-    case 7:
-        if (nextPosition % beatSubdivisionThreeQuarter == 0) {
-            relevantToUs = true;
-            nextPosition = nextPosition / beatSubdivisionThreeQuarter;
-            noteDuration = 12;
-        } else {
-            relevantToUs = false;
-        }
-        break;
-    case 3:
-        if (nextPosition % beatSubdivision3 == 0) {
-            relevantToUs = true;
-            nextPosition = nextPosition / beatSubdivision3;
-            noteDuration = 8;
-        } else {
-            relevantToUs = false;
-        }
-        break;
-    case 9:
-        if (nextPosition % beatSubdivisionFiveQuarter == 0) {
-            relevantToUs = true;
-            nextPosition = nextPosition / beatSubdivisionFiveQuarter;
-            noteDuration = 6;
-        } else {
-            relevantToUs = false;
-        }
-        break;
-    case 4:
-        if (nextPosition % beatSubdivision4 == 0) {
-            relevantToUs = true;
-            nextPosition = nextPosition / beatSubdivision4;
-            noteDuration = 4;
-        } else {
-            relevantToUs = false;
-        }
-        break;
-    case 10:
-        if (nextPosition % beatSubdivisionTriple == 0) {
-            relevantToUs = true;
-            nextPosition = nextPosition / beatSubdivisionTriple;
-            noteDuration = 3;
-        } else {
-            relevantToUs = false;
-        }
-        break;
-    case 5:
-        if (nextPosition % beatSubdivision5 == 0) {
-            relevantToUs = true;
-            nextPosition = nextPosition / beatSubdivision5;
-            noteDuration = 2;
-        } else {
-            relevantToUs = false;
-        }
-        break;
-    case 6:
+    if (nextPosition % stepLength == 0) {
+        noteDuration = stepLength;
+        nextPosition = nextPosition / stepLength;
         relevantToUs = true;
-        noteDuration = 1;
-        break;
-    default:
-        qWarning() << "Incorrect note length in pattern, no notes will be played from this one, ever";
-        break;
+    } else {
+        relevantToUs = false;
     }
 }
 
@@ -2064,9 +1975,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
             const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->sketchpadTrack, d->partIndex) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
             // check whether the sequencePosition + progressionIncrement matches our note length
             qint64 nextPosition = sequencePosition - playbackOffset + progressionIncrement;
-            d->noteLengthDetails(d->noteLength, nextPosition, relevantToUs, noteDuration);
-            // Since the schedule operates at a higher subdivision than the pattern model, adjust to match
-            noteDuration = noteDuration * d->patternTickToSyncTimerTick;
+            d->noteLengthDetails(d->stepLength, nextPosition, relevantToUs, noteDuration);
             const int schedulingIncrement{progressionIncrement * d->patternTickToSyncTimerTick};
 
             if (relevantToUs) {
@@ -2284,13 +2193,12 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
 
 void PatternModel::updateSequencePosition(qint64 sequencePosition)
 {
-    // Don't play notes on channel 15, because that's the control channel, and we don't want patterns to play to that
     if (isPlaying() || sequencePosition == 0) {
         const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->sketchpadTrack, d->partIndex) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
         bool relevantToUs{false};
         qint64 nextPosition{sequencePosition - playbackOffset};
         qint64 noteDuration{0};
-        d->noteLengthDetails(d->noteLength, nextPosition, relevantToUs, noteDuration);
+        d->noteLengthDetails(d->stepLength, nextPosition, relevantToUs, noteDuration);
 
         if (relevantToUs) {
             nextPosition = nextPosition % d->patternLength;
@@ -2377,14 +2285,15 @@ void ZLPatternSynchronisationManager::addRecordedNote(void *recordedNote)
     qint64 nextPosition{0}; // not relevant
     bool relevantToUs{false}; // not relevant
     qint64 noteDuration{0};
-    q->d->noteLengthDetails(q->noteLength(), nextPosition, relevantToUs, noteDuration);
+    q->d->noteLengthDetails(q->stepLength(), nextPosition, relevantToUs, noteDuration);
+    noteDuration = noteDuration * q->d->patternTickToSyncTimerTick;
 
     // Unless we're in the "all the zoomies" mode where each step is one pattern tick, allow for a deviation of 2 before auto-quantizing
     int deviationAllowance = qMin(qint64(2), noteDuration);
 
     // convert the timer ticks to pattern ticks, and adjust for whatever was the most recent restart of the pattern's playback
-    newNote->timestamp = (newNote->timestamp - quint64(q->d->mostRecentStartTimestamp)) / quint64(q->d->beatSubdivision6);
-    newNote->endTimestamp = (newNote->endTimestamp - quint64(q->d->mostRecentStartTimestamp)) / quint64(q->d->beatSubdivision6);
+    newNote->timestamp = (newNote->timestamp - quint64(q->d->mostRecentStartTimestamp)) / quint64(q->d->patternTickToSyncTimerTick);
+    newNote->endTimestamp = (newNote->endTimestamp - quint64(q->d->mostRecentStartTimestamp)) / quint64(q->d->patternTickToSyncTimerTick);
 
     const int patternLength = q->width() * q->availableBars();
     const double normalisedTimestamp{double(qint64(newNote->timestamp) % (patternLength * noteDuration))};

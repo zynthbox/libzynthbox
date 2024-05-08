@@ -836,7 +836,7 @@ QString PlayGridManager::modelToJson(const QObject* model) const
         // This is informational for displaying in other places (like webconf), and not actually used internally
         modelObject["sketchpadTrack"] = modelObject["midiChannel"] = patternModel->sketchpadTrack();
         modelObject["defaultNoteDuration"] = patternModel->defaultNoteDuration();
-        modelObject["noteLength"] = patternModel->noteLength();
+        modelObject["stepLength"] = patternModel->stepLength();
         modelObject["swing"] = patternModel->swing();
         modelObject["patternLength"] = patternModel->patternLength();
         modelObject["activeBar"] = patternModel->activeBar();
@@ -894,7 +894,12 @@ void PlayGridManager::setModelFromJson(QObject* model, const QString& json)
             setModelFromJson(model, patternObject.value("notes").toString());
             pattern->setHeight(patternObject.value("height").toInt());
             pattern->setWidth(patternObject.value("width").toInt());
-            pattern->setNoteLength(patternObject.value("noteLength").toInt());
+            if (patternObject.contains("noteLength")) {
+                static const QMap<int, int> noteLengthToStepLength{{-1, 384}, {0, 192}, {1, 96}, {2, 48}, {3, 24}, {4, 12}, {5, 6}, {6, 3}};
+                pattern->setStepLength(noteLengthToStepLength.value(patternObject.value("noteLength").toInt(), 24));
+            } else {
+                pattern->setStepLength(patternObject.value("stepLength").toDouble());
+            }
             if (patternObject.contains("patternLength")) {
                 pattern->setPatternLength(patternObject.value("patternLength").toInt());
             } else {
