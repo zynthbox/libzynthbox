@@ -171,11 +171,11 @@ void PatternRunnable::run()
         static const QColor white{"white"};
         // Dark gray dot for "no note, but pattern is enabled"
         static const QColor gray{"darkGray"};
-        // Black dot for "bank is not within availableBars
+        // Black dot for "bar is not within availableBars
         static const QColor black{"black"};
         img.fill(black);
         QPainter painter(&img);
-        painter.fillRect(0, 0, pattern->availableBars() * pattern->width(), height, gray);
+        painter.fillRect(0, 0, pattern->patternLength(), height, gray);
         for (int row = 0; row < pattern->bankLength(); ++row) {
             for (int column = 0; column < pattern->width(); ++column) {
                 if (row < pattern->availableBars()) {
