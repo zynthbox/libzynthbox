@@ -375,6 +375,7 @@ public:
                             passthroughOutputPort->routerDevice->writeEventToOutput(*event);
                         } else {
                             currentTrack = sketchpadTracks[sketchpadTrack];
+                            currentTrack->routerDevice->writeEventToOutput(*event);
                             switch (currentTrack->destination) {
                                 case MidiRouter::ZynthianDestination:
                                     passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
@@ -389,7 +390,6 @@ public:
                                     break;
                                 case MidiRouter::SamplerDestination:
                                     passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
-                                    currentTrack->routerDevice->writeEventToOutput(*event);
                                     currentTrackMirror->writeEventToOutput(*event);
                                     passthroughOutputPort->routerDevice->writeEventToOutput(*event);
                                     break;
