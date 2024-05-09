@@ -105,8 +105,8 @@ public:
             }
             zlChannel = newZlChannel;
             if (zlChannel) {
-                connect(zlChannel, SIGNAL(channel_audio_type_changed()), this, SLOT(channelAudioTypeChanged()), Qt::QueuedConnection);
-                connect(zlChannel, SIGNAL(channel_audio_type_changed()), this, SLOT(updateSamples()), Qt::QueuedConnection);
+                connect(zlChannel, SIGNAL(track_type_changed()), this, SLOT(trackTypeChanged()), Qt::QueuedConnection);
+                connect(zlChannel, SIGNAL(track_type_changed()), this, SLOT(updateSamples()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(externalMidiChannelChanged()), this, SLOT(externalMidiChannelChanged()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(samples_changed()), this, SLOT(updateSamples()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(selectedPartChanged()), this, SLOT(selectedPartChanged()), Qt::QueuedConnection);
@@ -116,7 +116,7 @@ public:
                 connect(zlChannel, SIGNAL(recordingPopupActiveChanged()), this, SIGNAL(recordingPopupActiveChanged()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(mutedChanged()), this, SLOT(mutedChanged()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(samplePickingStyleChanged()), this, SLOT(updateSamples()), Qt::QueuedConnection);
-                channelAudioTypeChanged();
+                trackTypeChanged();
                 externalMidiChannelChanged();
                 updateSamples();
                 selectedPartChanged();
@@ -166,29 +166,29 @@ public Q_SLOTS:
     void sceneEnabledChanged() {
         q->setEnabled(zlScene->property("enabled").toBool());
     }
-    void channelAudioTypeChanged() {
+    void trackTypeChanged() {
         static const QLatin1String sampleTrig{"sample-trig"};
         static const QLatin1String sampleSlice{"sample-slice"};
         static const QLatin1String sampleLoop{"sample-loop"};
         static const QLatin1String external{"external"};
 //         static const QLatin1String synth{"synth"}; // the default
-        const QString channelAudioType = zlChannel->property("channelAudioType").toString();
+        const QString trackType = zlChannel->property("trackType").toString();
         TimerCommand* timerCommand = syncTimer->getTimerCommand();
         timerCommand->operation = TimerCommand::SamplerChannelEnabledStateOperation;
         timerCommand->parameter = q->sketchpadTrack();
-        if (channelAudioType == sampleTrig) {
+        if (trackType == sampleTrig) {
             q->setNoteDestination(PatternModel::SampleTriggerDestination);
             timerCommand->parameter2 = true;
-        } else if (channelAudioType == sampleSlice) {
+        } else if (trackType == sampleSlice) {
             q->setNoteDestination(PatternModel::SampleSlicedDestination);
             timerCommand->parameter2 = true;
-        } else if (channelAudioType == sampleLoop) {
+        } else if (trackType == sampleLoop) {
             q->setNoteDestination(PatternModel::SampleLoopedDestination);
             timerCommand->parameter2 = true;
-        } else if (channelAudioType == external) {
+        } else if (trackType == external) {
             q->setNoteDestination(PatternModel::ExternalDestination);
             timerCommand->parameter2 = false;
-        } else { // or in other words "if (channelAudioType == synth)"
+        } else { // or in other words "if (trackType == synth)"
             q->setNoteDestination(PatternModel::SynthDestination);
             timerCommand->parameter2 = false;
         }

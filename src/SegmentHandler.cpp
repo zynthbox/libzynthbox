@@ -323,8 +323,8 @@ public Q_SLOTS:
                             TimerCommand* command = new TimerCommand; // This does not need to use the pool, as we might make a LOT of these, and also don't do so during playback time.
                             command->parameter = clip->property("row").toInt();
                             const QObject *channelObject = zlChannels.at(command->parameter);
-                            const QString channelAudioType = channelObject->property("channelAudioType").toString();
-                            if (channelAudioType == sampleLoopedType) {
+                            const QString trackType = channelObject->property("trackType").toString();
+                            if (trackType == sampleLoopedType) {
                                 command->operation = TimerCommand::StartClipLoopOperation;
                                 command->parameter2 = clip->property("cppObjId").toInt();
                                 command->parameter3 = 60;
@@ -347,8 +347,8 @@ public Q_SLOTS:
                             TimerCommand* command = new TimerCommand; // This does not need to use the pool, as we might make a LOT of these, and also don't do so during playback time.
                             command->parameter = clip->property("row").toInt();
                             const QObject *channelObject = zlChannels.at(command->parameter);
-                            const QString channelAudioType = channelObject->property("channelAudioType").toString();
-                            if (channelAudioType == sampleLoopedType) {
+                            const QString trackType = channelObject->property("trackType").toString();
+                            if (trackType == sampleLoopedType) {
                                 command->operation = TimerCommand::StopClipLoopOperation;
                                 command->parameter2 = clip->property("cppObjId").toInt();
                                 command->parameter3 = 60;
@@ -382,8 +382,8 @@ public Q_SLOTS:
                 TimerCommand* command = new TimerCommand; // This does not need to use the pool, as we might make a LOT of these, and also don't do so during playback time.
                 command->parameter = clip->property("row").toInt();
                 const QObject *channelObject = zlChannels.at(command->parameter);
-                const QString channelAudioType = channelObject->property("channelAudioType").toString();
-                if (channelAudioType == sampleLoopedType) {
+                const QString trackType = channelObject->property("trackType").toString();
+                if (trackType == sampleLoopedType) {
                     command->operation = TimerCommand::StopClipLoopOperation;
                     command->parameter2 = clip->property("cppObjId").toInt();
                     command->parameter3 = 60;

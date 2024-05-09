@@ -143,17 +143,17 @@ public Q_SLOTS:
                     QObject *track{nullptr};
                     QMetaObject::invokeMethod(channelsModel, "getChannel", Qt::DirectConnection, Q_RETURN_ARG(QObject*, track), Q_ARG(int, trackIndex));
                     track->disconnect(&clipUpdateThrottle);
-                    connect(track, SIGNAL(channel_audio_type_changed()), &clipUpdateThrottle, SLOT(start()));
-                    const QString channelAudioType = track->property("channelAudioType").toString();
-                    if (channelAudioType == sampleTrig) {
+                    connect(track, SIGNAL(track_type_changed()), &clipUpdateThrottle, SLOT(start()));
+                    const QString trackType = track->property("trackType").toString();
+                    if (trackType == sampleTrig) {
                         destinations[songIndex][trackIndex] = PatternModel::SampleTriggerDestination;
-                    } else if (channelAudioType == sampleSlice) {
+                    } else if (trackType == sampleSlice) {
                         destinations[songIndex][trackIndex] = PatternModel::SampleSlicedDestination;
-                    } else if (channelAudioType == sampleLoop) {
+                    } else if (trackType == sampleLoop) {
                         destinations[songIndex][trackIndex] = PatternModel::SampleLoopedDestination;
-                    } else if (channelAudioType == external) {
+                    } else if (trackType == external) {
                         destinations[songIndex][trackIndex] = PatternModel::ExternalDestination;
-                    } else { // or in other words "if (channelAudioType == synth)"
+                    } else { // or in other words "if (trackType == synth)"
                         destinations[songIndex][trackIndex] = PatternModel::SynthDestination;
                     }
                     for (int clipIndex = 0; clipIndex < ZynthboxPartCount; ++clipIndex) {
