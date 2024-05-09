@@ -49,7 +49,7 @@ class Plugin : public QObject {
     /**
      * \brief A list of the 10 JackPassthrough clients used by each of the channels
      */
-    Q_PROPERTY(QList<JackPassthrough*> channelPassthroughClients READ channelPassthroughClients CONSTANT)
+    Q_PROPERTY(QList<JackPassthrough*> trackPassthroughClients READ trackPassthroughClients CONSTANT)
     /**
      * \brief A list of the 10 lists. Each list contains 5 JackPasstrough clients to be used by each fx lane of a channel
      */
@@ -86,7 +86,7 @@ public:
     Q_INVOKABLE int nextClipId();
     JackPassthrough* globalPlaybackClient() const;
     QList<JackPassthrough*> synthPassthroughClients() const;
-    QList<JackPassthrough*> channelPassthroughClients() const;
+    QList<JackPassthrough*> trackPassthroughClients() const;
     QList<QList<JackPassthrough*>> fxPassthroughClients() const;
     int sketchpadSongCount() const;
     int sketchpadTrackCount() const;
@@ -102,7 +102,7 @@ private:
     int lastCreatedClipId{-1};
     JackPassthrough* m_globalPlaybackClient;
     QList<JackPassthrough*> m_synthPassthroughClients;
-    QList<JackPassthrough*> m_channelPassthroughClients;
+    QList<JackPassthrough*> m_trackPassthroughClients;
     QList<QList<JackPassthrough*>> m_fxPassthroughClients;
 
     static std::atomic<Plugin*> singletonInstance;

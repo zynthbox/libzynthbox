@@ -212,13 +212,13 @@ void Plugin::initialize()
         m_synthPassthroughClients << new JackPassthrough(QString("SynthPassthrough:Synth%1").arg(i+1), QCoreApplication::instance(), true, false, false);
     }
     qDebug() << "Creating Channel Passthrough Client";
-    // Create a ChannelPassthrough client for each of five lanes on each of the ten channels
+    // Create a TrackPassthrough client for each of five lanes on each of the ten channels
     for (int channelNumber = 0; channelNumber < 10; ++channelNumber) {
         for (int laneNumber = 0; laneNumber < 5; ++laneNumber) {
-            JackPassthrough* client = new JackPassthrough(QString("ChannelPassthrough:Channel%1-lane%2").arg(channelNumber+1).arg(laneNumber+1), QCoreApplication::instance());
+            JackPassthrough* client = new JackPassthrough(QString("TrackPassthrough:Channel%1-lane%2").arg(channelNumber+1).arg(laneNumber+1), QCoreApplication::instance());
             client->setWetFx1Amount(0.0f);
             client->setWetFx2Amount(0.0f);
-            m_channelPassthroughClients << client;
+            m_trackPassthroughClients << client;
         }
     }
     // Create FX Passthrough clients for the 5 lanes, with 10 tracks each, for each fx slot in a channel
@@ -412,9 +412,9 @@ QList<JackPassthrough *> Plugin::synthPassthroughClients() const
     return m_synthPassthroughClients;
 }
 
-QList<JackPassthrough *> Plugin::channelPassthroughClients() const
+QList<JackPassthrough *> Plugin::trackPassthroughClients() const
 {
-    return m_channelPassthroughClients;
+    return m_trackPassthroughClients;
 }
 
 QList<QList<JackPassthrough *>> Plugin::fxPassthroughClients() const
