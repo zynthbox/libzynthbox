@@ -51,7 +51,7 @@ public:
     {
         connect(q, &SequenceModel::sceneIndexChanged, this, &ZLSequenceSynchronisationManager::selectedSketchpadSongIndexChanged, Qt::QueuedConnection);
         // This actually means current /channel/ changed, the channel index and our current midi channel are the same number
-        connect(q->playGridManager(), &PlayGridManager::currentMidiChannelChanged, this, &ZLSequenceSynchronisationManager::currentMidiChannelChanged, Qt::QueuedConnection);
+        connect(q->playGridManager(), &PlayGridManager::currentSketchpadTrackChanged, this, &ZLSequenceSynchronisationManager::currentSketchpadTrackChanged, Qt::QueuedConnection);
     };
     SequenceModel *q{nullptr};
     QObject *zlSong{nullptr};
@@ -73,7 +73,7 @@ public:
                 connect(zlSong, SIGNAL(isLoadingChanged()), this, SLOT(isLoadingChanged()), Qt::QueuedConnection);
             }
             scenesModelChanged();
-            currentMidiChannelChanged();
+            currentSketchpadTrackChanged();
             playChannelSoloChanged();
             isLoadingChanged();
         }
@@ -140,11 +140,11 @@ public Q_SLOTS:
     void isLoadingChanged() {
         q->setIsDirty(false); // As we are either loading, or just got done loading the song, we're a member of, we can assume that the data was recently loaded and actually fresh, so... mark self as not dirty
     }
-    void currentMidiChannelChanged() {
+    void currentSketchpadTrackChanged() {
         if (zlSong) {
             QObject *channelsModel = zlSong->property("channelsModel").value<QObject*>();
             QObject *channel{nullptr};
-            QMetaObject::invokeMethod(channelsModel, "getChannel", Qt::DirectConnection, Q_RETURN_ARG(QObject*, channel), Q_ARG(int, PlayGridManager::instance()->currentMidiChannel()));
+            QMetaObject::invokeMethod(channelsModel, "getChannel", Qt::DirectConnection, Q_RETURN_ARG(QObject*, channel), Q_ARG(int, PlayGridManager::instance()->currentSketchpadTrack()));
             if (channel) {
                 const int channelId{channel->property("id").toInt()};
                 const int selectedPart{channel->property("selectedPart").toInt()};

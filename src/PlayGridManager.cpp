@@ -100,7 +100,7 @@ public Q_SLOTS:
     void selectedChannelChanged() {
         if (zlSketchpad) {
             const int selectedTrackId = zlSketchpad->property("selectedTrackId").toInt();
-            q->setCurrentMidiChannel(selectedTrackId);
+            q->setCurrentSketchpadTrack(selectedTrackId);
             SyncTimer::instance()->sendProgramChangeImmediately(MidiRouter::instance()->masterChannel(), 64);
         }
     }
@@ -240,7 +240,7 @@ public:
     QStringList hardwareOutActiveNotes;
     int internalPassthroughNoteActivations[128];
 
-    int currentMidiChannel{0};
+    int currentSketchpadTrack{0};
 
     std::vector<unsigned char> midiMessage;
     MidiRouter* midiRouter{MidiRouter::instance()};
@@ -493,8 +493,8 @@ void PlayGridManager::setPitch(int pitch)
 {
     int adjusted = qBound(0, pitch + 8192, 16383);
     if (d->pitch != adjusted) {
-        juce::MidiBuffer buffer{juce::MidiMessage::pitchWheel(d->currentMidiChannel + 1, adjusted)};
-        d->syncTimer->sendMidiBufferImmediately(buffer);
+        juce::MidiBuffer buffer{juce::MidiMessage::pitchWheel(MidiRouter::instance()->masterChannel(), adjusted)};
+        d->syncTimer->sendMidiBufferImmediately(buffer, SyncTimer::instance()->masterSketchpadTrack());
         d->pitch = adjusted;
         Q_EMIT pitchChanged();
     }
@@ -509,8 +509,8 @@ void PlayGridManager::setModulation(int modulation)
 {
     int adjusted = qBound(0, modulation, 127);
     if (d->modulation != adjusted) {
-        juce::MidiBuffer buffer{juce::MidiMessage::controllerEvent(d->currentMidiChannel + 1, 1, adjusted)};
-        d->syncTimer->sendMidiBufferImmediately(buffer);
+        juce::MidiBuffer buffer{juce::MidiMessage::controllerEvent(MidiRouter::instance()->masterChannel(), 1, adjusted)};
+        d->syncTimer->sendMidiBufferImmediately(buffer, SyncTimer::instance()->masterSketchpadTrack());
         d->modulation = adjusted;
         Q_EMIT modulationChanged();
     }
@@ -1050,20 +1050,19 @@ void PlayGridManager::setZlSketchpad(QObject* zlSketchpad)
     }
 }
 
-
-void PlayGridManager::setCurrentMidiChannel(int midiChannel)
+void PlayGridManager::setCurrentSketchpadTrack(const int &sketchpadTrack)
 {
-    if (d->currentMidiChannel != midiChannel) {
-        d->currentMidiChannel = midiChannel;
-        SyncTimer::instance()->setCurrentTrack(midiChannel);
-        MidiRouter::instance()->setCurrentSketchpadTrack(midiChannel);
-        Q_EMIT currentMidiChannelChanged();
+    if (d->currentSketchpadTrack != sketchpadTrack) {
+        d->currentSketchpadTrack = sketchpadTrack;
+        SyncTimer::instance()->setCurrentTrack(sketchpadTrack);
+        MidiRouter::instance()->setCurrentSketchpadTrack(sketchpadTrack);
+        Q_EMIT currentSketchpadTrackChanged();
     }
 }
 
-int PlayGridManager::currentMidiChannel() const
+int PlayGridManager::currentSketchpadTrack() const
 {
-    return d->currentMidiChannel;
+    return d->currentSketchpadTrack;
 }
 
 void PlayGridManager::scheduleNote(unsigned char midiNote, unsigned char midiChannel, bool setOn, unsigned char velocity, quint64 duration, quint64 delay)

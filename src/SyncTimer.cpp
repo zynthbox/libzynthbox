@@ -869,7 +869,7 @@ public:
                 }
                 QObject *clipToRecord = pgm->zlSketchpad()->property("clipToRecord").value<QObject*>();
                 if (clipToRecord) {
-                    MidiRecorder::instance()->startRecording(pgm->currentMidiChannel(), true, currentFrameUsecs);
+                    MidiRecorder::instance()->startRecording(pgm->currentSketchpadTrack(), true, currentFrameUsecs);
                     AudioLevels::instance()->startRecording(currentFrame);
                 }
                 PlayfieldManager::instance()->startPlayback();

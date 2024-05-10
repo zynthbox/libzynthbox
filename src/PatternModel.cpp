@@ -201,7 +201,7 @@ public Q_SLOTS:
         SequenceModel *sequence = qobject_cast<SequenceModel*>(q->sequence());
         if (sequence && zlChannel) {
             const int selectedPart{zlChannel->property("selectedPart").toInt()};
-            sequence->setActiveChannel(PlayGridManager::instance()->currentMidiChannel(), selectedPart);
+            sequence->setActiveChannel(PlayGridManager::instance()->currentSketchpadTrack(), selectedPart);
         }
     }
     void updateSamples() {
@@ -717,8 +717,8 @@ PatternModel::PatternModel(SequenceModel* parent)
         connect(d->sequence, &SequenceModel::soloPatternChanged, this, updateIsPlaying, Qt::DirectConnection);
         // This is to ensure that when the current sound changes and we have no midi channel, we will schedule
         // the notes that are expected of us
-        connect(d->sequence->playGridManager(), &PlayGridManager::currentMidiChannelChanged, this, [this](){
-            if (d->sketchpadTrack == -1 && d->sequence->playGridManager()->currentMidiChannel() > -1) {
+        connect(d->sequence->playGridManager(), &PlayGridManager::currentSketchpadTrackChanged, this, [this](){
+            if (d->sketchpadTrack == -1 && d->sequence->playGridManager()->currentSketchpadTrack() > -1) {
                 d->invalidatePosition();
             }
         });

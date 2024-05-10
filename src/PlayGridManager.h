@@ -92,10 +92,10 @@ class PlayGridManager : public QObject
      */
     Q_PROPERTY(QObject* zlSketchpad READ zlSketchpad WRITE setZlSketchpad NOTIFY zlSketchpadChanged)
     /**
-     * \brief The midi channel associated with the currently selected channel, or -1 if the channel is invalid
-     * @default -1
+     * \brief The currently selected Sketchpad Track
+     * @default 0
      */
-    Q_PROPERTY(int currentMidiChannel READ currentMidiChannel WRITE setCurrentMidiChannel NOTIFY currentMidiChannelChanged)
+    Q_PROPERTY(int currentSketchpadTrack READ currentSketchpadTrack NOTIFY currentSketchpadTrackChanged)
 
     Q_PROPERTY(QObject* syncTimer READ syncTimer CONSTANT)
     Q_PROPERTY(bool metronomeActive READ metronomeActive NOTIFY metronomeActiveChanged)
@@ -302,9 +302,9 @@ public:
     void setZlSketchpad(QObject *zlSketchpad);
     Q_SIGNAL void zlSketchpadChanged();
 
-    void setCurrentMidiChannel(int midiChannel);
-    int currentMidiChannel() const;
-    Q_SIGNAL void currentMidiChannelChanged();
+    void setCurrentSketchpadTrack(const int &sketchpadTrack);
+    int currentSketchpadTrack() const;
+    Q_SIGNAL void currentSketchpadTrackChanged();
     /**
      * \brief Schedules a note to be set on or off on the next tick of the metronome
      * @param midiNote The note you wish to change the state of
