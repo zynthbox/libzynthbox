@@ -1519,6 +1519,44 @@ void SyncTimer::sendNoteImmediately(unsigned char midiNote, unsigned char midiCh
     }
 }
 
+void SyncTimer::sendAllNotesOffImmediately(int sketchpadTrack)
+{
+    static juce::MidiBuffer trackBuffers[ZynthboxTrackCount];
+    const int theTrack{d->sketchpadTrack(sketchpadTrack)};
+    if (trackBuffers[theTrack].isEmpty()) {
+        for (int channel = 1; channel < 17; ++channel) {
+            trackBuffers[theTrack].addEvent(juce::MidiMessage::allNotesOff(channel), 0);
+        }
+    }
+    sendMidiBufferImmediately(trackBuffers[theTrack], theTrack);
+}
+
+void SyncTimer::sendAllNotesOffEverywhereImmediately()
+{
+    for (int track = 0; track < ZynthboxTrackCount; ++track) {
+        sendAllNotesOffImmediately(track);
+    }
+}
+
+void SyncTimer::sendAllSoundsOffImmediately(int sketchpadTrack)
+{
+    static juce::MidiBuffer trackBuffers[ZynthboxTrackCount];
+    const int theTrack{d->sketchpadTrack(sketchpadTrack)};
+    if (trackBuffers[theTrack].isEmpty()) {
+        for (int channel = 1; channel < 17; ++channel) {
+            trackBuffers[theTrack].addEvent(juce::MidiMessage::allSoundOff(channel), 0);
+        }
+    }
+    sendMidiBufferImmediately(trackBuffers[theTrack], theTrack);
+}
+
+void SyncTimer::sendAllSoundsOffEverywhereImmediately()
+{
+    for (int track = 0; track < ZynthboxTrackCount; ++track) {
+        sendAllSoundsOffImmediately(track);
+    }
+}
+
 void SyncTimer::sendMidiMessageImmediately(int size, int byte0, int byte1, int byte2, int sketchpadTrack)
 {
     StepData *stepData{d->delayedStep(0, true, true)};

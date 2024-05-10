@@ -298,6 +298,25 @@ public:
   void sendNoteImmediately(unsigned char midiNote, unsigned char midiChannel, bool setOn, unsigned char velocity, int sketchpadTrack = -1);
 
   /**
+   * \brief Send all-note-off messages to all channels on the given track
+   * @param sketchpadTrack The track to send note-off messages to
+   */
+  Q_INVOKABLE void sendAllNotesOffImmediately(int sketchpadTrack = -1);
+  /**
+   * \brief Send all-note-off messages to all channels on all tracks
+   */
+  Q_INVOKABLE void sendAllNotesOffEverywhereImmediately();
+  /**
+   * \brief Send all-sounds-off messages to all channels on the given track
+   * @param sketchpadTrack The track to send note-off messages to
+   */
+  Q_INVOKABLE void sendAllSoundsOffImmediately(int sketchpadTrack = -1);
+  /**
+   * \brief Send all-sounds-off messages to all channels on all tracks
+   */
+  Q_INVOKABLE void sendAllSoundsOffEverywhereImmediately();
+
+  /**
    * \brief Send a raw midi message with the given values at the next possible opportunity
    * @param size How many of the given values should be sent (between 1 and 3)
    * @param byte0 The first byte of the message
