@@ -319,6 +319,7 @@ public:
   float getLengthInBeats() const;
   void setPitch(float pitchChange, bool immediate = false);
   void setSpeedRatio(float speedRatio, bool immediate = false);
+  float speedRatio() const;
   void setGain(float db);
   float getGain() const;
   float getGainDB() const;

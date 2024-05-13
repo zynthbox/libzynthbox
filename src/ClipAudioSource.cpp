@@ -392,6 +392,11 @@ void ClipAudioSource::setSpeedRatio(float speedRatio, bool immediate) {
   d->isRendering = true;
 }
 
+float ClipAudioSource::speedRatio() const
+{
+  return d->speedRatio;
+}
+
 void ClipAudioSource::setGain(float db) {
   if (auto clip = d->getClip()) {
     IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting gain:" << db;
