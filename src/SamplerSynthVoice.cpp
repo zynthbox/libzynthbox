@@ -224,7 +224,7 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
 
         d->pitchRatio = std::pow (2.0, (clipCommand->midiNote - sound->rootMidiNote()) / 12.0) * sound->sourceSampleRate() / d->clip->sampleRate();
 
-        d->sourceSampleLength = d->clip->getDuration() * sound->sourceSampleRate();
+        d->sourceSampleLength = d->clip->getDuration() * sound->sourceSampleRate() / d->clip->speedRatio();
         if (d->clipCommand->changePitch && d->clipCommand->pitchChange < 0) {
             d->sourceSamplePosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition : d->clip->getStopPosition(d->clipCommand->slice)) * sound->sourceSampleRate());
         } else {
