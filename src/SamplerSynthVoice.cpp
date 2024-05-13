@@ -260,7 +260,7 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         d->playbackData.pan = std::clamp(float(d->clip->pan()) + d->clipCommand->pan, -1.0f, 1.0f);
         d->playbackData.startPosition = (int) ((d->clipCommand->setStartPosition ? d->clipCommand->startPosition : d->clip->getStartPosition(d->clipCommand->slice)) * d->playbackData.sourceSampleRate);
         d->playbackData.stopPosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition : d->clip->getStopPosition(d->clipCommand->slice)) * d->playbackData.sourceSampleRate);
-        d->playbackData.loopPosition = int((d->clip->getStartPosition(d->clipCommand->slice) + d->clip->loopDelta()) * d->playbackData.sourceSampleRate);
+        d->playbackData.loopPosition = int((d->clip->getStartPosition(d->clipCommand->slice) + (d->clip->loopDelta() / d->clip->speedRatio())) * d->playbackData.sourceSampleRate);
         if (d->playbackData.loopPosition >= d->playbackData.stopPosition) {
             d->playbackData.loopPosition = d->playbackData.startPosition;
         }
@@ -350,7 +350,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
         d->playbackData.pan = std::clamp(float(d->clip->pan()) + d->clipCommand->pan, -1.0f, 1.0f);
         d->playbackData.startPosition = (int) ((d->clipCommand->setStartPosition ? d->clipCommand->startPosition : d->clip->getStartPosition(d->clipCommand->slice)) * d->playbackData.sourceSampleRate);
         d->playbackData.stopPosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition : d->clip->getStopPosition(d->clipCommand->slice)) * d->playbackData.sourceSampleRate);
-        d->playbackData.loopPosition = int((d->clip->getStartPosition(d->clipCommand->slice) + d->clip->loopDelta()) * d->playbackData.sourceSampleRate);
+        d->playbackData.loopPosition = int((d->clip->getStartPosition(d->clipCommand->slice) + (d->clip->loopDelta() / d->clip->speedRatio())) * d->playbackData.sourceSampleRate);
         if (d->playbackData.loopPosition >= d->playbackData.stopPosition) {
             d->playbackData.loopPosition = d->playbackData.startPosition;
         }
