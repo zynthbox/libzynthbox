@@ -188,7 +188,7 @@ void WaveFormItem::paint(QPainter *painter)
         if (numChannels == 1) {
             m_externalThumbnail->drawChannel(m_juceGraphics, thumbnailBounds, m_start, qMin(m_end, m_externalThumbnail->getTotalLength()), 0, 1.0f);
         } else {
-            const double spacing{height() / 3};
+            const double spacing{height() / (numChannels + 1)};
             for (int channel = 0; channel < numChannels; ++channel) {
                 thumbnailBounds.setTop(channel * spacing);
                 thumbnailBounds.setHeight(height() - spacing);
@@ -200,7 +200,7 @@ void WaveFormItem::paint(QPainter *painter)
         if (numChannels == 1) {
             m_thumbnail.drawChannel(m_juceGraphics, thumbnailBounds, m_start, qMin(m_end, m_thumbnail.getTotalLength()), 0, 1.0f);
         } else {
-            const double spacing{height() / 3};
+            const double spacing{height() / (numChannels + 1)};
             for (int channel = 0; channel < numChannels; ++channel) {
                 thumbnailBounds.setTop(channel * spacing);
                 thumbnailBounds.setHeight(height() - spacing);
