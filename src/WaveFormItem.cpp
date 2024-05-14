@@ -181,22 +181,32 @@ void WaveFormItem::thumbnailChanged()
 void WaveFormItem::paint(QPainter *painter)
 {
     m_painterContext.setPainter(painter);
-    const juce::Rectangle<int> thumbnailBounds (0, 0, width(), height());
+    juce::Rectangle<int> thumbnailBounds (0, 0, width(), height());
     // FIXME This only draws channel 0 (left)... maybe we should be checking if we've got two channels, and draw both if we do? ...in some clever way, or just stacked using the built-in function?
     if (m_externalThumbnail) {
-        m_externalThumbnail->drawChannel(m_juceGraphics,
-                                         thumbnailBounds,
-                                         m_start,
-                                         qMin(m_end, m_externalThumbnail->getTotalLength()),
-                                         0,
-                                         1.0f);
+        const int numChannels{m_externalThumbnail->getNumChannels()};
+        if (numChannels == 1) {
+            m_externalThumbnail->drawChannel(m_juceGraphics, thumbnailBounds, m_start, qMin(m_end, m_externalThumbnail->getTotalLength()), 0, 1.0f);
+        } else {
+            const double spacing{height() / 3};
+            for (int channel = 0; channel < numChannels; ++channel) {
+                thumbnailBounds.setTop(channel * spacing);
+                thumbnailBounds.setHeight(height() - spacing);
+                m_externalThumbnail->drawChannel(m_juceGraphics, thumbnailBounds, m_start, qMin(m_end, m_externalThumbnail->getTotalLength()), channel, 1.0f);
+            }
+        }
     } else {
-        m_thumbnail.drawChannel(m_juceGraphics,
-                                thumbnailBounds,
-                                m_start,                                    // start time
-                                qMin(m_end, m_thumbnail.getTotalLength()),  // end time
-                                0, // channel num
-                                1.0f);
+        const int numChannels{m_thumbnail.getNumChannels()};
+        if (numChannels == 1) {
+            m_thumbnail.drawChannel(m_juceGraphics, thumbnailBounds, m_start, qMin(m_end, m_thumbnail.getTotalLength()), 0, 1.0f);
+        } else {
+            const double spacing{height() / 3};
+            for (int channel = 0; channel < numChannels; ++channel) {
+                thumbnailBounds.setTop(channel * spacing);
+                thumbnailBounds.setHeight(height() - spacing);
+                m_thumbnail.drawChannel(m_juceGraphics, thumbnailBounds, m_start, qMin(m_end, m_thumbnail.getTotalLength()), channel, 1.0f);
+            }
+        }
         if (!m_thumbnail.isFullyLoaded()) {
             // qDebug() << Q_FUNC_INFO << m_source << "is not fully loaded yet, schedule a repaint...";
             QMetaObject::invokeMethod(m_repaintTimer, "start", Qt::QueuedConnection);
