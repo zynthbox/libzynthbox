@@ -9,6 +9,10 @@
 #include <QDebug>
 #include <QtMath>
 
+namespace tracktion_engine {
+#include <tracktion_engine/3rd_party/soundtouch/include/SoundTouch.h>
+};
+
 #define DataRingSize 128
 class DataRing {
 public:
@@ -125,6 +129,10 @@ public:
     float allpassBufferL{0.0f};
     float allpassBufferR{0.0f};
 
+    float timeStretchingInput[2];
+    float timeStretchingOutput[2];
+    tracktion_engine::soundtouch::SoundTouch soundTouch;
+
     PlaybackData playbackData;
 };
 
@@ -223,7 +231,6 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         d->clip = sound->clip();
 
         d->pitchRatio = std::pow (2.0, (clipCommand->midiNote - sound->rootMidiNote()) / 12.0) * sound->sourceSampleRate() / d->clip->sampleRate();
-
         d->sourceSampleLength = d->clip->getDuration() * sound->sourceSampleRate() / d->clip->speedRatio();
         if (d->clipCommand->changePitch && d->clipCommand->pitchChange < 0) {
             d->sourceSamplePosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition : d->clip->getStopPosition(d->clipCommand->slice)) * sound->sourceSampleRate());
@@ -267,6 +274,11 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         d->playbackData.forwardTailingOffPosition = (d->playbackData.stopPosition - (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
         d->playbackData.backwardTailingOffPosition = (d->playbackData.startPosition + (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
 
+        if (d->clip->timeStretchLive()) {
+            d->soundTouch.setChannels(2);
+            d->soundTouch.setSampleRate(d->sound->sourceSampleRate());
+        }
+
         if (clipCommand->looping == true) {
             availableAfter = UINT_MAX;
         } else {
@@ -289,8 +301,10 @@ void SamplerSynthVoice::stopNote(float velocity, bool allowTailOff, jack_nframes
     }
     else
     {
+        d->soundTouch.clear();
         d->adsr.reset();
         if (d->clip) {
+
             d->clip = nullptr;
         }
         if (d->clipCommand) {
@@ -438,7 +452,8 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
             const int sampleIndex{int(d->sourceSamplePosition)};
             float modIntegral{0};
             const float fraction = std::modf(d->sourceSamplePosition, &modIntegral);
-            if (fraction < 0.0001f && d->pitchRatio == 1.0f) {
+            const double pitchRatio{d->pitchRatio * clipPitchChange};
+            if ((fraction < 0.0001f && pitchRatio == 1.0f) || d->clip->timeStretchLive()) {
                 // If we're just doing un-pitch-shifted playback, don't bother interpolating,
                 // just grab the sample as given and adjust according to the requests, might
                 // as well save a bit of processing (it's a very common case, and used for
@@ -446,6 +461,19 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
                 // as we can reasonably make it).
                 l = sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inL[sampleIndex] * d->lgain * envelopeValue * clipVolume : 0;
                 r = d->playbackData.inR != nullptr && sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inR[sampleIndex] * d->rgain * envelopeValue * clipVolume : l;
+                if (d->clip->timeStretchLive()) {
+                    d->soundTouch.setPitch(pitchRatio);
+                    d->timeStretchingInput[0] = l;
+                    d->timeStretchingInput[1] = r;
+                    d->soundTouch.putSamples(d->timeStretchingInput, 1);
+                    if (d->soundTouch.numUnprocessedSamples() > 0) {
+                        d->soundTouch.receiveSamples(d->timeStretchingOutput, 1);
+                        l = d->timeStretchingOutput[0];
+                        r = d->timeStretchingOutput[1];
+                    } else {
+                        l = r = 0;
+                    }
+                }
             } else {
                 // Use Hermite interpolation to ensure out sound data is reasonably on the expected
                 // curve. We could use linear interpolation, but Hermite is cheap enough that it's
@@ -536,8 +564,11 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
             *rightBuffer += r;
             ++rightBuffer;
 
-            const double pitchRatio{d->pitchRatio * clipPitchChange};
-            d->sourceSamplePosition += pitchRatio;
+            if (d->clip->timeStretchLive()) {
+                d->sourceSamplePosition += 1.0f;
+            } else {
+                d->sourceSamplePosition += pitchRatio;
+            }
 
             if (d->adsr.isActive()) {
                 if (pitchRatio > 0) {
