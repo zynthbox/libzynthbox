@@ -41,6 +41,23 @@ class ClipAudioSource : public QObject {
     Q_PROPERTY(PlaybackStyle playbackStyle READ playbackStyle WRITE setPlaybackStyle NOTIFY playbackStyleChanged)
     Q_PROPERTY(QString playbackStyleLabel READ playbackStyleLabel NOTIFY playbackStyleChanged)
     /**
+     * \brief Whether to play using a live time stretching method for pitch changes during polyphonic playback
+     * When set to true, pitch bending will be done using a time stretching system, instead of the standard
+     * pitch bending (which is done by speeding up or slowing down the sample)
+     * This is orthogonal to the offline time stretching done by the pitch and speedRatio properties
+     */
+    Q_PROPERTY(bool timeStretchLive READ timeStretchLive WRITE setTimeStretchLive NOTIFY timeStretchLiveChanged)
+    /**
+     * \brief The ptch adjustment (a floating point number of semitones) to adjust the sample offline
+     * This is orthogonal to the live time stretching done by setting timeStretchLive
+     */
+    Q_PROPERTY(float pitch READ pitch WRITE setPitch NOTIFY pitchChanged)
+    /**
+     * \brief The playback speed adjustment (a floating point number) for adjusting the sample offline
+     * This is orthogonal to the live time stretching done by setting timeStretchLive
+     */
+    Q_PROPERTY(float speedRatio READ speedRatio WRITE setSpeedRatio NOTIFY speedRatioChanged)
+    /**
      * \brief Whether or not this sample should be looped for playback (or single-shot so it auto-stops)
      * This can be overridden by the play function, where looping can be forced
      * @see ClipAudioSource::play(bool, int)
@@ -317,9 +334,16 @@ public:
    * @return The length of the clip in beats (that is, in quarter notes)
    */
   float getLengthInBeats() const;
+
+  void setTimeStretchLive(bool timeStretchLive);
+  bool timeStretchLive() const;
+  Q_SIGNAL void timeStretchLiveChanged();
   void setPitch(float pitchChange, bool immediate = false);
+  float pitch() const;
+  Q_SIGNAL void pitchChanged();
   void setSpeedRatio(float speedRatio, bool immediate = false);
   float speedRatio() const;
+  Q_SIGNAL void speedRatioChanged();
   void setGain(float db);
   float getGain() const;
   float getGainDB() const;

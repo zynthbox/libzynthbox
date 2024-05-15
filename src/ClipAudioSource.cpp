@@ -71,6 +71,7 @@ public:
   float gain{1.0f};
   float gainAbsolute{0.5};
   float volumeAbsolute{-1.0f}; // This is a cached value
+  bool timeStretchLive{false};
   float pitchChange = 0;
   float speedRatio = 1.0;
   float pan{0.0f};
@@ -365,6 +366,19 @@ float ClipAudioSource::getStopPosition(int slice) const
         return d->startPositionInSeconds + d->lengthInSeconds;
     }
 }
+void ClipAudioSource::setTimeStretchLive(bool timeStretchLive)
+{
+  if (d->timeStretchLive != timeStretchLive) {
+    d->timeStretchLive = timeStretchLive;
+    Q_EMIT timeStretchLiveChanged();
+  }
+}
+
+bool ClipAudioSource::timeStretchLive() const
+{
+  return d->timeStretchLive;
+}
+
 
 void ClipAudioSource::setPitch(float pitchChange, bool immediate) {
   IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Pitch to" << pitchChange;
@@ -376,7 +390,13 @@ void ClipAudioSource::setPitch(float pitchChange, bool immediate) {
   } else {
     updateTempoAndPitch();
   }
+  Q_EMIT pitchChanged();
   d->isRendering = true;
+}
+
+float ClipAudioSource::pitch() const
+{
+  return d->pitchChange;
 }
 
 void ClipAudioSource::setSpeedRatio(float speedRatio, bool immediate) {
@@ -389,6 +409,7 @@ void ClipAudioSource::setSpeedRatio(float speedRatio, bool immediate) {
   } else {
     updateTempoAndPitch();
   }
+  Q_EMIT speedRatioChanged();
   d->isRendering = true;
 }
 
