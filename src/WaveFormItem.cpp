@@ -182,7 +182,6 @@ void WaveFormItem::paint(QPainter *painter)
 {
     m_painterContext.setPainter(painter);
     juce::Rectangle<int> thumbnailBounds (0, 0, width(), height());
-    // FIXME This only draws channel 0 (left)... maybe we should be checking if we've got two channels, and draw both if we do? ...in some clever way, or just stacked using the built-in function?
     if (m_externalThumbnail) {
         const int numChannels{m_externalThumbnail->getNumChannels()};
         if (numChannels == 1) {
