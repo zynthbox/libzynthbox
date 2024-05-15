@@ -137,8 +137,8 @@ public:
             zlPart = newZlPart;
             Q_EMIT q->zlPartChanged();
             if (zlPart) {
-                connect(zlPart, SIGNAL(samples_changed()), this, SLOT(updateSamples()), Qt::QueuedConnection);
-                updateSamples();
+                // connect(zlPart, SIGNAL(samples_changed()), this, SLOT(updateSamples()), Qt::QueuedConnection);
+                // updateSamples();
             }
         }
     }
@@ -206,9 +206,9 @@ public Q_SLOTS:
     }
     void updateSamples() {
         QVariantList clipIds;
-        if (zlChannel && zlPart) {
+        // qDebug() << Q_FUNC_INFO << q->sketchpadTrack() << q->partName();
+        if (zlChannel) {
             const QVariantList channelSamples = zlChannel->property("samples").toList();
-            const QVariantList partSamples = zlPart->property("samples").toList();
             QList<int> slotIndices{0, 1, 2, 3, 4};
             switch(samplePickingStyle) {
                 case ClipAudioSource::AllPickingStyle:
@@ -230,8 +230,9 @@ public Q_SLOTS:
             for (const int &slotIndex : qAsConst(slotIndices)) {
                 const QObject *sample = channelSamples[slotIndex].value<QObject*>();
                 if (sample) {
-                    static const int cppObjId{sample->property("cppObjId").toInt()};
+                    const int cppObjId{sample->property("cppObjId").toInt()};
                     clipIds << cppObjId;
+                    // qDebug() << Q_FUNC_INFO << "Sample in slot" << slotIndex << "has cppObjId" << cppObjId;
                     if (samplePickingStyle == ClipAudioSource::SameOrFirstPickingStyle && cppObjId > -1 && slotIndex == q->partIndex()) {
                         // In SameOrFirst, if there is a sample in the matches-me slot, ignore any sample that isn't that one
                         // If there is no sample in that slot, we want to try all the others in order
