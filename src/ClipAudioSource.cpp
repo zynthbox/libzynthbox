@@ -24,6 +24,10 @@
 #include "SyncTimer.h"
 #include "Plugin.h"
 
+namespace tracktion_engine {
+#include <tracktion_engine/3rd_party/soundtouch/include/BPMDetect.h>
+};
+
 #define DEBUG_CLIP false
 #define IF_DEBUG_CLIP if (DEBUG_CLIP)
 
@@ -366,6 +370,45 @@ float ClipAudioSource::getStopPosition(int slice) const
         return d->startPositionInSeconds + d->lengthInSeconds;
     }
 }
+
+float ClipAudioSource::guessBPM(int slice) const
+{
+  float guessedBPM{0.0f};
+  if (auto clip = d->getClip()) {
+    // Set up our basic prerequisite knowledge
+    tracktion_engine::AudioFile audioFile = clip->getAudioFile();
+    const int numChannels{audioFile.getNumChannels()};
+    int startSample = audioFile.getLengthInSamples() * getStartPosition(slice);
+    int lastSample = audioFile.getLengthInSamples() * getStopPosition(slice);
+    // Pull the samples we want out of the reader and stuff them into the bpm detector
+    const int numSamples{numChannels * (lastSample - startSample)};
+    juce::int64 numLeft{numSamples};
+    const int blockSize{65536};
+    const bool useRightChan{numChannels > 1};
+    AudioFormatReader *reader{audioFile.getFormat()->createReaderFor(d->givenFile.createInputStream().release(), true)};
+    tracktion_engine::soundtouch::BPMDetect bpmDetector(numChannels, audioFile.getSampleRate());
+    juce::AudioBuffer<float> fileBuffer(jmin(2, numChannels), lastSample - startSample);
+    while (numLeft > 0)
+    {
+      // Either read our desired block size, or whatever is left, whichever is shorter
+      const int numThisTime = (int) juce::jmin (numLeft, (juce::int64) blockSize);
+      // Get the data and stuff it into a buffer
+      reader->read(&fileBuffer, 0, numThisTime, startSample, true, useRightChan);
+      // Create an interleaved selection of samples as we want them
+      tracktion_engine::AudioScratchBuffer scratch(1, numThisTime * numChannels);
+      float* interleaved = scratch.buffer.getWritePointer(0);
+      juce::AudioDataConverters::interleaveSamples(fileBuffer.getArrayOfReadPointers(), interleaved, numThisTime, numChannels);
+      // Pass them along to the bpm detector for processing
+      bpmDetector.inputSamples(interleaved, numThisTime);
+      // Next run...
+      startSample += numThisTime;
+      numLeft -= numThisTime;
+    }
+    guessedBPM = bpmDetector.getBpm();
+  }
+  return guessedBPM;
+}
+
 void ClipAudioSource::setTimeStretchLive(bool timeStretchLive)
 {
   if (d->timeStretchLive != timeStretchLive) {

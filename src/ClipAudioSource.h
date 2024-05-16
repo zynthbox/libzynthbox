@@ -335,6 +335,13 @@ public:
    */
   float getLengthInBeats() const;
 
+  /**
+   * \brief Attempt to guess the beats per minute of the given slice
+   * @param slice The slice to detect the BPM inside of
+   * @return The guessed BPM
+   */
+  Q_INVOKABLE float guessBPM(int slice = -1) const;
+
   void setTimeStretchLive(bool timeStretchLive);
   bool timeStretchLive() const;
   Q_SIGNAL void timeStretchLiveChanged();
