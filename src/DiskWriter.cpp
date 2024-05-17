@@ -77,6 +77,7 @@ void DiskWriter::stop() {
     // take a little time while remaining data gets flushed to disk, so it's best to avoid blocking
     // the audio callback while this happens.
     m_threadedWriter.reset();
+    m_fileNameSuffix = ".wav";
 }
 
 const bool &DiskWriter::isRecording() const {
@@ -89,6 +90,16 @@ const QString &DiskWriter::filenamePrefix() const {
 
 void DiskWriter::setFilenamePrefix(const QString& fileNamePrefix) {
     m_fileNamePrefix = fileNamePrefix;
+}
+
+const QString & DiskWriter::filenameSuffix() const
+{
+    return m_fileNameSuffix;
+}
+
+void DiskWriter::setFilenameSuffix(const QString& fileNameSuffix)
+{
+    m_fileNameSuffix = fileNameSuffix;
 }
 
 QString DiskWriter::fileName() const

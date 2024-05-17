@@ -309,6 +309,11 @@ void AudioLevels::setGlobalPlaybackFilenamePrefix(const QString &fileNamePrefix)
     d->globalPlaybackWriter->setFilenamePrefix(fileNamePrefix);
 }
 
+void AudioLevels::setGlobalPlaybackFilenameSuffix(const QString& fileNameSuffix)
+{
+    d->globalPlaybackWriter->setFilenameSuffix(fileNameSuffix);
+}
+
 void AudioLevels::setChannelToRecord(int channel, bool shouldRecord)
 {
     if (channel > -1 && channel < d->channelWriters.count()) {
@@ -330,10 +335,23 @@ void AudioLevels::setChannelFilenamePrefix(int channel, const QString& fileNameP
     }
 }
 
+void AudioLevels::setChannelFilenameSuffix(int channel, const QString& fileNameSuffix)
+{
+    if (channel > -1 && channel < d->channelWriters.count()) {
+        d->channelWriters[channel]->setFilenameSuffix(fileNameSuffix);
+    }
+}
+
 void AudioLevels::setRecordPortsFilenamePrefix(const QString &fileNamePrefix)
 {
     d->portsRecorder->setFilenamePrefix(fileNamePrefix);
 }
+
+void AudioLevels::setRecordPortsFilenameSuffix(const QString& fileNameSuffix)
+{
+    d->portsRecorder->setFilenameSuffix(fileNameSuffix);
+}
+
 
 void AudioLevels::addRecordPort(const QString &portName, int channel)
 {
@@ -425,7 +443,7 @@ void AudioLevels::startRecording(quint64 startTimestamp)
             // If prefix already ends with `.wav` do not add timestamp and suffix to filename
             d->globalPlaybackWriter->startRecording(d->globalPlaybackWriter->filenamePrefix(), sampleRate);
         } else {
-            const QString filename = QString("%1-%2.wav").arg(d->globalPlaybackWriter->filenamePrefix()).arg(timestamp);
+            const QString filename = QString("%1-%2%3").arg(d->globalPlaybackWriter->filenamePrefix()).arg(timestamp).arg(d->globalPlaybackWriter->filenameSuffix());
             d->globalPlaybackWriter->startRecording(filename, sampleRate);
         }
     }
@@ -434,7 +452,7 @@ void AudioLevels::startRecording(quint64 startTimestamp)
             // If prefix already ends with `.wav` do not add timestamp and suffix to filename
             d->portsRecorder->startRecording(d->portsRecorder->filenamePrefix(), sampleRate, 16, d->recordPorts.count());
         } else {
-            const QString filename = QString("%1-%2.wav").arg(d->portsRecorder->filenamePrefix()).arg(timestamp);
+            const QString filename = QString("%1-%2%3").arg(d->portsRecorder->filenamePrefix()).arg(timestamp).arg(d->portsRecorder->filenameSuffix());
             d->portsRecorder->startRecording(filename, sampleRate, 16, d->recordPorts.count());
         }
     }
@@ -444,7 +462,7 @@ void AudioLevels::startRecording(quint64 startTimestamp)
                 // If prefix already ends with `.wav` do not add timestamp and suffix to filename
                 channelWriter->startRecording(channelWriter->filenamePrefix(), sampleRate);
             } else {
-                const QString filename = QString("%1-%2.wav").arg(channelWriter->filenamePrefix()).arg(timestamp);
+                const QString filename = QString("%1-%2%3").arg(channelWriter->filenamePrefix()).arg(timestamp).arg(channelWriter->filenameSuffix());
                 channelWriter->startRecording(filename, sampleRate);
             }
         }

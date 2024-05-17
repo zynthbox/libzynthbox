@@ -128,6 +128,12 @@ public:
      * @param fileNamePrefix The prefix you wish to use as the basis for the global playback recording's filenames
      */
     Q_INVOKABLE void setGlobalPlaybackFilenamePrefix(const QString& fileNamePrefix);
+    /**
+     * \brief Set the last part of the filename used when recording
+     * @note This is reset to ".wav" whenever the recording ports are cleared or recording is stopped
+     * @param fileNamePrefix The suffix you wish to use at the end of the global channel's filenames
+     */
+    Q_INVOKABLE void setGlobalPlaybackFilenameSuffix(const QString& fileNameSuffix);
 
     /**
      * \brief Sets whether or not a channel should be included when recording
@@ -149,6 +155,13 @@ public:
      * @param fileNamePrefix The prefix you wish to use as the basis of the given channel's filenames
      */
     Q_INVOKABLE void setChannelFilenamePrefix(int channel, const QString& fileNamePrefix);
+    /**
+     * \brief Set the last part of the filename used when recording
+     * @note This is reset to ".wav" whenever the recording ports are cleared or recording is stopped
+     * @param channel The index of the channel you wish to change the filename suffix for
+     * @param fileNamePrefix The suffix you wish to use at the end of the given channel's filenames
+     */
+    Q_INVOKABLE void setChannelFilenameSuffix(int channel, const QString& fileNameSuffix);
 
     /**
      * \brief Set the first part of the filename used when recording
@@ -156,9 +169,15 @@ public:
      * a timestamp and the file suffix (.wav). You should also ensure that the path exists before calling
      * startRecording.
      * @note If you pass in something that ends in .wav, the prefix will be used verbatim and no details added
-     * @param fileNamePrefix The prefix you wish to use as the basis of the given channel's filenames
+     * @param fileNamePrefix The prefix you wish to use as the basis of the port recorder's filenames
      */
     Q_INVOKABLE void setRecordPortsFilenamePrefix(const QString& fileNamePrefix);
+    /**
+     * \brief Set the last part of the filename used when recording
+     * @note This is reset to ".wav" whenever the recording ports are cleared or recording is stopped
+     * @param fileNamePrefix The suffix you wish to use at the end of the port recorder's filenames
+     */
+    Q_INVOKABLE void setRecordPortsFilenameSuffix(const QString& fileNameSuffix);
     /**
      * \brief Adds a port to the list of ports to be recorded
      * @param portName The audio type jack port to record

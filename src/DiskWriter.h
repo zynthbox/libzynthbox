@@ -23,11 +23,14 @@ public:
     const bool &isRecording() const;
     const QString &filenamePrefix() const;
     void setFilenamePrefix(const QString& fileNamePrefix);
+    const QString &filenameSuffix() const;
+    void setFilenameSuffix(const QString& fileNameSuffix);
     QString fileName() const;
     const bool &shouldRecord() const;
     void setShouldRecord(bool shouldRecord);
 private:
     QString m_fileNamePrefix;
+    QString m_fileNameSuffix{".wav"};
     bool m_shouldRecord{false};
     bool m_isRecording{false};
 
