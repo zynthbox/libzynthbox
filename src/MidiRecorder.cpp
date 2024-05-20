@@ -453,8 +453,10 @@ bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorde
 
     // work out how many microseconds we've got per step in the given pattern
     SyncTimer *syncTimer = SyncTimer::instance();
-    int microsecondsPerStep = syncTimer->subbeatCountToSeconds(syncTimer->getBpm(), patternModel->stepLength() * syncTimer->getMultiplier()) * 1000000;
-    int microsecondsPerSubbeat = syncTimer->subbeatCountToSeconds(syncTimer->getBpm(), 1) * 1000000;
+    static const double timerTicksInOnePatternSubbeat{syncTimer->getMultiplier() / 32.0};
+    const double microsecondsPerSubbeat = syncTimer->subbeatCountToSeconds(syncTimer->getBpm(), timerTicksInOnePatternSubbeat) * 1000000.0;
+    static const double timerTicksInOneStepLengthUnit{(double(syncTimer->getMultiplier()) / 96.0)};
+    const double microsecondsPerStep = syncTimer->subbeatCountToSeconds(syncTimer->getBpm(), patternModel->stepLength() * timerTicksInOnePatternSubbeat) * 1000000.0;
 
     // Update the matching on/off pairs in the sequence (just to make sure they're there, and logically
     // matched, as we depend on that below, but also kind of just want things ready before we use the data
@@ -466,7 +468,7 @@ bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorde
     // find out what the last "on" message is, and use that to determine what the last step would be in the current sequence
     int lastStep{-1};
     if (d->globalMidiMessageSequence.getNumEvents() > 0) {
-        qDebug() << Q_FUNC_INFO << "Operating on" << d->globalMidiMessageSequence.getNumEvents() << "events, for a pattern with step length" << patternModel->stepLength() << "meaning" << microsecondsPerStep << "µs per step" << microsecondsPerSubbeat << "µs per subbeat";
+        qDebug() << Q_FUNC_INFO << "Operating on" << d->globalMidiMessageSequence.getNumEvents() << "events, for a pattern with step length" << patternModel->stepLength() << "meaning" << microsecondsPerStep << "µs per step and" << microsecondsPerSubbeat << "µs per subbeat";
         qDebug() << Q_FUNC_INFO << "We've got more than one event recorded, let's find the last on note...";
         for (int messageIndex = d->globalMidiMessageSequence.getNumEvents() - 1; messageIndex > -1; --messageIndex) {
             juce::MidiMessageSequence::MidiEventHolder *message = d->globalMidiMessageSequence.getEventPointer(messageIndex);
