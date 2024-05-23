@@ -2,13 +2,15 @@
 
 #include "JUCEHeaders.h"
 
+#include <QObject>
 #include <QString>
 
 // that is one left and one right channel
 #define DISKWRITER_CHANNEL_COUNT 2
 
 class AudioLevelsChannel;
-class DiskWriter {
+class DiskWriter : public QObject {
+    Q_OBJECT
 public:
     explicit DiskWriter(AudioLevelsChannel *audioLevelsChannel);
     ~DiskWriter();
@@ -21,6 +23,8 @@ public:
     void stop();
 
     const bool &isRecording() const;
+    Q_SIGNAL void isRecordingChanged();
+
     const QString &filenamePrefix() const;
     void setFilenamePrefix(const QString& fileNamePrefix);
     const QString &filenameSuffix() const;

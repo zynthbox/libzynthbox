@@ -38,7 +38,9 @@ void DiskWriter::startRecording(const QString& fileName, double sampleRate, int 
                 // And now, swap over our active writer pointer so that the audio callback will start using it..
                 const ScopedLock sl (m_writerLock);
                 m_activeWriter = m_threadedWriter.get();
+                m_audioLevelsChannel->lastRecordingFrame = ULONG_LONG_MAX;
                 m_isRecording = true;
+                Q_EMIT isRecordingChanged();
             }
         }
     }
@@ -70,7 +72,9 @@ void DiskWriter::stop() {
         const ScopedLock sl(m_writerLock);
         m_activeWriter = nullptr;
         m_sampleRate = 0;
+        m_audioLevelsChannel->lastRecordingFrame = ULONG_LONG_MAX;
         m_isRecording = false;
+        Q_EMIT isRecordingChanged();
     }
 
     // Now we can delete the writer object. It's done in this order because the deletion could

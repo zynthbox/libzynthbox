@@ -178,15 +178,16 @@ AudioLevels::AudioLevels(QObject *parent)
                     d->audioLevelsChannels << channel;
                     ++channelIndex;
                 }
-                for (AudioLevelsChannel *channel : d->audioLevelsChannels) {
-                    channel->enabled = true;
-                }
                 d->analysisTimer.setInterval(50);
                 connect(&d->analysisTimer, &QTimer::timeout, this, &AudioLevels::timerCallback);
                 d->analysisTimer.start();
-                d->isRecordingChangedThrottle.setInterval(50);
+                d->isRecordingChangedThrottle.setInterval(10);
                 d->isRecordingChangedThrottle.setSingleShot(true);
                 connect(&d->isRecordingChangedThrottle, &QTimer::timeout, this, &AudioLevels::isRecordingChanged);
+                for (AudioLevelsChannel *channel : d->audioLevelsChannels) {
+                    channel->enabled = true;
+                    connect(channel->diskRecorder(), &DiskWriter::isRecordingChanged, &d->isRecordingChangedThrottle, QOverload<>::of(&QTimer::start), Qt::QueuedConnection);
+                }
                 d->initialized = true;
             } else {
                 qWarning() << Q_FUNC_INFO << "Failed to activate AudioLevels Jack client with the return code" << result;
@@ -413,11 +414,11 @@ void AudioLevels::startRecording(quint64 startTimestamp)
     } else {
         d->startTimestamp = SyncTimer::instance()->jackPlayhead();
     }
-    d->stopTimestamp = 0;
+    d->stopTimestamp = ULONG_LONG_MAX;
     // Inform all the channels they should only be recording from (and including) that given timestamp
     for (AudioLevelsChannel *channel : qAsConst(d->audioLevelsChannels)) {
         channel->firstRecordingFrame = d->startTimestamp;
-        channel->lastRecordingFrame = ULONG_LONG_MAX;
+        channel->lastRecordingFrame = d->stopTimestamp;
     }
     const QString timestamp{QDateTime::currentDateTime().toString(Qt::ISODate)};
     const double sampleRate = jack_get_sample_rate(d->jackClient);
@@ -534,7 +535,6 @@ void AudioLevels::handleTimerCommand(quint64 timestamp, TimerCommand* command)
             d->audioLevelsChannels[command->parameter2 + 3]->lastRecordingFrame = timestamp;
         }
     }
-    QMetaObject::invokeMethod(&d->isRecordingChangedThrottle, "start");
 }
 
 QStringList AudioLevels::recordingFilenames() const

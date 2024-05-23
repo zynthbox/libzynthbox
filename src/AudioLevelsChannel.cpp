@@ -43,7 +43,6 @@ int AudioLevelsChannel::process(jack_nframes_t nframes, jack_nframes_t current_f
                 if (m_diskRecorder->isRecording()) {
                     qDebug() << Q_FUNC_INFO << "We have been asked to start a new recording while one is already going on. Stopping the ongoing one first.";
                     m_diskRecorder->stop();
-                    lastRecordingFrame = ULONG_LONG_MAX;
                 }
                 m_diskRecorder->startRecording(command->variantParameter.toString(), sampleRate);
             }
@@ -112,7 +111,6 @@ void AudioLevelsChannel::doRecordingHandling(jack_nframes_t nframes, jack_nframe
         if (lastRecordingFrame < next_frames) {
             qDebug() << Q_FUNC_INFO << clientName << "We've passed the last data to the recorder - tell it to stop.";
             m_diskRecorder->stop();
-            lastRecordingFrame = ULONG_LONG_MAX;
         }
     }
 }
