@@ -113,7 +113,7 @@ public:
     double recordingStartTime{0.0};
     double recordingStopTime{DBL_MAX};
     void handleMidiMessage(const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const double& timestamp, const int &sketchpadTrack) {
-        if (recordingStartTime <= recordingStartTime && timestamp <= recordingStopTime) {
+        if (recordingStartTime <= timestamp && timestamp <= recordingStopTime) {
             if (0x7F < byte1 && byte1 < 0xA0) {
                 // Using microseconds for timestamps (midi is commonly that anyway)
                 // and juce expects ongoing timestamps, not intervals (it will create those when saving)
