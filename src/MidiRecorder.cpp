@@ -27,6 +27,7 @@
 #include "PatternModel.h"
 #include "SyncTimer.h"
 #include "TimerCommand.h"
+#include "ZynthboxBasics.h"
 
 #include <QDebug>
 #include <QTimer>
@@ -109,8 +110,8 @@ public:
     MidiRecorderRing recorderRing;
     // One for each of the sketchpad tracks
     juce::MidiMessageSequence globalMidiMessageSequence;
-    juce::MidiMessageSequence midiMessageSequence[10];
-    double recordingStartTime{0.0};
+    juce::MidiMessageSequence midiMessageSequence[ZynthboxTrackCount];
+    double recordingStartTime{DBL_MAX};
     double recordingStopTime{DBL_MAX};
     void handleMidiMessage(const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const double& timestamp, const int &sketchpadTrack) {
         if (recordingStartTime <= timestamp && timestamp <= recordingStopTime) {
@@ -122,6 +123,9 @@ public:
             }
         // } else {
             // qDebug() << Q_FUNC_INFO << "Did not add message for" << sketchpadTrack << "containing bytes" << byte1 << byte2 << byte3 << "at time" << quint64(timestamp) << "which was not between" << quint64(recordingStartTime) << "and" << quint64(recordingStopTime);
+        }
+        if (recordingStopTime < timestamp && recordingStartTime < recordingStopTime) {
+            recordingStartTime = DBL_MAX;
         }
     }
 
@@ -249,7 +253,7 @@ void MidiRecorder::scheduleStopRecording(quint64 delay, int sketchpadTrack)
 void MidiRecorder::clearRecording()
 {
     d->globalMidiMessageSequence.clear();
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < ZynthboxTrackCount; ++i) {
         d->midiMessageSequence[i].clear();
     }
 }
@@ -456,12 +460,12 @@ bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorde
     static const double timerTicksInOnePatternSubbeat{syncTimer->getMultiplier() / 32.0};
     const double microsecondsPerSubbeat = syncTimer->subbeatCountToSeconds(syncTimer->getBpm(), timerTicksInOnePatternSubbeat) * 1000000.0;
     static const double timerTicksInOneStepLengthUnit{(double(syncTimer->getMultiplier()) / 96.0)};
-    const double microsecondsPerStep = syncTimer->subbeatCountToSeconds(syncTimer->getBpm(), patternModel->stepLength() * timerTicksInOnePatternSubbeat) * 1000000.0;
+    const double microsecondsPerStep = syncTimer->subbeatCountToSeconds(syncTimer->getBpm(), patternModel->stepLength() * timerTicksInOneStepLengthUnit) * 1000000.0;
 
     // Update the matching on/off pairs in the sequence (just to make sure they're there, and logically
     // matched, as we depend on that below, but also kind of just want things ready before we use the data
     d->globalMidiMessageSequence.updateMatchedPairs();
-    for(int i = 0; i < 10; ++i) {
+    for(int i = 0; i < ZynthboxTrackCount; ++i) {
         d->midiMessageSequence[i].updateMatchedPairs();
     }
 
@@ -480,6 +484,7 @@ bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorde
             }
         }
     }
+    int totalStepEntries{0};
     if (lastStep > -1) {
         // if it's more than pattern width*bankLength, we've got a problem (and should probably do the first part, and then spit out a message somewhere to the effect that some bits are missing)
         if (lastStep > patternModel->width() * patternModel->bankLength()) {
@@ -503,22 +508,22 @@ bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorde
                 velocity = message->message.getVelocity();
                 timestamp = message->message.getTimeStamp();
                 qDebug() << Q_FUNC_INFO << "Found an on message, for channel, note, velocity, and timestamp" << midiChannel << midiNote << velocity << timestamp;
-                while (timestamp > (step * microsecondsPerStep)) {
+                while (timestamp > ((step + 1) * microsecondsPerStep)) {
                     ++step;
                 }
                 qDebug() << Q_FUNC_INFO << "Increased step position to match" << double(timestamp) / 1000000.0 << "seconds, now operating on step" << step;
-                delay = ((step * microsecondsPerStep) - timestamp) / microsecondsPerSubbeat;
+                delay = (timestamp - (step * microsecondsPerStep)) / microsecondsPerSubbeat;
                 if (message->noteOffObject) {
-                    duration = (message->noteOffObject->message.getTimeStamp() - timestamp - delay) / microsecondsPerStep;
-                    qDebug() << Q_FUNC_INFO << "Found a note off partner, duration is now" << duration;
+                    duration = double(message->noteOffObject->message.getTimeStamp() - timestamp) / microsecondsPerSubbeat;
+                    qDebug() << Q_FUNC_INFO << "Found a note off partner, duration is now" << duration << "based on an off note timestamp of" << int(message->noteOffObject->message.getTimeStamp());
                 } else {
                     duration = 0;
                 }
             } else {
-                if (!acceptChannel.contains(message->message.getChannel() - 1)) {
-                    qDebug() << Q_FUNC_INFO << "Message channel is not accepted, skipping";
-                } else {
+                if (acceptChannel.contains(message->message.getChannel() - 1)) {
                     qDebug() << Q_FUNC_INFO << "Not an on message, skipping";
+                } else {
+                    qDebug() << Q_FUNC_INFO << "Message channel is not accepted, skipping";
                 }
                 continue;
             }
@@ -527,6 +532,7 @@ bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorde
             row = patternModel->bankOffset() + (step / patternModel->width());
             column = step % patternModel->width();
             subnoteIndex = patternModel->addSubnote(row, column, note);
+            ++totalStepEntries;
             qDebug() << Q_FUNC_INFO << "Inserted subnote at" << row << column << "New subnote is" << note << "with duration" << duration << "delay" << delay;
             patternModel->setSubnoteMetadata(row, column, subnoteIndex, "velocity", velocity);
             if (duration > 0) {
@@ -541,6 +547,7 @@ bool MidiRecorder::applyToPattern(PatternModel *patternModel, QFlags<MidiRecorde
                 break;
             }
         }
+        qDebug() << Q_FUNC_INFO << "Added a total of" << totalStepEntries << "entries to" << step << "steps";
         success = true;
     } else {
         qWarning() << Q_FUNC_INFO << "Failed to find a last step";
