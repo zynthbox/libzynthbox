@@ -2255,11 +2255,8 @@ void ZLPatternSynchronisationManager::addRecordedNote(void *recordedNote)
 {
     NewNoteData *newNote = static_cast<NewNoteData*>(recordedNote);
 
-    qint64 nextPosition{0}; // not relevant
-    bool relevantToUs{false}; // not relevant
-    qint64 noteDuration{0};
-    q->d->noteLengthDetails(q->stepLength(), nextPosition, relevantToUs, noteDuration);
-    noteDuration = noteDuration * q->d->patternTickToSyncTimerTick;
+    // Note duration in the majority of this is in pattern ticks (that is, 1/128th of a bar), so let's trim things down a bit
+    qint64 noteDuration = q->stepLength() / q->d->patternTickToSyncTimerTick;
 
     // Unless we're in the "all the zoomies" mode where each step is one pattern tick, allow for a deviation of 2 before auto-quantizing
     int deviationAllowance = qMin(qint64(2), noteDuration);
@@ -2268,8 +2265,7 @@ void ZLPatternSynchronisationManager::addRecordedNote(void *recordedNote)
     newNote->timestamp = (newNote->timestamp - quint64(q->d->mostRecentStartTimestamp)) / quint64(q->d->patternTickToSyncTimerTick);
     newNote->endTimestamp = (newNote->endTimestamp - quint64(q->d->mostRecentStartTimestamp)) / quint64(q->d->patternTickToSyncTimerTick);
 
-    const int patternLength = q->width() * q->availableBars();
-    const double normalisedTimestamp{double(qint64(newNote->timestamp) % (patternLength * noteDuration))};
+    const double normalisedTimestamp{double(qint64(newNote->timestamp) % (q->patternLength() * noteDuration))};
     newNote->step = normalisedTimestamp / noteDuration;
     newNote->delay = normalisedTimestamp - (newNote->step * noteDuration);
 
@@ -2281,7 +2277,7 @@ void ZLPatternSynchronisationManager::addRecordedNote(void *recordedNote)
     if (newNote->delay < deviationAllowance) {
         newNote->delay = 0;
     } else if (noteDuration - newNote->delay < deviationAllowance) {
-        newNote->step = (newNote->step + 1) % patternLength;
+        newNote->step = (newNote->step + 1) % q->patternLength();
         row = (newNote->step / q->width()) % q->availableBars();
         column = newNote->step - (row * q->width());
         newNote->delay = 0;
@@ -2317,7 +2313,7 @@ void ZLPatternSynchronisationManager::addRecordedNote(void *recordedNote)
         const int oldDuration = q->subnoteMetadata(newNote->row, newNote->column, subnoteIndex, "duration").toInt();
         const int oldDelay = q->subnoteMetadata(newNote->row, newNote->column, subnoteIndex, "delay").toInt();
         if (oldVelocity == newNote->velocity && oldDuration == newNote->duration && oldDelay == newNote->delay) {
-            // qDebug() <<  Q_FUNC_INFO << "This is a note we already have in the pattern, with the same data set on it, so no need to do anything with that" << newNote << newNote->timestamp << newNote->endTimestamp << newNote->step << newNote->row << newNote->column << newNote->midiNote << newNote->velocity << newNote->delay << newNote->duration;
+            qDebug() <<  Q_FUNC_INFO << "This is a note we already have in the pattern, with the same data set on it, so no need to do anything with that" << newNote << newNote->timestamp << newNote->endTimestamp << newNote->step << newNote->row << newNote->column << newNote->midiNote << newNote->velocity << newNote->delay << newNote->duration;
             subnoteIndex = -1;
         }
     }
