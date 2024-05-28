@@ -53,4 +53,18 @@
     <object-type name="MidiRouterDeviceModel">
         <enum-type name="Roles" />
     </object-type>
+    <object-type name="SequenceModel">
+        <enum-type name="Roles" />
+    </object-type>
+    <object-type name="NotesModel">
+        <enum-type name="Roles" />
+    </object-type>
+    <object-type name="PatternModel">
+        <enum-type name="NoteDestination" />
+    </object-type>
+    <object-type name="KeyScales">
+        <enum-type name="Scale" />
+        <enum-type name="Pitch" />
+        <enum-type name="Octave" />
+    </object-type>
 </typesystem>

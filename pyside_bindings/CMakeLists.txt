@@ -5,14 +5,18 @@ set(generated_sources
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/audiolevels_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/clipaudiosource_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/jackpassthrough_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/keyscales_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirouter_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirouterdevice_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirouterdevicemodel_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirecorder_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/notesmodel_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/patternmodel_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/playgridmanager_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/playfieldmanager_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/plugin_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/processwrapper_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/sequencemodel_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/synctimer_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/zynthbox_module_wrapper.cpp
 )

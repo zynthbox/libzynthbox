@@ -6,14 +6,18 @@
 #include <AudioLevels.h>
 #include <ClipAudioSource.h>
 #include <JackPassthrough.h>
+#include <KeyScales.h>
 #include <MidiRouter.h>
 #include <MidiRouterDevice.h>
 #include <MidiRouterDeviceModel.h>
 #include <MidiRecorder.h>
+#include <NotesModel.h>
+#include <PatternModel.h>
 #include <PlayGridManager.h>
 #include <PlayfieldManager.h>
 #include <Plugin.h>
 #include <ProcessWrapper.h>
+#include <SequenceModel.h>
 #include <SyncTimer.h>
 
 #endif//PYSIDE_BINDINGS_H
