@@ -49,7 +49,7 @@ public:
         unsigned char byte0{0};
         unsigned char byte1{0};
         unsigned char byte2{0};
-        char size{0};
+        unsigned char size{0};
     };
     MidiRecorderRing() {
         Entry* entryPrevious{&ringData[MidiRecorderRingSize - 1]};
@@ -62,7 +62,7 @@ public:
     }
     ~MidiRecorderRing() { }
 
-    void write(const double &timestamp, const int &sketchpadTrack, const unsigned char &byte0, const unsigned char &byte1, const unsigned char &byte2, const char &size) {
+    void write(const double &timestamp, const int &sketchpadTrack, const unsigned char &byte0, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &size) {
         Entry *entry = writeHead;
         writeHead = writeHead->next;
         if (entry->processed == false) {
@@ -80,7 +80,7 @@ public:
      * \brief Attempt to read the data out of the ring, until there are no more unprocessed entries
      * @return Whether or not the read was valid
      */
-    bool read(double *timestamp, int *sketchpadTrack, unsigned char *byte0, unsigned char *byte1, unsigned char *byte2, char *size) {
+    bool read(double *timestamp, int *sketchpadTrack, unsigned char *byte0, unsigned char *byte1, unsigned char *byte2, unsigned char *size) {
         if (readHead->processed == false) {
             Entry *entry = readHead;
             readHead = readHead->next;
@@ -113,14 +113,12 @@ public:
     juce::MidiMessageSequence midiMessageSequence[ZynthboxTrackCount];
     double recordingStartTime{DBL_MAX};
     double recordingStopTime{DBL_MAX};
-    void handleMidiMessage(const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const double& timestamp, const int &sketchpadTrack) {
+    void handleMidiMessage(const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const unsigned char& size, const double& timestamp, const int &sketchpadTrack) {
         if (recordingStartTime <= timestamp && timestamp <= recordingStopTime) {
-            if (0x7F < byte1 && byte1 < 0xA0) {
-                // Using microseconds for timestamps (midi is commonly that anyway)
-                // and juce expects ongoing timestamps, not intervals (it will create those when saving)
-                double ourTimestamp = qMax(timestamp - recordingStartTime, 0.0);
-                recorderRing.write(ourTimestamp, sketchpadTrack, byte1, byte2, byte3, 3);
-            }
+            // Using microseconds for timestamps (midi is commonly that anyway)
+            // and juce expects ongoing timestamps, not intervals (it will create those when saving)
+            double ourTimestamp = qMax(timestamp - recordingStartTime, 0.0);
+            recorderRing.write(ourTimestamp, sketchpadTrack, byte1, byte2, byte3, size);
         // } else {
             // qDebug() << Q_FUNC_INFO << "Did not add message for" << sketchpadTrack << "containing bytes" << byte1 << byte2 << byte3 << "at time" << quint64(timestamp) << "which was not between" << quint64(recordingStartTime) << "and" << quint64(recordingStopTime);
         }
@@ -136,12 +134,19 @@ public:
         unsigned char byte0{0};
         unsigned char byte1{0};
         unsigned char byte2{0};
-        char size{0};
+        unsigned char size{0};
         while (recorderRing.read(&timestamp, &sketchpadTrack, &byte0, &byte1, &byte2, &size)) {
-            juce::MidiMessage message{byte0, byte1, byte2, timestamp};
+            juce::MidiMessage message;
+            if (size == 3) {
+                message = juce::MidiMessage(byte0, byte1, byte2, timestamp);
+            } else if (size == 2) {
+                message = juce::MidiMessage(byte0, byte1, timestamp);
+            } else if (size == 1) {
+                message = juce::MidiMessage(byte0, timestamp);
+            }
             midiMessageSequence[sketchpadTrack].addEvent(message);
             globalMidiMessageSequence.addEvent(message);
-            qDebug() << Q_FUNC_INFO << "Added message for track" << sketchpadTrack << "containing bytes" << byte0 << byte1 << byte2 << "with local timestamp" << quint64(timestamp) << "µs, or" << (timestamp / 1000000) << "seconds";
+            qDebug() << Q_FUNC_INFO << "Added message for track" << sketchpadTrack << "containing" << size << "bytes with values" << byte0 << byte1 << byte2 << "with local timestamp" << quint64(timestamp) << "µs, or" << (timestamp / 1000000) << "seconds";
         }
     }
 };
@@ -181,9 +186,9 @@ MidiRecorder::MidiRecorder(QObject *parent)
 
 MidiRecorder::~MidiRecorder() = default;
 
-void MidiRecorder::handleMidiMessage(const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const double& timeStamp, const int& sketchpadTrack)
+void MidiRecorder::handleMidiMessage(const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3, const unsigned char& size, const double& timeStamp, const int& sketchpadTrack)
 {
-    d->handleMidiMessage(byte1, byte2, byte3, timeStamp, sketchpadTrack);
+    d->handleMidiMessage(byte1, byte2, byte3, size, timeStamp, sketchpadTrack);
 }
 
 void MidiRecorder::startRecording(int sketchpadTrack, bool clear, quint64 startTimestamp)

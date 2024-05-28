@@ -89,7 +89,7 @@ struct MidiListenerPort {
         message.eventDevice = eventDevice;
         message.submitted = false;
         if (identifier == MidiRouter::PassthroughPort) {
-            MidiRecorder::instance()->handleMidiMessage(message.byte0, message.byte1, message.byte2, timeStampUsecs, sketchpadTrack);
+            MidiRecorder::instance()->handleMidiMessage(message.byte0, message.byte1, message.byte2, event.size, timeStampUsecs, sketchpadTrack);
         }
     }
     NoteMessage messages[MAX_LISTENER_MESSAGES];
