@@ -58,6 +58,7 @@
 #include "KeyScales.h"
 #include "Chords.h"
 #include "ProcessWrapper.h"
+#include "JackPassthroughFilter.h"
 #include "ZynthboxBasics.h"
 
 #include "Plugin.h"
@@ -127,6 +128,7 @@ Plugin::Plugin(QObject *parent)
     : QObject(parent)
 {
     qRegisterMetaType<ClipAudioSource::PlaybackStyle>("ClipAudioSource::PlaybackStyle");
+    qRegisterMetaType<JackPassthroughFilter::FilterType>("JackPassthroughFilter::FilterType");
 }
 
 Plugin *Plugin::instance()
@@ -310,6 +312,7 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
     qmlRegisterUncreatableType<PatternModel>(uri, 1, 0, "PatternModel", "Use the getPatternModel function on the main PlayGrid global object to get one of these");
     qmlRegisterUncreatableType<MidiRouterDeviceModel>(uri, 1, 0, "MidiRouterDeviceModel", "Use model on MidiRouter to get the devices model");
     qmlRegisterUncreatableType<SettingsContainer>(uri, 1, 0, "SettingsContainer", "This is for internal use only");
+    qmlRegisterUncreatableType<JackPassthroughFilter>(uri, 1, 0, "JackPassthroughFilter", "Find a list of these in the passthrough clients' equaliserSettings property");
     qmlRegisterType<PlayGrid>(uri, 1, 0, "PlayGrid");
     qmlRegisterType<ProcessWrapper>(uri, 1, 0, "ProcessWrapper");
     qmlRegisterSingletonType<PlayGridManager>(uri, 1, 0, "PlayGridManager", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {

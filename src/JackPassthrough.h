@@ -22,6 +22,8 @@ class JackPassthroughPrivate;
  * Due to the manner in which the client operates, setting the dry and wet amounts to 0 or 1 makes the
  * client operate much faster than any value between the two (the two extremes are direct copies, and
  * the others have to modify the sample values).
+ *
+ * There is further a pair of inputs named sidechainLeft and sidechainRight, which are used to perform sidechained compression if the compressor is enabled
  */
 class JackPassthrough : public QObject {
     Q_OBJECT
@@ -47,6 +49,34 @@ class JackPassthrough : public QObject {
     Q_PROPERTY(float dryWetMixAmount READ dryWetMixAmount WRITE setDryWetMixAmount NOTIFY dryWetMixAmountChanged)
     Q_PROPERTY(float panAmount READ panAmount WRITE setPanAmount NOTIFY panAmountChanged)
     Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY mutedChanged)
+
+    /**
+     * \brief Whether or not the equaliser will be applied to incoming audio
+     * @default false
+     */
+    Q_PROPERTY(bool equaliserEnabled READ equaliserEnabled WRITE setEqualiserEnabled NOTIFY equaliserEnabledChanged)
+    /**
+     * \brief A list of the settings container objects for each of the equaliser bands
+     */
+    Q_PROPERTY(QVariantList equaliserSettings READ equaliserSettings NOTIFY equaliserSettingsChanged)
+
+    /**
+     * \brief Whether or not the compressor will be applied to incoming audio (post-equaliser)
+     * @default false
+     */
+    Q_PROPERTY(bool compressorEnabled READ compressorEnabled WRITE setCompressorEnabled NOTIFY compressorEnabledChanged)
+    /**
+     * \brief The sources used for the left channel of the compressor side channel
+     */
+    Q_PROPERTY(QString compressorSidechannelLeft READ compressorSidechannelLeft WRITE setCompressorSidechannelLeft NOTIFY compressorSidechannelLeftChanged)
+    /**
+     * \brief The sources used for the right channel of the compressor side channel
+     */
+    Q_PROPERTY(QString compressorSidechannelRight READ compressorSidechannelRight WRITE setCompressorSidechannelRight NOTIFY compressorSidechannelRightChanged)
+    /**
+     * \brief The threshold for detecting in the side channel whether to apply the compressor
+     */
+    Q_PROPERTY(float compressorThreshold READ compressorThreshold WRITE setCompressorThreshold NOTIFY compressorThresholdChanged)
 public:
     explicit JackPassthrough(const QString &clientName, QObject *parent = nullptr, bool dryOutPortsEnabled = true, bool wetOutFx1PortsEnabled = true, bool wetOutFx2PortsEnabled = true);
     ~JackPassthrough() override;
@@ -74,6 +104,25 @@ public:
     bool muted() const;
     void setMuted(const bool& newValue);
     Q_SIGNAL void mutedChanged();
+
+    bool equaliserEnabled() const;
+    void setEqualiserEnabled(const bool &equaliserEnabled);
+    Q_SIGNAL void equaliserEnabledChanged();
+    QVariantList equaliserSettings() const;
+    Q_SIGNAL void equaliserSettingsChanged();
+
+    bool compressorEnabled() const;
+    void setCompressorEnabled(const bool &compressorEnabled);
+    Q_SIGNAL void compressorEnabledChanged();
+    QString compressorSidechannelLeft() const;
+    void setCompressorSidechannelLeft(const QString &compressorSidechannelLeft);
+    Q_SIGNAL void compressorSidechannelLeftChanged();
+    QString compressorSidechannelRight() const;
+    void setCompressorSidechannelRight(const QString &compressorSidechannelRight);
+    Q_SIGNAL void compressorSidechannelRightChanged();
+    float compressorThreshold() const;
+    void setCompressorThreshold(const float &compressorThreshold);
+    Q_SIGNAL void compressorThresholdChanged();
 private:
     JackPassthroughPrivate *d{nullptr};
 };
