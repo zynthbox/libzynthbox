@@ -6,6 +6,7 @@
 #include <AudioLevels.h>
 #include <ClipAudioSource.h>
 #include <JackPassthrough.h>
+#include <JackPassthroughFilter.h>
 #include <KeyScales.h>
 #include <MidiRouter.h>
 #include <MidiRouterDevice.h>

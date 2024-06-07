@@ -11,6 +11,9 @@
         <enum-type name="PlaybackStyle" />
     </object-type>
     <object-type name="JackPassthrough"></object-type>
+    <object-type name="JackPassthroughFilter">
+        <enum-type name="FilterType" />
+    </object-type>
     <object-type name="MidiRecorder">
         <enum-type name="ApplicatorSetting" />
     </object-type>

@@ -5,6 +5,7 @@ set(generated_sources
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/audiolevels_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/clipaudiosource_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/jackpassthrough_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/jackpassthroughfilter_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/keyscales_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirouter_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirouterdevice_wrapper.cpp
