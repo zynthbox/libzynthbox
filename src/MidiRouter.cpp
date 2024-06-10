@@ -493,103 +493,107 @@ public:
         const char **ports = jack_get_ports(jackClient, nullptr, JACK_DEFAULT_MIDI_TYPE, JackPortIsPhysical);
         QList<MidiRouterDevice*> connectedDevices{internalDevices};
         QList<MidiRouterDevice*> newDevices;
-        for (const char **p = ports; *p; p++) {
-            const QString portName{QString::fromLocal8Bit(*p)};
-            MidiRouterDevice *device{nullptr};
-            jack_port_t *hardwarePort = jack_port_by_name(jackClient, *p);
-            if (hardwarePort) {
-                QString humanReadableName, zynthianId, hardwareId;
-                int num_aliases;
-                char *aliases[2];
-                aliases[0] = (char *)malloc(size_t(jack_port_name_size()));
-                aliases[1] = (char *)malloc(size_t(jack_port_name_size()));
-                num_aliases = jack_port_get_aliases(hardwarePort, aliases);
-                static const QString ttyMidiPortName{"ttymidi:MIDI_"};
-                if (portName.startsWith(ttyMidiPortName)) {
-                    humanReadableName = QString{"Midi 5-Pin"};
-                    hardwareId = zynthianId = ttyMidiPortName.left(ttyMidiPortName.length() - 1);
-                } else if (num_aliases > 0) {
-                    int i;
-                    for (i = 0; i < num_aliases; i++) {
-                        QStringList hardwareIdSplit;
-                        QStringList splitAlias = QString::fromUtf8(aliases[i]).split('-');
-                        if (splitAlias.length() > 5) {
-                            for (int i = 0; i < 5; ++i) {
-                                if (i > 0) {
-                                    hardwareIdSplit.append(splitAlias.takeFirst());
-                                } else {
-                                    splitAlias.removeFirst();
+        if (ports == nullptr) {
+            qDebug() << Q_FUNC_INFO << "No physical ports found";
+        } else {
+            for (const char **p = ports; *p; p++) {
+                const QString portName{QString::fromLocal8Bit(*p)};
+                MidiRouterDevice *device{nullptr};
+                jack_port_t *hardwarePort = jack_port_by_name(jackClient, *p);
+                if (hardwarePort) {
+                    QString humanReadableName, zynthianId, hardwareId;
+                    int num_aliases;
+                    char *aliases[2];
+                    aliases[0] = (char *)malloc(size_t(jack_port_name_size()));
+                    aliases[1] = (char *)malloc(size_t(jack_port_name_size()));
+                    num_aliases = jack_port_get_aliases(hardwarePort, aliases);
+                    static const QString ttyMidiPortName{"ttymidi:MIDI_"};
+                    if (portName.startsWith(ttyMidiPortName)) {
+                        humanReadableName = QString{"Midi 5-Pin"};
+                        hardwareId = zynthianId = ttyMidiPortName.left(ttyMidiPortName.length() - 1);
+                    } else if (num_aliases > 0) {
+                        int i;
+                        for (i = 0; i < num_aliases; i++) {
+                            QStringList hardwareIdSplit;
+                            QStringList splitAlias = QString::fromUtf8(aliases[i]).split('-');
+                            if (splitAlias.length() > 5) {
+                                for (int i = 0; i < 5; ++i) {
+                                    if (i > 0) {
+                                        hardwareIdSplit.append(splitAlias.takeFirst());
+                                    } else {
+                                        splitAlias.removeFirst();
+                                    }
                                 }
+                                humanReadableName = splitAlias.join(" ");
+                                zynthianId = splitAlias.join("_");
+                                hardwareId = hardwareIdSplit.join("-");
+                                break;
                             }
-                            humanReadableName = splitAlias.join(" ");
-                            zynthianId = splitAlias.join("_");
-                            hardwareId = hardwareIdSplit.join("-");
-                            break;
                         }
+                    } else {
+                        QStringList splitAlias = portName.split('-');
+                        humanReadableName = splitAlias.join(" ");
+                        zynthianId = splitAlias.join("_");
+                        hardwareId = zynthianId;
                     }
-                } else {
-                    QStringList splitAlias = portName.split('-');
-                    humanReadableName = splitAlias.join(" ");
-                    zynthianId = splitAlias.join("_");
-                    hardwareId = zynthianId;
-                }
-                free(aliases[0]);
-                free(aliases[1]);
-                int jackPortFlags = jack_port_flags(hardwarePort);
-                QString inputPortName = QString("input-%1").arg(portName);
-                QString outputPortName = QString("output-%1").arg(portName);
-                for (MidiRouterDevice *needle : qAsConst(devices)) {
-                    if (needle->hardwareId() == hardwareId && needle->zynthianId() == zynthianId) {
-                        device = needle;
-                        break;
-                    }
-                }
-                if (!device) {
-                    for (MidiRouterDevice *needle : qAsConst(newDevices)) {
+                    free(aliases[0]);
+                    free(aliases[1]);
+                    int jackPortFlags = jack_port_flags(hardwarePort);
+                    QString inputPortName = QString("input-%1").arg(portName);
+                    QString outputPortName = QString("output-%1").arg(portName);
+                    for (MidiRouterDevice *needle : qAsConst(devices)) {
                         if (needle->hardwareId() == hardwareId && needle->zynthianId() == zynthianId) {
                             device = needle;
                             break;
                         }
                     }
                     if (!device) {
-                        device = new MidiRouterDevice(jackClient, q);
-                        newDevices << device;
-                        device->setDeviceType(MidiRouterDevice::HardwareDeviceType);
-                        device->setZynthianMasterChannel(masterChannel);
-                        device->setZynthianId(zynthianId);
-                        device->setHardwareId(hardwareId);
-                        device->setHumanReadableName(humanReadableName);
+                        for (MidiRouterDevice *needle : qAsConst(newDevices)) {
+                            if (needle->hardwareId() == hardwareId && needle->zynthianId() == zynthianId) {
+                                device = needle;
+                                break;
+                            }
+                        }
+                        if (!device) {
+                            device = new MidiRouterDevice(jackClient, q);
+                            newDevices << device;
+                            device->setDeviceType(MidiRouterDevice::HardwareDeviceType);
+                            device->setZynthianMasterChannel(masterChannel);
+                            device->setZynthianId(zynthianId);
+                            device->setHardwareId(hardwareId);
+                            device->setHumanReadableName(humanReadableName);
+                        }
                     }
-                }
-                if (jackPortFlags & JackPortIsOutput) {
-                    bool currentState{device->inputEnabled()};
-                    bool portIsUnknown{device->inputPortName().isEmpty()};
-                    device->setInputPortName(inputPortName);
-                    device->setInputEnabled(!disabledMidiInPorts.contains(device->zynthianId()));
-                    connectPorts(portName, QString("ZLRouter:%1").arg(inputPortName));
-                    if (portIsUnknown || currentState != device->inputEnabled()) {
-                        // Only debug this out if there's a change or the device is new
-                        qDebug() << Q_FUNC_INFO << "Updated" << device << device->humanReadableName() << "input port" << device->inputPortName() << "enabled state to" << device->inputEnabled();
+                    if (jackPortFlags & JackPortIsOutput) {
+                        bool currentState{device->inputEnabled()};
+                        bool portIsUnknown{device->inputPortName().isEmpty()};
+                        device->setInputPortName(inputPortName);
+                        device->setInputEnabled(!disabledMidiInPorts.contains(device->zynthianId()));
+                        connectPorts(portName, QString("ZLRouter:%1").arg(inputPortName));
+                        if (portIsUnknown || currentState != device->inputEnabled()) {
+                            // Only debug this out if there's a change or the device is new
+                            qDebug() << Q_FUNC_INFO << "Updated" << device << device->humanReadableName() << "input port" << device->inputPortName() << "enabled state to" << device->inputEnabled();
+                        }
+                    } else if (jackPortFlags & JackPortIsInput) {
+                        bool currentState{device->outputEnabled()};
+                        bool portIsUnknown{device->outputPortName().isEmpty()};
+                        device->setOutputPortName(outputPortName);
+                        device->setOutputEnabled(enabledMidiOutPorts.contains(device->zynthianId()));
+                        connectPorts(QString("ZLRouter:%1").arg(outputPortName), portName);
+                        if (portIsUnknown || currentState != device->outputEnabled()) {
+                            // Only debug this out if there's a change or the device is new
+                            qDebug() << Q_FUNC_INFO << "Updated" << device << device->humanReadableName() << "output port" << device->outputPortName() << "enabled state to" << device->outputEnabled();
+                        }
                     }
-                } else if (jackPortFlags & JackPortIsInput) {
-                    bool currentState{device->outputEnabled()};
-                    bool portIsUnknown{device->outputPortName().isEmpty()};
-                    device->setOutputPortName(outputPortName);
-                    device->setOutputEnabled(enabledMidiOutPorts.contains(device->zynthianId()));
-                    connectPorts(QString("ZLRouter:%1").arg(outputPortName), portName);
-                    if (portIsUnknown || currentState != device->outputEnabled()) {
-                        // Only debug this out if there's a change or the device is new
-                        qDebug() << Q_FUNC_INFO << "Updated" << device << device->humanReadableName() << "output port" << device->outputPortName() << "enabled state to" << device->outputEnabled();
+                    if (connectedDevices.contains(device) == false) {
+                        connectedDevices << device;
                     }
+                } else {
+                    qWarning() << Q_FUNC_INFO << "Failed to open hardware port for identification:" << portName;
                 }
-                if (connectedDevices.contains(device) == false) {
-                    connectedDevices << device;
-                }
-            } else {
-                qWarning() << Q_FUNC_INFO << "Failed to open hardware port for identification:" << portName;
             }
+            free(ports);
         }
-        free(ports);
         for (MidiRouterDevice *device : qAsConst(devices)) {
             if (connectedDevices.contains(device) == false) {
                 // A device has been removed, notify people about that
