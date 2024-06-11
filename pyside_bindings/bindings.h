@@ -3,6 +3,9 @@
 
 #define JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED 1
 
+#include <QPolygon>
+#include <QRect>
+
 #include <AudioLevels.h>
 #include <ClipAudioSource.h>
 #include <JackPassthrough.h>

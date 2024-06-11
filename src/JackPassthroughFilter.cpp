@@ -12,30 +12,38 @@
 #include "JUCEHeaders.h"
 
 #include <QDebug>
+#include <QDateTime>
+#include <QPolygonF>
 #include <QTimer>
+
+static constexpr float inverseRootTwo{0.70710678118654752440};
 
 class JackPassthroughFilterPrivate {
 public:
-    JackPassthroughFilterPrivate(JackPassthroughFilter *q)
+    JackPassthroughFilterPrivate(JackPassthroughFilter *q, JackPassthrough *passthrough)
         : q(q)
+        , passthrough(passthrough)
     {
-        frequencies.resize (300);
-        for (size_t i=0; i < frequencies.size(); ++i) {
-            frequencies [i] = 20.0 * std::pow (2.0, i / 30.0);
+        frequencies.resize(300);
+        for (size_t i = 0; i < frequencies.size(); ++i) {
+            frequencies [i] = 20.0 * std::pow(2.0, i / 30.0);
         }
-        magnitudes.resize (frequencies.size());
+        magnitudes.resize(frequencies.size());
 
         coefficientUpdater.setSingleShot(true);
         coefficientUpdater.setInterval(0);
         QObject::connect(&coefficientUpdater, &QTimer::timeout, q, [this](){ updateCoefficientsActual(); });
     }
     JackPassthroughFilter *q{nullptr};
+    JackPassthrough *passthrough{nullptr};
+    QString graphUrl;
     QString name;
+    qint64 lastModifiedTime{0};
     bool selected{false};
     float sampleRate{48000.0f};
     JackPassthroughFilter::FilterType filterType;
     float frequency;
-    float quality{0.707f};
+    float quality{inverseRootTwo};
     float gain{1.0f};
     bool active{true}; // The global setting is off, but when enabling the qualiser, we want all of the filters to be active by default
     bool soloed{false};
@@ -56,9 +64,9 @@ public:
     std::vector<double> magnitudes;
 };
 
-JackPassthroughFilter::JackPassthroughFilter(int index, QObject* parent)
+JackPassthroughFilter::JackPassthroughFilter(int index, JackPassthrough* parent)
     : QObject(parent)
-    , d(new JackPassthroughFilterPrivate(this))
+    , d(new JackPassthroughFilterPrivate(this, parent))
 {
     switch(index) {
         case 0:
@@ -66,41 +74,44 @@ JackPassthroughFilter::JackPassthroughFilter(int index, QObject* parent)
             d->filterType = HighPassType;
             d->frequency = 20.0f;
             d->color = QColorConstants::Svg::blue;
+            d->active = false; // Since this would change the sound at base state, let's disable it by default to avoid processing sound we don't want to
             break;
         case 1:
             d->name = QLatin1String{"Low"};
             d->filterType = LowShelfType;
             d->frequency = 250.0f;
-            d->color = QColorConstants::Svg::brown;
+            d->color = QColorConstants::Svg::yellow;
             break;
         case 2:
             d->name = QLatin1String{"Low Mids"};
             d->filterType = PeakType;
             d->frequency = 500.0f;
-            d->color = QColorConstants::Svg::green;
+            d->color = QColorConstants::Svg::lightgreen;
             break;
         case 3:
             d->name = QLatin1String{"High Mids"};
             d->filterType = PeakType;
             d->frequency = 1000.0f;
-            d->color = QColorConstants::Svg::coral;
+            d->color = QColorConstants::Svg::orange;
             break;
         case 4:
             d->name = QLatin1String{"High"};
             d->filterType = HighShelfType;
             d->frequency = 5000.0f;
-            d->color = QColorConstants::Svg::orange;
+            d->color = QColorConstants::Svg::orchid;
             break;
         case 5:
             d->name = QLatin1String{"Highest"};
             d->filterType = LowPassType;
             d->frequency = 12000.0f;
             d->color = QColorConstants::Svg::red;
+            d->active = false; // Since this would change the sound at base state, let's disable it by default to avoid processing sound we don't want to
             break;
         default:
             qCritical() << Q_FUNC_INFO << "Attempted to create a JackPassthroughFilter with an index outside the expected range of 0 through 5 - probably look at that. Given index was" << index;
             break;
     }
+    d->updateCoefficientsActual();
 }
 
 JackPassthroughFilter::~JackPassthroughFilter()
@@ -190,6 +201,8 @@ void JackPassthroughFilter::setSelected(const bool& selected)
         }
         d->selected = selected;
         Q_EMIT selectedChanged();
+        d->lastModifiedTime = QDateTime::currentSecsSinceEpoch();
+        Q_EMIT graphUrlChanged();
     }
 }
 
@@ -204,6 +217,7 @@ void JackPassthroughFilter::setFilterType(const FilterType& filterType)
         d->filterType = filterType;
         Q_EMIT filterTypeChanged();
         d->updateCoefficients();
+        setSelected(true);
     }
 }
 
@@ -218,6 +232,7 @@ void JackPassthroughFilter::setFrequency(const float& frequency)
         d->frequency = frequency;
         Q_EMIT frequencyChanged();
         d->updateCoefficients();
+        setSelected(true);
     }
 }
 
@@ -232,6 +247,7 @@ void JackPassthroughFilter::setQuality(const float& quality)
         d->quality = quality;
         Q_EMIT qualityChanged();
         d->updateCoefficients();
+        setSelected(true);
     }
 }
 
@@ -251,6 +267,7 @@ void JackPassthroughFilter::setGain(const float& gain)
         d->gain = gain;
         Q_EMIT gainChanged();
         d->updateCoefficients();
+        setSelected(true);
     }
 }
 
@@ -264,6 +281,9 @@ void JackPassthroughFilter::setActive(const bool& active)
     if (d->active != active) {
         d->active = active;
         Q_EMIT activeChanged();
+        d->lastModifiedTime = QDateTime::currentSecsSinceEpoch();
+        Q_EMIT graphUrlChanged();
+        setSelected(true);
     }
 }
 
@@ -291,6 +311,9 @@ void JackPassthroughFilter::setSoloed(const bool& soloed)
         }
         d->soloed = soloed;
         Q_EMIT soloedChanged();
+        d->lastModifiedTime = QDateTime::currentSecsSinceEpoch();
+        Q_EMIT graphUrlChanged();
+        setSelected(true);
     }
 }
 
@@ -307,14 +330,28 @@ void JackPassthroughFilter::setColor(const QColor& color)
     }
 }
 
-void JackPassthroughFilter::createFrequencyPlot(juce::Path &p, const std::vector<double> &mags, const juce::Rectangle<int> bounds, float pixelsPerDouble)
+QUrl JackPassthroughFilter::graphUrl() const
 {
-    // Some TODO -ness here, as we don't really do this... we likely will want this, but for now it's more of a "for later" type situation
-    p.startNewSubPath (float (bounds.getX()), mags[0] > 0 ? float (bounds.getCentreY() - pixelsPerDouble * std::log (mags[0]) / std::log (2.0)) : bounds.getBottom());
-    const auto xFactor = static_cast<double> (bounds.getWidth()) / d->frequencies.size();
-    for (size_t i=1; i < d->frequencies.size(); ++i) {
-        p.lineTo (float (bounds.getX() + i * xFactor), float (mags[i] > 0 ? bounds.getCentreY() - pixelsPerDouble * std::log (mags[i]) / std::log (2.0) : bounds.getBottom()));
+    return QUrl(QString("%1?%2").arg(d->graphUrl).arg(d->lastModifiedTime));
+}
+
+void JackPassthroughFilter::setGraphUrlBase(const QString& graphUrl)
+{
+    d->graphUrl = graphUrl;
+    Q_EMIT graphUrlChanged();
+}
+
+void JackPassthroughFilter::createFrequencyPlot(QPolygonF &p, const QRect bounds, float pixelsPerDouble)
+{
+    const auto xFactor = static_cast<double>(bounds.width()) / d->frequencies.size();
+    for (size_t i = 0; i < d->frequencies.size(); ++i) {
+        p << QPointF(float(bounds.x() + i * xFactor), float (d->magnitudes[i] > 0 ? bounds.center().y() - pixelsPerDouble * std::log (d->magnitudes[i]) / std::log(2.0) : bounds.bottom()));
     }
+}
+
+std::vector<double> & JackPassthroughFilter::magnitudes() const
+{
+    return d->magnitudes;
 }
 
 void JackPassthroughFilter::setDspObjects(dsp::IIR::Filter<float> *filterLeft, dsp::IIR::Filter<float> *filterRight)
@@ -388,4 +425,6 @@ void JackPassthroughFilterPrivate::updateCoefficientsActual()
         updatedCoefficients = newCoefficients;
         newCoefficients->getMagnitudeForFrequencyArray(frequencies.data(), magnitudes.data(), frequencies.size(), sampleRate);
     }
+    lastModifiedTime = QDateTime::currentSecsSinceEpoch();
+    Q_EMIT q->graphUrlChanged();
 }

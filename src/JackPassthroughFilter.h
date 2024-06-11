@@ -10,10 +10,9 @@
 
 #pragma once
 
-#include <QObject>
-#include <QColor>
+#include "JackPassthrough.h"
 
-#include "JUCEHeaders.h"
+#include <QColor>
 
 class JackPassthroughFilterPrivate;
 class JackPassthroughFilter : public QObject {
@@ -30,8 +29,9 @@ class JackPassthroughFilter : public QObject {
     Q_PROPERTY(bool active READ active WRITE setActive NOTIFY activeChanged)
     Q_PROPERTY(bool soloed READ soloed WRITE setSoloed NOTIFY soloedChanged)
     Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY colorChanged)
+    Q_PROPERTY(QUrl graphUrl READ graphUrl NOTIFY graphUrlChanged)
 public:
-    explicit JackPassthroughFilter(int index, QObject *parent = nullptr);
+    explicit JackPassthroughFilter(int index, JackPassthrough *parent = nullptr);
     ~JackPassthroughFilter() override;
 
     enum FilterType {
@@ -87,8 +87,12 @@ public:
     QColor color() const;
     void setColor(const QColor &color);
     Q_SIGNAL void colorChanged();
+    QUrl graphUrl() const;
+    void setGraphUrlBase(const QString &graphUrl);
+    Q_SIGNAL void graphUrlChanged();
 
-    void createFrequencyPlot(juce::Path &p, const std::vector<double> &mags, const juce::Rectangle<int> bounds, float pixelsPerDouble);
+    void createFrequencyPlot(QPolygonF &p, const QRect bounds, float pixelsPerDouble);
+    std::vector<double> &magnitudes() const;
     void setDspObjects(dsp::IIR::Filter<float> *filterLeft, dsp::IIR::Filter<float> *filterRight);
     void setSampleRate(const float &sampleRate);
 

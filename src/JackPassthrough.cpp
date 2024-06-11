@@ -13,10 +13,10 @@
 #include "JackThreadAffinitySetter.h"
 #include "Compressor.h"
 
-#include "JUCEHeaders.h"
-
 #include <QDebug>
+#include <QDateTime>
 #include <QGlobalStatic>
+#include <QPolygonF>
 
 #include <jack/jack.h>
 #include <jack/midiport.h>
@@ -75,6 +75,12 @@ public:
 
     bool equaliserEnabled{false};
     JackPassthroughFilter* equaliserSettings[equaliserBandCount];
+    JackPassthroughFilter *soloedFilter{nullptr};
+    QString equaliserGraphURL;
+    qint64 equaliserLastModifiedTime{0};
+    bool updateMagnitudes{true};
+    std::vector<double> equaliserMagnitudes;
+    std::vector<double> equaliserFrequencies;
 
     bool compressorEnabled{false};
     float compressorThreshold{1.0f};
@@ -116,7 +122,7 @@ public:
     dsp::ProcessorChain<dsp::IIR::Filter<float>, dsp::IIR::Filter<float>, dsp::IIR::Filter<float>, dsp::IIR::Filter<float>, dsp::IIR::Filter<float>, dsp::IIR::Filter<float>> filterChain[2];
     void bypassUpdater() {
         for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
-            JackPassthroughFilter *soloedFilter{nullptr};
+            soloedFilter = nullptr;
             for (JackPassthroughFilter *filter : equaliserSettings) {
                 if (filter->soloed()) {
                     soloedFilter = filter;
@@ -342,10 +348,17 @@ JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName, bool d
         sideChainGainLeft = new jack_default_audio_sample_t[8192](); // TODO This is an awkward assumption, there has to be a sensible way to do this - jack should know this, right?
         sideChainGainRight = new jack_default_audio_sample_t[8192]();
         tempBuffer = new jack_default_audio_sample_t[8192]();
+        const float sampleRate = jack_get_sample_rate(client);
         for (int equaliserBand = 0; equaliserBand < equaliserBandCount; ++equaliserBand) {
-            equaliserSettings[equaliserBand] = new JackPassthroughFilter(equaliserBand, q);
-            QObject::connect(equaliserSettings[equaliserBand], &JackPassthroughFilter::activeChanged, q, [this](){ bypassUpdater(); });
-            QObject::connect(equaliserSettings[equaliserBand], &JackPassthroughFilter::soloedChanged, q, [this](){ bypassUpdater(); });
+            JackPassthroughFilter *newBand = new JackPassthroughFilter(equaliserBand, q);
+            newBand->setSampleRate(sampleRate);
+            QObject::connect(newBand, &JackPassthroughFilter::activeChanged, q, [this](){ bypassUpdater(); });
+            QObject::connect(newBand, &JackPassthroughFilter::soloedChanged, q, [this](){ bypassUpdater(); });
+            QObject::connect(newBand, &JackPassthroughFilter::graphUrlChanged, q, [this, q](){
+                equaliserLastModifiedTime = QDateTime::currentMSecsSinceEpoch();
+                Q_EMIT q->equaliserGraphUrlChanged();
+            });
+            equaliserSettings[equaliserBand] = newBand;
         }
         for (int equaliserBand = 0; equaliserBand < equaliserBandCount; ++equaliserBand) {
             if (equaliserBand > 0) {
@@ -362,6 +375,11 @@ JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName, bool d
         equaliserSettings[3]->setDspObjects(&filterChain[0].get<3>(), &filterChain[1].get<3>());
         equaliserSettings[4]->setDspObjects(&filterChain[0].get<4>(), &filterChain[1].get<4>());
         equaliserSettings[5]->setDspObjects(&filterChain[0].get<5>(), &filterChain[1].get<5>());
+        equaliserFrequencies.resize(300);
+        for (size_t i = 0; i < equaliserFrequencies.size(); ++i) {
+            equaliserFrequencies[i] = 20.0 * std::pow(2.0, i / 30.0);
+        }
+        equaliserMagnitudes.resize(300);
     }
 }
 
@@ -496,6 +514,54 @@ QVariantList JackPassthrough::equaliserSettings() const
         settings.append(QVariant::fromValue<QObject*>(filter));
     }
     return settings;
+}
+
+const std::vector<double> & JackPassthrough::equaliserMagnitudes() const
+{
+    if (d->updateMagnitudes) {
+        // Fill the magnitudes with a flat 1.0 of no change
+        std::fill(d->equaliserMagnitudes.begin(), d->equaliserMagnitudes.end(), 1.0f);
+
+        if (d->soloedFilter) {
+            // If we've got a soloed band, only show that one
+            juce::FloatVectorOperations::multiply(d->equaliserMagnitudes.data(), d->soloedFilter->magnitudes().data(), static_cast<int>(d->equaliserMagnitudes.size()));
+        } else {
+            for (size_t bandIndex = 0; bandIndex < equaliserBandCount; ++bandIndex) {
+                if (d->equaliserSettings[bandIndex]->active()) {
+                    juce::FloatVectorOperations::multiply(d->equaliserMagnitudes.data(), d->equaliserSettings[bandIndex]->magnitudes().data(), static_cast<int>(d->equaliserMagnitudes.size()));
+                }
+            }
+        }
+    }
+    return d->equaliserMagnitudes;
+}
+
+void JackPassthrough::setEqualiserUrlBase(const QString& equaliserUrlBase)
+{
+    d->equaliserGraphURL = equaliserUrlBase;
+    Q_EMIT equaliserGraphUrlChanged();
+    for (int bandIndex = 0; bandIndex < equaliserBandCount; ++bandIndex) {
+        d->equaliserSettings[bandIndex]->setGraphUrlBase(QString("%1/%2").arg(equaliserUrlBase).arg(bandIndex));
+    }
+}
+
+QUrl JackPassthrough::equaliserGraphUrl() const
+{
+    return QUrl(QString("%1?%2").arg(d->equaliserGraphURL).arg(d->equaliserLastModifiedTime));
+}
+
+const std::vector<double> & JackPassthrough::equaliserFrequencies() const
+{
+    return d->equaliserFrequencies;
+}
+
+void JackPassthrough::equaliserCreateFrequencyPlot(QPolygonF &p, const QRect bounds, float pixelsPerDouble)
+{
+    equaliserMagnitudes(); // Just make sure our magnitudes are updated
+    const auto xFactor = static_cast<double>(bounds.width()) / d->equaliserFrequencies.size();
+    for (size_t i = 0; i < d->equaliserFrequencies.size(); ++i) {
+        p <<  QPointF(float (bounds.x() + i * xFactor), float(d->equaliserMagnitudes[i] > 0 ? bounds.center().y() - pixelsPerDouble * std::log(d->equaliserMagnitudes[i]) / std::log (2.0) : bounds.bottom()));
+    }
 }
 
 bool JackPassthrough::compressorEnabled() const

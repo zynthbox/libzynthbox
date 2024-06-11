@@ -59,6 +59,7 @@
 #include "Chords.h"
 #include "ProcessWrapper.h"
 #include "JackPassthroughFilter.h"
+#include "JackPassthroughFilterImageProvider.h"
 #include "ZynthboxBasics.h"
 
 #include "Plugin.h"
@@ -211,7 +212,9 @@ void Plugin::initialize()
     m_globalPlaybackClient = new JackPassthrough("GlobalPlayback", QCoreApplication::instance(), true, false, false);
     qDebug() << "Creating SynthPassthroughClient";
     for (int i = 0; i < 16; i++) {
-        m_synthPassthroughClients << new JackPassthrough(QString("SynthPassthrough:Synth%1").arg(i+1), QCoreApplication::instance(), true, false, false);
+        JackPassthrough *passthrough{new JackPassthrough(QString("SynthPassthrough:Synth%1").arg(i+1), QCoreApplication::instance(), true, false, false)};
+        passthrough->setEqualiserUrlBase(QString("image://passthroughfilter/synth/%1").arg(i));
+        m_synthPassthroughClients << passthrough;
     }
     qDebug() << "Creating Channel Passthrough Client";
     // Create a TrackPassthrough client for each of five lanes on each of the ten channels
@@ -231,6 +234,7 @@ void Plugin::initialize()
         for (int laneNumber = 0; laneNumber < 5; ++laneNumber) {
             JackPassthrough* fxPassthrough = new JackPassthrough(QString("FXPassthrough-lane%1:Channel%2").arg(laneNumber+1).arg(channelNumber+1), QCoreApplication::instance(), true, true, false);
             fxPassthrough->setDryWetMixAmount(1.0f);
+            fxPassthrough->setEqualiserUrlBase(QString("image://passthroughfilter/fx/%1/%2").arg(channelNumber).arg(laneNumber));
             lanes << fxPassthrough;
         }
         m_fxPassthroughClients << lanes;
@@ -304,6 +308,7 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
 {
     m_qmlEngine = engine;
     engine->addImageProvider("pattern", new PatternImageProvider());
+    engine->addImageProvider("passthroughfilter", new JackPassthroughFilterImageProvider());
 
     qmlRegisterType<FilterProxy>(uri, 1, 0, "FilterProxy");
     qmlRegisterUncreatableType<ClipAudioSource>(uri, 1, 0, "ClipAudioSource", "Use the getClipById fucntion to get these (they are held by sketchpad.clip, which has a .cppObjId property)");

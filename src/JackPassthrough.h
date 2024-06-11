@@ -10,7 +10,10 @@
 
 #pragma once
 
+#include "JUCEHeaders.h"
+
 #include <QObject>
+#include <QUrl>
 
 class JackPassthroughPrivate;
 /**
@@ -59,6 +62,10 @@ class JackPassthrough : public QObject {
      * \brief A list of the settings container objects for each of the equaliser bands
      */
     Q_PROPERTY(QVariantList equaliserSettings READ equaliserSettings NOTIFY equaliserSettingsChanged)
+    /**
+     * \brief A URL that can be passed to a Qt image loader representing the equaliser settings for this passthrough
+     */
+    Q_PROPERTY(QUrl equaliserGraphUrl READ equaliserGraphUrl NOTIFY equaliserGraphUrlChanged)
 
     /**
      * \brief Whether or not the compressor will be applied to incoming audio (post-equaliser)
@@ -110,6 +117,12 @@ public:
     Q_SIGNAL void equaliserEnabledChanged();
     QVariantList equaliserSettings() const;
     Q_SIGNAL void equaliserSettingsChanged();
+    void setEqualiserUrlBase(const QString &equaliserUrlBase);
+    QUrl equaliserGraphUrl() const;
+    Q_SIGNAL void equaliserGraphUrlChanged();
+    const std::vector<double> &equaliserMagnitudes() const;
+    const std::vector<double> &equaliserFrequencies() const;
+    void equaliserCreateFrequencyPlot(QPolygonF &p, const QRect bounds, float pixelsPerDouble);
 
     bool compressorEnabled() const;
     void setCompressorEnabled(const bool &compressorEnabled);
