@@ -233,8 +233,8 @@ void AudioLevels::timerCallback() {
     static const float floatToIntMultiplier{131072};
     for (AudioLevelsChannel *channel : d->audioLevelsChannels) {
         if (channel->enabled && channel->leftPort && channel->rightPort) {
-            channel->peakA = qMax(0, channel->peakA - 10000);
-            channel->peakB = qMax(0, channel->peakB - 10000);
+            channel->peakA = qMin(qMax(0, channel->peakA - 10000), int(floatToIntMultiplier));
+            channel->peakB = qMin(qMax(0, channel->peakB - 10000), int(floatToIntMultiplier));
             if (channel->bufferReadSize > 0) {
                 // Peak checkery for the left channel
                 portBuffer = channel->leftBuffer;
