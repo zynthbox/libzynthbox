@@ -26,6 +26,10 @@ class JackPassthroughFilter : public QObject {
     Q_PROPERTY(float quality READ quality WRITE setQuality NOTIFY qualityChanged)
     Q_PROPERTY(float gain READ gain WRITE setGain NOTIFY gainChanged)
     Q_PROPERTY(float gainDb READ gainDb NOTIFY gainChanged)
+    /**
+     * \brief The gain represented as the position of a conceptual slider widget (from 0 through 1 inclusive)
+     */
+    Q_PROPERTY(float gainAbsolute READ gainAbsolute WRITE setGainAbsolute NOTIFY gainChanged)
     Q_PROPERTY(bool active READ active WRITE setActive NOTIFY activeChanged)
     Q_PROPERTY(bool soloed READ soloed WRITE setSoloed NOTIFY soloedChanged)
     Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY colorChanged)
@@ -76,7 +80,9 @@ public:
     Q_SIGNAL void qualityChanged();
     float gain() const;
     float gainDb() const;
+    float gainAbsolute() const;
     void setGain(const float &gain);
+    void setGainAbsolute(const float &gainAbsolute);
     Q_SIGNAL void gainChanged();
     bool active() const;
     void setActive(const bool &active);

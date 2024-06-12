@@ -17,6 +17,7 @@
 #include <QTimer>
 
 static constexpr float inverseRootTwo{0.70710678118654752440};
+static constexpr float maxGainDB{24.0f};
 
 class JackPassthroughFilterPrivate {
 public:
@@ -261,14 +262,24 @@ float JackPassthroughFilter::gainDb() const
     return juce::Decibels::gainToDecibels(d->gain);
 }
 
+float JackPassthroughFilter::gainAbsolute() const
+{
+    return juce::jmap(juce::Decibels::gainToDecibels(d->gain, -maxGainDB), -maxGainDB, maxGainDB, 0.0f, 1.0f);
+}
+
 void JackPassthroughFilter::setGain(const float& gain)
 {
-    if (d->gain != gain && 0.0f <= gain && gain <= 2.0f) {
+    if (d->gain != gain && 0.0f <= gain && gain <= 15.84893192461113) {
         d->gain = gain;
         Q_EMIT gainChanged();
         d->updateCoefficients();
         setSelected(true);
     }
+}
+
+void JackPassthroughFilter::setGainAbsolute(const float& gainAbsolute)
+{
+    setGain(juce::Decibels::decibelsToGain(juce::jmap(gainAbsolute, 0.0f, 1.0f, -maxGainDB, maxGainDB), -maxGainDB));
 }
 
 bool JackPassthroughFilter::active() const
