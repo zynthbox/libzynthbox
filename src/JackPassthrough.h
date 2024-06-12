@@ -117,6 +117,7 @@ public:
     Q_SIGNAL void equaliserEnabledChanged();
     QVariantList equaliserSettings() const;
     Q_SIGNAL void equaliserSettingsChanged();
+    Q_INVOKABLE QObject *equaliserNearestToFrequency(const float &frequency) const;
     void setEqualiserUrlBase(const QString &equaliserUrlBase);
     QUrl equaliserGraphUrl() const;
     Q_SIGNAL void equaliserGraphUrlChanged();

@@ -516,6 +516,38 @@ QVariantList JackPassthrough::equaliserSettings() const
     return settings;
 }
 
+QObject * JackPassthrough::equaliserNearestToFrequency(const float& frequency) const
+{
+    JackPassthroughFilter *nearest{nullptr};
+    QMap<float, JackPassthroughFilter*> sortedFilters;
+    for (JackPassthroughFilter *filter : d->equaliserSettings) {
+        sortedFilters.insert(filter->frequency(), filter);
+    }
+    QMap<float, JackPassthroughFilter*>::const_iterator filterIterator(sortedFilters.constBegin());
+    float previousFrequency{0};
+    JackPassthroughFilter *previousFilter{nullptr};
+    while (filterIterator != sortedFilters.constEnd()) {
+        float currentFrequency = filterIterator.key();
+        nearest = filterIterator.value();
+        if (frequency <= currentFrequency) {
+            if (previousFilter) {
+                // Between two filters, so test which one we're closer to. If it's nearest to the previous filter, reset nearest to that (otherwise it's already the nearest)
+                float halfWayPoint{currentFrequency - ((currentFrequency - previousFrequency) / 2)};
+                if (frequency < halfWayPoint) {
+                    nearest = previousFilter;
+                }
+            }
+            // We've found our filter, so stop looking :)
+            break;
+        } else {
+            previousFrequency = currentFrequency;
+            previousFilter = nearest;
+        }
+        ++filterIterator;
+    }
+    return nearest;
+}
+
 const std::vector<double> & JackPassthrough::equaliserMagnitudes() const
 {
     if (d->updateMagnitudes) {
