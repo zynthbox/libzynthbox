@@ -364,8 +364,8 @@ void JackPassthroughFilter::setSampleRate(const float& sampleRate)
 void JackPassthroughFilter::updateCoefficients() const
 {
     if (d->updatedCoefficients) {
-        d->filters[0]->coefficients = *d->updatedCoefficients;
-        d->filters[1]->coefficients = *d->updatedCoefficients;
+        d->filters[0]->coefficients = d->updatedCoefficients;
+        d->filters[1]->coefficients = d->updatedCoefficients;
         d->updatedCoefficients = nullptr;
     }
 }
