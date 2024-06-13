@@ -171,13 +171,11 @@ public:
                     filter->updateCoefficients();
                 }
                 jack_default_audio_sample_t *inputBuffers[2]{inputLeftBuffer, inputRightBuffer};
-                for (int activeOutputIndex = 0; activeOutputIndex < 3; ++activeOutputIndex) {
-                    for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
-                        juce::AudioBuffer<float> bufferWrapper(&inputBuffers[channelIndex], 1, int(nframes));
-                        juce::dsp::AudioBlock<float> block(bufferWrapper);
-                        juce::dsp::ProcessContextReplacing<float> context(block);
-                        filterChain[channelIndex].process(context);
-                    }
+                for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
+                    juce::AudioBuffer<float> bufferWrapper(&inputBuffers[channelIndex], 1, int(nframes));
+                    juce::dsp::AudioBlock<float> block(bufferWrapper);
+                    juce::dsp::ProcessContextReplacing<float> context(block);
+                    filterChain[channelIndex].process(context);
                 }
             }
             if (compressorEnabled) {
