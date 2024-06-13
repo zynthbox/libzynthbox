@@ -12,7 +12,6 @@
 #include "JUCEHeaders.h"
 
 #include <QDebug>
-#include <QDateTime>
 #include <QPolygonF>
 #include <QTimer>
 
@@ -37,9 +36,7 @@ public:
     }
     JackPassthroughFilter *q{nullptr};
     JackPassthrough *passthrough{nullptr};
-    QString graphUrl;
     QString name;
-    qint64 lastModifiedTime{0};
     bool selected{false};
     float sampleRate{48000.0f};
     JackPassthroughFilter::FilterType filterType;
@@ -202,8 +199,7 @@ void JackPassthroughFilter::setSelected(const bool& selected)
         }
         d->selected = selected;
         Q_EMIT selectedChanged();
-        d->lastModifiedTime = QDateTime::currentSecsSinceEpoch();
-        Q_EMIT graphUrlChanged();
+        Q_EMIT dataChanged();
     }
 }
 
@@ -292,8 +288,7 @@ void JackPassthroughFilter::setActive(const bool& active)
     if (d->active != active) {
         d->active = active;
         Q_EMIT activeChanged();
-        d->lastModifiedTime = QDateTime::currentSecsSinceEpoch();
-        Q_EMIT graphUrlChanged();
+        Q_EMIT dataChanged();
         setSelected(true);
     }
 }
@@ -322,8 +317,7 @@ void JackPassthroughFilter::setSoloed(const bool& soloed)
         }
         d->soloed = soloed;
         Q_EMIT soloedChanged();
-        d->lastModifiedTime = QDateTime::currentSecsSinceEpoch();
-        Q_EMIT graphUrlChanged();
+        Q_EMIT dataChanged();
         setSelected(true);
     }
 }
@@ -338,18 +332,8 @@ void JackPassthroughFilter::setColor(const QColor& color)
     if (d->color != color) {
         d->color = color;
         Q_EMIT colorChanged();
+        Q_EMIT dataChanged();
     }
-}
-
-QUrl JackPassthroughFilter::graphUrl() const
-{
-    return QUrl(QString("%1?%2").arg(d->graphUrl).arg(d->lastModifiedTime));
-}
-
-void JackPassthroughFilter::setGraphUrlBase(const QString& graphUrl)
-{
-    d->graphUrl = graphUrl;
-    Q_EMIT graphUrlChanged();
 }
 
 void JackPassthroughFilter::createFrequencyPlot(QPolygonF &p, const QRect bounds, float pixelsPerDouble)
@@ -436,6 +420,5 @@ void JackPassthroughFilterPrivate::updateCoefficientsActual()
         updatedCoefficients = newCoefficients;
         newCoefficients->getMagnitudeForFrequencyArray(frequencies.data(), magnitudes.data(), frequencies.size(), sampleRate);
     }
-    lastModifiedTime = QDateTime::currentSecsSinceEpoch();
-    Q_EMIT q->graphUrlChanged();
+    Q_EMIT q->dataChanged();
 }

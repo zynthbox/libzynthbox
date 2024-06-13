@@ -59,7 +59,7 @@
 #include "Chords.h"
 #include "ProcessWrapper.h"
 #include "JackPassthroughFilter.h"
-#include "JackPassthroughFilterImageProvider.h"
+#include "JackPassthroughVisualiserItem.h"
 #include "ZynthboxBasics.h"
 
 #include "Plugin.h"
@@ -213,7 +213,6 @@ void Plugin::initialize()
     qDebug() << "Creating SynthPassthroughClient";
     for (int i = 0; i < 16; i++) {
         JackPassthrough *passthrough{new JackPassthrough(QString("SynthPassthrough:Synth%1").arg(i+1), QCoreApplication::instance(), true, false, false)};
-        passthrough->setEqualiserUrlBase(QString("image://passthroughfilter/synth/%1").arg(i));
         m_synthPassthroughClients << passthrough;
     }
     qDebug() << "Creating Channel Passthrough Client";
@@ -234,7 +233,6 @@ void Plugin::initialize()
         for (int laneNumber = 0; laneNumber < 5; ++laneNumber) {
             JackPassthrough* fxPassthrough = new JackPassthrough(QString("FXPassthrough-lane%1:Channel%2").arg(laneNumber+1).arg(channelNumber+1), QCoreApplication::instance(), true, true, false);
             fxPassthrough->setDryWetMixAmount(1.0f);
-            fxPassthrough->setEqualiserUrlBase(QString("image://passthroughfilter/fx/%1/%2").arg(channelNumber).arg(laneNumber));
             lanes << fxPassthrough;
         }
         m_fxPassthroughClients << lanes;
@@ -249,6 +247,7 @@ void Plugin::initialize()
     qRegisterMetaType<SegmentHandler*>("SegmentHandler");
     qRegisterMetaType<SyncTimer*>("SyncTimer");
     qRegisterMetaType<WaveFormItem*>("WaveFormItem");
+    qRegisterMetaType<JackPassthroughVisualiserItem*>("JackPassthroughVisualiserItem");
     qRegisterMetaType<Plugin*>("Plugin");
     qRegisterMetaType<ProcessWrapper*>("ProcessWrapper");
 
@@ -308,7 +307,6 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
 {
     m_qmlEngine = engine;
     engine->addImageProvider("pattern", new PatternImageProvider());
-    engine->addImageProvider("passthroughfilter", new JackPassthroughFilterImageProvider());
 
     qmlRegisterType<FilterProxy>(uri, 1, 0, "FilterProxy");
     qmlRegisterUncreatableType<ClipAudioSource>(uri, 1, 0, "ClipAudioSource", "Use the getClipById fucntion to get these (they are held by sketchpad.clip, which has a .cppObjId property)");
@@ -388,6 +386,7 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
         return chords;
     });
     qmlRegisterType<WaveFormItem>(uri, 1, 0, "WaveFormItem");
+    qmlRegisterType<JackPassthroughVisualiserItem>(uri, 1, 0, "JackPassthroughVisualiserItem");
 }
 
 void Plugin::addCreatedClipToMap(ClipAudioSource *clip)

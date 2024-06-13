@@ -14,7 +14,6 @@
 #include "Compressor.h"
 
 #include <QDebug>
-#include <QDateTime>
 #include <QGlobalStatic>
 #include <QPolygonF>
 
@@ -76,8 +75,6 @@ public:
     bool equaliserEnabled{false};
     JackPassthroughFilter* equaliserSettings[equaliserBandCount];
     JackPassthroughFilter *soloedFilter{nullptr};
-    QString equaliserGraphURL;
-    qint64 equaliserLastModifiedTime{0};
     bool updateMagnitudes{true};
     std::vector<double> equaliserMagnitudes;
     std::vector<double> equaliserFrequencies;
@@ -354,10 +351,7 @@ JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName, bool d
             newBand->setSampleRate(sampleRate);
             QObject::connect(newBand, &JackPassthroughFilter::activeChanged, q, [this](){ bypassUpdater(); });
             QObject::connect(newBand, &JackPassthroughFilter::soloedChanged, q, [this](){ bypassUpdater(); });
-            QObject::connect(newBand, &JackPassthroughFilter::graphUrlChanged, q, [this, q](){
-                equaliserLastModifiedTime = QDateTime::currentMSecsSinceEpoch();
-                Q_EMIT q->equaliserGraphUrlChanged();
-            });
+            QObject::connect(newBand, &JackPassthroughFilter::dataChanged, q, &JackPassthrough::equaliserDataChanged);
             equaliserSettings[equaliserBand] = newBand;
         }
         for (int equaliserBand = 0; equaliserBand < equaliserBandCount; ++equaliserBand) {
@@ -566,20 +560,6 @@ const std::vector<double> & JackPassthrough::equaliserMagnitudes() const
         }
     }
     return d->equaliserMagnitudes;
-}
-
-void JackPassthrough::setEqualiserUrlBase(const QString& equaliserUrlBase)
-{
-    d->equaliserGraphURL = equaliserUrlBase;
-    Q_EMIT equaliserGraphUrlChanged();
-    for (int bandIndex = 0; bandIndex < equaliserBandCount; ++bandIndex) {
-        d->equaliserSettings[bandIndex]->setGraphUrlBase(QString("%1/%2").arg(equaliserUrlBase).arg(bandIndex));
-    }
-}
-
-QUrl JackPassthrough::equaliserGraphUrl() const
-{
-    return QUrl(QString("%1?%2").arg(d->equaliserGraphURL).arg(d->equaliserLastModifiedTime));
 }
 
 const std::vector<double> & JackPassthrough::equaliserFrequencies() const

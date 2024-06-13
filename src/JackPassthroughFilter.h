@@ -33,7 +33,6 @@ class JackPassthroughFilter : public QObject {
     Q_PROPERTY(bool active READ active WRITE setActive NOTIFY activeChanged)
     Q_PROPERTY(bool soloed READ soloed WRITE setSoloed NOTIFY soloedChanged)
     Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY colorChanged)
-    Q_PROPERTY(QUrl graphUrl READ graphUrl NOTIFY graphUrlChanged)
 public:
     explicit JackPassthroughFilter(int index, JackPassthrough *parent = nullptr);
     ~JackPassthroughFilter() override;
@@ -93,9 +92,7 @@ public:
     QColor color() const;
     void setColor(const QColor &color);
     Q_SIGNAL void colorChanged();
-    QUrl graphUrl() const;
-    void setGraphUrlBase(const QString &graphUrl);
-    Q_SIGNAL void graphUrlChanged();
+    Q_SIGNAL void dataChanged();
 
     void createFrequencyPlot(QPolygonF &p, const QRect bounds, float pixelsPerDouble);
     std::vector<double> &magnitudes() const;
