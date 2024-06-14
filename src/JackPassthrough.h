@@ -77,9 +77,9 @@ class JackPassthrough : public QObject {
      */
     Q_PROPERTY(QString compressorSidechannelRight READ compressorSidechannelRight WRITE setCompressorSidechannelRight NOTIFY compressorSidechannelRightChanged)
     /**
-     * \brief The threshold for detecting in the side channel whether to apply the compressor
+     * \brief The settings container object for the compressor
      */
-    Q_PROPERTY(float compressorThreshold READ compressorThreshold WRITE setCompressorThreshold NOTIFY compressorThresholdChanged)
+    Q_PROPERTY(QObject* compressorSettings READ compressorSettings NOTIFY compressorSettingsChanged)
 public:
     explicit JackPassthrough(const QString &clientName, QObject *parent = nullptr, bool dryOutPortsEnabled = true, bool wetOutFx1PortsEnabled = true, bool wetOutFx2PortsEnabled = true);
     ~JackPassthrough() override;
@@ -128,9 +128,8 @@ public:
     QString compressorSidechannelRight() const;
     void setCompressorSidechannelRight(const QString &compressorSidechannelRight);
     Q_SIGNAL void compressorSidechannelRightChanged();
-    float compressorThreshold() const;
-    void setCompressorThreshold(const float &compressorThreshold);
-    Q_SIGNAL void compressorThresholdChanged();
+    QObject *compressorSettings() const;
+    Q_SIGNAL void compressorSettingsChanged();
 private:
     JackPassthroughPrivate *d{nullptr};
 };

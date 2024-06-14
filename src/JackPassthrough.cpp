@@ -9,9 +9,11 @@
 */
 
 #include "JackPassthrough.h"
+#include "JackPassthroughCompressor.h"
 #include "JackPassthroughFilter.h"
 #include "JackThreadAffinitySetter.h"
-#include "Compressor.h"
+#include "MidiRouter.h"
+#include "MidiRouterDeviceModel.h"
 
 #include <QDebug>
 #include <QGlobalStatic>
@@ -59,11 +61,12 @@ public:
                 delete aggregate;
             }
         }
-        delete sideChainGainLeft;
-        delete sideChainGainRight;
-        delete tempBuffer;
+        for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
+            delete sideChainGain[channelIndex];
+        }
     }
     JackPassthrough *q{nullptr};
+    QString actualClientName;
     QString portPrefix;
     float dryAmount{1.0f};
     float wetFx1Amount{1.0f};
@@ -80,7 +83,7 @@ public:
     std::vector<double> equaliserFrequencies;
 
     bool compressorEnabled{false};
-    float compressorThreshold{1.0f};
+    JackPassthroughCompressor *compressorSettings{nullptr};
     QString compressorSidechannelLeft, compressorSidechannelRight;
 
     bool dryOutPortsEnabled{true};
@@ -107,14 +110,8 @@ public:
     jack_default_audio_sample_t *wetOutFx2LeftBuffer{nullptr};
     jack_default_audio_sample_t *wetOutFx2RightBuffer{nullptr};
 
-    jack_port_t *sideChainInputLeft{nullptr};
-    jack_port_t *sideChainInputRight{nullptr};
-    jack_default_audio_sample_t *sideChainInputBufferLeft{nullptr};
-    jack_default_audio_sample_t *sideChainInputBufferRight{nullptr};
-    jack_default_audio_sample_t *sideChainGainLeft{nullptr};
-    jack_default_audio_sample_t *sideChainGainRight{nullptr};
-    jack_default_audio_sample_t *tempBuffer{nullptr};
-    iem::Compressor compressorLeft, compressorRight;
+    jack_port_t *sideChainInput[2]{nullptr};
+    jack_default_audio_sample_t *sideChainGain[2]{nullptr};
 
     dsp::ProcessorChain<dsp::IIR::Filter<float>, dsp::IIR::Filter<float>, dsp::IIR::Filter<float>, dsp::IIR::Filter<float>, dsp::IIR::Filter<float>, dsp::IIR::Filter<float>> filterChain[2];
     void bypassUpdater() {
@@ -175,16 +172,18 @@ public:
                     juce::AudioBuffer<float> bufferWrapper(&inputBuffers[channelIndex], 1, int(nframes));
                     juce::dsp::AudioBlock<float> block(bufferWrapper);
                     juce::dsp::ProcessContextReplacing<float> context(block);
+                    // equaliserInputAnalyser[channelIndex].addAudioData (bufferWrapper, 0, 1);
                     filterChain[channelIndex].process(context);
+                    // equaliserOutputAnalyser[channelIndex].addAudioData (bufferWrapper, 0, 1);
                 }
             }
             if (compressorEnabled) {
-                jack_default_audio_sample_t *sideChainInputBufferLeft = (jack_default_audio_sample_t *)jack_port_get_buffer(sideChainInputLeft, nframes);
-                jack_default_audio_sample_t *sideChainInputBufferRight = (jack_default_audio_sample_t *)jack_port_get_buffer(sideChainInputRight, nframes);
-                compressorLeft.getGainFromSidechainSignal(sideChainInputBufferLeft, sideChainGainLeft, int(nframes));
-                compressorRight.getGainFromSidechainSignal(sideChainInputBufferRight, sideChainGainRight, int(nframes));
-                juce::FloatVectorOperations::multiply(inputLeftBuffer, sideChainGainLeft, int(nframes));
-                juce::FloatVectorOperations::multiply(inputRightBuffer, sideChainGainRight, int(nframes));
+                jack_default_audio_sample_t *inputBuffers[2]{inputLeftBuffer, inputRightBuffer};
+                for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
+                    jack_default_audio_sample_t *sideChainInputBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(sideChainInput[channelIndex], nframes);
+                    compressorSettings->compressors[channelIndex].getGainFromSidechainSignal(sideChainInputBuffer, sideChainGain[channelIndex], int(nframes));
+                    juce::FloatVectorOperations::multiply(inputBuffers[channelIndex], sideChainGain[channelIndex], int(nframes));
+                }
             }
             bool outputDry{true};
             bool outputWetFx1{true};
@@ -269,7 +268,7 @@ JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName, bool d
     : q(q)
 {
     jack_status_t real_jack_status{};
-    QString actualClientName{clientName};
+    actualClientName = clientName;
     this->dryOutPortsEnabled = dryOutPortsEnabled;
     this->wetOutFx1PortsEnabled = wetOutFx1PortsEnabled;
     this->wetOutFx2PortsEnabled = wetOutFx2PortsEnabled;
@@ -338,11 +337,7 @@ JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName, bool d
         } else {
             qWarning() << "JackPasstrough Client: Failed to register ports for" << clientName;
         }
-        sideChainInputLeft = jack_port_register(client, QString("%1sidechainInputLeft").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-        sideChainInputRight = jack_port_register(client, QString("%1sidechainInputRight").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-        sideChainGainLeft = new jack_default_audio_sample_t[8192](); // TODO This is an awkward assumption, there has to be a sensible way to do this - jack should know this, right?
-        sideChainGainRight = new jack_default_audio_sample_t[8192]();
-        tempBuffer = new jack_default_audio_sample_t[8192]();
+        // Equaliser
         const float sampleRate = jack_get_sample_rate(client);
         for (int equaliserBand = 0; equaliserBand < equaliserBandCount; ++equaliserBand) {
             JackPassthroughFilter *newBand = new JackPassthroughFilter(equaliserBand, q);
@@ -372,6 +367,14 @@ JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName, bool d
             equaliserFrequencies[i] = 20.0 * std::pow(2.0, i / 30.0);
         }
         equaliserMagnitudes.resize(300);
+        // Compressor
+        static const QString channelNames[2]{"Left", "Right"};
+        compressorSettings = new JackPassthroughCompressor(q);
+        compressorSettings->setSampleRate(sampleRate);
+        for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
+            sideChainInput[channelIndex] = jack_port_register(client, QString("%1sidechainInput%2").arg(portPrefix).arg(channelNames[channelIndex]).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+            sideChainGain[channelIndex] = new jack_default_audio_sample_t[8192](); // TODO This is an awkward assumption, there has to be a sensible way to do this - jack should know this, right?
+        }
     }
 }
 
@@ -587,19 +590,6 @@ void JackPassthrough::setCompressorEnabled(const bool& compressorEnabled)
     }
 }
 
-float JackPassthrough::compressorThreshold() const
-{
-    return d->compressorThreshold;
-}
-
-void JackPassthrough::setCompressorThreshold(const float& compressorThreshold)
-{
-    if (d->compressorThreshold != compressorThreshold) {
-        d->compressorThreshold = compressorThreshold;
-        Q_EMIT compressorThresholdChanged();
-    }
-}
-
 QString JackPassthrough::compressorSidechannelLeft() const
 {
     return d->compressorSidechannelLeft;
@@ -611,9 +601,13 @@ void JackPassthrough::setCompressorSidechannelLeft(const QString& compressorSide
         d->compressorSidechannelLeft = compressorSidechannelLeft;
         Q_EMIT compressorSidechannelLeftChanged();
         // First disconnect anything currently connected to the left sidechannel input port
-        jack_port_disconnect(d->client, d->sideChainInputLeft);
+        jack_port_disconnect(d->client, d->sideChainInput[0]);
         // Then connect up the new sidechain input
-        d->connectPorts(d->compressorSidechannelLeft, QString("%1sidechainInputLeft").arg(d->portPrefix));
+        static MidiRouterDeviceModel *model = qobject_cast<MidiRouterDeviceModel*>(MidiRouter::instance()->model());
+        const QStringList portsToConnect{model->audioInSourceToJackPortNames(d->compressorSidechannelLeft, {})};
+        for (const QString &port : portsToConnect) {
+            d->connectPorts(port, QString("%1:%2sidechainInputLeft").arg(d->actualClientName).arg(d->portPrefix));
+        }
     }
 }
 
@@ -628,7 +622,17 @@ void JackPassthrough::setCompressorSidechannelRight(const QString& compressorSid
         d->compressorSidechannelRight = compressorSidechannelRight;
         Q_EMIT compressorSidechannelRightChanged();
         // First disconnect anything currently connected to the right sidechannel input port
-        jack_port_disconnect(d->client, d->sideChainInputRight);
-        d->connectPorts(d->compressorSidechannelLeft, QString("%1sidechainInputLeft").arg(d->portPrefix));
+        jack_port_disconnect(d->client, d->sideChainInput[1]);
+        // Then connect up the new sidechain input
+        static MidiRouterDeviceModel *model = qobject_cast<MidiRouterDeviceModel*>(MidiRouter::instance()->model());
+        const QStringList portsToConnect{model->audioInSourceToJackPortNames(d->compressorSidechannelRight, {})};
+        for (const QString &port : portsToConnect) {
+            d->connectPorts(port, QString("%1:%2sidechainInputRight").arg(d->actualClientName).arg(d->portPrefix));
+        }
     }
+}
+
+QObject * JackPassthrough::compressorSettings() const
+{
+    return d->compressorSettings;
 }
