@@ -10,11 +10,15 @@
 
 #pragma once
 
+#include "MidiRouter.h"
+
 #include <QAbstractListModel>
 #include <QObject>
 #include <QVariant>
 #include <QSize>
 #include <memory>
+
+#include <jack/jack.h>
 
 class MidiRouterDevice;
 class MidiRouterDeviceModelPrivate;
@@ -33,7 +37,7 @@ class MidiRouterDeviceModel : public QAbstractListModel {
      */
     Q_PROPERTY(QVariantList midiInSources READ midiInSources NOTIFY midiInSourcesChanged)
 public:
-    explicit MidiRouterDeviceModel(QObject *parent = nullptr);
+    explicit MidiRouterDeviceModel(jack_client_t *jackClient, MidiRouter *parent = nullptr);
     ~MidiRouterDeviceModel() override;
 
     enum Roles {
@@ -54,6 +58,7 @@ public:
 
     QVariantList audioInSources() const;
     Q_INVOKABLE int audioInSourceIndex(const QString &value) const;
+    Q_INVOKABLE QStringList audioInSourceToJackPortNames(const QString &value, const QStringList &standardRouting) const;
     Q_SIGNAL void audioInSourcesChanged();
     QVariantList midiInSources() const;
     Q_INVOKABLE int midiInSourceIndex(const QString &value) const;

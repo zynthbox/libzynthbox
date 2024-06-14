@@ -68,6 +68,8 @@ public:
     }
     ~MidiRouterDeviceModelPrivate() {}
     MidiRouterDeviceModel *q{nullptr};
+    MidiRouter *qq{nullptr};
+    jack_client_t *jackClient{nullptr};
     QList<MidiRouterDevice*> devices;
 
     QVariantList audioInSources;
@@ -80,10 +82,12 @@ public:
     }
 };
 
-MidiRouterDeviceModel::MidiRouterDeviceModel(QObject *parent)
+MidiRouterDeviceModel::MidiRouterDeviceModel(jack_client_t *jackClient, MidiRouter *parent)
     : QAbstractListModel(parent)
     , d(new MidiRouterDeviceModelPrivate(this))
 {
+    d->qq = parent;
+    d->jackClient = jackClient;
 }
 
 MidiRouterDeviceModel::~MidiRouterDeviceModel() = default;
@@ -210,6 +214,65 @@ int MidiRouterDeviceModel::audioInSourceIndex(const QString& value) const
         }
     }
     return -1;
+}
+
+QStringList MidiRouterDeviceModel::audioInSourceToJackPortNames(const QString& value, const QStringList &standardRouting) const
+{
+    QStringList jackPortNames;
+    if (value.startsWith("standard-routing:")) {
+        // Standard routing is whatever we're told it is
+        jackPortNames = standardRouting;
+    } else if (value == "no-input") {
+        // No input means just don't have anything connected
+    } else if (value.startsWith("external:")) {
+        // Use the system/mic input
+        const char **ports = jack_get_ports(d->jackClient, "system", JACK_DEFAULT_AUDIO_TYPE, JackPortIsPhysical);
+        QStringList physicalPorts;
+        if (ports == nullptr) {
+            // No ports found, this is going to be something of a problem...
+        } else {
+            for (const char **p = ports; *p; p++) {
+                physicalPorts << QString::fromLocal8Bit(*p);
+            }
+            if (value.endsWith(":left")) {
+                jackPortNames << physicalPorts[0];
+            } else if (value.endsWith(":right")) {
+                jackPortNames << physicalPorts[1];
+            } else {
+                jackPortNames = physicalPorts;
+            }
+        }
+        free(ports);
+    } else if (value.startsWith("internal-master:")) {
+        if (value.endsWith(":left") || value.endsWith(":both")) {
+            jackPortNames << "GlobalPlayback:dryOurLeft";
+        }
+        if (value.endsWith(":right") || value.endsWith(":both")) {
+            jackPortNames << "GlobalPlayback:dryOurRight";
+        }
+    } else if (value.startsWith("sketchpadTrack:") || value.startsWith("fxSlot:")) {
+        const QStringList splitData = value.split(":");
+        QString portRootName, dryOrWet;
+        int theLane = QString(splitData[2].right(1)).toInt() + 1;
+        int theTrack = QString(splitData[1]).toInt() + 1;
+        if (splitData[0] == "sketchpadTrack:") {
+            portRootName = QString("FXPassthrough-lane%1:Channel%2").arg(theLane).arg(theTrack);
+        } else {
+            portRootName = QString("TrackPassthrough:Channel%2-lane%1").arg(theLane).arg(theTrack);
+        }
+        if (splitData[2].startsWith("dry")) {
+            dryOrWet = "dryOut";
+        } else if (splitData[2].startsWith("wet")) {
+            dryOrWet = "wetOutFx1";
+        }
+        if (splitData[3] == "left" || splitData[3] == "both") {
+            jackPortNames << QString("%1-%2Left").arg(portRootName).arg(dryOrWet);
+        }
+        if (splitData[3] == "Right" || splitData[3] == "both") {
+            jackPortNames << QString("%1-%2Right").arg(portRootName).arg(dryOrWet);
+        }
+    }
+    return jackPortNames;
 }
 
 QVariantList MidiRouterDeviceModel::midiInSources() const

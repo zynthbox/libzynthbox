@@ -183,7 +183,6 @@ public:
         externalOutListener.waitTime = 5;
         listenerPorts[3] = &externalOutListener;
         syncTimer = SyncTimer::instance();
-        devicesModel = new MidiRouterDeviceModel(q);
     };
     ~MidiRouterPrivate() {
         if (jackClient) {
@@ -672,6 +671,7 @@ MidiRouter::MidiRouter(QObject *parent)
     // Open the client.
     jack_status_t real_jack_status{};
     d->jackClient = jack_client_open("ZLRouter", JackNullOption, &real_jack_status);
+    d->devicesModel = new MidiRouterDeviceModel(d->jackClient, this);
     if (d->jackClient) {
         if (jack_set_process_callback(d->jackClient, client_process, static_cast<void*>(d)) == 0) {
             jack_set_xrun_callback(d->jackClient, client_xrun, static_cast<void*>(d));
@@ -774,7 +774,6 @@ MidiRouter::MidiRouter(QObject *parent)
     } else {
         qWarning() << "ZLRouter: Could not create the ZLRouter Jack client.";
     }
-
     d->constructing = false;
     start();
 }
