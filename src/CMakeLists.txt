@@ -18,6 +18,7 @@ target_sources(libzynthbox
         QPainterContext.cpp
         WaveFormItem.cpp
         JackPassthrough.cpp
+        JackPassthroughCompressor.cpp
         JackPassthroughVisualiserItem.cpp
         JackPassthroughFilter.cpp
         JackThreadAffinitySetter.cpp
