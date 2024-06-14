@@ -60,7 +60,7 @@ bool JackPassthroughCompressor::selected() const
 void JackPassthroughCompressor::setSelected(const bool& selected)
 {
     if (d->selected != selected) {
-        d->selected = true;
+        d->selected = selected;
         Q_EMIT selectedChanged();
     }
 }
