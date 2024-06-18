@@ -85,6 +85,7 @@ public:
     bool compressorEnabled{false};
     JackPassthroughCompressor *compressorSettings{nullptr};
     QString compressorSidechannelLeft, compressorSidechannelRight;
+    bool compressorSidechannelEmpty[2]{true, true};
 
     bool dryOutPortsEnabled{true};
     bool wetOutFx1PortsEnabled{true};
@@ -163,27 +164,37 @@ public:
                 memset(wetOutFx2RightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
             }
         } else {
+            jack_default_audio_sample_t *inputBuffers[2]{inputLeftBuffer, inputRightBuffer};
             if (equaliserEnabled) {
                 for (JackPassthroughFilter *filter : equaliserSettings) {
                     filter->updateCoefficients();
                 }
-                jack_default_audio_sample_t *inputBuffers[2]{inputLeftBuffer, inputRightBuffer};
                 for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
                     juce::AudioBuffer<float> bufferWrapper(&inputBuffers[channelIndex], 1, int(nframes));
                     juce::dsp::AudioBlock<float> block(bufferWrapper);
                     juce::dsp::ProcessContextReplacing<float> context(block);
-                    // equaliserInputAnalyser[channelIndex].addAudioData (bufferWrapper, 0, 1);
+                    // equaliserInputAnalyser[channelIndex].addAudioData(bufferWrapper, 0, 1);
                     filterChain[channelIndex].process(context);
-                    // equaliserOutputAnalyser[channelIndex].addAudioData (bufferWrapper, 0, 1);
+                    // equaliserOutputAnalyser[channelIndex].addAudioData(bufferWrapper, 0, 1);
                 }
             }
             if (compressorEnabled) {
-                jack_default_audio_sample_t *inputBuffers[2]{inputLeftBuffer, inputRightBuffer};
+                float sidechainPeaks[2];
+                float outputPeaks[2];
+                float maxGainReduction[2];
                 for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
-                    jack_default_audio_sample_t *sideChainInputBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(sideChainInput[channelIndex], nframes);
+                    // If we're not using a sidechannel for input, use what we're fed instead
+                    jack_default_audio_sample_t *sideChainInputBuffer = compressorSidechannelEmpty[channelIndex] ? inputBuffers[channelIndex] : (jack_default_audio_sample_t *)jack_port_get_buffer(sideChainInput[channelIndex], nframes);
                     compressorSettings->compressors[channelIndex].getGainFromSidechainSignal(sideChainInputBuffer, sideChainGain[channelIndex], int(nframes));
                     juce::FloatVectorOperations::multiply(inputBuffers[channelIndex], sideChainGain[channelIndex], int(nframes));
+                    // These three are essentially visualisation
+                    sidechainPeaks[channelIndex] = juce::Decibels::decibelsToGain(compressorSettings->compressors[channelIndex].getMaxLevelInDecibels());
+                    maxGainReduction[channelIndex] = juce::Decibels::decibelsToGain(juce::Decibels::gainToDecibels(juce::FloatVectorOperations::findMinimum(sideChainGain[channelIndex], int(nframes)) - compressorSettings->compressors[channelIndex].getMakeUpGain()));
+                    outputPeaks[channelIndex] = juce::AudioBuffer<float>(&inputBuffers[channelIndex], 1, int(nframes)).getMagnitude(0, 0, int(nframes));
                 }
+                compressorSettings->updatePeaks(sidechainPeaks[0], sidechainPeaks[1], maxGainReduction[0], maxGainReduction[1], outputPeaks[0], outputPeaks[1]);
+            } else if (compressorSettings) { // just to avoid doing any unnecessary hoop-jumping during construction
+                compressorSettings->setPeaks(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
             }
             bool outputDry{true};
             bool outputWetFx1{true};
@@ -249,6 +260,7 @@ public:
         int result = jack_connect(client, from.toUtf8(), to.toUtf8());
         if (result == 0 || result == EEXIST) {
             // successful connection or connection already exists
+            // qDebug() << Q_FUNC_INFO << "Successfully connected" << from << "to" << to << "(or connection already existed)";
         } else {
             qWarning() << Q_FUNC_INFO << "Failed to connect" << from << "with" << to << "with error code" << result;
             // This should probably reschedule an attempt in the near future, with a limit to how long we're trying for?
@@ -584,7 +596,7 @@ bool JackPassthrough::compressorEnabled() const
 
 void JackPassthrough::setCompressorEnabled(const bool& compressorEnabled)
 {
-    if (d->compressorEnabled) {
+    if (d->compressorEnabled != compressorEnabled) {
         d->compressorEnabled = compressorEnabled;
         Q_EMIT compressorEnabledChanged();
     }
@@ -608,6 +620,7 @@ void JackPassthrough::setCompressorSidechannelLeft(const QString& compressorSide
         for (const QString &port : portsToConnect) {
             d->connectPorts(port, QString("%1:%2sidechainInputLeft").arg(d->actualClientName).arg(d->portPrefix));
         }
+        d->compressorSidechannelEmpty[0] = portsToConnect.isEmpty();
     }
 }
 
@@ -629,6 +642,7 @@ void JackPassthrough::setCompressorSidechannelRight(const QString& compressorSid
         for (const QString &port : portsToConnect) {
             d->connectPorts(port, QString("%1:%2sidechainInputRight").arg(d->actualClientName).arg(d->portPrefix));
         }
+        d->compressorSidechannelEmpty[1] = portsToConnect.isEmpty();
     }
 }
 
