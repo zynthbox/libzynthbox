@@ -26,6 +26,13 @@ public:
     juce::NormalisableRange<float> ratioRange{1.0f, 16.0f, 0.1f};
     float makeUpGain{0.0f}; // Make Up Gain (dB)
     juce::NormalisableRange<float> makeUpGainRange{-10.0f, 20.0f, 0.1f};
+
+    float sidechainPeakLeft{0.0f};
+    float sidechainPeakRight{0.0f};
+    float maxGainReductionLeft{0.0f};
+    float maxGainReductionRight{0.0f};
+    float outputPeakLeft{0.0f};
+    float outputPeakRight{0.0f};
 };
 
 JackPassthroughCompressor::JackPassthroughCompressor(JackPassthrough* parent)
@@ -84,6 +91,7 @@ void JackPassthroughCompressor::setThresholdDB(const float& thresholdDB)
 {
     if (d->threshold != thresholdDB) {
         d->threshold = d->thresholdRange.getRange().clipValue(thresholdDB);
+        d->parametersChanged = true;
         Q_EMIT thresholdChanged();
     }
 }
@@ -107,6 +115,7 @@ void JackPassthroughCompressor::setKneeWidthDB(const float& kneeWidthDB)
 {
     if (d->kneeWidth != kneeWidthDB) {
         d->kneeWidth = d->kneeWidthRange.getRange().clipValue(kneeWidthDB);
+        d->parametersChanged = true;
         Q_EMIT kneeWidthChanged();
     }
 }
@@ -120,6 +129,7 @@ void JackPassthroughCompressor::setAttack(const float& attack)
 {
     if (d->attack != attack) {
         d->attack = d->attackRange.getRange().clipValue(attack);
+        d->parametersChanged = true;
         Q_EMIT attackChanged();
     }
 }
@@ -133,6 +143,7 @@ void JackPassthroughCompressor::setRelease(const float& release)
 {
     if (d->release != release) {
         d->release = d->releaseRange.getRange().clipValue(release);
+        d->parametersChanged = true;
         Q_EMIT releaseChanged();
     }
 }
@@ -146,6 +157,7 @@ void JackPassthroughCompressor::setRatio(const float& ratio)
 {
     if (d->ratio != ratio) {
         d->ratio = d->ratioRange.getRange().clipValue(ratio);
+        d->parametersChanged = true;
         Q_EMIT ratioChanged();
     }
 }
@@ -169,7 +181,73 @@ void JackPassthroughCompressor::setMakeUpGainDB(const float makeUpGainDB)
 {
     if (d->makeUpGain != makeUpGainDB) {
         d->makeUpGain = d->makeUpGainRange.getRange().clipValue(makeUpGainDB);
+        d->parametersChanged = true;
         Q_EMIT makeUpGainChanged();
+    }
+}
+
+float JackPassthroughCompressor::sidechainPeakLeft() const
+{
+    return d->sidechainPeakLeft;
+}
+
+float JackPassthroughCompressor::sidechainPeakRight() const
+{
+    return d->sidechainPeakRight;
+}
+
+float JackPassthroughCompressor::maxGainReductionLeft() const
+{
+    return d->maxGainReductionLeft;
+}
+
+float JackPassthroughCompressor::maxGainReductionRight() const
+{
+    return d->maxGainReductionRight;
+}
+
+float JackPassthroughCompressor::outputPeakLeft() const
+{
+    return d->outputPeakLeft;
+}
+
+float JackPassthroughCompressor::outputPeakRight() const
+{
+    return d->outputPeakRight;
+}
+
+void JackPassthroughCompressor::updatePeaks(const float& sidechainPeakLeft, const float& sidechainPeakRight, const float &maxGainReductionLeft, const float &maxGainReductionRight, const float& outputPeakLeft, const float& outputPeakRight)
+{
+    d->sidechainPeakLeft = qMin(qMax(d->sidechainPeakLeft - 0.005f, sidechainPeakLeft), 1.0f);
+    d->sidechainPeakRight = qMin(qMax(d->sidechainPeakRight - 0.005f, sidechainPeakRight), 1.0f);
+    d->maxGainReductionLeft = qMin(qMax(0.0f, maxGainReductionLeft), 1.0f);
+    d->maxGainReductionRight = qMin(qMax(0.0f, maxGainReductionRight), 1.0f);
+    d->outputPeakLeft = qMin(qMax(d->outputPeakLeft - 0.005f, outputPeakLeft), 1.0f);
+    d->outputPeakRight = qMin(qMax(d->outputPeakRight - 0.005f, outputPeakRight), 1.0f);
+    Q_EMIT peakChanged();
+}
+
+void JackPassthroughCompressor::setPeaks(const float& sidechainPeakLeft, const float& sidechainPeakRight, const float &maxGainReductionLeft, const float &maxGainReductionRight, const float& outputPeakLeft, const float& outputPeakRight)
+{
+    if (d->sidechainPeakLeft != sidechainPeakLeft || d->sidechainPeakRight != sidechainPeakRight || d->maxGainReductionLeft != maxGainReductionLeft || d->maxGainReductionRight != maxGainReductionRight || d->outputPeakLeft != outputPeakLeft || d->outputPeakRight != outputPeakRight) {
+        d->sidechainPeakLeft = sidechainPeakLeft;
+        d->sidechainPeakRight = sidechainPeakRight;
+        d->maxGainReductionLeft = maxGainReductionLeft;
+        d->maxGainReductionRight = maxGainReductionRight;
+        d->outputPeakLeft = outputPeakLeft;
+        d->outputPeakRight = outputPeakRight;
+        Q_EMIT peakChanged();
+    }
+}
+
+void JackPassthroughCompressor::setSampleRate(const float& sampleRate)
+{
+    juce::dsp::ProcessSpec spec;
+    spec.sampleRate = sampleRate;
+    spec.numChannels = 1;
+    spec.maximumBlockSize = 8192;
+    for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
+        compressors[channelIndex].prepare(spec);
     }
 }
 
@@ -185,16 +263,5 @@ void JackPassthroughCompressor::updateParameters()
             compressors[channelIndex].setRatio(d->ratio > 15.9f ? INFINITY : d->ratio);
             compressors[channelIndex].setMakeUpGain(d->makeUpGain);
         }
-    }
-}
-
-void JackPassthroughCompressor::setSampleRate(const float& sampleRate)
-{
-    juce::dsp::ProcessSpec spec;
-    spec.sampleRate = sampleRate;
-    spec.numChannels = 1;
-    spec.maximumBlockSize = 8192;
-    for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
-        compressors[channelIndex].prepare(spec);
     }
 }

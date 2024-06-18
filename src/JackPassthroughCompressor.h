@@ -23,6 +23,13 @@ class JackPassthroughCompressor : public QObject {
     Q_PROPERTY(float ratio READ ratio WRITE setRatio NOTIFY ratioChanged)
     Q_PROPERTY(float makeUpGain READ makeUpGain WRITE setMakeUpGain NOTIFY makeUpGainChanged)
     Q_PROPERTY(float makeUpGainDB READ makeUpGainDB WRITE setMakeUpGainDB NOTIFY makeUpGainChanged)
+
+    Q_PROPERTY(float sidechainPeakLeft READ sidechainPeakLeft NOTIFY peakChanged)
+    Q_PROPERTY(float sidechainPeakRight READ sidechainPeakRight NOTIFY peakChanged)
+    Q_PROPERTY(float maxGainReductionLeft READ maxGainReductionLeft NOTIFY peakChanged)
+    Q_PROPERTY(float maxGainReductionRight READ maxGainReductionRight NOTIFY peakChanged)
+    Q_PROPERTY(float outputPeakLeft READ outputPeakLeft NOTIFY peakChanged)
+    Q_PROPERTY(float outputPeakRight READ outputPeakRight NOTIFY peakChanged)
 public:
     explicit JackPassthroughCompressor(JackPassthrough *parent = nullptr);
     ~JackPassthroughCompressor() override;
@@ -58,6 +65,16 @@ public:
     float makeUpGainDB() const;
     void setMakeUpGainDB(const float makeUpGainDB);
     Q_SIGNAL void makeUpGainChanged();
+
+    float sidechainPeakLeft() const;
+    float sidechainPeakRight() const;
+    float maxGainReductionLeft() const;
+    float maxGainReductionRight() const;
+    float outputPeakLeft() const;
+    float outputPeakRight() const;
+    void updatePeaks(const float &sidechainPeakLeft, const float &sidechainPeakRight, const float &maxGainReductionLeft, const float &maxGainReductionRight, const float &outputPeakLeft, const float &outputPeakRight);
+    void setPeaks(const float &sidechainPeakLeft, const float &sidechainPeakRight, const float &maxGainReductionLeft, const float &maxGainReductionRight, const float &outputPeakLeft, const float &outputPeakRight);
+    Q_SIGNAL void peakChanged();
 
     void setSampleRate(const float &sampleRate);
 
