@@ -29,23 +29,23 @@ public:
         audioInSources << QVariantMap{ {"text", "Master Output - Right Channel"}, {"value", "internal-master:right"} };
         audioInSources << QVariantMap{ {"text", "Master Output - Both Channels"}, {"value", "internal-master:both"} };
         const QStringList clients{"sketchpadTrack", "fxSlot"};
-        const QStringList clientNames{"Track Sound", "Track FX"};
+        const QStringList clientNames{"Sound", "FX"};
         const QList<QStringList> entries = {
             QStringList{"dry0", "dry1", "dry2", "dry3", "dry4"},
             QStringList{"dry0", "wet0", "dry1", "wet1", "dry2", "wet2", "dry3", "wet3", "dry4", "wet4"}
         };
         const QList<QStringList> entryNames = {
-            QStringList{"Output 1", "Output 2", "Output 3", "Output 4", "Output 5"},
-            QStringList{"Slot 1 (Dry)", "Slot 1 (Wet)", "Slot 2 (Dry)", "Slot 2 (Wet)", "Slot 3 (Dry)", "Slot 3 (Wet)", "Slot 4 (Dry)", "Slot 4 (Wet)", "Slot 5 (Dry)", "Slot 5 (Wet)"}
+            QStringList{"1", "2", "3", "4", "5"},
+            QStringList{"1 (Dry)", "1 (Wet)", "2 (Dry)", "2 (Wet)", "3 (Dry)", "3 (Wet)", "4 (Dry)", "4 (Wet)", "5 (Dry)", "5 (Wet)"}
         };
         QStringList channels{"left", "right", "both"};
-        QStringList channelNames{"Left", "Right", "Both"};
+        QStringList channelNames{"Left Channel", "Right Channel", "Both Channels"};
         for (int clientIndex = 0; clientIndex < 2; ++clientIndex) {
             for (int trackIndex = 0; trackIndex < ZynthboxTrackCount; ++trackIndex) {
                 for (int entryIndex = 0; entryIndex < entries[clientIndex].length(); ++entryIndex) {
                     for (int channelIndex = 0; channelIndex < 3; ++channelIndex) {
                         audioInSources << QVariantMap{
-                            {"text", QString("Track %1 %2 - %3 - %4 Channel").arg(clientNames[clientIndex]).arg(trackIndex + 1).arg(entryNames[clientIndex][entryIndex]).arg(channelNames[channelIndex])},
+                            {"text", QString("Track %1 %2 %3 - %4").arg(trackIndex + 1).arg(clientNames[clientIndex]).arg(entryNames[clientIndex][entryIndex]).arg(channelNames[channelIndex])},
                             {"value", QString("%1:%2:%3:%4").arg(clients[clientIndex]).arg(trackIndex).arg(entries[clientIndex][entryIndex]).arg(channels[channelIndex])}
                         };
                     }
@@ -268,7 +268,7 @@ QStringList MidiRouterDeviceModel::audioInSourceToJackPortNames(const QString& v
         if (splitData[3] == "left" || splitData[3] == "both") {
             jackPortNames << QString("%1-%2Left").arg(portRootName).arg(dryOrWet);
         }
-        if (splitData[3] == "Right" || splitData[3] == "both") {
+        if (splitData[3] == "right" || splitData[3] == "both") {
             jackPortNames << QString("%1-%2Right").arg(portRootName).arg(dryOrWet);
         }
     }
