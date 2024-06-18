@@ -182,6 +182,7 @@ public:
                 float sidechainPeaks[2];
                 float outputPeaks[2];
                 float maxGainReduction[2];
+                compressorSettings->updateParameters();
                 for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
                     // If we're not using a sidechannel for input, use what we're fed instead
                     jack_default_audio_sample_t *sideChainInputBuffer = compressorSidechannelEmpty[channelIndex] ? inputBuffers[channelIndex] : (jack_default_audio_sample_t *)jack_port_get_buffer(sideChainInput[channelIndex], nframes);
