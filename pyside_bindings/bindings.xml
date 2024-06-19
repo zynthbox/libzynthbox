@@ -11,6 +11,7 @@
         <enum-type name="PlaybackStyle" />
     </object-type>
     <object-type name="JackPassthrough"></object-type>
+    <object-type name="JackPassthroughCompressor"></object-type>
     <object-type name="JackPassthroughFilter">
         <enum-type name="FilterType" />
     </object-type>
