@@ -46,6 +46,18 @@ JackPassthroughCompressor::~JackPassthroughCompressor()
     delete d;
 }
 
+void JackPassthroughCompressor::setDefaults()
+{
+    setName("");
+    setSelected(false);
+    setThresholdDB(-10.0f);
+    setKneeWidthDB(0.0f);
+    setAttack(30.0f);
+    setRelease(150.0f);
+    setRatio(4.0f);
+    setMakeUpGainDB(0.0f);
+}
+
 QString JackPassthroughCompressor::name() const
 {
     return d->name;

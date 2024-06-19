@@ -34,6 +34,11 @@ public:
     explicit JackPassthroughCompressor(JackPassthrough *parent = nullptr);
     ~JackPassthroughCompressor() override;
 
+    /**
+     * \brief This will reset all values to their defaults
+     */
+    Q_INVOKABLE void setDefaults();
+
     QString name() const;
     void setName(const QString &name);
     Q_SIGNAL void nameChanged();

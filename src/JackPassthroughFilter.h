@@ -37,6 +37,11 @@ public:
     explicit JackPassthroughFilter(int index, JackPassthrough *parent = nullptr);
     ~JackPassthroughFilter() override;
 
+    /**
+     * \brief This will reset all values to their defaults
+     */
+    Q_INVOKABLE void setDefaults();
+
     enum FilterType {
         NoFilterType = 0,
         HighPassType,

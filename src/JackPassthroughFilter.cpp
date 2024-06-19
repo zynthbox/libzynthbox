@@ -36,6 +36,7 @@ public:
     }
     JackPassthroughFilter *q{nullptr};
     JackPassthrough *passthrough{nullptr};
+    int index{-1};
     QString name;
     bool selected{false};
     float sampleRate{48000.0f};
@@ -66,7 +67,18 @@ JackPassthroughFilter::JackPassthroughFilter(int index, JackPassthrough* parent)
     : QObject(parent)
     , d(new JackPassthroughFilterPrivate(this, parent))
 {
-    switch(index) {
+    d->index = index;
+    setDefaults();
+}
+
+JackPassthroughFilter::~JackPassthroughFilter()
+{
+    delete d;
+}
+
+void JackPassthroughFilter::setDefaults()
+{
+    switch(d->index) {
         case 0:
             d->name = QLatin1String{"Lowest"};
             d->filterType = HighPassType;
@@ -79,24 +91,28 @@ JackPassthroughFilter::JackPassthroughFilter(int index, JackPassthrough* parent)
             d->filterType = LowShelfType;
             d->frequency = 250.0f;
             d->color = QColorConstants::Svg::yellow;
+            d->active = true;
             break;
         case 2:
             d->name = QLatin1String{"Low Mids"};
             d->filterType = PeakType;
             d->frequency = 500.0f;
             d->color = QColorConstants::Svg::lightgreen;
+            d->active = true;
             break;
         case 3:
             d->name = QLatin1String{"High Mids"};
             d->filterType = PeakType;
             d->frequency = 1000.0f;
             d->color = QColorConstants::Svg::orange;
+            d->active = true;
             break;
         case 4:
             d->name = QLatin1String{"High"};
             d->filterType = HighShelfType;
             d->frequency = 5000.0f;
             d->color = QColorConstants::Svg::orchid;
+            d->active = true;
             break;
         case 5:
             d->name = QLatin1String{"Highest"};
@@ -106,15 +122,23 @@ JackPassthroughFilter::JackPassthroughFilter(int index, JackPassthrough* parent)
             d->active = false; // Since this would change the sound at base state, let's disable it by default to avoid processing sound we don't want to
             break;
         default:
-            qCritical() << Q_FUNC_INFO << "Attempted to create a JackPassthroughFilter with an index outside the expected range of 0 through 5 - probably look at that. Given index was" << index;
+            qCritical() << Q_FUNC_INFO << "Attempted to create a JackPassthroughFilter with an index outside the expected range of 0 through 5 - probably look at that. Given index was" << d->index;
             break;
     }
+    Q_EMIT nameChanged();
+    Q_EMIT filterTypeChanged();
+    Q_EMIT frequencyChanged();
+    Q_EMIT colorChanged();
+    Q_EMIT activeChanged();
+    d->selected = false;
+    Q_EMIT selectedChanged();
+    d->quality = inverseRootTwo;
+    Q_EMIT qualityChanged();
+    d->gain = 1.0f;
+    Q_EMIT gainChanged();
+    d->soloed = false;
+    Q_EMIT soloedChanged();
     d->updateCoefficientsActual();
-}
-
-JackPassthroughFilter::~JackPassthroughFilter()
-{
-    delete d;
 }
 
 QString JackPassthroughFilter::filterTypeName(FilterType filterType) const
