@@ -47,7 +47,9 @@ public:
     JackPassthroughFilter *filter{nullptr};
     float sampleRate{48000.0f};
     JackPassthroughAnalyser equaliserInputAnalyser[2];
+    QColor inputColours[2]{QColorConstants::Svg::lightskyblue,QColorConstants::Svg::lightsteelblue};
     JackPassthroughAnalyser equaliserOutputAnalyser[2];
+    QColor outputColours[2]{QColorConstants::Svg::salmon,QColorConstants::Svg::sandybrown};
     QList<JackPassthroughAnalyser*> equaliserInputAnalyserList, equaliserOutputAnalyserList;
     QTimer repaintTimer;
 };
@@ -149,13 +151,30 @@ void JackPassthroughVisualiserItem::paint(QPainter* painter)
         QPen pen;
         pen.setCosmetic(true);
         pen.setWidth(1);
+        QFont font = painter->font();
+        font.setPixelSize(12);
+        painter->setFont(font);
+        const QRect insetFrame = frame.adjusted(3, 3, -3, -3);
+        const QRect insetFrameDown = insetFrame.translated(0, 13);
+        pen.setColor(d->inputColours[0]);
+        painter->setPen(pen);
+        painter->drawText(insetFrame, Qt::AlignLeft | Qt::AlignTop, "Input (left)");
+        pen.setColor(d->inputColours[1]);
+        painter->setPen(pen);
+        painter->drawText(insetFrameDown, Qt::AlignLeft | Qt::AlignTop, "Input (right)");
+        pen.setColor(d->outputColours[0]);
+        painter->setPen(pen);
+        painter->drawText(insetFrame, Qt::AlignRight | Qt::AlignTop, "Output (left)");
+        pen.setColor(d->outputColours[1]);
+        painter->setPen(pen);
+        painter->drawText(insetFrameDown, Qt::AlignRight | Qt::AlignTop, "Output (right)");
         for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
             d->equaliserInputAnalyser[channelIndex].createPath(polygon, frame, 20.0f);
-            pen.setColor(QColorConstants::LightGray);
+            pen.setColor(d->inputColours[channelIndex]);
             painter->setPen(pen);
             painter->drawPolyline(polygon);
             d->equaliserOutputAnalyser[channelIndex].createPath(polygon, frame, 20.0f);
-            pen.setColor(QColorConstants::White);
+            pen.setColor(d->outputColours[channelIndex]);
             painter->setPen(pen);
             painter->drawPolyline(polygon);
         }
