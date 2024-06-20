@@ -75,21 +75,25 @@ struct MidiListenerPort {
     ~MidiListenerPort() { }
     inline void addMessage(const bool &fromInternal, const bool &isNoteMessage, const double &timeStampFrames, const double &timeStampUsecs, const jack_midi_event_t &event, const int rewriteChannel, const int sketchpadTrack, MidiRouterDevice *eventDevice)
     {
-        NoteMessage &message = *writeHead;
-        writeHead = writeHead->next;
-        message.timeStamp = timeStampFrames;
-        const int eventChannel = (event.buffer[0] & 0xf);
-        message.fromInternal = fromInternal;
-        message.isNoteMessage = isNoteMessage;
-        message.byte0 = event.buffer[0] - eventChannel + rewriteChannel;
-        message.byte1 = event.size > 1 ? event.buffer[1] : 0;
-        message.byte2 = event.size > 2 ? event.buffer[2] : 0;
-        message.size = int(event.size);
-        message.sketchpadTrack = sketchpadTrack;
-        message.eventDevice = eventDevice;
-        message.submitted = false;
-        if (identifier == MidiRouter::PassthroughPort) {
-            MidiRecorder::instance()->handleMidiMessage(message.byte0, message.byte1, message.byte2, event.size, timeStampUsecs, sketchpadTrack);
+        if (eventDevice == nullptr) {
+            qWarning() << Q_FUNC_INFO << "An extremely unlikely situation has occurred and we've ended up with a nullptr eventDevice - not adding message. The remaining data is" << fromInternal << isNoteMessage << timeStampFrames << timeStampUsecs << event.size << rewriteChannel << sketchpadTrack;
+        } else {
+            NoteMessage &message = *writeHead;
+            writeHead = writeHead->next;
+            message.timeStamp = timeStampFrames;
+            const int eventChannel = (event.buffer[0] & 0xf);
+            message.fromInternal = fromInternal;
+            message.isNoteMessage = isNoteMessage;
+            message.byte0 = event.buffer[0] - eventChannel + rewriteChannel;
+            message.byte1 = event.size > 1 ? event.buffer[1] : 0;
+            message.byte2 = event.size > 2 ? event.buffer[2] : 0;
+            message.size = int(event.size);
+            message.sketchpadTrack = sketchpadTrack;
+            message.eventDevice = eventDevice;
+            message.submitted = false;
+            if (identifier == MidiRouter::PassthroughPort) {
+                MidiRecorder::instance()->handleMidiMessage(message.byte0, message.byte1, message.byte2, event.size, timeStampUsecs, sketchpadTrack);
+            }
         }
     }
     NoteMessage messages[MAX_LISTENER_MESSAGES];
@@ -792,7 +796,8 @@ void MidiRouter::run() {
             MidiListenerPort *listenerPort = d->listenerPorts[i];
             MidiListenerPort::NoteMessage *message = listenerPort->readHead;
             while (!message->submitted) {
-                if (message->isNoteMessage) {
+                // FIXME Somehow eventDevice might end up as a nullptr - that seems extremely weird and will need some proper investigating...
+                if (message->isNoteMessage && message->eventDevice) {
                     const bool setOn = (message->byte0 >= 0x90 && message->byte2 > 0);
                     const int midiChannel = (message->byte0 & 0xf);
                     const int &midiNote = message->byte1;
