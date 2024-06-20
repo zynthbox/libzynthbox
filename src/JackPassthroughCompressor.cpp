@@ -27,6 +27,7 @@ public:
     float makeUpGain{0.0f}; // Make Up Gain (dB)
     juce::NormalisableRange<float> makeUpGainRange{-10.0f, 20.0f, 0.1f};
 
+    int observerCount{0};
     float sidechainPeakLeft{0.0f};
     float sidechainPeakRight{0.0f};
     float maxGainReductionLeft{0.0f};
@@ -196,6 +197,21 @@ void JackPassthroughCompressor::setMakeUpGainDB(const float makeUpGainDB)
         d->parametersChanged = true;
         Q_EMIT makeUpGainChanged();
     }
+}
+
+void JackPassthroughCompressor::registerObserver() const
+{
+    d->observerCount++;
+}
+
+void JackPassthroughCompressor::unregisterObserver() const
+{
+    d->observerCount = qMax(0, d->observerCount - 1);
+}
+
+bool JackPassthroughCompressor::hasObservers() const
+{
+    return d->observerCount > 0;
 }
 
 float JackPassthroughCompressor::sidechainPeakLeft() const

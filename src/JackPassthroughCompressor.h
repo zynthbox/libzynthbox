@@ -71,6 +71,9 @@ public:
     void setMakeUpGainDB(const float makeUpGainDB);
     Q_SIGNAL void makeUpGainChanged();
 
+    Q_INVOKABLE void registerObserver() const;
+    Q_INVOKABLE void unregisterObserver() const;
+    bool hasObservers() const;
     float sidechainPeakLeft() const;
     float sidechainPeakRight() const;
     float maxGainReductionLeft() const;
