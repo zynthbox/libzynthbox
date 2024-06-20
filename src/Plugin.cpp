@@ -210,12 +210,12 @@ void Plugin::initialize()
 
     qDebug() << "Creating GlobalPlayback Passthrough Client";
     m_globalPlaybackClient = new JackPassthrough("GlobalPlayback", QCoreApplication::instance(), true, false, false);
-    qDebug() << "Creating SynthPassthroughClient";
+    qDebug() << "Creating 16 Synth Passthrough Clients";
     for (int i = 0; i < 16; i++) {
         JackPassthrough *passthrough{new JackPassthrough(QString("SynthPassthrough:Synth%1").arg(i+1), QCoreApplication::instance(), true, false, false)};
         m_synthPassthroughClients << passthrough;
     }
-    qDebug() << "Creating Channel Passthrough Client";
+    qDebug() << "Creating 10 Track Passthrough Clients";
     // Create a TrackPassthrough client for each of five lanes on each of the ten channels
     for (int channelNumber = 0; channelNumber < 10; ++channelNumber) {
         for (int laneNumber = 0; laneNumber < 5; ++laneNumber) {
@@ -227,7 +227,7 @@ void Plugin::initialize()
     }
     // Create FX Passthrough clients for the 5 lanes, with 10 tracks each, for each fx slot in a channel
     // The lanes have individual clients, ensuring we can avoid loops when routing the sketchpad track' slots in serial mode
-    qDebug() << "Creating FX Passthrough Client";
+    qDebug() << "Creating 10*5 FX Passthrough Clients";
     for (int channelNumber = 0; channelNumber < 10; ++channelNumber) {
         QList<JackPassthrough*> lanes;
         for (int laneNumber = 0; laneNumber < 5; ++laneNumber) {
