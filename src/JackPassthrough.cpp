@@ -9,6 +9,7 @@
 */
 
 #include "JackPassthrough.h"
+#include "JackPassthroughAnalyser.h"
 #include "JackPassthroughCompressor.h"
 #include "JackPassthroughFilter.h"
 #include "JackThreadAffinitySetter.h"
@@ -81,6 +82,8 @@ public:
     bool updateMagnitudes{true};
     std::vector<double> equaliserMagnitudes;
     std::vector<double> equaliserFrequencies;
+    QList<JackPassthroughAnalyser*> equaliserInputAnalysers{nullptr,nullptr};
+    QList<JackPassthroughAnalyser*> equaliserOutputAnalysers{nullptr,nullptr};
 
     bool compressorEnabled{false};
     JackPassthroughCompressor *compressorSettings{nullptr};
@@ -173,25 +176,31 @@ public:
                     juce::AudioBuffer<float> bufferWrapper(&inputBuffers[channelIndex], 1, int(nframes));
                     juce::dsp::AudioBlock<float> block(bufferWrapper);
                     juce::dsp::ProcessContextReplacing<float> context(block);
-                    // equaliserInputAnalyser[channelIndex].addAudioData(bufferWrapper, 0, 1);
+                    if (equaliserInputAnalysers[channelIndex]) {
+                        equaliserInputAnalysers[channelIndex]->addAudioData(bufferWrapper, 0, 1);
+                    }
                     filterChain[channelIndex].process(context);
-                    // equaliserOutputAnalyser[channelIndex].addAudioData(bufferWrapper, 0, 1);
+                    if (equaliserOutputAnalysers[channelIndex]) {
+                        equaliserOutputAnalysers[channelIndex]->addAudioData(bufferWrapper, 0, 1);
+                    }
                 }
             }
             if (compressorEnabled) {
-                float sidechainPeaks[2];
-                float outputPeaks[2];
-                float maxGainReduction[2];
+                float sidechainPeaks[2]{0.0f, 0.0f};
+                float outputPeaks[2]{0.0f, 0.0f};
+                float maxGainReduction[2]{0.0f, 0.0f};
                 compressorSettings->updateParameters();
                 for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
                     // If we're not using a sidechannel for input, use what we're fed instead
                     jack_default_audio_sample_t *sideChainInputBuffer = compressorSidechannelEmpty[channelIndex] ? inputBuffers[channelIndex] : (jack_default_audio_sample_t *)jack_port_get_buffer(sideChainInput[channelIndex], nframes);
                     compressorSettings->compressors[channelIndex].getGainFromSidechainSignal(sideChainInputBuffer, sideChainGain[channelIndex], int(nframes));
                     juce::FloatVectorOperations::multiply(inputBuffers[channelIndex], sideChainGain[channelIndex], int(nframes));
-                    // These three are essentially visualisation
-                    sidechainPeaks[channelIndex] = juce::Decibels::decibelsToGain(compressorSettings->compressors[channelIndex].getMaxLevelInDecibels());
-                    maxGainReduction[channelIndex] = juce::Decibels::decibelsToGain(juce::Decibels::gainToDecibels(juce::FloatVectorOperations::findMinimum(sideChainGain[channelIndex], int(nframes)) - compressorSettings->compressors[channelIndex].getMakeUpGain()));
-                    outputPeaks[channelIndex] = juce::AudioBuffer<float>(&inputBuffers[channelIndex], 1, int(nframes)).getMagnitude(0, 0, int(nframes));
+                    // These three are essentially visualisation, so let's try and make sure we don't do the work unless someone's looking
+                    if (compressorSettings->hasObservers()) {
+                        sidechainPeaks[channelIndex] = juce::Decibels::decibelsToGain(compressorSettings->compressors[channelIndex].getMaxLevelInDecibels());
+                        maxGainReduction[channelIndex] = juce::Decibels::decibelsToGain(juce::Decibels::gainToDecibels(juce::FloatVectorOperations::findMinimum(sideChainGain[channelIndex], int(nframes)) - compressorSettings->compressors[channelIndex].getMakeUpGain()));
+                        outputPeaks[channelIndex] = juce::AudioBuffer<float>(&inputBuffers[channelIndex], 1, int(nframes)).getMagnitude(0, 0, int(nframes));
+                    }
                 }
                 compressorSettings->updatePeaks(sidechainPeaks[0], sidechainPeaks[1], maxGainReduction[0], maxGainReduction[1], outputPeaks[0], outputPeaks[1]);
             } else if (compressorSettings) { // just to avoid doing any unnecessary hoop-jumping during construction
@@ -588,6 +597,16 @@ void JackPassthrough::equaliserCreateFrequencyPlot(QPolygonF &p, const QRect bou
     for (size_t i = 0; i < d->equaliserFrequencies.size(); ++i) {
         p <<  QPointF(float (bounds.x() + i * xFactor), float(d->equaliserMagnitudes[i] > 0 ? bounds.center().y() - pixelsPerDouble * std::log(d->equaliserMagnitudes[i]) / std::log (2.0) : bounds.bottom()));
     }
+}
+
+void JackPassthrough::setEqualiserInputAnalysers(QList<JackPassthroughAnalyser*>& equaliserInputAnalysers) const
+{
+    d->equaliserInputAnalysers = equaliserInputAnalysers;
+}
+
+void JackPassthrough::setEqualiserOutputAnalysers(QList<JackPassthroughAnalyser*>& equaliserOutputAnalysers) const
+{
+    d->equaliserOutputAnalysers = equaliserOutputAnalysers;
 }
 
 bool JackPassthrough::compressorEnabled() const

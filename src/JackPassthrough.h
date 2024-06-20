@@ -15,6 +15,7 @@
 #include <QObject>
 #include <QUrl>
 
+class JackPassthroughAnalyser;
 class JackPassthroughPrivate;
 /**
  * \brief A splitting passthrough client which has a pair of inputs, and two pairs of outputs (dry and wet) with individual volume for each output
@@ -118,6 +119,8 @@ public:
     const std::vector<double> &equaliserMagnitudes() const;
     const std::vector<double> &equaliserFrequencies() const;
     void equaliserCreateFrequencyPlot(QPolygonF &p, const QRect bounds, float pixelsPerDouble);
+    void setEqualiserInputAnalysers(QList<JackPassthroughAnalyser*> &equaliserInputAnalysers) const;
+    void setEqualiserOutputAnalysers(QList<JackPassthroughAnalyser*> &equaliserOutputAnalysers) const;
 
     bool compressorEnabled() const;
     void setCompressorEnabled(const bool &compressorEnabled);
