@@ -58,6 +58,7 @@ JackPassthroughVisualiserItem::JackPassthroughVisualiserItem(QQuickItem* parent)
     : QQuickPaintedItem(parent)
     , d(new JackPassthroughVisualiserItemPrivate(this))
 {
+    setRenderTarget(QQuickPaintedItem::FramebufferObject);
 }
 
 JackPassthroughVisualiserItem::~JackPassthroughVisualiserItem()
