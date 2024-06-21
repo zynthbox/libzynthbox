@@ -30,6 +30,8 @@ WaveFormItem::WaveFormItem(QQuickItem *parent)
     m_rapidRepaintTimer->setInterval(0);
     connect(m_rapidRepaintTimer, &QTimer::timeout, this, &WaveFormItem::thumbnailChanged);
     m_thumbnail.addChangeListener(this);
+    // We're not in the habit of resizing these things, so more speed is more better
+    setRenderTarget(QQuickPaintedItem::FramebufferObject);
 }
 
 WaveFormItem::~WaveFormItem()
