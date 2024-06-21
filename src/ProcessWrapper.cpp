@@ -1,5 +1,6 @@
 #include "ProcessWrapper.h"
 
+#include <QCoreApplication>
 #include <QDebug>
 #include <QProcess>
 #include <QTimer>
@@ -68,10 +69,14 @@ public:
     void handleError(const QProcess::ProcessError &error) {
         qDebug() << Q_FUNC_INFO << process << "reported error" << error;
     }
+
+    bool blockingCallInProgress{false};
+    bool dataReceivedAfterBlockingWrite{true};
     QString standardError;
     void handleReadyReadError() {
         if (process) {
             standardError = QString::fromLocal8Bit(process->readAllStandardError());
+            dataReceivedAfterBlockingWrite = true;
             Q_EMIT q->standardError(standardError);
         }
     }
@@ -79,6 +84,7 @@ public:
     void handleReadyReadOutput() {
         if (process) {
             standardOutput = QString::fromLocal8Bit(process->readAllStandardOutput());
+            dataReceivedAfterBlockingWrite = true;
             Q_EMIT q->standardOutput(standardOutput);
         }
     }
@@ -133,13 +139,24 @@ void ProcessWrapper::stop(const int& timeout)
 QString ProcessWrapper::call(const QByteArray& function)
 {
     if (d->process) {
+        d->blockingCallInProgress = true;
+        d->dataReceivedAfterBlockingWrite = false;
+        d->standardOutput.clear();
+        d->standardError.clear();
         // qDebug() << Q_FUNC_INFO << "Writing" << function << "to the process";
         d->process->write(function);
         // qDebug() << Q_FUNC_INFO << "Write completed, now waiting for that to be acknowledged";
         d->process->waitForBytesWritten();
         // qDebug() << Q_FUNC_INFO << "Function was written, now waiting for ready read";
-        d->process->waitForReadyRead();
-        // qDebug() << Q_FUNC_INFO << "Waited for ready read and now have the following standard output:" << d->standardOutput;
+        // can't use waitForReadyRead as we're capturing the data elsewhere which breaks that call
+        int bailout{0};
+        while (d->dataReceivedAfterBlockingWrite == false && ++bailout < 10000) {
+            qApp->processEvents();
+        }
+        d->dataReceivedAfterBlockingWrite = true; // just in case we've bailed out
+        // qDebug() << Q_FUNC_INFO << "Waited (or timed out) and now have the following standard output:\n" << d->standardOutput;
+        // qDebug() << Q_FUNC_INFO << "And the following standard error:\n" << d->standardError;
+        d->blockingCallInProgress = false;
         return d->standardOutput;
     }
     return {};
@@ -148,6 +165,8 @@ QString ProcessWrapper::call(const QByteArray& function)
 void ProcessWrapper::send(const QByteArray& data)
 {
     if (d->process) {
+        d->standardOutput.clear();
+        d->standardError.clear();
         d->process->write(data);
     }
 }
