@@ -54,6 +54,7 @@ target_compile_definitions(libzynthbox
         JUCE_DISPLAY_SPLASH_SCREEN=0
         JUCE_REPORT_APP_USAGE=0
         JUCE_STRICT_REFCOUNTEDPOINTER=1
+        JUCE_DSP_USE_SHARED_FFTW=1
         JUCE_JACK=0
         JUCE_ALSA=1
         TRACKTION_ENABLE_TIMESTRETCH_SOUNDTOUCH=1
@@ -77,6 +78,7 @@ target_link_libraries(libzynthbox
         juce::juce_gui_extra
         "-latomic"
         "-lcurl"
+        "-lfftw3"
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
