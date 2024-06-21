@@ -187,8 +187,8 @@ void Plugin::initialize()
     auto juceInitialiser = [&]() {
         qDebug() << "Instantiating tracktion engine";
         tracktionEngine = new te::Engine("libzynthbox", nullptr, std::make_unique<ZLEngineBehavior>());
-        qDebug() << "Setting device type to JACK";
-        tracktionEngine->getDeviceManager().deviceManager.setCurrentAudioDeviceType("JACK", true);
+        qDebug() << "Setting device type to ALSA";
+        tracktionEngine->getDeviceManager().deviceManager.setCurrentAudioDeviceType("ALSA", true);
         qDebug() << "Initialising device manager";
         tracktionEngine->getDeviceManager().initialise(0, 2);
         qDebug() << "Initialisation completed";
