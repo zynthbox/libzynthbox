@@ -176,6 +176,7 @@ QString ProcessWrapper::call(const QByteArray& function, const QString &expected
         } else {
             // qDebug() << Q_FUNC_INFO << "Function was written, now waiting the output" << expectedOutput << "or the timeout" << timeout;
             WaitForOutputResult result = waitForOutput(expectedOutput, timeout);
+            Q_UNUSED(result)
             // qDebug() << Q_FUNC_INFO << "Waited for the output" << expectedOutput << "for" << timeout << "milliseconds, with the result being" << result;
         }
         d->dataReceivedAfterBlockingWrite = true; // just in case we've bailed out
