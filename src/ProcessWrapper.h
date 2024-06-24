@@ -54,23 +54,40 @@ public:
     Q_INVOKABLE void stop(const int &timeout = 1000);
 
     /**
-     * \brief Send an instruction to the process, and block until the function returns some data
+     * \brief Send an instruction to the process, and block until the function returns some data, or optionally until a given timeout and/or expected output
      * @param function The instruction to send to the process
+     * @param expectedOutput Some output to wait for (a regular expression)
+     * @param timeout The amount of time to wait in milliseconds
+     * @see waitForOutput(QString, int)
      * @return The resulting output from that call
      */
-    Q_INVOKABLE QString call(const QByteArray &function);
+    Q_INVOKABLE QString call(const QByteArray &function, const QString &expectedOutput = {}, const int timeout = -1);
     /**
      * \brief Send some data to the process in a non-blocking manner
      * @param data The data to send to the process
      */
     Q_INVOKABLE void send(const QByteArray &data);
 
-// Ouch not cool hack: https://forum.qt.io/topic/130255/shiboken-signals-don-t-work
+    enum WaitForOutputResult {
+        WaitForOutputSuccess,
+        WaitForOutputFailure,
+        WaitForOutputTimeout
+    };
+    Q_ENUM(WaitForOutputResult)
+    /**
+     * \brief Wait for standard output to contain the given expected output
+     * @param expectedOutput The output you expect (a regular expression)
+     * @param timeout The amount of time to wait in milliseconds
+     * @return What the outcome of the function call was (success, failure, or timeout)
+     */
+    Q_INVOKABLE WaitForOutputResult waitForOutput(const QString &expectedOutput, const int timeout = -1);
+
+    // Ouch not cool hack: https://forum.qt.io/topic/130255/shiboken-signals-don-t-work
 // Core message (by vberlier): Turns out Shiboken shouldn't do anything for signals and let PySide setup the signals using the MOC data. Shiboken generates bindings for signals as if they were plain methods and shadows the actual signals.
 #ifndef PYSIDE_BINDINGS_H
     /**
      * \brief Emitted when there is any output written to standard output by the process
-     * @param output The output sent by the process
+     * @param output All output sent by the process since the most recent call to clearStandardOutput()
      */
     Q_SIGNAL void standardOutput(const QString &output);
     /**

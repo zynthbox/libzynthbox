@@ -48,6 +48,7 @@
     <object-type name="Plugin"></object-type>
     <object-type name="ProcessWrapper">
         <enum-type name="ProcessState" />
+        <enum-type name="WaitForOutputResult" />
     </object-type>
     <object-type name="SyncTimer"></object-type>
     <object-type name="MidiRouterDevice">

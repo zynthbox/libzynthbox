@@ -1,8 +1,10 @@
 #include "ProcessWrapper.h"
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDebug>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QTimer>
 
 class ProcessWrapper::Private {
@@ -136,7 +138,7 @@ void ProcessWrapper::stop(const int& timeout)
     }
 }
 
-QString ProcessWrapper::call(const QByteArray& function)
+QString ProcessWrapper::call(const QByteArray& function, const QString &expectedOutput, const int timeout)
 {
     if (d->process) {
         d->blockingCallInProgress = true;
@@ -147,11 +149,15 @@ QString ProcessWrapper::call(const QByteArray& function)
         d->process->write(function);
         // qDebug() << Q_FUNC_INFO << "Write completed, now waiting for that to be acknowledged";
         d->process->waitForBytesWritten();
-        // qDebug() << Q_FUNC_INFO << "Function was written, now waiting for ready read";
+        // qDebug() << Q_FUNC_INFO << "Function was written, now waiting for data to be written (or out timeout)";
         // can't use waitForReadyRead as we're capturing the data elsewhere which breaks that call
-        int bailout{0};
-        while (d->dataReceivedAfterBlockingWrite == false && ++bailout < 10000) {
-            qApp->processEvents();
+        if (expectedOutput.isEmpty()) {
+            qint64 startTime = QDateTime::currentMSecsSinceEpoch();
+            while (d->dataReceivedAfterBlockingWrite == false || (timeout == -1 || (QDateTime::currentMSecsSinceEpoch() - startTime) > timeout)) {
+                qApp->processEvents();
+            }
+        } else {
+            waitForOutput(expectedOutput, timeout);
         }
         d->dataReceivedAfterBlockingWrite = true; // just in case we've bailed out
         // qDebug() << Q_FUNC_INFO << "Waited (or timed out) and now have the following standard output:\n" << d->standardOutput;
@@ -169,6 +175,26 @@ void ProcessWrapper::send(const QByteArray& data)
         d->standardError.clear();
         d->process->write(data);
     }
+}
+
+ProcessWrapper::WaitForOutputResult ProcessWrapper::waitForOutput(const QString& expectedOutput, const int timeout)
+{
+    WaitForOutputResult result{ProcessWrapper::WaitForOutputFailure};
+    qint64 startTime = QDateTime::currentMSecsSinceEpoch();
+    QRegularExpression regularExpectedOutput{expectedOutput};
+    while (true) {
+        if (timeout > -1 && (QDateTime::currentMSecsSinceEpoch() - startTime) > timeout) {
+            result = ProcessWrapper::WaitForOutputTimeout;
+            break;
+        }
+        QRegularExpressionMatch match = regularExpectedOutput.match(d->standardOutput);
+        if (match.hasMatch()) {
+            result = ProcessWrapper::WaitForOutputSuccess;
+            break;
+        }
+        qApp->processEvents();
+    }
+    return result;
 }
 
 ProcessWrapper::ProcessState ProcessWrapper::state() const
