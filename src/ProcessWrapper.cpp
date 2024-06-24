@@ -5,7 +5,6 @@
 #include <QDebug>
 #include <QProcess>
 #include <QRegularExpression>
-#include <QTimer>
 
 #include <kptydevice.h>
 #include <kptyprocess.h>
@@ -15,13 +14,6 @@ public:
     Private(ProcessWrapper *q)
         : q(q)
     {
-        processKiller.setSingleShot(true);
-        processKiller.callOnTimeout([this](){
-            if (process) {
-                qDebug() << Q_FUNC_INFO << "Process" << executable << "did not shut down gracefully in time, killing...";
-                process->kill();
-            }
-        });
     }
     ProcessWrapper *q{nullptr};
     QString executable;
@@ -32,7 +24,6 @@ public:
     bool performRestart{false}; // Set to the value of autoRestart when start() is called, and explicitly to false when stop() is called
     ProcessState state{NotRunningState};
     KPtyProcess *process{nullptr};
-    QTimer processKiller;
     void handleStateChange(const QProcess::ProcessState &newState) {
         ProcessWrapper::ProcessState updatedState{RunningState};
         if (process) {
@@ -59,8 +50,6 @@ public:
     }
     void handleFinished(const int &/*exitCode*/, const QProcess::ExitStatus &exitStatus) {
         // qDebug() << Q_FUNC_INFO << "Process has exited";
-        processKiller.stop();
-        process->deleteLater();
         process = nullptr;
         state = ProcessWrapper::NotRunningState;
         Q_EMIT q->stateChanged();
@@ -110,7 +99,7 @@ ProcessWrapper::ProcessWrapper(QObject* parent)
 ProcessWrapper::~ProcessWrapper()
 {
     if (d->process) {
-        stop(0);
+        stop(100);
     }
     delete d;
 }
@@ -146,7 +135,12 @@ void ProcessWrapper::stop(const int& timeout)
         Q_EMIT stateChanged();
         d->performRestart = false;
         d->process->terminate();
-        d->processKiller.start(timeout);
+        if (d->process->waitForFinished(timeout) == false) {
+            d->process->kill();
+            if (d->process->waitForFinished(timeout) == false) {
+                qDebug() << Q_FUNC_INFO << "Failed to shut down" << d->process << d->parameters << "within" << timeout << "milliseconds";
+            }
+        }
     }
 }
 
