@@ -87,6 +87,7 @@ target_link_libraries(libzynthbox
         Qt5::Gui
         Qt5::Qml
         Qt5::Quick
+        KF5::Pty
 )
 
 target_include_directories(libzynthbox

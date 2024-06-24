@@ -6,6 +6,7 @@ endif()
 
 find_package(ECM ${KF5_MIN_VERSION} REQUIRED CONFIG)
 find_package(Qt5 ${QT_MIN_VERSION} REQUIRED CONFIG COMPONENTS Core Gui Quick Qml)
+find_package(KF5Pty)
 find_package(KF5Kirigami2 2.7.0)
 
 set(CMAKE_CXX_STANDARD 17)
