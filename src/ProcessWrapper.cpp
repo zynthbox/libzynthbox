@@ -7,6 +7,9 @@
 #include <QRegularExpression>
 #include <QTimer>
 
+#include <kptydevice.h>
+#include <kptyprocess.h>
+
 class ProcessWrapper::Private {
 public:
     Private(ProcessWrapper *q)
@@ -28,7 +31,7 @@ public:
     int autoRestartCount{0};
     bool performRestart{false}; // Set to the value of autoRestart when start() is called, and explicitly to false when stop() is called
     ProcessState state{NotRunningState};
-    QProcess *process{nullptr};
+    KPtyProcess *process{nullptr};
     QTimer processKiller;
     void handleStateChange(const QProcess::ProcessState &newState) {
         ProcessWrapper::ProcessState updatedState{RunningState};
@@ -77,17 +80,23 @@ public:
     QString standardError;
     void handleReadyReadError() {
         if (process) {
-            standardError = QString::fromLocal8Bit(process->readAllStandardError());
-            dataReceivedAfterBlockingWrite = true;
-            Q_EMIT q->standardError(standardError);
+            const QString newData{QString::fromLocal8Bit(process->readAllStandardError())};
+            if (newData.isEmpty() == false) {
+                standardError.append(newData);
+                dataReceivedAfterBlockingWrite = true;
+                Q_EMIT q->standardErrorChanged(standardError);
+            }
         }
     }
     QString standardOutput;
     void handleReadyReadOutput() {
         if (process) {
-            standardOutput = QString::fromLocal8Bit(process->readAllStandardOutput());
-            dataReceivedAfterBlockingWrite = true;
-            Q_EMIT q->standardOutput(standardOutput);
+            const QString newData{QString::fromLocal8Bit(process->pty()->readAll())};
+            if (newData.isEmpty() == false) {
+                standardOutput.append(newData);
+                dataReceivedAfterBlockingWrite = true;
+                Q_EMIT q->standardOutputChanged(standardOutput);
+            }
         }
     }
 };
@@ -112,18 +121,21 @@ void ProcessWrapper::start(const QString& executable, const QStringList& paramet
         stop(0); // If we've already got a process going on, let's ensure that it's shut down (not gracefully, as documented, but immediately)
     }
     d->state = StartingState;
-    d->process = new QProcess(this);
+    d->process = new KPtyProcess(this);
+    d->process->setOutputChannelMode(KPtyProcess::OnlyStderrChannel);
+    d->process->setPtyChannels(KPtyProcess::StdinChannel | KPtyProcess::StdoutChannel);
+    d->process->pty()->setEcho(false);
     resetAutoRestartCount();
     d->performRestart = d->autoRestart;
-    connect(d->process, &QProcess::errorOccurred, this, [this](const QProcess::ProcessError &error){ d->handleError(error); });
-    connect(d->process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, [this](const int &exitCode, const QProcess::ExitStatus &exitStatus){ d->handleFinished(exitCode, exitStatus); });
+    connect(d->process, &KPtyProcess::errorOccurred, this, [this](const QProcess::ProcessError &error){ d->handleError(error); });
+    connect(d->process, QOverload<int, QProcess::ExitStatus>::of(&KPtyProcess::finished), this, [this](const int &exitCode, const QProcess::ExitStatus &exitStatus){ d->handleFinished(exitCode, exitStatus); });
     connect(d->process, &QProcess::stateChanged, this, [this](const QProcess::ProcessState &newState){ d->handleStateChange(newState); });
-    connect(d->process, &QProcess::readyReadStandardOutput, this, [this](){ d->handleReadyReadOutput(); });
-    connect(d->process, &QProcess::readyReadStandardError, this, [this](){ d->handleReadyReadError(); });
+    connect(d->process->pty(), &KPtyDevice::readyRead, this, [this]() { d->handleReadyReadOutput(); });
+    connect(d->process, &KPtyProcess::readyReadStandardError, this, [this](){ d->handleReadyReadError(); });
     d->executable = executable;
     d->parameters = parameters;
-    d->process->setProgram(executable);
-    d->process->setArguments(parameters);
+    d->process->setProgram(executable, parameters);
+    d->process->setNextOpenMode(QIODevice::ReadWrite | QIODevice::Unbuffered);
     d->process->start();
 }
 
@@ -143,21 +155,28 @@ QString ProcessWrapper::call(const QByteArray& function, const QString &expected
     if (d->process) {
         d->blockingCallInProgress = true;
         d->dataReceivedAfterBlockingWrite = false;
-        d->standardOutput.clear();
-        d->standardError.clear();
+        d->standardOutput = QString("\n");
+        Q_EMIT standardOutputChanged(d->standardOutput);
+        d->standardError = QString("\n");
+        Q_EMIT standardErrorChanged(d->standardError);
         // qDebug() << Q_FUNC_INFO << "Writing" << function << "to the process";
-        d->process->write(function);
+        d->process->pty()->write(function);
         // qDebug() << Q_FUNC_INFO << "Write completed, now waiting for that to be acknowledged";
-        d->process->waitForBytesWritten();
-        // qDebug() << Q_FUNC_INFO << "Function was written, now waiting for data to be written (or out timeout)";
+        // d->process->waitForBytesWritten();
         // can't use waitForReadyRead as we're capturing the data elsewhere which breaks that call
         if (expectedOutput.isEmpty()) {
+            // qDebug() << Q_FUNC_INFO << "Function was written, now waiting for output or the timeout" << timeout;
             qint64 startTime = QDateTime::currentMSecsSinceEpoch();
-            while (d->dataReceivedAfterBlockingWrite == false || (timeout == -1 || (QDateTime::currentMSecsSinceEpoch() - startTime) > timeout)) {
+            while (d->dataReceivedAfterBlockingWrite == false) {
+                if (timeout > -1 && (QDateTime::currentMSecsSinceEpoch() - startTime) > timeout) {
+                    break;
+                }
                 qApp->processEvents();
             }
         } else {
-            waitForOutput(expectedOutput, timeout);
+            // qDebug() << Q_FUNC_INFO << "Function was written, now waiting the output" << expectedOutput << "or the timeout" << timeout;
+            WaitForOutputResult result = waitForOutput(expectedOutput, timeout);
+            // qDebug() << Q_FUNC_INFO << "Waited for the output" << expectedOutput << "for" << timeout << "milliseconds, with the result being" << result;
         }
         d->dataReceivedAfterBlockingWrite = true; // just in case we've bailed out
         // qDebug() << Q_FUNC_INFO << "Waited (or timed out) and now have the following standard output:\n" << d->standardOutput;
@@ -171,9 +190,11 @@ QString ProcessWrapper::call(const QByteArray& function, const QString &expected
 void ProcessWrapper::send(const QByteArray& data)
 {
     if (d->process) {
-        d->standardOutput.clear();
-        d->standardError.clear();
-        d->process->write(data);
+        d->standardOutput = QString("\n");
+        Q_EMIT standardOutputChanged(d->standardOutput);
+        d->standardError = QString("\n");
+        Q_EMIT standardOutputChanged(d->standardOutput);
+        d->process->pty()->write(data);
     }
 }
 
@@ -183,6 +204,8 @@ ProcessWrapper::WaitForOutputResult ProcessWrapper::waitForOutput(const QString&
     qint64 startTime = QDateTime::currentMSecsSinceEpoch();
     QRegularExpression regularExpectedOutput{expectedOutput};
     while (true) {
+        d->handleReadyReadError();
+        d->handleReadyReadOutput();
         if (timeout > -1 && (QDateTime::currentMSecsSinceEpoch() - startTime) > timeout) {
             result = ProcessWrapper::WaitForOutputTimeout;
             break;
@@ -195,6 +218,16 @@ ProcessWrapper::WaitForOutputResult ProcessWrapper::waitForOutput(const QString&
         qApp->processEvents();
     }
     return result;
+}
+
+QString ProcessWrapper::standardOutput() const
+{
+    return d->standardOutput;
+}
+
+QString ProcessWrapper::standardError() const
+{
+    return d->standardError;
 }
 
 ProcessWrapper::ProcessState ProcessWrapper::state() const

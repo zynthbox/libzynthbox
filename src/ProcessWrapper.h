@@ -32,6 +32,15 @@ class ProcessWrapper : public QObject {
      * @note Please don't delete this - technically you can, but yeah, don't do that please
      */
     Q_PROPERTY(QObject* internalProcess READ internalProcess NOTIFY internalProcessChanged)
+
+    /**
+     * \brief The standard output received after the most recent call to call() or send()
+     */
+    Q_PROPERTY(QString standardOutput READ standardOutput NOTIFY standardOutputChanged)
+    /**
+     * \brief The standard error output received after the most recent call to call() or send()
+     */
+    Q_PROPERTY(QString standardError READ standardError NOTIFY standardErrorChanged)
 public:
     explicit ProcessWrapper(QObject *parent = nullptr);
     ~ProcessWrapper() override;
@@ -82,6 +91,9 @@ public:
      */
     Q_INVOKABLE WaitForOutputResult waitForOutput(const QString &expectedOutput, const int timeout = -1);
 
+    QString standardOutput() const;
+    QString standardError() const;
+
     // Ouch not cool hack: https://forum.qt.io/topic/130255/shiboken-signals-don-t-work
 // Core message (by vberlier): Turns out Shiboken shouldn't do anything for signals and let PySide setup the signals using the MOC data. Shiboken generates bindings for signals as if they were plain methods and shadows the actual signals.
 #ifndef PYSIDE_BINDINGS_H
@@ -89,12 +101,12 @@ public:
      * \brief Emitted when there is any output written to standard output by the process
      * @param output All output sent by the process since the most recent call to clearStandardOutput()
      */
-    Q_SIGNAL void standardOutput(const QString &output);
+    Q_SIGNAL void standardOutputChanged(const QString &output);
     /**
      * \brief Emitted when there is any output written to standard error by the process
      * @param output The output sent by the process
      */
-    Q_SIGNAL void standardError(const QString &output);
+    Q_SIGNAL void standardErrorChanged(const QString &output);
 #endif
 
     enum ProcessState {
