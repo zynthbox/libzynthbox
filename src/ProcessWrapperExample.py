@@ -37,8 +37,8 @@ if __name__ == "__main__":
     app = QCoreApplication()
 
     p = Zynthbox.ProcessWrapper(app)
-    p.standardOutput.connect(handleStandardOutput)
-    p.standardError.connect(handleStandardError)
+    p.standardOutputChanged.connect(handleStandardOutput)
+    p.standardErrorChanged.connect(handleStandardError)
     p.stateChanged.connect(handleStateChanged)
     print("--- Created process wrapper, now starting process")
     p.start("jalv", ["-n", "synthv1-py", "http://synthv1.sourceforge.net/lv2"])
