@@ -64,6 +64,7 @@ public:
         qDebug() << Q_FUNC_INFO << process << "reported error" << error;
     }
 
+    QString awaitedOutput;
     bool blockingCallInProgress{false};
     bool dataReceivedAfterBlockingWrite{true};
     QString standardError;
@@ -232,12 +233,18 @@ ProcessWrapper::WaitForOutputResult ProcessWrapper::waitForOutput(const QString&
         }
         QRegularExpressionMatch match = regularExpectedOutput.match(d->standardOutput);
         if (match.hasMatch()) {
+            d->awaitedOutput = d->standardOutput.left(match.capturedStart(0));
             result = ProcessWrapper::WaitForOutputSuccess;
             break;
         }
         qApp->processEvents();
     }
     return result;
+}
+
+QString ProcessWrapper::awaitedOutput() const
+{
+    return d->awaitedOutput;
 }
 
 QString ProcessWrapper::standardOutput() const
