@@ -106,7 +106,7 @@ ProcessWrapper::~ProcessWrapper()
     delete d;
 }
 
-void ProcessWrapper::start(const QString& executable, const QStringList& parameters)
+void ProcessWrapper::start(const QString& executable, const QStringList& parameters, const QVariantMap &environment)
 {
     if (d->process) {
         stop(0); // If we've already got a process going on, let's ensure that it's shut down (not gracefully, as documented, but immediately)
@@ -127,6 +127,13 @@ void ProcessWrapper::start(const QString& executable, const QStringList& paramet
     d->parameters = parameters;
     d->process->setProgram(executable, parameters);
     d->process->setNextOpenMode(QIODevice::ReadWrite | QIODevice::Unbuffered);
+    if (environment.isEmpty() == false) {
+        QProcessEnvironment construct;
+        for (auto it = environment.keyValueBegin(); it != environment.keyValueEnd(); ++it) {
+            construct.insert(it->first, it->second.toString());
+        }
+        d->process->setProcessEnvironment(construct);
+    }
     d->process->start();
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QVariantMap>
 
 /**
  * \brief A way to start, stop, and interact with external processes which have a call/output command-line style interface
@@ -52,8 +53,9 @@ public:
      * ensure this happens.
      * @param executable An executable as QProcess understands it
      * @param parameters Optionally, parameters to be sent along to the executable (also as QProcess understands it)
+     * @param environment Optionally, the environment variables that this process should be given (if none are passed, or an empty list is, the current process environment is inherited)
      */
-    Q_INVOKABLE void start(const QString& executable, const QStringList &parameters = {});
+    Q_INVOKABLE void start(const QString& executable, const QStringList &parameters = {}, const QVariantMap &environment = {});
 
     /**
      * \brief Stops the process, and will kill the process if it takes too long to shut down
