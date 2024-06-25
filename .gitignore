@@ -4,3 +4,12 @@ build
 CMakeLists.txt.user
 *.qmlc
 *.kdev4
+
+# QtCreator project files
+libzynthbox.cflags
+libzynthbox.config
+libzynthbox.creator
+libzynthbox.creator.user
+libzynthbox.cxxflags
+libzynthbox.files
+libzynthbox.includes
