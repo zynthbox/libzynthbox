@@ -109,14 +109,24 @@ public:
 #ifndef PYSIDE_BINDINGS_H
     /**
      * \brief Emitted when there is any output written to standard output by the process
-     * @param output All output sent by the process since the most recent call to clearStandardOutput()
+     * @param output All output sent by the process since the most recent call to send() or call()
      */
     Q_SIGNAL void standardOutputChanged(const QString &output);
     /**
      * \brief Emitted when there is any output written to standard error by the process
-     * @param output The output sent by the process
+     * @param output The output sent by the process since the most recent call to send() or call()
      */
     Q_SIGNAL void standardErrorChanged(const QString &output);
+    /**
+     * \brief Emitted when output is written to standard output by the process
+     * @param output The output received from the process
+     */
+    Q_SIGNAL void standardOutputReceived(const QString &output);
+    /**
+     * \brief Emitted when output is written to standard error by the process
+     * @param output The output received from the process
+     */
+    Q_SIGNAL void standardErrorReceived(const QString &output);
 #endif
 
     enum ProcessState {

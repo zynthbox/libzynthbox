@@ -74,6 +74,7 @@ public:
                 standardError.append(newData);
                 dataReceivedAfterBlockingWrite = true;
                 Q_EMIT q->standardErrorChanged(standardError);
+                Q_EMIT q->standardErrorReceived(newData);
             }
         }
     }
@@ -85,6 +86,7 @@ public:
                 standardOutput.append(newData);
                 dataReceivedAfterBlockingWrite = true;
                 Q_EMIT q->standardOutputChanged(standardOutput);
+                Q_EMIT q->standardOutputReceived(newData);
             }
         }
     }
@@ -153,6 +155,7 @@ QString ProcessWrapper::call(const QByteArray& function, const QString &expected
         Q_EMIT standardOutputChanged(d->standardOutput);
         d->standardError = QString("\n");
         Q_EMIT standardErrorChanged(d->standardError);
+        // Not emitting the received signals (as nothing has been received yet...)
         // qDebug() << Q_FUNC_INFO << "Writing" << function << "to the process";
         d->process->pty()->write(function);
         // qDebug() << Q_FUNC_INFO << "Write completed, now waiting for that to be acknowledged";
@@ -189,6 +192,7 @@ void ProcessWrapper::send(const QByteArray& data)
         Q_EMIT standardOutputChanged(d->standardOutput);
         d->standardError = QString("\n");
         Q_EMIT standardOutputChanged(d->standardOutput);
+        // Not emitting the received signals (as nothing has been received yet...)
         d->process->pty()->write(data);
     }
 }
