@@ -105,7 +105,6 @@ public:
     /**
      * \brief After a successful waitForOutput call, use this function to retrieve the output leading up to the expected output
      * @note The result of calling this function for an unsuccessful wait (that is, timeout or failure) is not defined and should be avoided
-     * @param expectedOutput The output you expect (a regular expression)
      * @return The output leading up to the expected output
      */
     Q_INVOKABLE QString awaitedOutput() const;
