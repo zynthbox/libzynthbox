@@ -80,12 +80,12 @@ public:
      * \brief Helper funcation which is same as ProcessWrapper::send but expects data argument to be QString
      * @param data The data to send to the process
      */
-    Q_INVOKABLE void send(const QString data);
+    Q_INVOKABLE void send(const QString &data);
     /**
      * \brief Helper funcation which is same as ProcessWrapper::send but expects data argument to be QString and appends a newline
      * @param data The data to send to the process
      */
-    Q_INVOKABLE void sendLine(QString data);
+    Q_INVOKABLE void sendLine(const QString &data);
 
     enum WaitForOutputResult {
         WaitForOutputSuccess,
