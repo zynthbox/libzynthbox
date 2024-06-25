@@ -49,6 +49,7 @@
     <object-type name="ProcessWrapper">
         <enum-type name="ProcessState" />
         <enum-type name="WaitForOutputResult" />
+        <enum-type name="WaitForOutputStream" />
     </object-type>
     <object-type name="SyncTimer"></object-type>
     <object-type name="MidiRouterDevice">

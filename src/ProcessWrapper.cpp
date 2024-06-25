@@ -219,7 +219,7 @@ void ProcessWrapper::sendLine(const QString &data)
     }
 }
 
-ProcessWrapper::WaitForOutputResult ProcessWrapper::waitForOutput(const QString& expectedOutput, const int timeout)
+ProcessWrapper::WaitForOutputResult ProcessWrapper::waitForOutput(const QString& expectedOutput, const int timeout, WaitForOutputStream stream)
 {
     WaitForOutputResult result{ProcessWrapper::WaitForOutputFailure};
     qint64 startTime = QDateTime::currentMSecsSinceEpoch();
@@ -231,11 +231,27 @@ ProcessWrapper::WaitForOutputResult ProcessWrapper::waitForOutput(const QString&
             result = ProcessWrapper::WaitForOutputTimeout;
             break;
         }
-        QRegularExpressionMatch match = regularExpectedOutput.match(d->standardOutput);
-        if (match.hasMatch()) {
-            d->awaitedOutput = d->standardOutput.left(match.capturedStart(0));
-            result = ProcessWrapper::WaitForOutputSuccess;
-            break;
+        if (stream == StandardOutputStream || stream == StandardOutputAndErrorStream || stream == CombinedStreams) {
+            QRegularExpressionMatch match = regularExpectedOutput.match(d->standardOutput);
+            if (match.hasMatch()) {
+                d->awaitedOutput = d->standardOutput.left(match.capturedStart(0));
+                if (stream == CombinedStreams) {
+                    d->awaitedOutput.append(d->standardError);
+                }
+                result = ProcessWrapper::WaitForOutputSuccess;
+                break;
+            }
+        }
+        if (stream == StandardErrorStream || stream == StandardOutputAndErrorStream || stream == CombinedStreams) {
+            QRegularExpressionMatch match = regularExpectedOutput.match(d->standardError);
+            if (match.hasMatch()) {
+                d->awaitedOutput = d->standardError.left(match.capturedStart(0));
+                if (stream == CombinedStreams) {
+                    d->awaitedOutput.prepend(d->standardOutput);
+                }
+                result = ProcessWrapper::WaitForOutputSuccess;
+                break;
+            }
         }
         qApp->processEvents();
     }

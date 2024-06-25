@@ -92,19 +92,32 @@ public:
     enum WaitForOutputResult {
         WaitForOutputSuccess,
         WaitForOutputFailure,
-        WaitForOutputTimeout
+        WaitForOutputTimeout,
     };
     Q_ENUM(WaitForOutputResult)
+    enum WaitForOutputStream {
+        ///@> Specify this to search only stdout
+        StandardOutputStream,
+        ///@> Specify this to search only stderr
+        StandardErrorStream,
+        ///@> Specify this for awaitedOutput to contain only the output stream in which expectedOutput was found
+        StandardOutputAndErrorStream,
+        ///@> Specify this for awaitedOutput to contain both of the output streams (it will contain first stdout, then stderr, with whichever stream the expected output was found in clipped before the given expectedOutput)
+        CombinedStreams,
+    };
+    Q_ENUM(WaitForOutputStream)
     /**
      * \brief Wait for standard output to contain the given expected output
      * @param expectedOutput The output you expect (a regular expression)
      * @param timeout The amount of time to wait in milliseconds
+     * @param stream Which of the output streams to search for the expected output
      * @return What the outcome of the function call was (success, failure, or timeout)
      */
-    Q_INVOKABLE WaitForOutputResult waitForOutput(const QString &expectedOutput, const int timeout = -1);
+    Q_INVOKABLE WaitForOutputResult waitForOutput(const QString &expectedOutput, const int timeout = -1, WaitForOutputStream stream = StandardOutputAndErrorStream);
     /**
-     * \brief After a successful waitForOutput call, use this function to retrieve the output leading up to the expected output
+     * \brief After a successful waitForOutput call, use this function to retrieve the output leading up to the expected output of the stream in which it was found
      * @note The result of calling this function for an unsuccessful wait (that is, timeout or failure) is not defined and should be avoided
+     * @see WaitForOutputResult
      * @return The output leading up to the expected output
      */
     Q_INVOKABLE QString awaitedOutput() const;
