@@ -193,6 +193,19 @@ void ProcessWrapper::send(const QByteArray& data)
     }
 }
 
+void ProcessWrapper::send(const QString data)
+{
+    send(data.toUtf8());
+}
+
+void ProcessWrapper::sendLine(QString data)
+{
+    if (!data.endsWith("\n")) {
+        data += "\n";
+    }
+    send(data);
+}
+
 ProcessWrapper::WaitForOutputResult ProcessWrapper::waitForOutput(const QString& expectedOutput, const int timeout)
 {
     WaitForOutputResult result{ProcessWrapper::WaitForOutputFailure};
