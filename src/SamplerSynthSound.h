@@ -15,6 +15,11 @@ public:
     int rootMidiNote() const;
     double sourceSampleRate() const;
     bool isValid{false};
+
+    jack_port_t *leftPort{nullptr};
+    jack_port_t *rightPort{nullptr};
+    float *leftBuffer{nullptr};
+    float *rightBuffer{nullptr};
 private:
     SamplerSynthSoundPrivate *d{nullptr};
 };

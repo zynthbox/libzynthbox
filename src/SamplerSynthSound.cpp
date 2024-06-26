@@ -25,6 +25,7 @@ public:
     std::unique_ptr<juce::AudioBuffer<float>> data;
     int length{0};
     double sourceSampleRate{0.0f};
+    size_t audioBufferLength{8192};
 
     ClipAudioSource *clip{nullptr};
 
@@ -71,6 +72,8 @@ public:
 SamplerSynthSound::SamplerSynthSound(ClipAudioSource *clip)
     : d(new SamplerSynthSoundPrivate(this))
 {
+    leftBuffer = new float[d->audioBufferLength]();
+    rightBuffer = new float[d->audioBufferLength]();
     d->clip = clip;
     d->loadSoundData();
     QObject::connect(clip, &ClipAudioSource::playbackFileChanged, &d->soundLoader, [this](){ isValid = false; d->soundLoader.start(1); }, Qt::QueuedConnection);
@@ -79,6 +82,8 @@ SamplerSynthSound::SamplerSynthSound(ClipAudioSource *clip)
 SamplerSynthSound::~SamplerSynthSound()
 {
     delete d;
+    delete leftBuffer;
+    delete rightBuffer;
 }
 
 ClipAudioSource *SamplerSynthSound::clip() const
