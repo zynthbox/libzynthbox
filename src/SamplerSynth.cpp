@@ -561,9 +561,60 @@ public:
 int SamplerSynthPrivate::process(jack_nframes_t nframes)
 {
     if (initialized) {
+        /**
+        * The steps in processing are:
+        * - If Sound is valid, clear its buffers
+        * - Process all the various active voices (each voice writes sound data to the Sound's buffers)
+        * - If Sound is valid:
+        *   - If equaliser is enabled:
+        *     - feed sound data to input analyser (if there is one)
+        *     - apply equaliser
+        *     - feed sound data to output analyser (if there is one)
+        *   - If compressor is enabled:
+        *     - apply compressor
+        *     - if compressor has observers, do peak handling
+        *   - write the buffer output onto the track's output
+        * - Update the clip's position models most recent position update
+        */
+        // First clear all the sounds' internal buffers, where that makes sense
+        for (auto soundIterator = clipSounds.constKeyValueBegin(); soundIterator != clipSounds.constKeyValueEnd(); ++soundIterator) {
+            SamplerSynthSound *sound = soundIterator->second;
+            if (sound && sound->isValid) {
+                memset(sound->leftBuffer, 0, nframes * sizeof (jack_default_audio_sample_t));
+                memset(sound->rightBuffer, 0, nframes * sizeof (jack_default_audio_sample_t));
+            }
+        }
+        // Process each of the channels in turn
         for(SamplerChannel *channel : qAsConst(channels)) {
             channel->process(nframes);
         }
+        // Finalise processing on each individual sound
+        jack_default_audio_sample_t *leftBuffers[11][SubChannelCount]{{nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}};
+        jack_default_audio_sample_t *rightBuffers[11][SubChannelCount]{{nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}};
+        for (auto soundIterator = clipSounds.constKeyValueBegin(); soundIterator != clipSounds.constKeyValueEnd(); ++soundIterator) {
+            SamplerSynthSound *sound = soundIterator->second;
+            if (sound && sound->isValid) {
+                ClipAudioSource *clip = soundIterator->first;
+                const int channelIndex{clip->sketchpadTrack() + 1};
+                const int laneIndex{clip->laneAffinity()};
+                jack_default_audio_sample_t *leftBuffer = leftBuffers[channelIndex][laneIndex];
+                jack_default_audio_sample_t *rightBuffer = rightBuffers[channelIndex][laneIndex];
+                if (leftBuffer == nullptr) {
+                    const SubChannel &subChannel = channels[channelIndex]->subChannels[laneIndex];
+                    leftBuffer = (jack_default_audio_sample_t*)jack_port_get_buffer(subChannel.leftPort, nframes);
+                    leftBuffers[channelIndex][laneIndex] = leftBuffer;
+                }
+                if (rightBuffer == nullptr) {
+                    const SubChannel &subChannel = channels[channelIndex]->subChannels[laneIndex];
+                    rightBuffer = (jack_default_audio_sample_t*)jack_port_get_buffer(subChannel.rightPort, nframes);
+                    rightBuffers[channelIndex][laneIndex] = rightBuffer;
+                }
+                float *outputBuffers[2]{leftBuffer, rightBuffer};
+                float *inputBuffers[2]{sound->leftBuffer, sound->rightBuffer};
+                clip->finaliseProcess(inputBuffers, outputBuffers, nframes);
+            }
+        }
+        // Update the clips' position model information
         jack_nframes_t current_frames;
         jack_time_t current_usecs;
         jack_time_t next_usecs;
@@ -718,6 +769,12 @@ void SamplerSynth::registerClip(ClipAudioSource *clip)
     QMutexLocker locker(&d->synthMutex);
     if (!d->clipSounds.contains(clip)) {
         SamplerSynthSound *sound = new SamplerSynthSound(clip);
+        sound->leftPort = jack_port_register(d->jackClient, QString("Clip%1-SidechannelLeft").arg(clip->id()).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+        sound->rightPort = jack_port_register(d->jackClient, QString("Clip%1-SidechannelRight").arg(clip->id()).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+        clip->setSidechainPorts(sound->leftPort, sound->rightPort);
+        clip->reconnectSidechainPorts(d->jackClient);
+        connect(clip, &ClipAudioSource::compressorSidechannelLeftChanged, this, [this, clip](){ clip->reconnectSidechainPorts(d->jackClient); });
+        connect(clip, &ClipAudioSource::compressorSidechannelRightChanged, this, [this, clip](){ clip->reconnectSidechainPorts(d->jackClient); });
         d->clipSounds[clip] = sound;
         d->positionModels << clip->playbackPositionsModel();
     } else {
@@ -729,6 +786,16 @@ void SamplerSynth::unregisterClip(ClipAudioSource *clip)
 {
     QMutexLocker locker(&d->synthMutex);
     if (d->clipSounds.contains(clip)) {
+        clip->setSidechainPorts(nullptr, nullptr);
+        SamplerSynthSound *sound = d->clipSounds[clip];
+        if (sound->leftPort) {
+            jack_port_unregister(d->jackClient, sound->leftPort);
+            sound->leftPort = nullptr;
+        }
+        if (sound->rightPort) {
+            jack_port_unregister(d->jackClient, sound->rightPort);
+            sound->rightPort = nullptr;
+        }
         d->clipSounds.remove(clip);
         d->positionModels.removeAll(clip->playbackPositionsModel());
     }
