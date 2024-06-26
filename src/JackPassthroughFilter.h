@@ -34,7 +34,7 @@ class JackPassthroughFilter : public QObject {
     Q_PROPERTY(bool soloed READ soloed WRITE setSoloed NOTIFY soloedChanged)
     Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY colorChanged)
 public:
-    explicit JackPassthroughFilter(int index, JackPassthrough *parent = nullptr);
+    explicit JackPassthroughFilter(int index, QObject *parent = nullptr);
     ~JackPassthroughFilter() override;
 
     /**

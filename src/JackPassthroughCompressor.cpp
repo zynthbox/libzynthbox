@@ -36,7 +36,7 @@ public:
     float outputPeakRight{0.0f};
 };
 
-JackPassthroughCompressor::JackPassthroughCompressor(JackPassthrough* parent)
+JackPassthroughCompressor::JackPassthroughCompressor(QObject* parent)
     : QObject(parent)
     , d(new JackPassthroughCompressorPrivate)
 {

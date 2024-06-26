@@ -31,7 +31,7 @@ class JackPassthroughCompressor : public QObject {
     Q_PROPERTY(float outputPeakLeft READ outputPeakLeft NOTIFY peakChanged)
     Q_PROPERTY(float outputPeakRight READ outputPeakRight NOTIFY peakChanged)
 public:
-    explicit JackPassthroughCompressor(JackPassthrough *parent = nullptr);
+    explicit JackPassthroughCompressor(QObject *parent = nullptr);
     ~JackPassthroughCompressor() override;
 
     /**

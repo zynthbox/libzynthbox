@@ -20,9 +20,8 @@ static constexpr float maxGainDB{24.0f};
 
 class JackPassthroughFilterPrivate {
 public:
-    JackPassthroughFilterPrivate(JackPassthroughFilter *q, JackPassthrough *passthrough)
+    JackPassthroughFilterPrivate(JackPassthroughFilter *q)
         : q(q)
-        , passthrough(passthrough)
     {
         frequencies.resize(300);
         for (size_t i = 0; i < frequencies.size(); ++i) {
@@ -35,7 +34,6 @@ public:
         QObject::connect(&coefficientUpdater, &QTimer::timeout, q, [this](){ updateCoefficientsActual(); });
     }
     JackPassthroughFilter *q{nullptr};
-    JackPassthrough *passthrough{nullptr};
     int index{-1};
     QString name;
     bool selected{false};
@@ -63,9 +61,9 @@ public:
     std::vector<double> magnitudes;
 };
 
-JackPassthroughFilter::JackPassthroughFilter(int index, JackPassthrough* parent)
+JackPassthroughFilter::JackPassthroughFilter(int index, QObject* parent)
     : QObject(parent)
-    , d(new JackPassthroughFilterPrivate(this, parent))
+    , d(new JackPassthroughFilterPrivate(this))
 {
     d->index = index;
     setDefaults();
