@@ -48,6 +48,40 @@ public:
     parameters.sustain = 1.0f;
     parameters.release = 0.01f;
     grainADSR.setParameters(parameters);
+    // Equaliser
+    for (int equaliserBand = 0; equaliserBand < equaliserBandCount; ++equaliserBand) {
+        JackPassthroughFilter *newBand = new JackPassthroughFilter(equaliserBand, q);
+        newBand->setSampleRate(sampleRate);
+        QObject::connect(newBand, &JackPassthroughFilter::activeChanged, q, [this](){ bypassUpdater(); });
+        QObject::connect(newBand, &JackPassthroughFilter::soloedChanged, q, [this](){ bypassUpdater(); });
+        QObject::connect(newBand, &JackPassthroughFilter::dataChanged, q, &ClipAudioSource::equaliserDataChanged);
+        equaliserSettings[equaliserBand] = newBand;
+    }
+    for (int equaliserBand = 0; equaliserBand < equaliserBandCount; ++equaliserBand) {
+        if (equaliserBand > 0) {
+            equaliserSettings[equaliserBand]->setPrevious(equaliserSettings[equaliserBand - 1]);
+        }
+        if (equaliserBand < 5) {
+            equaliserSettings[equaliserBand]->setNext(equaliserSettings[equaliserBand + 1]);
+        }
+    }
+    // A bit awkward perhaps, but... this is a variadic template, and there's no indexed access, just a template one, so... alright
+    equaliserSettings[0]->setDspObjects(&filterChain[0].get<0>(), &filterChain[1].get<0>());
+    equaliserSettings[1]->setDspObjects(&filterChain[0].get<1>(), &filterChain[1].get<1>());
+    equaliserSettings[2]->setDspObjects(&filterChain[0].get<2>(), &filterChain[1].get<2>());
+    equaliserSettings[3]->setDspObjects(&filterChain[0].get<3>(), &filterChain[1].get<3>());
+    equaliserSettings[4]->setDspObjects(&filterChain[0].get<4>(), &filterChain[1].get<4>());
+    equaliserSettings[5]->setDspObjects(&filterChain[0].get<5>(), &filterChain[1].get<5>());
+    equaliserFrequencies.resize(300);
+    for (size_t i = 0; i < equaliserFrequencies.size(); ++i) {
+        equaliserFrequencies[i] = 20.0 * std::pow(2.0, i / 30.0);
+    }
+    equaliserMagnitudes.resize(300);
+    // Compressor
+    compressorSettings = new JackPassthroughCompressor(q);
+    for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
+        sideChainGain[channelIndex] = new jack_default_audio_sample_t[8192](); // TODO This is an awkward assumption, there has to be a sensible way to do this - jack should know this, right?
+    }
   }
   ClipAudioSource *q;
   const te::Engine &getEngine() const { return *engine; };
@@ -143,6 +177,24 @@ public:
   QList<JackPassthroughAnalyser*> equaliserInputAnalysers{nullptr,nullptr};
   QList<JackPassthroughAnalyser*> equaliserOutputAnalysers{nullptr,nullptr};
   dsp::ProcessorChain<dsp::IIR::Filter<float>, dsp::IIR::Filter<float>, dsp::IIR::Filter<float>, dsp::IIR::Filter<float>, dsp::IIR::Filter<float>, dsp::IIR::Filter<float>> filterChain[2];
+  void bypassUpdater() {
+      for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
+          soloedFilter = nullptr;
+          for (JackPassthroughFilter *filter : equaliserSettings) {
+              if (filter->soloed()) {
+                  soloedFilter = filter;
+                  break;
+              }
+          }
+          // A bit awkward perhaps, but... this is a variadic template, and there's no indexed access, just a template one, so... alright
+          filterChain[channelIndex].setBypassed<0>((soloedFilter == equaliserSettings[0]) == false && equaliserSettings[0]->active() == false);
+          filterChain[channelIndex].setBypassed<1>((soloedFilter == equaliserSettings[1]) == false && equaliserSettings[1]->active() == false);
+          filterChain[channelIndex].setBypassed<2>((soloedFilter == equaliserSettings[2]) == false && equaliserSettings[2]->active() == false);
+          filterChain[channelIndex].setBypassed<3>((soloedFilter == equaliserSettings[3]) == false && equaliserSettings[3]->active() == false);
+          filterChain[channelIndex].setBypassed<4>((soloedFilter == equaliserSettings[4]) == false && equaliserSettings[4]->active() == false);
+          filterChain[channelIndex].setBypassed<5>((soloedFilter == equaliserSettings[5]) == false && equaliserSettings[5]->active() == false);
+      }
+  }
 
   bool compressorEnabled{false};
   JackPassthroughCompressor *compressorSettings{nullptr};
@@ -678,8 +730,9 @@ int ClipAudioSource::sketchpadTrack() const
 
 void ClipAudioSource::setSketchpadTrack(const int& newValue)
 {
-  if (d->sketchpadTrack != newValue) {
-    d->sketchpadTrack = newValue;
+  const int adjusted{std::clamp(newValue, -1, 9)};
+  if (d->sketchpadTrack != adjusted) {
+    d->sketchpadTrack = adjusted;
     Q_EMIT sketchpadTrackChanged();
   }
 }
@@ -1400,6 +1453,11 @@ void ClipAudioSource::setSidechainPorts(jack_port_t* leftPort, jack_port_t* righ
 
 void ClipAudioSource::reconnectSidechainPorts(jack_client_t* jackClient)
 {
+  static float sampleRate{0};
+  if (sampleRate == 0) {
+    sampleRate = jack_get_sample_rate(jackClient);
+    d->compressorSettings->setSampleRate(sampleRate);
+  }
   static MidiRouterDeviceModel *model = qobject_cast<MidiRouterDeviceModel*>(MidiRouter::instance()->model());
   // First disconnect anything currently connected to the left sidechannel input port
   jack_port_disconnect(jackClient, d->sideChainInput[0]);
