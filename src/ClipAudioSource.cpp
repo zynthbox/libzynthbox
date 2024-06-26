@@ -20,6 +20,10 @@
 #include "../tracktion_engine/examples/common/Utilities.h"
 #include "Helper.h"
 #include "ClipCommand.h"
+#include "JackPassthroughAnalyser.h"
+#include "JackPassthroughCompressor.h"
+#include "JackPassthroughFilter.h"
+#include "MidiRouterDeviceModel.h"
 #include "SamplerSynth.h"
 #include "SyncTimer.h"
 #include "Plugin.h"
@@ -30,6 +34,8 @@ namespace tracktion_engine {
 
 #define DEBUG_CLIP false
 #define IF_DEBUG_CLIP if (DEBUG_CLIP)
+
+#define equaliserBandCount 6
 
 using namespace std;
 
@@ -83,6 +89,7 @@ public:
   double currentLeveldB{-400.0};
   double prevLeveldB{-400.0};
   int id{0};
+  int sketchpadTrack{-1};
   int laneAffinity{0};
   ClipAudioSourcePositionsModel *positionsModel{nullptr};
   // Default is 16, but we also need to generate the positions, so that is set up in the ClipAudioSource ctor
@@ -126,6 +133,23 @@ public:
     parameters.release = remainingPeriod * (1.0f - grainTilt);
     grainADSR.setParameters(parameters);
   }
+
+  bool equaliserEnabled{false};
+  JackPassthroughFilter* equaliserSettings[equaliserBandCount];
+  JackPassthroughFilter *soloedFilter{nullptr};
+  bool updateMagnitudes{true};
+  std::vector<double> equaliserMagnitudes;
+  std::vector<double> equaliserFrequencies;
+  QList<JackPassthroughAnalyser*> equaliserInputAnalysers{nullptr,nullptr};
+  QList<JackPassthroughAnalyser*> equaliserOutputAnalysers{nullptr,nullptr};
+  dsp::ProcessorChain<dsp::IIR::Filter<float>, dsp::IIR::Filter<float>, dsp::IIR::Filter<float>, dsp::IIR::Filter<float>, dsp::IIR::Filter<float>, dsp::IIR::Filter<float>> filterChain[2];
+
+  bool compressorEnabled{false};
+  JackPassthroughCompressor *compressorSettings{nullptr};
+  QString compressorSidechannelLeft, compressorSidechannelRight;
+  bool compressorSidechannelEmpty[2]{true, true};
+  jack_port_t *sideChainInput[2]{nullptr};
+  jack_default_audio_sample_t *sideChainGain[2]{nullptr};
 
   qint64 nextPositionUpdateTime{0};
   double firstPositionProgress{0};
@@ -645,6 +669,19 @@ void ClipAudioSource::setId(int id)
         d->id = id;
         Q_EMIT idChanged();
     }
+}
+
+int ClipAudioSource::sketchpadTrack() const
+{
+  return d->sketchpadTrack;
+}
+
+void ClipAudioSource::setSketchpadTrack(const int& newValue)
+{
+  if (d->sketchpadTrack != newValue) {
+    d->sketchpadTrack = newValue;
+    Q_EMIT sketchpadTrackChanged();
+  }
 }
 
 int ClipAudioSource::laneAffinity() const
@@ -1175,4 +1212,259 @@ void ClipAudioSource::setGrainTilt(const float& newValue)
 const juce::ADSR & ClipAudioSource::grainADSR() const
 {
   return d->grainADSR;
+}
+
+bool ClipAudioSource::equaliserEnabled() const
+{
+    return d->equaliserEnabled;
+}
+
+void ClipAudioSource::setEqualiserEnabled(const bool& equaliserEnabled)
+{
+    if (d->equaliserEnabled != equaliserEnabled) {
+        d->equaliserEnabled = equaliserEnabled;
+        Q_EMIT equaliserEnabledChanged();
+    }
+}
+
+QVariantList ClipAudioSource::equaliserSettings() const
+{
+    QVariantList settings;
+    for (JackPassthroughFilter *filter : d->equaliserSettings) {
+        settings.append(QVariant::fromValue<QObject*>(filter));
+    }
+    return settings;
+}
+
+QObject * ClipAudioSource::equaliserNearestToFrequency(const float& frequency) const
+{
+    JackPassthroughFilter *nearest{nullptr};
+    QMap<float, JackPassthroughFilter*> sortedFilters;
+    for (JackPassthroughFilter *filter : d->equaliserSettings) {
+        sortedFilters.insert(filter->frequency(), filter);
+    }
+    QMap<float, JackPassthroughFilter*>::const_iterator filterIterator(sortedFilters.constBegin());
+    float previousFrequency{0};
+    JackPassthroughFilter *previousFilter{nullptr};
+    while (filterIterator != sortedFilters.constEnd()) {
+        float currentFrequency = filterIterator.key();
+        nearest = filterIterator.value();
+        if (frequency <= currentFrequency) {
+            if (previousFilter) {
+                // Between two filters, so test which one we're closer to. If it's nearest to the previous filter, reset nearest to that (otherwise it's already the nearest)
+                float halfWayPoint{currentFrequency - ((currentFrequency - previousFrequency) / 2)};
+                if (frequency < halfWayPoint) {
+                    nearest = previousFilter;
+                }
+            }
+            // We've found our filter, so stop looking :)
+            break;
+        } else {
+            previousFrequency = currentFrequency;
+            previousFilter = nearest;
+        }
+        ++filterIterator;
+    }
+    return nearest;
+}
+
+const std::vector<double> & ClipAudioSource::equaliserMagnitudes() const
+{
+    if (d->updateMagnitudes) {
+        // Fill the magnitudes with a flat 1.0 of no change
+        std::fill(d->equaliserMagnitudes.begin(), d->equaliserMagnitudes.end(), 1.0f);
+
+        if (d->soloedFilter) {
+            // If we've got a soloed band, only show that one
+            juce::FloatVectorOperations::multiply(d->equaliserMagnitudes.data(), d->soloedFilter->magnitudes().data(), static_cast<int>(d->equaliserMagnitudes.size()));
+        } else {
+            for (size_t bandIndex = 0; bandIndex < equaliserBandCount; ++bandIndex) {
+                if (d->equaliserSettings[bandIndex]->active()) {
+                    juce::FloatVectorOperations::multiply(d->equaliserMagnitudes.data(), d->equaliserSettings[bandIndex]->magnitudes().data(), static_cast<int>(d->equaliserMagnitudes.size()));
+                }
+            }
+        }
+    }
+    return d->equaliserMagnitudes;
+}
+
+const std::vector<double> & ClipAudioSource::equaliserFrequencies() const
+{
+    return d->equaliserFrequencies;
+}
+
+void ClipAudioSource::equaliserCreateFrequencyPlot(QPolygonF &p, const QRect bounds, float pixelsPerDouble)
+{
+    equaliserMagnitudes(); // Just make sure our magnitudes are updated
+    const auto xFactor = static_cast<double>(bounds.width()) / d->equaliserFrequencies.size();
+    for (size_t i = 0; i < d->equaliserFrequencies.size(); ++i) {
+        p <<  QPointF(float (bounds.x() + i * xFactor), float(d->equaliserMagnitudes[i] > 0 ? bounds.center().y() - pixelsPerDouble * std::log(d->equaliserMagnitudes[i]) / std::log (2.0) : bounds.bottom()));
+    }
+}
+
+void ClipAudioSource::setEqualiserInputAnalysers(QList<JackPassthroughAnalyser*>& equaliserInputAnalysers) const
+{
+    d->equaliserInputAnalysers = equaliserInputAnalysers;
+}
+
+const QList<JackPassthroughAnalyser *> & ClipAudioSource::equaliserInputAnalysers() const
+{
+  return d->equaliserInputAnalysers;
+}
+
+void ClipAudioSource::setEqualiserOutputAnalysers(QList<JackPassthroughAnalyser*>& equaliserOutputAnalysers) const
+{
+    d->equaliserOutputAnalysers = equaliserOutputAnalysers;
+}
+
+const QList<JackPassthroughAnalyser *> & ClipAudioSource::equaliserOutputAnalysers() const
+{
+  return d->equaliserOutputAnalysers;
+}
+
+bool ClipAudioSource::compressorEnabled() const
+{
+    return d->compressorEnabled;
+}
+
+void ClipAudioSource::setCompressorEnabled(const bool& compressorEnabled)
+{
+    if (d->compressorEnabled != compressorEnabled) {
+        d->compressorEnabled = compressorEnabled;
+        Q_EMIT compressorEnabledChanged();
+    }
+}
+
+QString ClipAudioSource::compressorSidechannelLeft() const
+{
+    return d->compressorSidechannelLeft;
+}
+
+void ClipAudioSource::setCompressorSidechannelLeft(const QString& compressorSidechannelLeft)
+{
+    if (d->compressorSidechannelLeft != compressorSidechannelLeft) {
+        d->compressorSidechannelLeft = compressorSidechannelLeft;
+        Q_EMIT compressorSidechannelLeftChanged();
+        // // First disconnect anything currently connected to the left sidechannel input port
+        // jack_port_disconnect(d->client, d->sideChainInput[0]);
+        // // Then connect up the new sidechain input
+        // static MidiRouterDeviceModel *model = qobject_cast<MidiRouterDeviceModel*>(MidiRouter::instance()->model());
+        // const QStringList portsToConnect{model->audioInSourceToJackPortNames(d->compressorSidechannelLeft, {})};
+        // for (const QString &port : portsToConnect) {
+        //     d->connectPorts(port, QString("%1:%2sidechainInputLeft").arg(d->actualClientName).arg(d->portPrefix));
+        // }
+        // d->compressorSidechannelEmpty[0] = portsToConnect.isEmpty();
+        // TODO Do this on compressorSidechannelLeftChanged AND when first registering a clip (in case it's already been set up)
+    }
+}
+
+QString ClipAudioSource::compressorSidechannelRight() const
+{
+    return d->compressorSidechannelRight;
+}
+
+void ClipAudioSource::setCompressorSidechannelRight(const QString& compressorSidechannelRight)
+{
+    if (d->compressorSidechannelRight != compressorSidechannelRight) {
+        d->compressorSidechannelRight = compressorSidechannelRight;
+        Q_EMIT compressorSidechannelRightChanged();
+        // // First disconnect anything currently connected to the right sidechannel input port
+        // jack_port_disconnect(d->client, d->sideChainInput[1]);
+        // // Then connect up the new sidechain input
+        // static MidiRouterDeviceModel *model = qobject_cast<MidiRouterDeviceModel*>(MidiRouter::instance()->model());
+        // const QStringList portsToConnect{model->audioInSourceToJackPortNames(d->compressorSidechannelRight, {})};
+        // for (const QString &port : portsToConnect) {
+        //     d->connectPorts(port, QString("%1:%2sidechainInputRight").arg(d->actualClientName).arg(d->portPrefix));
+        // }
+        // d->compressorSidechannelEmpty[1] = portsToConnect.isEmpty();
+        // TODO Do this on compressorSidechannelLeftChanged AND when first registering a clip (in case it's already been set up)
+    }
+}
+
+void connectPorts(jack_client_t* client, const QString &from, const QString &to) {
+  int result = jack_connect(client, from.toUtf8(), to.toUtf8());
+  if (result == 0 || result == EEXIST) {
+    // successful connection or connection already exists
+    // qDebug() << Q_FUNC_INFO << "Successfully connected" << from << "to" << to << "(or connection already existed)";
+  } else {
+    qWarning() << Q_FUNC_INFO << "Failed to connect" << from << "with" << to << "with error code" << result;
+    // This should probably reschedule an attempt in the near future, with a limit to how long we're trying for?
+  }
+}
+
+void ClipAudioSource::setSidechainPorts(jack_port_t* leftPort, jack_port_t* rightPort)
+{
+  d->sideChainInput[0] = leftPort;
+  d->sideChainInput[1] = rightPort;
+}
+
+void ClipAudioSource::reconnectSidechainPorts(jack_client_t* jackClient)
+{
+  static MidiRouterDeviceModel *model = qobject_cast<MidiRouterDeviceModel*>(MidiRouter::instance()->model());
+  // First disconnect anything currently connected to the left sidechannel input port
+  jack_port_disconnect(jackClient, d->sideChainInput[0]);
+  // Then connect up the new sidechain input
+  const QStringList leftPortsToConnect{model->audioInSourceToJackPortNames(d->compressorSidechannelLeft, {})};
+  for (const QString &port : leftPortsToConnect) {
+    connectPorts(jackClient, port, QString("SamplerSynth:Clip%1-SidechainInputLeft").arg(d->id));
+  }
+  d->compressorSidechannelEmpty[0] = leftPortsToConnect.isEmpty();
+  // First disconnect anything currently connected to the right sidechannel input port
+  jack_port_disconnect(jackClient, d->sideChainInput[1]);
+  // Then connect up the new sidechain input
+  const QStringList rightPortsToConnect{model->audioInSourceToJackPortNames(d->compressorSidechannelRight, {})};
+  for (const QString &port : rightPortsToConnect) {
+    connectPorts(jackClient, port, QString("SamplerSynth:Clip%1-SidechainInputRight").arg(d->id));
+  }
+  d->compressorSidechannelEmpty[1] = rightPortsToConnect.isEmpty();
+}
+
+QObject * ClipAudioSource::compressorSettings() const
+{
+    return d->compressorSettings;
+}
+
+void ClipAudioSource::finaliseProcess(float ** inputBuffers, float ** outputBuffers, size_t bufferLenth) const
+{
+  for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
+    if (d->equaliserEnabled) {
+      for (JackPassthroughFilter *filter : d->equaliserSettings) {
+        filter->updateCoefficients();
+      }
+      for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
+        juce::AudioBuffer<float> bufferWrapper(&inputBuffers[channelIndex], 1, int(bufferLenth));
+        juce::dsp::AudioBlock<float> block(bufferWrapper);
+        juce::dsp::ProcessContextReplacing<float> context(block);
+        if (d->equaliserInputAnalysers[channelIndex]) {
+          d->equaliserInputAnalysers[channelIndex]->addAudioData(bufferWrapper, 0, 1);
+        }
+        d->filterChain[channelIndex].process(context);
+        if (d->equaliserOutputAnalysers[channelIndex]) {
+          d->equaliserOutputAnalysers[channelIndex]->addAudioData(bufferWrapper, 0, 1);
+        }
+      }
+    }
+    if (d->compressorEnabled) {
+      float sidechainPeaks[2]{0.0f, 0.0f};
+      float outputPeaks[2]{0.0f, 0.0f};
+      float maxGainReduction[2]{0.0f, 0.0f};
+      d->compressorSettings->updateParameters();
+      for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
+          // If we're not using a sidechannel for input, use what we're fed instead
+          jack_default_audio_sample_t *sideChainInputBuffer = d->compressorSidechannelEmpty[channelIndex] || d->sideChainInput[channelIndex] == nullptr ? inputBuffers[channelIndex] : (jack_default_audio_sample_t *)jack_port_get_buffer(d->sideChainInput[channelIndex], bufferLenth);
+          d->compressorSettings->compressors[channelIndex].getGainFromSidechainSignal(sideChainInputBuffer, d->sideChainGain[channelIndex], int(bufferLenth));
+          juce::FloatVectorOperations::multiply(inputBuffers[channelIndex], d->sideChainGain[channelIndex], int(bufferLenth));
+          // These three are essentially visualisation, so let's try and make sure we don't do the work unless someone's looking
+          if (d->compressorSettings->hasObservers()) {
+              sidechainPeaks[channelIndex] = juce::Decibels::decibelsToGain(d->compressorSettings->compressors[channelIndex].getMaxLevelInDecibels());
+              maxGainReduction[channelIndex] = juce::Decibels::decibelsToGain(juce::Decibels::gainToDecibels(juce::FloatVectorOperations::findMinimum(d->sideChainGain[channelIndex], int(bufferLenth)) - d->compressorSettings->compressors[channelIndex].getMakeUpGain()));
+              outputPeaks[channelIndex] = juce::AudioBuffer<float>(&inputBuffers[channelIndex], 1, int(bufferLenth)).getMagnitude(0, 0, int(bufferLenth));
+          }
+      }
+      d->compressorSettings->updatePeaks(sidechainPeaks[0], sidechainPeaks[1], maxGainReduction[0], maxGainReduction[1], outputPeaks[0], outputPeaks[1]);
+    } else if (d->compressorSettings) { // just to avoid doing any unnecessary hoop-jumping during construction
+      d->compressorSettings->setPeaks(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    }
+    juce::FloatVectorOperations::add(outputBuffers[channelIndex], inputBuffers[channelIndex], bufferLenth);
+  }
 }

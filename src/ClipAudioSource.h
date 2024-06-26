@@ -14,11 +14,16 @@
 
 #include <iostream>
 
+#include <jack/jack.h>
+
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <juce_events/juce_events.h>
 
 class SyncTimer;
 class ClipAudioSourcePositionsModel;
+class JackPassthroughAnalyser;
+class JackPassthroughFilter;
+class JackPassthroughCompressor;
 namespace tracktion_engine {
     class AudioFile;
     class Engine;
@@ -71,6 +76,14 @@ class ClipAudioSource : public QObject {
      * @default 0.0
      */
     Q_PROPERTY(float loopDelta READ loopDelta WRITE setLoopDelta NOTIFY loopDeltaChanged)
+    /**
+     * \brief The sketchpad track this clip is associated with
+     * @note changing this while the clip is playing will potentially cause some weird sounds to happen, so probably try and avoid that
+     * @default -1 (global playback)
+     * @minimum -1
+     * @maximum 9
+     */
+    Q_PROPERTY(int sketchpadTrack READ sketchpadTrack WRITE setSketchpadTrack NOTIFY sketchpadTrackChanged)
     /**
      * \brief The lane the clip should be played one (equivalent to the sample slot in SketchPad)
      * @default 0
@@ -291,6 +304,34 @@ class ClipAudioSource : public QObject {
      * @minimum 1.0f
      */
     Q_PROPERTY(float grainTilt READ grainTilt WRITE setGrainTilt NOTIFY grainTiltChanged)
+
+    /**
+     * \brief Whether or not the equaliser will be applied to incoming audio
+     * @default false
+     */
+    Q_PROPERTY(bool equaliserEnabled READ equaliserEnabled WRITE setEqualiserEnabled NOTIFY equaliserEnabledChanged)
+    /**
+     * \brief A list of the settings container objects for each of the equaliser bands
+     */
+    Q_PROPERTY(QVariantList equaliserSettings READ equaliserSettings NOTIFY equaliserSettingsChanged)
+
+    /**
+     * \brief Whether or not the compressor will be applied to incoming audio (post-equaliser)
+     * @default false
+     */
+    Q_PROPERTY(bool compressorEnabled READ compressorEnabled WRITE setCompressorEnabled NOTIFY compressorEnabledChanged)
+    /**
+     * \brief The sources used for the left channel of the compressor side channel
+     */
+    Q_PROPERTY(QString compressorSidechannelLeft READ compressorSidechannelLeft WRITE setCompressorSidechannelLeft NOTIFY compressorSidechannelLeftChanged)
+    /**
+     * \brief The sources used for the right channel of the compressor side channel
+     */
+    Q_PROPERTY(QString compressorSidechannelRight READ compressorSidechannelRight WRITE setCompressorSidechannelRight NOTIFY compressorSidechannelRightChanged)
+    /**
+     * \brief The settings container object for the compressor
+     */
+    Q_PROPERTY(QObject* compressorSettings READ compressorSettings NOTIFY compressorSettingsChanged)
 public:
   explicit ClipAudioSource(const char *filepath, bool muted = false, QObject *parent = nullptr);
   ~ClipAudioSource() override;
@@ -394,6 +435,10 @@ public:
   int id() const;
   void setId(int id);
   Q_SIGNAL void idChanged();
+
+  int sketchpadTrack() const;
+  void setSketchpadTrack(const int &newValue);
+  Q_SIGNAL void sketchpadTrackChanged();
 
   int laneAffinity() const;
   void setLaneAffinity(const int& newValue);
@@ -542,6 +587,36 @@ public:
   void setGrainTilt(const float &newValue);
   Q_SIGNAL void grainTiltChanged();
   const juce::ADSR &grainADSR() const;
+
+  bool equaliserEnabled() const;
+  void setEqualiserEnabled(const bool &equaliserEnabled);
+  Q_SIGNAL void equaliserEnabledChanged();
+  QVariantList equaliserSettings() const;
+  Q_SIGNAL void equaliserSettingsChanged();
+  Q_INVOKABLE QObject *equaliserNearestToFrequency(const float &frequency) const;
+  Q_SIGNAL void equaliserDataChanged();
+  const std::vector<double> &equaliserMagnitudes() const;
+  const std::vector<double> &equaliserFrequencies() const;
+  void equaliserCreateFrequencyPlot(QPolygonF &p, const QRect bounds, float pixelsPerDouble);
+  void setEqualiserInputAnalysers(QList<JackPassthroughAnalyser*> &equaliserInputAnalysers) const;
+  const QList<JackPassthroughAnalyser*> &equaliserInputAnalysers() const;
+  void setEqualiserOutputAnalysers(QList<JackPassthroughAnalyser*> &equaliserOutputAnalysers) const;
+  const QList<JackPassthroughAnalyser*> &equaliserOutputAnalysers() const;
+
+  bool compressorEnabled() const;
+  void setCompressorEnabled(const bool &compressorEnabled);
+  Q_SIGNAL void compressorEnabledChanged();
+  QString compressorSidechannelLeft() const;
+  void setCompressorSidechannelLeft(const QString &compressorSidechannelLeft);
+  Q_SIGNAL void compressorSidechannelLeftChanged();
+  QString compressorSidechannelRight() const;
+  void setCompressorSidechannelRight(const QString &compressorSidechannelRight);
+  Q_SIGNAL void compressorSidechannelRightChanged();
+  void setSidechainPorts(jack_port_t *leftPort, jack_port_t *rightPort);
+  void reconnectSidechainPorts(jack_client_t* jackClient);
+  QObject *compressorSettings() const;
+  Q_SIGNAL void compressorSettingsChanged();
+  void finaliseProcess(float** inputBuffers, float** outputBuffers, size_t bufferLenth) const;
 private:
   class Private;
   Private *d;
