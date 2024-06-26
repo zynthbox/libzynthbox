@@ -559,10 +559,9 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_de
                 peakGain = newGain;
             }
 
-            *leftBuffer += l;
-            ++leftBuffer;
-            *rightBuffer += r;
-            ++rightBuffer;
+            // Add the playback data into the current sound's playback buffer at the current frame position
+            *(d->sound->leftBuffer + int(frame)) += l;
+            *(d->sound->rightBuffer + int(frame)) += l;
 
             if (d->clip->timeStretchLive()) {
                 d->sourceSamplePosition += 1.0f;
