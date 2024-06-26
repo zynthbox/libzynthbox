@@ -345,7 +345,7 @@ inline float interpolateHermite4pt3oX(float x0, float x1, float x2, float x3, fl
 
 // if we perform highpass filtering, we need to invert the output of the allpass (multiply it by -1)
 static const double highpassSign{-1.f};
-void SamplerSynthVoice::process(jack_default_audio_sample_t *leftBuffer, jack_default_audio_sample_t *rightBuffer, jack_nframes_t nframes, jack_nframes_t current_frames, jack_time_t /*current_usecs*/, jack_time_t /*next_usecs*/, float /*period_usecs*/)
+void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jack_default_audio_sample_t */*rightBuffer*/, jack_nframes_t nframes, jack_nframes_t current_frames, jack_time_t /*current_usecs*/, jack_time_t /*next_usecs*/, float /*period_usecs*/)
 {
     float peakGain{0.0f};
     int dataChannel{0}, dataNote{0};
