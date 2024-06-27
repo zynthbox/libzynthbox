@@ -1486,45 +1486,45 @@ QObject * ClipAudioSource::compressorSettings() const
 
 void ClipAudioSource::finaliseProcess(float ** inputBuffers, float ** outputBuffers, size_t bufferLenth) const
 {
+  if (d->equaliserEnabled) {
+    for (JackPassthroughFilter *filter : d->equaliserSettings) {
+      filter->updateCoefficients();
+    }
+    for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
+      juce::AudioBuffer<float> bufferWrapper(&inputBuffers[channelIndex], 1, int(bufferLenth));
+      juce::dsp::AudioBlock<float> block(bufferWrapper);
+      juce::dsp::ProcessContextReplacing<float> context(block);
+      if (d->equaliserInputAnalysers[channelIndex]) {
+        d->equaliserInputAnalysers[channelIndex]->addAudioData(bufferWrapper, 0, 1);
+      }
+      d->filterChain[channelIndex].process(context);
+      if (d->equaliserOutputAnalysers[channelIndex]) {
+        d->equaliserOutputAnalysers[channelIndex]->addAudioData(bufferWrapper, 0, 1);
+      }
+    }
+  }
+  if (d->compressorEnabled) {
+    float sidechainPeaks[2]{0.0f, 0.0f};
+    float outputPeaks[2]{0.0f, 0.0f};
+    float maxGainReduction[2]{0.0f, 0.0f};
+    d->compressorSettings->updateParameters();
+    for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
+        // If we're not using a sidechannel for input, use what we're fed instead
+        jack_default_audio_sample_t *sideChainInputBuffer = d->compressorSidechannelEmpty[channelIndex] || d->sideChainInput[channelIndex] == nullptr ? inputBuffers[channelIndex] : (jack_default_audio_sample_t *)jack_port_get_buffer(d->sideChainInput[channelIndex], bufferLenth);
+        d->compressorSettings->compressors[channelIndex].getGainFromSidechainSignal(sideChainInputBuffer, d->sideChainGain[channelIndex], int(bufferLenth));
+        juce::FloatVectorOperations::multiply(inputBuffers[channelIndex], d->sideChainGain[channelIndex], int(bufferLenth));
+        // These three are essentially visualisation, so let's try and make sure we don't do the work unless someone's looking
+        if (d->compressorSettings->hasObservers()) {
+            sidechainPeaks[channelIndex] = juce::Decibels::decibelsToGain(d->compressorSettings->compressors[channelIndex].getMaxLevelInDecibels());
+            maxGainReduction[channelIndex] = juce::Decibels::decibelsToGain(juce::Decibels::gainToDecibels(juce::FloatVectorOperations::findMinimum(d->sideChainGain[channelIndex], int(bufferLenth)) - d->compressorSettings->compressors[channelIndex].getMakeUpGain()));
+            outputPeaks[channelIndex] = juce::AudioBuffer<float>(&inputBuffers[channelIndex], 1, int(bufferLenth)).getMagnitude(0, 0, int(bufferLenth));
+        }
+    }
+    d->compressorSettings->updatePeaks(sidechainPeaks[0], sidechainPeaks[1], maxGainReduction[0], maxGainReduction[1], outputPeaks[0], outputPeaks[1]);
+  } else if (d->compressorSettings) { // just to avoid doing any unnecessary hoop-jumping during construction
+    d->compressorSettings->setPeaks(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+  }
   for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
-    if (d->equaliserEnabled) {
-      for (JackPassthroughFilter *filter : d->equaliserSettings) {
-        filter->updateCoefficients();
-      }
-      for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
-        juce::AudioBuffer<float> bufferWrapper(&inputBuffers[channelIndex], 1, int(bufferLenth));
-        juce::dsp::AudioBlock<float> block(bufferWrapper);
-        juce::dsp::ProcessContextReplacing<float> context(block);
-        if (d->equaliserInputAnalysers[channelIndex]) {
-          d->equaliserInputAnalysers[channelIndex]->addAudioData(bufferWrapper, 0, 1);
-        }
-        d->filterChain[channelIndex].process(context);
-        if (d->equaliserOutputAnalysers[channelIndex]) {
-          d->equaliserOutputAnalysers[channelIndex]->addAudioData(bufferWrapper, 0, 1);
-        }
-      }
-    }
-    if (d->compressorEnabled) {
-      float sidechainPeaks[2]{0.0f, 0.0f};
-      float outputPeaks[2]{0.0f, 0.0f};
-      float maxGainReduction[2]{0.0f, 0.0f};
-      d->compressorSettings->updateParameters();
-      for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
-          // If we're not using a sidechannel for input, use what we're fed instead
-          jack_default_audio_sample_t *sideChainInputBuffer = d->compressorSidechannelEmpty[channelIndex] || d->sideChainInput[channelIndex] == nullptr ? inputBuffers[channelIndex] : (jack_default_audio_sample_t *)jack_port_get_buffer(d->sideChainInput[channelIndex], bufferLenth);
-          d->compressorSettings->compressors[channelIndex].getGainFromSidechainSignal(sideChainInputBuffer, d->sideChainGain[channelIndex], int(bufferLenth));
-          juce::FloatVectorOperations::multiply(inputBuffers[channelIndex], d->sideChainGain[channelIndex], int(bufferLenth));
-          // These three are essentially visualisation, so let's try and make sure we don't do the work unless someone's looking
-          if (d->compressorSettings->hasObservers()) {
-              sidechainPeaks[channelIndex] = juce::Decibels::decibelsToGain(d->compressorSettings->compressors[channelIndex].getMaxLevelInDecibels());
-              maxGainReduction[channelIndex] = juce::Decibels::decibelsToGain(juce::Decibels::gainToDecibels(juce::FloatVectorOperations::findMinimum(d->sideChainGain[channelIndex], int(bufferLenth)) - d->compressorSettings->compressors[channelIndex].getMakeUpGain()));
-              outputPeaks[channelIndex] = juce::AudioBuffer<float>(&inputBuffers[channelIndex], 1, int(bufferLenth)).getMagnitude(0, 0, int(bufferLenth));
-          }
-      }
-      d->compressorSettings->updatePeaks(sidechainPeaks[0], sidechainPeaks[1], maxGainReduction[0], maxGainReduction[1], outputPeaks[0], outputPeaks[1]);
-    } else if (d->compressorSettings) { // just to avoid doing any unnecessary hoop-jumping during construction
-      d->compressorSettings->setPeaks(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
-    }
     juce::FloatVectorOperations::add(outputBuffers[channelIndex], inputBuffers[channelIndex], bufferLenth);
   }
 }
