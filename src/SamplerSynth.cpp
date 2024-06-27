@@ -604,9 +604,9 @@ int SamplerSynthPrivate::process(jack_nframes_t nframes)
                 const int channelIndex{clip->sketchpadTrack() + 1};
                 const int laneIndex{clip->laneAffinity()};
                 // if (throttler == 0) { qDebug() << Q_FUNC_INFO << "Working on clip" << clip << "with channel" << channelIndex << "and lane" << laneIndex; }
-                jack_default_audio_sample_t *outputBuffers[2]{leftBuffers[channelIndex][laneIndex], rightBuffers[channelIndex][laneIndex]};
-                jack_default_audio_sample_t *inputBuffers[2]{sound->leftBuffer, sound->rightBuffer};
-                clip->finaliseProcess(inputBuffers, outputBuffers, nframes);
+                jack_default_audio_sample_t *laneOutputBuffers[2]{leftBuffers[channelIndex][laneIndex], rightBuffers[channelIndex][laneIndex]};
+                jack_default_audio_sample_t *soundBuffers[2]{sound->leftBuffer, sound->rightBuffer};
+                clip->finaliseProcess(soundBuffers, laneOutputBuffers, nframes);
             }
         }
         // Update the clips' position model information
