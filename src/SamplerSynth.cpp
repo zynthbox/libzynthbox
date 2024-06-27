@@ -604,10 +604,8 @@ int SamplerSynthPrivate::process(jack_nframes_t nframes)
                 const int channelIndex{clip->sketchpadTrack() + 1};
                 const int laneIndex{clip->laneAffinity()};
                 // if (throttler == 0) { qDebug() << Q_FUNC_INFO << "Working on clip" << clip << "with channel" << channelIndex << "and lane" << laneIndex; }
-                jack_default_audio_sample_t *leftBuffer = leftBuffers[channelIndex][laneIndex];
-                jack_default_audio_sample_t *rightBuffer = rightBuffers[channelIndex][laneIndex];
-                float *outputBuffers[2]{leftBuffer, rightBuffer};
-                float *inputBuffers[2]{sound->leftBuffer, sound->rightBuffer};
+                jack_default_audio_sample_t *outputBuffers[2]{leftBuffers[channelIndex][laneIndex], rightBuffers[channelIndex][laneIndex]};
+                jack_default_audio_sample_t *inputBuffers[2]{sound->leftBuffer, sound->rightBuffer};
                 clip->finaliseProcess(inputBuffers, outputBuffers, nframes);
             }
         }
