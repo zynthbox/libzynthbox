@@ -304,8 +304,8 @@ void SamplerSynthVoice::stopNote(float velocity, bool allowTailOff, jack_nframes
         d->soundTouch.clear();
         d->adsr.reset();
         if (d->clip) {
-
             d->clip = nullptr;
+            d->sound = nullptr;
         }
         if (d->clipCommand) {
             d->syncTimer->deleteClipCommand(d->clipCommand);
