@@ -138,128 +138,130 @@ public:
     }
 
     int process(jack_nframes_t nframes) {
-        jack_default_audio_sample_t *inputLeftBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(inputLeft, nframes);
-        jack_default_audio_sample_t *inputRightBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(inputRight, nframes);
-        if (dryOutPortsEnabled) {
-            dryOutLeftBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(dryOutLeft, nframes);
-            dryOutRightBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(dryOutRight, nframes);
-        }
-        if (wetOutFx1PortsEnabled) {
-            wetOutFx1LeftBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(wetOutFx1Left, nframes);
-            wetOutFx1RightBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(wetOutFx1Right, nframes);
-        }
-        if (wetOutFx2PortsEnabled) {
-            wetOutFx2LeftBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(wetOutFx2Left, nframes);
-            wetOutFx2RightBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(wetOutFx2Right, nframes);
-        }
-
-        if (muted) {
+        if (inputLeft && inputRight) {
+            jack_default_audio_sample_t *inputLeftBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(inputLeft, nframes);
+            jack_default_audio_sample_t *inputRightBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(inputRight, nframes);
             if (dryOutPortsEnabled) {
-                memset(dryOutLeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
-                memset(dryOutRightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                dryOutLeftBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(dryOutLeft, nframes);
+                dryOutRightBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(dryOutRight, nframes);
             }
             if (wetOutFx1PortsEnabled) {
-                memset(wetOutFx1LeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
-                memset(wetOutFx1RightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                wetOutFx1LeftBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(wetOutFx1Left, nframes);
+                wetOutFx1RightBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(wetOutFx1Right, nframes);
             }
             if (wetOutFx2PortsEnabled) {
-                memset(wetOutFx2LeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
-                memset(wetOutFx2RightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                wetOutFx2LeftBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(wetOutFx2Left, nframes);
+                wetOutFx2RightBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(wetOutFx2Right, nframes);
             }
-        } else {
-            jack_default_audio_sample_t *inputBuffers[2]{inputLeftBuffer, inputRightBuffer};
-            if (equaliserEnabled) {
-                for (JackPassthroughFilter *filter : equaliserSettings) {
-                    filter->updateCoefficients();
-                }
-                for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
-                    juce::AudioBuffer<float> bufferWrapper(&inputBuffers[channelIndex], 1, int(nframes));
-                    juce::dsp::AudioBlock<float> block(bufferWrapper);
-                    juce::dsp::ProcessContextReplacing<float> context(block);
-                    if (equaliserInputAnalysers[channelIndex]) {
-                        equaliserInputAnalysers[channelIndex]->addAudioData(bufferWrapper, 0, 1);
-                    }
-                    filterChain[channelIndex].process(context);
-                    if (equaliserOutputAnalysers[channelIndex]) {
-                        equaliserOutputAnalysers[channelIndex]->addAudioData(bufferWrapper, 0, 1);
-                    }
-                }
-            }
-            if (compressorEnabled) {
-                float sidechainPeaks[2]{0.0f, 0.0f};
-                float outputPeaks[2]{0.0f, 0.0f};
-                float maxGainReduction[2]{0.0f, 0.0f};
-                compressorSettings->updateParameters();
-                for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
-                    // If we're not using a sidechannel for input, use what we're fed instead
-                    jack_default_audio_sample_t *sideChainInputBuffer = compressorSidechannelEmpty[channelIndex] ? inputBuffers[channelIndex] : (jack_default_audio_sample_t *)jack_port_get_buffer(sideChainInput[channelIndex], nframes);
-                    compressorSettings->compressors[channelIndex].getGainFromSidechainSignal(sideChainInputBuffer, sideChainGain[channelIndex], int(nframes));
-                    juce::FloatVectorOperations::multiply(inputBuffers[channelIndex], sideChainGain[channelIndex], int(nframes));
-                    // These three are essentially visualisation, so let's try and make sure we don't do the work unless someone's looking
-                    if (compressorSettings->hasObservers()) {
-                        sidechainPeaks[channelIndex] = juce::Decibels::decibelsToGain(compressorSettings->compressors[channelIndex].getMaxLevelInDecibels());
-                        maxGainReduction[channelIndex] = juce::Decibels::decibelsToGain(juce::Decibels::gainToDecibels(juce::FloatVectorOperations::findMinimum(sideChainGain[channelIndex], int(nframes)) - compressorSettings->compressors[channelIndex].getMakeUpGain()));
-                        outputPeaks[channelIndex] = juce::AudioBuffer<float>(&inputBuffers[channelIndex], 1, int(nframes)).getMagnitude(0, 0, int(nframes));
-                    }
-                }
-                compressorSettings->updatePeaks(sidechainPeaks[0], sidechainPeaks[1], maxGainReduction[0], maxGainReduction[1], outputPeaks[0], outputPeaks[1]);
-            } else if (compressorSettings) { // just to avoid doing any unnecessary hoop-jumping during construction
-                compressorSettings->setPeaks(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
-            }
-            bool outputDry{true};
-            bool outputWetFx1{true};
-            bool outputWetFx2{true};
-            if (dryOutPortsEnabled) {
-                if (panAmount == 0 && dryAmount == 0) {
-                    outputDry = false;
+
+            if (muted) {
+                if (dryOutPortsEnabled) {
                     memset(dryOutLeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
                     memset(dryOutRightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
-                } else if (panAmount == 0 && dryAmount == 1) {
-                    outputDry = false;
-                    memcpy(dryOutLeftBuffer, inputLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
-                    memcpy(dryOutRightBuffer, inputRightBuffer, nframes * sizeof(jack_default_audio_sample_t));
-                }
-            }
-            if (wetOutFx1PortsEnabled) {
-                if (panAmount == 0 && wetFx1Amount == 0) {
-                    outputWetFx1 = false;
-                    memset(wetOutFx1LeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
-                    memset(wetOutFx1RightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
-                } else if (panAmount == 0 && wetFx1Amount == 1) {
-                    outputWetFx1 = false;
-                    memcpy(wetOutFx1LeftBuffer, inputLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
-                    memcpy(wetOutFx1RightBuffer, inputRightBuffer, nframes * sizeof(jack_default_audio_sample_t));
-                }
-            }
-            if (wetOutFx2PortsEnabled) {
-                if (panAmount == 0 && wetFx2Amount == 0) {
-                    outputWetFx2 = false;
-                    memset(wetOutFx2LeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
-                    memset(wetOutFx2RightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
-                } else if (panAmount == 0 && wetFx2Amount == 1) {
-                    outputWetFx2 = false;
-                    memcpy(wetOutFx2LeftBuffer, inputLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
-                    memcpy(wetOutFx2RightBuffer, inputRightBuffer, nframes * sizeof(jack_default_audio_sample_t));
-                }
-            }
-            if (panAmount != 0 || outputDry || outputWetFx1 || outputWetFx2) {
-                if (dryOutPortsEnabled) {
-                    const float dryAmountLeft{dryAmount * std::min(1 - panAmount, 1.0f)};
-                    const float dryAmountRight{dryAmount * std::min(1 + panAmount, 1.0f)};
-                    juce::FloatVectorOperations::multiply(dryOutLeftBuffer, inputLeftBuffer, dryAmountLeft, int(nframes));
-                    juce::FloatVectorOperations::multiply(dryOutRightBuffer, inputRightBuffer, dryAmountRight, int(nframes));
                 }
                 if (wetOutFx1PortsEnabled) {
-                    const float wetFx1AmountLeft{wetFx1Amount * std::min(1 - panAmount, 1.0f)};
-                    const float wetFx1AmountRight{wetFx1Amount * std::min(1 + panAmount, 1.0f)};
-                    juce::FloatVectorOperations::multiply(wetOutFx1LeftBuffer, inputLeftBuffer, wetFx1AmountLeft, int(nframes));
-                    juce::FloatVectorOperations::multiply(wetOutFx1RightBuffer, inputRightBuffer, wetFx1AmountRight, int(nframes));
+                    memset(wetOutFx1LeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                    memset(wetOutFx1RightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
                 }
                 if (wetOutFx2PortsEnabled) {
-                    const float wetFx2AmountLeft{wetFx2Amount * std::min(1 - panAmount, 1.0f)};
-                    const float wetFx2AmountRight{wetFx2Amount * std::min(1 + panAmount, 1.0f)};
-                    juce::FloatVectorOperations::multiply(wetOutFx2LeftBuffer, inputLeftBuffer, wetFx2AmountLeft, int(nframes));
-                    juce::FloatVectorOperations::multiply(wetOutFx2RightBuffer, inputRightBuffer, wetFx2AmountRight, int(nframes));
+                    memset(wetOutFx2LeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                    memset(wetOutFx2RightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                }
+            } else {
+                jack_default_audio_sample_t *inputBuffers[2]{inputLeftBuffer, inputRightBuffer};
+                if (equaliserEnabled) {
+                    for (JackPassthroughFilter *filter : equaliserSettings) {
+                        filter->updateCoefficients();
+                    }
+                    for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
+                        juce::AudioBuffer<float> bufferWrapper(&inputBuffers[channelIndex], 1, int(nframes));
+                        juce::dsp::AudioBlock<float> block(bufferWrapper);
+                        juce::dsp::ProcessContextReplacing<float> context(block);
+                        if (equaliserInputAnalysers[channelIndex]) {
+                            equaliserInputAnalysers[channelIndex]->addAudioData(bufferWrapper, 0, 1);
+                        }
+                        filterChain[channelIndex].process(context);
+                        if (equaliserOutputAnalysers[channelIndex]) {
+                            equaliserOutputAnalysers[channelIndex]->addAudioData(bufferWrapper, 0, 1);
+                        }
+                    }
+                }
+                if (compressorEnabled) {
+                    float sidechainPeaks[2]{0.0f, 0.0f};
+                    float outputPeaks[2]{0.0f, 0.0f};
+                    float maxGainReduction[2]{0.0f, 0.0f};
+                    compressorSettings->updateParameters();
+                    for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
+                        // If we're not using a sidechannel for input, use what we're fed instead
+                        jack_default_audio_sample_t *sideChainInputBuffer = compressorSidechannelEmpty[channelIndex] ? inputBuffers[channelIndex] : (jack_default_audio_sample_t *)jack_port_get_buffer(sideChainInput[channelIndex], nframes);
+                        compressorSettings->compressors[channelIndex].getGainFromSidechainSignal(sideChainInputBuffer, sideChainGain[channelIndex], int(nframes));
+                        juce::FloatVectorOperations::multiply(inputBuffers[channelIndex], sideChainGain[channelIndex], int(nframes));
+                        // These three are essentially visualisation, so let's try and make sure we don't do the work unless someone's looking
+                        if (compressorSettings->hasObservers()) {
+                            sidechainPeaks[channelIndex] = juce::Decibels::decibelsToGain(compressorSettings->compressors[channelIndex].getMaxLevelInDecibels());
+                            maxGainReduction[channelIndex] = juce::Decibels::decibelsToGain(juce::Decibels::gainToDecibels(juce::FloatVectorOperations::findMinimum(sideChainGain[channelIndex], int(nframes)) - compressorSettings->compressors[channelIndex].getMakeUpGain()));
+                            outputPeaks[channelIndex] = juce::AudioBuffer<float>(&inputBuffers[channelIndex], 1, int(nframes)).getMagnitude(0, 0, int(nframes));
+                        }
+                    }
+                    compressorSettings->updatePeaks(sidechainPeaks[0], sidechainPeaks[1], maxGainReduction[0], maxGainReduction[1], outputPeaks[0], outputPeaks[1]);
+                } else if (compressorSettings) { // just to avoid doing any unnecessary hoop-jumping during construction
+                    compressorSettings->setPeaks(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+                }
+                bool outputDry{true};
+                bool outputWetFx1{true};
+                bool outputWetFx2{true};
+                if (dryOutPortsEnabled) {
+                    if (panAmount == 0 && dryAmount == 0) {
+                        outputDry = false;
+                        memset(dryOutLeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                        memset(dryOutRightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                    } else if (panAmount == 0 && dryAmount == 1) {
+                        outputDry = false;
+                        memcpy(dryOutLeftBuffer, inputLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                        memcpy(dryOutRightBuffer, inputRightBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                    }
+                }
+                if (wetOutFx1PortsEnabled) {
+                    if (panAmount == 0 && wetFx1Amount == 0) {
+                        outputWetFx1 = false;
+                        memset(wetOutFx1LeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                        memset(wetOutFx1RightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                    } else if (panAmount == 0 && wetFx1Amount == 1) {
+                        outputWetFx1 = false;
+                        memcpy(wetOutFx1LeftBuffer, inputLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                        memcpy(wetOutFx1RightBuffer, inputRightBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                    }
+                }
+                if (wetOutFx2PortsEnabled) {
+                    if (panAmount == 0 && wetFx2Amount == 0) {
+                        outputWetFx2 = false;
+                        memset(wetOutFx2LeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                        memset(wetOutFx2RightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                    } else if (panAmount == 0 && wetFx2Amount == 1) {
+                        outputWetFx2 = false;
+                        memcpy(wetOutFx2LeftBuffer, inputLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                        memcpy(wetOutFx2RightBuffer, inputRightBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                    }
+                }
+                if (panAmount != 0 || outputDry || outputWetFx1 || outputWetFx2) {
+                    if (dryOutPortsEnabled) {
+                        const float dryAmountLeft{dryAmount * std::min(1 - panAmount, 1.0f)};
+                        const float dryAmountRight{dryAmount * std::min(1 + panAmount, 1.0f)};
+                        juce::FloatVectorOperations::multiply(dryOutLeftBuffer, inputLeftBuffer, dryAmountLeft, int(nframes));
+                        juce::FloatVectorOperations::multiply(dryOutRightBuffer, inputRightBuffer, dryAmountRight, int(nframes));
+                    }
+                    if (wetOutFx1PortsEnabled) {
+                        const float wetFx1AmountLeft{wetFx1Amount * std::min(1 - panAmount, 1.0f)};
+                        const float wetFx1AmountRight{wetFx1Amount * std::min(1 + panAmount, 1.0f)};
+                        juce::FloatVectorOperations::multiply(wetOutFx1LeftBuffer, inputLeftBuffer, wetFx1AmountLeft, int(nframes));
+                        juce::FloatVectorOperations::multiply(wetOutFx1RightBuffer, inputRightBuffer, wetFx1AmountRight, int(nframes));
+                    }
+                    if (wetOutFx2PortsEnabled) {
+                        const float wetFx2AmountLeft{wetFx2Amount * std::min(1 - panAmount, 1.0f)};
+                        const float wetFx2AmountRight{wetFx2Amount * std::min(1 + panAmount, 1.0f)};
+                        juce::FloatVectorOperations::multiply(wetOutFx2LeftBuffer, inputLeftBuffer, wetFx2AmountLeft, int(nframes));
+                        juce::FloatVectorOperations::multiply(wetOutFx2RightBuffer, inputRightBuffer, wetFx2AmountRight, int(nframes));
+                    }
                 }
             }
         }
@@ -281,7 +283,9 @@ public:
 static int jackPassthroughProcess(jack_nframes_t nframes, void* arg) {
     JackPassthroughAggregate *aggregate = static_cast<JackPassthroughAggregate*>(arg);
     for (JackPassthroughPrivate *passthrough : qAsConst(aggregate->passthroughs)) {
-        passthrough->process(nframes);
+        if (passthrough) {
+            passthrough->process(nframes);
+        }
     }
     return 0;
 }
