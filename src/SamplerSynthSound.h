@@ -18,8 +18,8 @@ public:
 
     jack_port_t *leftPort{nullptr};
     jack_port_t *rightPort{nullptr};
-    float *leftBuffer{nullptr};
-    float *rightBuffer{nullptr};
+    jack_default_audio_sample_t *leftBuffer{nullptr};
+    jack_default_audio_sample_t *rightBuffer{nullptr};
 private:
     SamplerSynthSoundPrivate *d{nullptr};
 };

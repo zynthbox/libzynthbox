@@ -1484,7 +1484,7 @@ QObject * ClipAudioSource::compressorSettings() const
     return d->compressorSettings;
 }
 
-void ClipAudioSource::finaliseProcess(float ** inputBuffers, float ** outputBuffers, size_t bufferLenth) const
+void ClipAudioSource::finaliseProcess(jack_default_audio_sample_t** inputBuffers, jack_default_audio_sample_t** outputBuffers, size_t bufferLenth) const
 {
   if (d->equaliserEnabled) {
     for (JackPassthroughFilter *filter : d->equaliserSettings) {
@@ -1524,7 +1524,11 @@ void ClipAudioSource::finaliseProcess(float ** inputBuffers, float ** outputBuff
   } else if (d->compressorSettings) { // just to avoid doing any unnecessary hoop-jumping during construction
     d->compressorSettings->setPeaks(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
   }
+  // static int throttler{0}; ++throttler; if (throttler > 200) { throttler = 0; };
   for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
+    // if (throttler == 0) { qDebug() << Q_FUNC_INFO << "Max thing happening in the input buffer for clip on track/lane" << d->sketchpadTrack << d->laneAffinity << juce::AudioBuffer<float>(&inputBuffers[channelIndex], 1, int(bufferLenth)).getMagnitude(0, 0, int(bufferLenth)); }
+    // if (throttler == 0) { qDebug() << Q_FUNC_INFO << "Max thing happening in the output buffer for clip on track/lane" << d->sketchpadTrack << d->laneAffinity << "before" << juce::AudioBuffer<float>(&outputBuffers[channelIndex], 1, int(bufferLenth)).getMagnitude(0, 0, int(bufferLenth)); }
     juce::FloatVectorOperations::add(outputBuffers[channelIndex], inputBuffers[channelIndex], bufferLenth);
+    // if (throttler == 0) { qDebug() << Q_FUNC_INFO << "Max thing happening in the output buffer for clip on track/lane" << d->sketchpadTrack << d->laneAffinity << " after" << juce::AudioBuffer<float>(&outputBuffers[channelIndex], 1, int(bufferLenth)).getMagnitude(0, 0, int(bufferLenth)); }
   }
 }

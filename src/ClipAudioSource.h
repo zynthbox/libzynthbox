@@ -616,7 +616,7 @@ public:
   void reconnectSidechainPorts(jack_client_t* jackClient);
   QObject *compressorSettings() const;
   Q_SIGNAL void compressorSettingsChanged();
-  void finaliseProcess(float** inputBuffers, float** outputBuffers, size_t bufferLenth) const;
+  void finaliseProcess(jack_default_audio_sample_t** inputBuffers, jack_default_audio_sample_t** outputBuffers, size_t bufferLenth) const;
 private:
   class Private;
   Private *d;
