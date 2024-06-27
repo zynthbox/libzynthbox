@@ -560,8 +560,10 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
             }
 
             // Add the playback data into the current sound's playback buffer at the current frame position
+            // static uint throttler{0}; ++throttler; if (throttler > 200 * nframes) { throttler = 0; };
+            // if (throttler == 0) { qDebug() << Q_FUNC_INFO << d->sound; }
             *(d->sound->leftBuffer + int(frame)) += l;
-            *(d->sound->rightBuffer + int(frame)) += l;
+            *(d->sound->rightBuffer + int(frame)) += r;
 
             if (d->clip->timeStretchLive()) {
                 d->sourceSamplePosition += 1.0f;
