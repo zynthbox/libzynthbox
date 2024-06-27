@@ -492,16 +492,11 @@ int SamplerChannel::process(jack_nframes_t nframes) {
         }
 
         // Then, if we've actually got our ports set up, let's play whatever voices are active
-        jack_default_audio_sample_t *leftBuffer{nullptr}, *rightBuffer{nullptr};
         for (SubChannel &subChannel : subChannels) {
             if (subChannel.leftPort && subChannel.rightPort) {
-                leftBuffer = (jack_default_audio_sample_t*)jack_port_get_buffer(subChannel.leftPort, nframes);
-                rightBuffer = (jack_default_audio_sample_t*)jack_port_get_buffer(subChannel.rightPort, nframes);
-                memset(leftBuffer, 0, nframes * sizeof (jack_default_audio_sample_t));
-                memset(rightBuffer, 0, nframes * sizeof (jack_default_audio_sample_t));
                 SamplerSynthVoice *voice = subChannel.firstActiveVoice;
                 while (voice) {
-                    voice->process(leftBuffer, rightBuffer, nframes, current_frames, current_usecs, next_usecs, period_usecs);
+                    voice->process(nullptr, nullptr, nframes, current_frames, current_usecs, next_usecs, period_usecs);
                     if (voice->isPlaying == false) {
                         // Then it has stopped playing for us, and we should return it to the pool
                         if (voice->previous) {
@@ -585,30 +580,32 @@ int SamplerSynthPrivate::process(jack_nframes_t nframes)
             }
         }
         // Process each of the channels in turn
-        for(SamplerChannel *channel : qAsConst(channels)) {
-            channel->process(nframes);
-        }
-        // Finalise processing on each individual sound
         jack_default_audio_sample_t *leftBuffers[11][SubChannelCount]{{nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}};
         jack_default_audio_sample_t *rightBuffers[11][SubChannelCount]{{nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}};
+        int channelIndex{0};
+        for(SamplerChannel *channel : qAsConst(channels)) {
+            int subChannelIndex{0};
+            for (SubChannel &subChannel : channel->subChannels) {
+                leftBuffers[channelIndex][subChannelIndex] = (jack_default_audio_sample_t*)jack_port_get_buffer(subChannel.leftPort, nframes);
+                rightBuffers[channelIndex][subChannelIndex] = (jack_default_audio_sample_t*)jack_port_get_buffer(subChannel.rightPort, nframes);
+                memset(leftBuffers[channelIndex][subChannelIndex], 0, nframes * sizeof (jack_default_audio_sample_t));
+                memset(rightBuffers[channelIndex][subChannelIndex], 0, nframes * sizeof (jack_default_audio_sample_t));
+                ++subChannelIndex;
+            }
+            channel->process(nframes);
+            ++channelIndex;
+        }
+        // Finalise processing on each individual sound
+        // static int throttler{0}; ++throttler; if (throttler > 200) { throttler = 0; };
         for (auto soundIterator = clipSounds.constKeyValueBegin(); soundIterator != clipSounds.constKeyValueEnd(); ++soundIterator) {
             SamplerSynthSound *sound = soundIterator->second;
             if (sound && sound->isValid) {
                 ClipAudioSource *clip = soundIterator->first;
                 const int channelIndex{clip->sketchpadTrack() + 1};
                 const int laneIndex{clip->laneAffinity()};
+                // if (throttler == 0) { qDebug() << Q_FUNC_INFO << "Working on clip" << clip << "with channel" << channelIndex << "and lane" << laneIndex; }
                 jack_default_audio_sample_t *leftBuffer = leftBuffers[channelIndex][laneIndex];
                 jack_default_audio_sample_t *rightBuffer = rightBuffers[channelIndex][laneIndex];
-                if (leftBuffer == nullptr) {
-                    const SubChannel &subChannel = channels[channelIndex]->subChannels[laneIndex];
-                    leftBuffer = (jack_default_audio_sample_t*)jack_port_get_buffer(subChannel.leftPort, nframes);
-                    leftBuffers[channelIndex][laneIndex] = leftBuffer;
-                }
-                if (rightBuffer == nullptr) {
-                    const SubChannel &subChannel = channels[channelIndex]->subChannels[laneIndex];
-                    rightBuffer = (jack_default_audio_sample_t*)jack_port_get_buffer(subChannel.rightPort, nframes);
-                    rightBuffers[channelIndex][laneIndex] = rightBuffer;
-                }
                 float *outputBuffers[2]{leftBuffer, rightBuffer};
                 float *inputBuffers[2]{sound->leftBuffer, sound->rightBuffer};
                 clip->finaliseProcess(inputBuffers, outputBuffers, nframes);
