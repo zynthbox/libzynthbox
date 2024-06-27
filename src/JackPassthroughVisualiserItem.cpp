@@ -10,6 +10,7 @@
 
 #include "JackPassthroughVisualiserItem.h"
 
+#include "ClipAudioSource.h"
 #include "JackPassthrough.h"
 #include "JackPassthroughAnalyser.h"
 #include "JackPassthroughFilter.h"
@@ -44,6 +45,7 @@ public:
     JackPassthroughVisualiserItem *q{nullptr};
     QObject *source{nullptr};
     JackPassthrough *passthrough{nullptr};
+    ClipAudioSource *clip{nullptr};
     JackPassthroughFilter *filter{nullptr};
     float sampleRate{48000.0f};
     JackPassthroughAnalyser equaliserInputAnalyser[2];
@@ -86,6 +88,10 @@ void JackPassthroughVisualiserItem::setSource(QObject* source)
             d->passthrough->setEqualiserOutputAnalysers(emptyList);
             d->passthrough = nullptr;
         }
+        if (d->clip) {
+            d->clip->disconnect(this);
+            d->clip = nullptr;
+        }
         d->filter = qobject_cast<JackPassthroughFilter*>(source);
         if (d->filter) {
             d->passthrough = qobject_cast<JackPassthrough*>(d->filter->parent());
@@ -94,6 +100,11 @@ void JackPassthroughVisualiserItem::setSource(QObject* source)
             d->passthrough = qobject_cast<JackPassthrough*>(source);
             if (d->passthrough) {
                 connect(d->passthrough, &JackPassthrough::equaliserDataChanged, this, &QQuickItem::update);
+            } else {
+                d->clip = qobject_cast<ClipAudioSource*>(source);
+                if (d->clip) {
+                    connect(d->clip, &ClipAudioSource::equaliserDataChanged, this, &QQuickItem::update);
+                }
             }
         }
         if (d->passthrough) {
@@ -101,6 +112,12 @@ void JackPassthroughVisualiserItem::setSource(QObject* source)
             d->passthrough->setEqualiserInputAnalysers(d->equaliserInputAnalyserList);
             d->passthrough->setEqualiserOutputAnalysers(d->equaliserOutputAnalyserList);
             d->repaintTimer.start();
+        } else if (d->clip) {
+            // Set the analysers on the new clip
+            d->clip->setEqualiserInputAnalysers(d->equaliserInputAnalyserList);
+            d->clip->setEqualiserOutputAnalysers(d->equaliserOutputAnalyserList);
+            d->repaintTimer.start();
+
         } else {
             d->repaintTimer.stop();
         }
@@ -118,9 +135,10 @@ static float getPositionForGain(float gain, float top, float bottom) {
 
 void JackPassthroughVisualiserItem::paint(QPainter* painter)
 {
-    if (d->passthrough) {
+    if (d->passthrough || d->clip) {
         JackPassthroughFilter *soloFilter{nullptr};
-        for (const QVariant &variant : d->passthrough->equaliserSettings()) {
+        const QVariantList &equaliserSettings{d->passthrough ? d->passthrough->equaliserSettings() : d->clip->equaliserSettings()};
+        for (const QVariant &variant : equaliserSettings) {
             JackPassthroughFilter *filter = qobject_cast<JackPassthroughFilter*>(variant.value<QObject*>());
             if (filter->soloed()) {
                 soloFilter = filter;
@@ -186,13 +204,17 @@ void JackPassthroughVisualiserItem::paint(QPainter* painter)
             drawAndClearPath(d->filter, polygon, pen);
         } else {
             // Otherwise we're drawing all of them
-            d->passthrough->equaliserCreateFrequencyPlot(polygon, frame, pixelsPerDouble);
+            if (d->passthrough) {
+                d->passthrough->equaliserCreateFrequencyPlot(polygon, frame, pixelsPerDouble);
+            } else if (d->clip) {
+                d->clip->equaliserCreateFrequencyPlot(polygon, frame, pixelsPerDouble);
+            }
             pen.setColor(QColorConstants::White);
             pen.setWidth(3);
             painter->setPen(pen);
             painter->drawPolyline(polygon);
             polygon.clear();
-            for (const QVariant &variant : d->passthrough->equaliserSettings()) {
+            for (const QVariant &variant : equaliserSettings) {
                 JackPassthroughFilter *filter = qobject_cast<JackPassthroughFilter*>(variant.value<QObject*>());
                 filter->createFrequencyPlot(polygon, frame, pixelsPerDouble);
                 drawAndClearPath(filter, polygon, pen);
