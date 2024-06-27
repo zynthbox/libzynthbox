@@ -51,7 +51,6 @@ public:
     // Equaliser
     for (int equaliserBand = 0; equaliserBand < equaliserBandCount; ++equaliserBand) {
         JackPassthroughFilter *newBand = new JackPassthroughFilter(equaliserBand, q);
-        newBand->setSampleRate(sampleRate);
         QObject::connect(newBand, &JackPassthroughFilter::activeChanged, q, [this](){ bypassUpdater(); });
         QObject::connect(newBand, &JackPassthroughFilter::soloedChanged, q, [this](){ bypassUpdater(); });
         QObject::connect(newBand, &JackPassthroughFilter::dataChanged, q, &ClipAudioSource::equaliserDataChanged);
@@ -1457,6 +1456,9 @@ void ClipAudioSource::reconnectSidechainPorts(jack_client_t* jackClient)
   if (sampleRate == 0) {
     sampleRate = jack_get_sample_rate(jackClient);
     d->compressorSettings->setSampleRate(sampleRate);
+    for (JackPassthroughFilter *filter : d->equaliserSettings) {
+      filter->setSampleRate(sampleRate);
+    }
   }
   static MidiRouterDeviceModel *model = qobject_cast<MidiRouterDeviceModel*>(MidiRouter::instance()->model());
   // First disconnect anything currently connected to the left sidechannel input port
