@@ -90,6 +90,10 @@ void JackPassthroughVisualiserItem::setSource(QObject* source)
         }
         if (d->clip) {
             d->clip->disconnect(this);
+            // Clear the analysers on the previous clip
+            QList<JackPassthroughAnalyser*> emptyList{nullptr, nullptr};
+            d->clip->setEqualiserInputAnalysers(emptyList);
+            d->clip->setEqualiserOutputAnalysers(emptyList);
             d->clip = nullptr;
         }
         d->filter = qobject_cast<JackPassthroughFilter*>(source);
