@@ -94,7 +94,11 @@ class ClipAudioSource : public QObject {
     /**
      * \brief The gain of the clip in absolute style (from 0.0 through 1.0, equivalent to dB -100 through 24)
      */
-    Q_PROPERTY(float gainAbsolute READ gainAbsolute WRITE setGainAbsolute NOTIFY gainAbsoluteChanged)
+    Q_PROPERTY(float gainAbsolute READ gainAbsolute WRITE setGainAbsolute NOTIFY gainChanged)
+    /**
+     * \brief The gain of the clip as a dB value
+     */
+    Q_PROPERTY(float gainDb READ getGainDB NOTIFY gainChanged)
     /**
      * \brief The volume of the clip in an absolute style (from 0.0 through 1.0)
      */
@@ -392,12 +396,13 @@ public:
   void setSpeedRatio(float speedRatio, bool immediate = false);
   float speedRatio() const;
   Q_SIGNAL void speedRatioChanged();
-  void setGain(float db);
   float getGain() const;
   float getGainDB() const;
   float gainAbsolute() const;
+  void setGain(const float &gain);
+  void setGainDb(const float &db);
   void setGainAbsolute(const float &gainAbsolute);
-  Q_SIGNAL void gainAbsoluteChanged();
+  Q_SIGNAL void gainChanged();
 
   void setVolume(float vol);
   /**

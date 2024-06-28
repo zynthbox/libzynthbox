@@ -36,6 +36,7 @@ namespace tracktion_engine {
 #define IF_DEBUG_CLIP if (DEBUG_CLIP)
 
 #define equaliserBandCount 6
+static constexpr float maxGainDB{24.0f};
 
 using namespace std;
 
@@ -110,9 +111,7 @@ public:
   ClipAudioSource::PlaybackStyle playbackStyle{ClipAudioSource::NonLoopingPlaybackStyle};
   bool looping{false};
   float loopDelta{0.0f};
-  float gainDB{0.0f};
   float gain{1.0f};
-  float gainAbsolute{0.5};
   float volumeAbsolute{-1.0f}; // This is a cached value
   bool timeStretchLive{false};
   float pitchChange = 0;
@@ -539,42 +538,37 @@ float ClipAudioSource::speedRatio() const
   return d->speedRatio;
 }
 
-void ClipAudioSource::setGain(float db) {
-  if (auto clip = d->getClip()) {
-    IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting gain:" << db;
-    clip->setGainDB(db);
-    d->gainDB = clip->getGainDB();
-    d->gain = clip->getGain();
-    setGainAbsolute(std::pow(2, (d->gainDB - 24) / 24));
-  }
-}
-
-float ClipAudioSource::getGainDB() const
-{
-  return d->gainDB;
-}
-
 float ClipAudioSource::getGain() const
 {
   return d->gain;
 }
 
-float ClipAudioSource::gainAbsolute() const
+float ClipAudioSource::getGainDB() const
 {
-  return d->gainAbsolute;
+  return juce::Decibels::gainToDecibels(d->gain);
 }
 
-// The logic here is that we want it to almost linearly assign dB values from 0 through 24,
-// and also on the negative side, however we want it to also suddenly and precipitously fall
-// off towards -100, while having 0.5 be 0dB. This allows us to do that.
-void ClipAudioSource::setGainAbsolute(const float& gainAbsolute)
+float ClipAudioSource::gainAbsolute() const
 {
-  const float adjusted{std::clamp(gainAbsolute, 0.0f, 1.0f)};
-  if (abs(d->gainAbsolute - adjusted) > 0.0001) {
-    d->gainAbsolute = adjusted;
-    Q_EMIT gainAbsoluteChanged();
-    setGain((std::log2(adjusted) * 24) + 24);
+  return juce::jmap(juce::Decibels::gainToDecibels(d->gain, -maxGainDB), -maxGainDB, maxGainDB, 0.0f, 1.0f);
+}
+
+void ClipAudioSource::setGain(const float &gain)
+{
+  if (d->gain != gain && 0.0f <= gain && gain <= 15.84893192461113) {
+    d->gain = gain;
+    Q_EMIT gainChanged();
   }
+}
+
+void ClipAudioSource::setGainDb(const float &db) {
+  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting gain:" << db;
+  setGain(juce::Decibels::decibelsToGain(db, -maxGainDB));
+}
+
+void ClipAudioSource::setGainAbsolute(const float &gainAbsolute)
+{
+  setGain(juce::Decibels::decibelsToGain(juce::jmap(gainAbsolute, 0.0f, 1.0f, -maxGainDB, maxGainDB), -maxGainDB));
 }
 
 void ClipAudioSource::setVolume(float vol) {
