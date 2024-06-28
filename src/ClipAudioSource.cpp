@@ -328,9 +328,12 @@ void ClipAudioSource::syncProgress() {
       d->progress = d->firstPositionProgress * getDuration();
       Q_EMIT positionChanged();
       Q_EMIT progressChanged();
-      /// TODO This really wants to be 16, so we can get to 60 updates per second, but that tears to all heck without compositing, so... for now
+      // This really wants to be 16, so we can get to 60 updates per second, but that tears to all heck without compositing, so... for now
       // (tested with higher rates, but it tears, so while it looks like an arbitrary number, afraid it's as high as we can go)
-      d->nextPositionUpdateTime = QDateTime::currentMSecsSinceEpoch() + 100; // 10 updates per second, this is loooow...
+      // d->nextPositionUpdateTime = QDateTime::currentMSecsSinceEpoch() + 100; // 10 updates per second, this is loooow...
+      // If it turns out this is a problem, we can reinstate the old code above, or perhaps do it on-demand...
+      // (it will a problem be for rpi4 but is that a problem-problem if we're more properly rpi5, and it's really purely visual?)
+      d->nextPositionUpdateTime = QDateTime::currentMSecsSinceEpoch() + 16;
     }
   }
 }
