@@ -230,7 +230,7 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         d->sound = sound;
         d->clip = sound->clip();
 
-        d->pitchRatio = std::pow (2.0, (clipCommand->midiNote - sound->rootMidiNote()) / 12.0) * sound->sourceSampleRate() / d->clip->sampleRate();
+        d->pitchRatio = std::pow(2.0, (clipCommand->midiNote - sound->rootMidiNote()) / 12.0) * sound->sourceSampleRate() / d->clip->sampleRate();
         d->sourceSampleLength = d->clip->getDuration() * sound->sourceSampleRate() / d->clip->speedRatio();
         if (d->clipCommand->changePitch && d->clipCommand->pitchChange < 0) {
             d->sourceSamplePosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition : d->clip->getStopPosition(d->clipCommand->slice)) * sound->sourceSampleRate());
@@ -251,8 +251,13 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         d->adsr.noteOn();
 
         d->playbackData.data = d->sound->audioData();
-        d->playbackData.inL = d->playbackData.data->getReadPointer(0);
-        d->playbackData.inR = d->playbackData.data->getNumChannels() > 1 ? d->playbackData.data->getReadPointer(1) : nullptr;
+        if (d->playbackData.data) {
+            d->playbackData.inL = d->playbackData.data->getReadPointer(0);
+            d->playbackData.inR = d->playbackData.data->getNumChannels() > 1 ? d->playbackData.data->getReadPointer(1) : nullptr;
+        } else {
+            d->playbackData.inL = nullptr;
+            d->playbackData.inR = nullptr;
+        }
         d->playbackData.sourceSampleRate = d->sound->sourceSampleRate();
         d->playbackData.sampleDuration = sound->length() - 1;
 
@@ -441,7 +446,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
         }
         // Don't actually perform playback operations unless we've got something to play
         if (d->clip) {
-            const float clipPitchChange = d->clipCommand->changePitch ? d->clipCommand->pitchChange : 1.0f;
+            const float clipPitchChange = d->clipCommand->changePitch ? d->clipCommand->pitchChange * d->clip->pitchChangePrecalc() : d->clip->pitchChangePrecalc();
             const float clipVolume = d->clip->volumeAbsolute() * d->clip->getGain();
             const float lPan = 2 * (1.0 + d->playbackData.pan); // Used for m/s panning, to ensure the signal is proper, we need to multiply it by 2 eventually, so might as well pre-do that calculation here
             const float rPan = 2 * (1.0 - d->playbackData.pan); // Used for m/s panning, to ensure the signal is proper, we need to multiply it by 2 eventually, so might as well pre-do that calculation here
@@ -521,6 +526,8 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
             // and if that happens, we really need to not try and use it. If it does
             // happen, zero out the inputs to avoid terrible noises and an angry jackd
             // which will just mute the heck out of everything and give up.
+            // Specifically, this will invariably happen when doing offline pitch
+            // shifting or speed ratio adjustments
             if (d->sound->isValid == false) {
                 l = r = 0;
             }
