@@ -85,17 +85,7 @@ public:
   }
   ClipAudioSource *q;
   const te::Engine &getEngine() const { return *engine; };
-  te::WaveAudioClip::Ptr getClip() {
-    if (edit) {
-      if (auto track = Helper::getOrInsertAudioTrackAt(*edit, 0)) {
-        if (auto clip = dynamic_cast<te::WaveAudioClip *>(track->getClips()[0])) {
-          return *clip;
-        }
-      }
-    }
-
-    return {};
-  }
+  te::WaveAudioClip::Ptr clip{nullptr};
 
   te::Engine *engine{nullptr};
   std::unique_ptr<te::Edit> edit;
@@ -115,6 +105,7 @@ public:
   float volumeAbsolute{-1.0f}; // This is a cached value
   bool timeStretchLive{false};
   float pitchChange = 0;
+  float pitchChangePrecalc = 1.0f;
   float speedRatio = 1.0;
   float pan{0.0f};
   double sampleRate{0.0f};
@@ -254,7 +245,7 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
   const File editFile = File::createTempFile("editFile");
 
   d->edit = te::createEmptyEdit(*d->engine, editFile);
-  auto clip = Helper::loadAudioFileAsClip(*d->edit, d->givenFile);
+  d->clip = Helper::loadAudioFileAsClip(*d->edit, d->givenFile);
 
   d->fileName = d->givenFile.getFileName();
   d->filePath = QString::fromUtf8(filepath);
@@ -262,11 +253,11 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
   // let the user set it to something else later on if they want to
   d->lengthInSeconds = d->edit->getLength();
 
-  if (clip) {
-    clip->setAutoTempo(false);
-    clip->setAutoPitch(false);
-    clip->setTimeStretchMode(te::TimeStretcher::defaultMode);
-    d->sampleRate = clip->getAudioFile().getSampleRate();
+  if (d->clip) {
+    d->clip->setAutoTempo(false);
+    d->clip->setAutoPitch(false);
+    d->clip->setTimeStretchMode(te::TimeStretcher::defaultMode);
+    d->sampleRate = d->clip->getAudioFile().getSampleRate();
     d->adsr.setSampleRate(d->sampleRate);
   }
 
@@ -451,7 +442,7 @@ float ClipAudioSource::getStopPosition(int slice) const
 float ClipAudioSource::guessBPM(int slice) const
 {
   float guessedBPM{0.0f};
-  if (auto clip = d->getClip()) {
+  if (auto clip = d->clip) {
     // Set up our basic prerequisite knowledge
     tracktion_engine::AudioFile audioFile = clip->getAudioFile();
     const int numChannels{audioFile.getNumChannels()};
@@ -499,19 +490,20 @@ bool ClipAudioSource::timeStretchLive() const
   return d->timeStretchLive;
 }
 
-
-void ClipAudioSource::setPitch(float pitchChange, bool immediate) {
+void ClipAudioSource::setPitch(float pitchChange, bool /*immediate*/) {
   IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Pitch to" << pitchChange;
   d->pitchChange = pitchChange;
-  if (immediate) {
-    if (auto clip = d->getClip()) {
-      clip->setPitchChange(d->pitchChange);
-    }
-  } else {
-    updateTempoAndPitch();
-  }
+  d->pitchChangePrecalc = std::pow(2.0, d->pitchChange / 12.0) /* * sampleRate() / sampleRate() */; // should this perhaps be a sound sample rate over playback sample rate thing?
   Q_EMIT pitchChanged();
-  d->isRendering = true;
+  // TODO Offline pitch shifting seems... to just outright be not working? Not sure i understand, i'm sure it worked at some point, but it looks to be entirely ignored when the rendering happens...
+  // d->isRendering = true;
+  // if (immediate) {
+    // if (auto clip = d->clip) {
+      // clip->setPitchChange(d->pitchChange);
+    // }
+  // } else {
+    // updateTempoAndPitch();
+  // }
 }
 
 float ClipAudioSource::pitch() const
@@ -519,18 +511,23 @@ float ClipAudioSource::pitch() const
   return d->pitchChange;
 }
 
+float ClipAudioSource::pitchChangePrecalc() const
+{
+  return d->pitchChangePrecalc;
+}
+
 void ClipAudioSource::setSpeedRatio(float speedRatio, bool immediate) {
   IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Speed to" << speedRatio;
   d->speedRatio = speedRatio;
+  Q_EMIT speedRatioChanged();
+  d->isRendering = true;
   if (immediate) {
-    if (auto clip = d->getClip()) {
+    if (auto clip = d->clip) {
       clip->setSpeedRatio(d->speedRatio);
     }
   } else {
     updateTempoAndPitch();
   }
-  Q_EMIT speedRatioChanged();
-  d->isRendering = true;
 }
 
 float ClipAudioSource::speedRatio() const
@@ -572,7 +569,7 @@ void ClipAudioSource::setGainAbsolute(const float &gainAbsolute)
 }
 
 void ClipAudioSource::setVolume(float vol) {
-  if (auto clip = d->getClip()) {
+  if (auto clip = d->clip) {
     IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting volume:" << vol;
     // Knowing that -40 is our "be quiet now thanks" volume level, but tracktion thinks it should be -100, we'll just adjust that a bit
     // It means the last step is a bigger jump than perhaps desirable, but it'll still be more correct
@@ -588,7 +585,7 @@ void ClipAudioSource::setVolume(float vol) {
 
 void ClipAudioSource::setVolumeAbsolute(float vol)
 {
-  if (auto clip = d->getClip()) {
+  if (auto clip = d->clip) {
     IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting volume absolutely:" << vol;
     clip->edit.setMasterVolumeSliderPos(qMax(0.0f, qMin(vol, 1.0f)));
     d->volumeAbsolute = clip->edit.getMasterVolumePlugin()->getSliderPos();
@@ -599,7 +596,7 @@ void ClipAudioSource::setVolumeAbsolute(float vol)
 float ClipAudioSource::volumeAbsolute() const
 {
   if (d->volumeAbsolute < 0) {
-    if (auto clip = d->getClip()) {
+    if (auto clip = d->clip) {
       d->volumeAbsolute = clip->edit.getMasterVolumePlugin()->getSliderPos();
     }
   }
@@ -636,17 +633,17 @@ const char *ClipAudioSource::getFilePath() const {
 }
 
 tracktion_engine::AudioFile ClipAudioSource::getPlaybackFile() const {
-    if (const auto& clip = d->getClip()) {
+    if (const auto& clip = d->clip) {
         return clip->getPlaybackFile();
     }
     return te::AudioFile(*d->engine);
 }
 
 void ClipAudioSource::updateTempoAndPitch() {
-  if (auto clip = d->getClip()) {
+  if (auto clip = d->clip) {
     IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Updating speedRatio(" << d->speedRatio << ") and pitch(" << d->pitchChange << ")";
+    // clip->setPitchChange(d->pitchChange);
     clip->setSpeedRatio(d->speedRatio);
-    clip->setPitchChange(d->pitchChange);
   }
 }
 
@@ -654,7 +651,7 @@ void ClipAudioSource::Private::timerCallback() {
   positionsModel->updatePositions();
   syncAudioLevel();
 
-  if (auto clip = getClip()) {
+  if (clip) {
     if (!clip->needsRender() && isRendering) {
         isRendering = false;
         Q_EMIT q->playbackFileChanged();
@@ -665,7 +662,7 @@ void ClipAudioSource::Private::timerCallback() {
 }
 
 void ClipAudioSource::play(bool forceLooping, int midiChannel) {
-  auto clip = d->getClip();
+  auto clip = d->clip;
   IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Starting clip " << this << d->filePath << " which is really " << clip.get() << " in a " << (forceLooping ? "looping" : "non-looping") << " manner from " << d->startPositionInSeconds << " and for " << d->lengthInSeconds << " seconds at volume " << (clip  && clip->edit.getMasterVolumePlugin().get() ? clip->edit.getMasterVolumePlugin()->volume : 0);
 
   ClipCommand *command = ClipCommand::channelCommand(this, midiChannel);

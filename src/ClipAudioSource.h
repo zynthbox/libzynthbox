@@ -392,6 +392,7 @@ public:
   Q_SIGNAL void timeStretchLiveChanged();
   void setPitch(float pitchChange, bool immediate = false);
   float pitch() const;
+  float pitchChangePrecalc() const;
   Q_SIGNAL void pitchChanged();
   void setSpeedRatio(float speedRatio, bool immediate = false);
   float speedRatio() const;
