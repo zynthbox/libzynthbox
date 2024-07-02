@@ -367,6 +367,12 @@ public:
   void setPlaybackStyle(const PlaybackStyle &playbackStyle);
   Q_SIGNAL void playbackStyleChanged();
 
+  enum LoopStyle {
+    ForwardLoop,
+    BackwardLoop,
+    PingPongLoop,
+  };
+  Q_ENUM(LoopStyle)
   void setLooping(bool looping);
   bool looping() const;
   Q_SIGNAL void loopingChanged();

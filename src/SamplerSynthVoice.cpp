@@ -116,6 +116,8 @@ public:
     SamplerSynthSound* sound{nullptr};
     double pitchRatio = 0;
     double sourceSamplePosition = 0;
+    double soundTouchSamplePositionL{0.0f}, soundTouchSamplePositionR{0.0f};
+    float soundTouchIncrementL{1.0f}, soundTouchIncrementR{1.0f};
     double sourceSampleLength = 0;
     float lgain = 0, rgain = 0;
     // Used to make sure the first sample on looped playback is interpolated to an empty previous sample, rather than the previous sample in the loop
@@ -224,6 +226,50 @@ void SamplerSynthVoice::setModwheel(int modwheelValue)
     d->initialCC[1] = modwheelValue;
 }
 
+static inline float nextSample(const float *source, double *currentPosition, float *increment, const float &firstSample, const float &lastSample, const float &loopPosition, const ClipAudioSource::LoopStyle &loopStyle) {
+    *currentPosition += *increment;
+    if (*increment > 0) {
+        // Currently moving forward
+        if (*currentPosition > lastSample) {
+            switch (loopStyle) {
+                case ClipAudioSource::PingPongLoop:
+                    // Invert the direction of the loop (so next time we'll be moving backwards)
+                    *increment *= -1;
+                    *currentPosition = lastSample + 1 - (*currentPosition - lastSample);
+                    break;
+                case ClipAudioSource::BackwardLoop:
+                    // this condition will never happen (increment must always be negative when running loop backwards)
+                    qWarning() << Q_FUNC_INFO << "Error in loop logic - somehow we've got a positive increment, but are supposed to be moving backwards";
+                    break;
+                case ClipAudioSource::ForwardLoop:
+                default:
+                    qDebug() << Q_FUNC_INFO << "Arrived at the forward loop point while going forward, resetting position to loop position plus leftovers";
+                    *currentPosition = loopPosition + (*currentPosition - lastSample);
+                    break;
+            }
+        }
+    } else {
+        if (*currentPosition < firstSample) {
+            switch (loopStyle) {
+                case ClipAudioSource::PingPongLoop:
+                    // Invert the direction of the loop (so next time we'll be moving forward)
+                    *increment *= -1;
+                    *currentPosition = firstSample + (firstSample - *currentPosition);
+                    break;
+                case ClipAudioSource::BackwardLoop:
+                    *currentPosition = loopPosition + 1 - (firstSample - *currentPosition);
+                    break;
+                case ClipAudioSource::ForwardLoop:
+                default:
+                    // this condition will never happen (increment must always be positive when running loop forwards)
+                    qWarning() << Q_FUNC_INFO << "Error in loop logic - somehow we've got a negative increment, but are supposed to be moving forwards";
+                    break;
+            }
+        }
+    }
+    return source[int(*currentPosition)];
+}
+
 void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t timestamp)
 {
     if (auto sound = d->samplerSynth->clipToSound(clipCommand->clip)) {
@@ -253,7 +299,7 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         d->playbackData.data = d->sound->audioData();
         if (d->playbackData.data) {
             d->playbackData.inL = d->playbackData.data->getReadPointer(0);
-            d->playbackData.inR = d->playbackData.data->getNumChannels() > 1 ? d->playbackData.data->getReadPointer(1) : nullptr;
+            d->playbackData.inR = d->playbackData.data->getNumChannels() > 1 ? d->playbackData.data->getReadPointer(1) : d->playbackData.inL;
         } else {
             d->playbackData.inL = nullptr;
             d->playbackData.inR = nullptr;
@@ -296,7 +342,10 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
                 d->soundTouch.setSetting(SETTING_SEQUENCE_MS, 60);
                 d->soundTouch.setSetting(SETTING_SEEKWINDOW_MS, 25);
             }
-            // TODO Pre-feed soundTouch with sample data until it's got samples ready for fetching
+            d->soundTouchSamplePositionL = d->sourceSamplePosition;
+            d->soundTouchSamplePositionR = d->sourceSamplePosition;
+            d->soundTouchIncrementL = 1.0f;
+            d->soundTouchIncrementR = 1.0f;
         }
 
         if (clipCommand->looping == true) {
@@ -479,20 +528,21 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                 // as well save a bit of processing (it's a very common case, and used for
                 // e.g. the metronome ticks, and we do want that stuff to be as low impact
                 // as we can reasonably make it).
-                l = sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inL[sampleIndex] * d->lgain * envelopeValue * clipVolume : 0;
-                r = d->playbackData.inR != nullptr && sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inR[sampleIndex] * d->rgain * envelopeValue * clipVolume : l;
                 if (d->clip->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
                     d->soundTouch.setPitch(pitchRatio);
-                    d->timeStretchingInput[0] = l;
-                    d->timeStretchingInput[1] = r;
-                    d->soundTouch.putSamples(d->timeStretchingInput, 1);
-                    if (d->soundTouch.numUnprocessedSamples() > 0) {
-                        d->soundTouch.receiveSamples(d->timeStretchingOutput, 1);
-                        l = d->timeStretchingOutput[0];
-                        r = d->timeStretchingOutput[1];
-                    } else {
-                        l = r = 0;
+                    bool firstGo{true}; // For some reason, soundTouch will insist that is is never empty if you're pitching up? Don't understand, but... just feed it some noises, i guess, this works
+                    while (firstGo || d->soundTouch.isEmpty()) {
+                        d->timeStretchingInput[0] = nextSample(d->playbackData.inL, &d->soundTouchSamplePositionL, &d->soundTouchIncrementL, d->playbackData.startPosition, d->playbackData.stopPosition, d->playbackData.loopPosition, ClipAudioSource::ForwardLoop);
+                        d->timeStretchingInput[1] = nextSample(d->playbackData.inR, &d->soundTouchSamplePositionR, &d->soundTouchIncrementR, d->playbackData.startPosition, d->playbackData.stopPosition, d->playbackData.loopPosition, ClipAudioSource::ForwardLoop);
+                        d->soundTouch.putSamples(d->timeStretchingInput, 1);
+                        firstGo = false;
                     }
+                    d->soundTouch.receiveSamples(d->timeStretchingOutput, 1);
+                    l = d->timeStretchingOutput[0] * d->lgain * envelopeValue * clipVolume;
+                    r = d->timeStretchingOutput[1] * d->rgain * envelopeValue * clipVolume;
+                } else {
+                    l = sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inL[sampleIndex] * d->lgain * envelopeValue * clipVolume : 0;
+                    r = d->playbackData.inR != nullptr && sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inR[sampleIndex] * d->rgain * envelopeValue * clipVolume : l;
                 }
             } else {
                 // Use Hermite interpolation to ensure out sound data is reasonably on the expected
