@@ -279,9 +279,24 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         d->playbackData.forwardTailingOffPosition = (d->playbackData.stopPosition - (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
         d->playbackData.backwardTailingOffPosition = (d->playbackData.startPosition + (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
 
-        if (d->clip->timeStretchLive()) {
+        if (d->clip->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
             d->soundTouch.setChannels(2);
             d->soundTouch.setSampleRate(d->sound->sourceSampleRate());
+            if (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchStandard) {
+                d->soundTouch.setSetting(SETTING_USE_AA_FILTER, 1); // Default when SOUNDTOUCH_PREVENT_CLICK_AT_RATE_CROSSOVER is not defined
+                d->soundTouch.setSetting(SETTING_AA_FILTER_LENGTH, 64); // Default value set in the RateTransposer ctor
+                d->soundTouch.setSetting(SETTING_USE_QUICKSEEK, 0); // Default value set in TDStretch ctor
+                d->soundTouch.setSetting(SETTING_SEQUENCE_MS, 0); // Default value - defined as DEFAULT_SEQUENCE_MS USE_AUTO_SEQUENCE_LEN ( = 0)
+                d->soundTouch.setSetting(SETTING_SEEKWINDOW_MS, 0); // Default value - defined as DEFAULT_SEEKWINDOW_MS USE_AUTO_SEEKWINDOW_LEN ( = 0)
+            } else if (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchBetter) {
+                // The settings used by the tracktion timestretcher's SoundTouchBetter setting
+                d->soundTouch.setSetting(SETTING_USE_AA_FILTER, 1);
+                d->soundTouch.setSetting(SETTING_AA_FILTER_LENGTH, 64);
+                d->soundTouch.setSetting(SETTING_USE_QUICKSEEK, 0);
+                d->soundTouch.setSetting(SETTING_SEQUENCE_MS, 60);
+                d->soundTouch.setSetting(SETTING_SEEKWINDOW_MS, 25);
+            }
+            // TODO Pre-feed soundTouch with sample data until it's got samples ready for fetching
         }
 
         if (clipCommand->looping == true) {
@@ -458,7 +473,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
             float modIntegral{0};
             const float fraction = std::modf(d->sourceSamplePosition, &modIntegral);
             const double pitchRatio{d->pitchRatio * clipPitchChange};
-            if ((fraction < 0.0001f && pitchRatio == 1.0f) || d->clip->timeStretchLive()) {
+            if ((fraction < 0.0001f && pitchRatio == 1.0f) || d->clip->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
                 // If we're just doing un-pitch-shifted playback, don't bother interpolating,
                 // just grab the sample as given and adjust according to the requests, might
                 // as well save a bit of processing (it's a very common case, and used for
@@ -466,7 +481,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                 // as we can reasonably make it).
                 l = sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inL[sampleIndex] * d->lgain * envelopeValue * clipVolume : 0;
                 r = d->playbackData.inR != nullptr && sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inR[sampleIndex] * d->rgain * envelopeValue * clipVolume : l;
-                if (d->clip->timeStretchLive()) {
+                if (d->clip->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
                     d->soundTouch.setPitch(pitchRatio);
                     d->timeStretchingInput[0] = l;
                     d->timeStretchingInput[1] = r;
@@ -572,7 +587,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
             *(d->sound->leftBuffer + int(frame)) += l;
             *(d->sound->rightBuffer + int(frame)) += r;
 
-            if (d->clip->timeStretchLive()) {
+            if (d->clip->timeStretchStyle()) {
                 d->sourceSamplePosition += 1.0f;
             } else {
                 d->sourceSamplePosition += pitchRatio;
