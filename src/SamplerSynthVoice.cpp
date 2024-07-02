@@ -243,7 +243,6 @@ static inline float nextSample(const float *source, double *currentPosition, flo
                     break;
                 case ClipAudioSource::ForwardLoop:
                 default:
-                    qDebug() << Q_FUNC_INFO << "Arrived at the forward loop point while going forward, resetting position to loop position plus leftovers";
                     *currentPosition = loopPosition + (*currentPosition - lastSample);
                     break;
             }
