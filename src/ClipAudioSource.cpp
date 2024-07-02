@@ -103,7 +103,7 @@ public:
   float loopDelta{0.0f};
   float gain{1.0f};
   float volumeAbsolute{-1.0f}; // This is a cached value
-  bool timeStretchLive{false};
+  TimeStretchStyle timeStretchLive{ClipAudioSource::TimeStretchOff};
   float pitchChange = 0;
   float pitchChangePrecalc = 1.0f;
   float speedRatio = 1.0;
@@ -477,15 +477,15 @@ float ClipAudioSource::guessBPM(int slice) const
   return guessedBPM;
 }
 
-void ClipAudioSource::setTimeStretchLive(bool timeStretchLive)
+void ClipAudioSource::setTimeStretchStyle(const TimeStretchStyle &timeStretchLive)
 {
   if (d->timeStretchLive != timeStretchLive) {
     d->timeStretchLive = timeStretchLive;
-    Q_EMIT timeStretchLiveChanged();
+    Q_EMIT timeStretchStyleChanged();
   }
 }
 
-bool ClipAudioSource::timeStretchLive() const
+ClipAudioSource::TimeStretchStyle ClipAudioSource::timeStretchStyle() const
 {
   return d->timeStretchLive;
 }

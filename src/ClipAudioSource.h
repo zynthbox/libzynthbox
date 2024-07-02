@@ -47,11 +47,11 @@ class ClipAudioSource : public QObject {
     Q_PROPERTY(QString playbackStyleLabel READ playbackStyleLabel NOTIFY playbackStyleChanged)
     /**
      * \brief Whether to play using a live time stretching method for pitch changes during polyphonic playback
-     * When set to true, pitch bending will be done using a time stretching system, instead of the standard
-     * pitch bending (which is done by speeding up or slowing down the sample)
-     * This is orthogonal to the offline time stretching done by the pitch and speedRatio properties
+     * When set to something other than off, pitch bending will be done using a time stretching system, instead
+     * of the standard pitch bending (which is done by speeding up or slowing down the sample)
+     * This is orthogonal to the offline time stretching done by the speedRatio property
      */
-    Q_PROPERTY(bool timeStretchLive READ timeStretchLive WRITE setTimeStretchLive NOTIFY timeStretchLiveChanged)
+    Q_PROPERTY(TimeStretchStyle timeStretchStyle READ timeStretchStyle WRITE setTimeStretchStyle NOTIFY timeStretchStyleChanged)
     /**
      * \brief The ptch adjustment (a floating point number of semitones) to adjust the sample offline
      * This is orthogonal to the live time stretching done by setting timeStretchLive
@@ -387,16 +387,25 @@ public:
    */
   Q_INVOKABLE float guessBPM(int slice = -1) const;
 
-  void setTimeStretchLive(bool timeStretchLive);
-  bool timeStretchLive() const;
-  Q_SIGNAL void timeStretchLiveChanged();
+  enum TimeStretchStyle {
+    TimeStretchOff,
+    TimeStretchStandard,
+    TimeStretchBetter,
+  };
+  Q_ENUM(TimeStretchStyle)
+  void setTimeStretchStyle(const TimeStretchStyle &timeStretchLive);
+  TimeStretchStyle timeStretchStyle() const;
+  Q_SIGNAL void timeStretchStyleChanged();
+
   void setPitch(float pitchChange, bool immediate = false);
   float pitch() const;
   float pitchChangePrecalc() const;
   Q_SIGNAL void pitchChanged();
+
   void setSpeedRatio(float speedRatio, bool immediate = false);
   float speedRatio() const;
   Q_SIGNAL void speedRatioChanged();
+
   float getGain() const;
   float getGainDB() const;
   float gainAbsolute() const;
@@ -629,3 +638,4 @@ private:
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ClipAudioSource)
 };
 Q_DECLARE_METATYPE(ClipAudioSource::PlaybackStyle)
+Q_DECLARE_METATYPE(ClipAudioSource::TimeStretchStyle)

@@ -7,8 +7,9 @@
 
     <object-type name="AudioLevels"></object-type>
     <object-type name="ClipAudioSource">
-        <enum-type name="SamplePickingStyle" />
         <enum-type name="PlaybackStyle" />
+        <enum-type name="SamplePickingStyle" />
+        <enum-type name="TimeStretchStyle" />
     </object-type>
     <object-type name="JackPassthrough"></object-type>
     <object-type name="JackPassthroughCompressor"></object-type>
