@@ -96,11 +96,14 @@ public:
   juce::String fileName;
   QString filePath;
   float startPositionInSeconds = 0;
+  int startPositionInSamples = 0;
   float lengthInSeconds = -1;
+  int lengthInSamples = -1;
   float lengthInBeats = -1;
   ClipAudioSource::PlaybackStyle playbackStyle{ClipAudioSource::NonLoopingPlaybackStyle};
   bool looping{false};
   float loopDelta{0.0f};
+  int loopDeltaSamples{0};
   float gain{1.0f};
   float volumeAbsolute{-1.0f}; // This is a cached value
   TimeStretchStyle timeStretchLive{ClipAudioSource::TimeStretchOff};
@@ -249,9 +252,6 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
 
   d->fileName = d->givenFile.getFileName();
   d->filePath = QString::fromUtf8(filepath);
-  // Initially set the length in seconds to the full duration of the sample,
-  // let the user set it to something else later on if they want to
-  d->lengthInSeconds = d->edit->getLength();
 
   if (d->clip) {
     d->clip->setAutoTempo(false);
@@ -260,6 +260,10 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
     d->sampleRate = d->clip->getAudioFile().getSampleRate();
     d->adsr.setSampleRate(d->sampleRate);
   }
+  // Initially set the length in seconds to the full duration of the sample,
+  // let the user set it to something else later on if they want to
+  d->lengthInSeconds = d->edit->getLength();
+  d->lengthInSamples = d->lengthInSeconds * d->sampleRate;
 
   if (muted) {
     IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Clip marked to be muted";
@@ -408,17 +412,40 @@ float ClipAudioSource::loopDelta() const
   return d->loopDelta;
 }
 
+int ClipAudioSource::loopDeltaSamples() const
+{
+  return d->loopDeltaSamples;
+}
+
 void ClipAudioSource::setLoopDelta(const float& newLoopDelta)
 {
   if (d->loopDelta != newLoopDelta) {
     d->loopDelta = newLoopDelta;
+    d->loopDeltaSamples = newLoopDelta / d->sampleRate;
+    Q_EMIT loopDeltaChanged();
+  }
+}
+
+void ClipAudioSource::setLoopDeltaSamples(const int& newLoopDeltaSamples)
+{
+  if (d->loopDeltaSamples != newLoopDeltaSamples) {
+    d->loopDeltaSamples = newLoopDeltaSamples;
+    d->loopDelta = newLoopDeltaSamples * d->sampleRate;
     Q_EMIT loopDeltaChanged();
   }
 }
 
 void ClipAudioSource::setStartPosition(float startPositionInSeconds) {
-  d->startPositionInSeconds = jmax(0.0f, startPositionInSeconds);
-  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Start Position to" << d->startPositionInSeconds;
+  setStartPositionSamples(startPositionInSeconds * d->sampleRate);
+}
+
+void ClipAudioSource::setStartPositionSamples(int startPositionInSamples)
+{
+  if (d->startPositionInSamples != startPositionInSamples) {
+    d->startPositionInSamples = jmax(0, startPositionInSamples);
+    d->startPositionInSeconds = double(startPositionInSamples) / d->sampleRate;
+    IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Start Position to" << d->startPositionInSeconds << "seconds, meaning" << d->startPositionInSamples << "samples of" << d->edit->getLength() * d->sampleRate;
+  }
 }
 
 float ClipAudioSource::getStartPosition(int slice) const
@@ -430,6 +457,15 @@ float ClipAudioSource::getStartPosition(int slice) const
     }
 }
 
+int ClipAudioSource::getStartPositionSamples(int slice) const
+{
+  if (slice > -1 && slice < d->slicePositionsCache.length()) {
+    return d->startPositionInSamples + (d->lengthInSamples * d->slicePositionsCache[slice]);
+  } else {
+    return d->startPositionInSamples;
+  }
+}
+
 float ClipAudioSource::getStopPosition(int slice) const
 {
     if (slice > -1 && slice + 1 < d->slicePositionsCache.length()) {
@@ -437,6 +473,15 @@ float ClipAudioSource::getStopPosition(int slice) const
     } else {
         return d->startPositionInSeconds + d->lengthInSeconds;
     }
+}
+
+int ClipAudioSource::getStopPositionSamples(int slice) const
+{
+  if (slice > -1 && slice + 1 < d->slicePositionsCache.length()) {
+    return d->startPositionInSamples + (d->lengthInSamples * d->slicePositionsCache[slice + 1]);
+  } else {
+    return d->startPositionInSamples * d->lengthInSamples;
+  }
 }
 
 float ClipAudioSource::guessBPM(int slice) const
@@ -608,11 +653,24 @@ void ClipAudioSource::setLength(float beat, int bpm) {
   float lengthInSeconds = d->syncTimer->subbeatCountToSeconds(quint64(bpm), quint64((beat * d->syncTimer->getMultiplier())));
   // IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Length to" << lengthInSeconds;
   d->lengthInSeconds = lengthInSeconds;
+  d->lengthInSamples = lengthInSeconds * d->sampleRate;
   d->lengthInBeats = beat;
+}
+
+void ClipAudioSource::setLengthInSamples(int lengthInSamples)
+{
+  d->lengthInSamples = lengthInSamples;
+  d->lengthInSeconds = double(lengthInSamples) * d->sampleRate;
+  d->lengthInBeats = double(d->syncTimer->secondsToSubbeatCount(d->syncTimer->getBpm(), d->lengthInSeconds)) / double(d->syncTimer->getMultiplier());
 }
 
 float ClipAudioSource::getLengthInBeats() const {
   return d->lengthInBeats;
+}
+
+int ClipAudioSource::getLengthInSamples() const
+{
+  return d->lengthInSamples;
 }
 
 float ClipAudioSource::getDuration() const {

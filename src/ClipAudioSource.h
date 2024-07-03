@@ -359,8 +359,11 @@ public:
 
   void syncProgress();
   void setStartPosition(float startPositionInSeconds);
+  void setStartPositionSamples(int startPositionInSamples);
   float getStartPosition(int slice = -1) const;
+  int getStartPositionSamples(int slice = -1) const;
   float getStopPosition(int slice = -1) const;
+  int getStopPositionSamples(int slice = -1) const;
 
   PlaybackStyle playbackStyle() const;
   QString playbackStyleLabel() const;
@@ -376,15 +379,25 @@ public:
   void setLooping(bool looping);
   bool looping() const;
   Q_SIGNAL void loopingChanged();
+
   float loopDelta() const;
+  int loopDeltaSamples() const;
   void setLoopDelta(const float &newLoopDelta);
+  void setLoopDeltaSamples(const int &newLoopDeltaSamples);
   Q_SIGNAL void loopDeltaChanged();
+
   void setLength(float beat, int bpm);
+  void setLengthInSamples(int lengthInSamples);
   /**
    * \brief The length of the clip in beats
    * @return The length of the clip in beats (that is, in quarter notes)
    */
   float getLengthInBeats() const;
+  /**
+   * \brief The length of the clip in samples
+   * @return The length of the clip in samples
+   */
+  int getLengthInSamples() const;
 
   /**
    * \brief Attempt to guess the beats per minute of the given slice
