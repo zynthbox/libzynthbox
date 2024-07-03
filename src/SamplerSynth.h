@@ -25,6 +25,12 @@ public:
     void initialize(tracktion_engine::Engine *engine);
     tracktion_engine::Engine *engine() const;
 
+    /**
+     * \brief Returns the sample rate of the jack process
+     * @return The samplerate used by jack
+     */
+    double sampleRate() const;
+
     void registerClip(ClipAudioSource *clip);
     void unregisterClip(ClipAudioSource *clip);
     SamplerSynthSound *clipToSound(ClipAudioSource *clip) const;

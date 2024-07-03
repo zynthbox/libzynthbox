@@ -759,6 +759,11 @@ tracktion_engine::Engine *SamplerSynth::engine() const
     return d->engine;
 }
 
+double SamplerSynth::sampleRate() const
+{
+    return d->sampleRate;
+}
+
 void SamplerSynth::registerClip(ClipAudioSource *clip)
 {
     QMutexLocker locker(&d->synthMutex);
