@@ -14,6 +14,8 @@ public:
     int stopPosition(int slice = 0) const;
     int rootMidiNote() const;
     double sourceSampleRate() const;
+    // The ratio between the loaded sample's sample rate, and the one in jack
+    double sampleRateRatio() const;
     bool isValid{false};
 
     jack_port_t *leftPort{nullptr};

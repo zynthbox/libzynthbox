@@ -1,5 +1,6 @@
 
 #include "SamplerSynthSound.h"
+#include "SamplerSynth.h"
 #include "JUCEHeaders.h"
 
 #include <QCoreApplication>
@@ -25,6 +26,7 @@ public:
     std::unique_ptr<juce::AudioBuffer<float>> data;
     int length{0};
     double sourceSampleRate{0.0f};
+    double sampleRateRatio{0.0f};
     size_t audioBufferLength{8192};
 
     ClipAudioSource *clip{nullptr};
@@ -50,6 +52,7 @@ public:
                 sourceSampleRate = format->sampleRate;
                 if (sourceSampleRate > 0 && format->lengthInSamples > 0)
                 {
+                    sampleRateRatio = sourceSampleRate / SamplerSynth::instance()->sampleRate();
                     length = (int) format->lengthInSamples;
                     juce::AudioBuffer<float> *newBuffer = new juce::AudioBuffer<float>(jmin(2, int(format->numChannels)), length);
                     format->read(newBuffer, 0, length, 0, true, true);
@@ -120,6 +123,11 @@ int SamplerSynthSound::rootMidiNote() const
 double SamplerSynthSound::sourceSampleRate() const
 {
     return d->sourceSampleRate;
+}
+
+double SamplerSynthSound::sampleRateRatio() const
+{
+    return d->sampleRateRatio;
 }
 
 // Since our pimpl is a qobject, let's make sure we do it properly
