@@ -58,10 +58,43 @@ class ClipAudioSource : public QObject {
      */
     Q_PROPERTY(float pitch READ pitch WRITE setPitch NOTIFY pitchChanged)
     /**
+     * \brief Whether to automatically synchronise the speed ratio between the clip's BPM and the playback one, to stretch the playback duration to match the same number of quarter notes between the two
+     */
+    Q_PROPERTY(bool autoSynchroniseSpeedRatio READ autoSynchroniseSpeedRatio WRITE setAutoSynchroniseSpeedRatio NOTIFY autoSynchroniseSpeedRatioChanged)
+    /**
      * \brief The playback speed adjustment (a floating point number) for adjusting the sample offline
      * This is orthogonal to the live time stretching done by setting timeStretchLive
      */
     Q_PROPERTY(float speedRatio READ speedRatio WRITE setSpeedRatio NOTIFY speedRatioChanged)
+    /**
+     * \brief The clip's own BPM (used to calculate the speed ratio if required)
+     * @note If set to 0, we will use the current song's BPM
+     */
+    Q_PROPERTY(float bpm READ bpm WRITE setBpm NOTIFY bpmChanged)
+    /**
+     * \brief The start position of the root slice in seconds
+     * @see startPositionSamples
+     */
+    Q_PROPERTY(float startPositionSeconds READ getStartPosition WRITE setStartPosition NOTIFY startPositionChanged)
+    /**
+     * \brief The start position of the root slice in samples
+     * @see startPositionSeconds
+     */
+    Q_PROPERTY(int startPositionSamples READ getStartPositionSamples WRITE setStartPositionSamples NOTIFY startPositionChanged)
+    /**
+     * \brief Whether the playback length should be locked to a number of beats (quarter notes) per the clip's BPM
+     */
+    Q_PROPERTY(bool snapLengthToBeat READ snapLengthToBeat WRITE setSnapLengthToBeat NOTIFY snapLengthToBeatChanged)
+    /**
+     * \brief The duration of the root slice in a number of beats (or quarter notes)
+     * @see lengthSamples
+     */
+    Q_PROPERTY(float lengthBeats READ getLengthBeats WRITE setLengthBeats NOTIFY lengthChanged)
+    /**
+     * \brief The duration of the root slice in samples
+     * @see lengthBeats
+     */
+    Q_PROPERTY(int lengthSamples READ getLengthSamples WRITE setLengthSamples NOTIFY lengthChanged)
     /**
      * \brief Whether or not this sample should be looped for playback (or single-shot so it auto-stops)
      * This can be overridden by the play function, where looping can be forced
@@ -76,6 +109,21 @@ class ClipAudioSource : public QObject {
      * @default 0.0
      */
     Q_PROPERTY(float loopDelta READ loopDelta WRITE setLoopDelta NOTIFY loopDeltaChanged)
+    Q_PROPERTY(int loopDeltaSamples READ loopDeltaSamples WRITE setLoopDeltaSamples NOTIFY loopDeltaChanged)
+    /**
+     * \brief The position of the loop point where looping playback will stop at once released (in seconds, delta from playback stop)
+     * TODO Once implemented, this will function as a fade-out point, to allow for long tails to go past the stop point after looping for sustain
+     * This will not be clamped for interaction purposes, but for playback the value will be blocked at the end of the sample
+     * @minimum 0.0
+     * @default 0.0
+     */
+    Q_PROPERTY(float loopDelta2 READ loopDelta2 WRITE setLoopDelta2 NOTIFY loopDelta2Changed)
+    Q_PROPERTY(int loopDelta2Samples READ loopDelta2Samples WRITE setLoopDelta2Samples NOTIFY loopDelta2Changed)
+    /**
+     * \brief The duration of the underlying file
+     */
+    Q_PROPERTY(float durationSeconds READ getDuration NOTIFY durationChanged)
+    Q_PROPERTY(int durationSamples READ getDurationSamples NOTIFY durationChanged)
     /**
      * \brief The sketchpad track this clip is associated with
      * @note changing this while the clip is playing will potentially cause some weird sounds to happen, so probably try and avoid that
@@ -354,6 +402,7 @@ public:
     OneshotPlaybackStyle,
     GranularNonLoopingPlaybackStyle,
     GranularLoopingPlaybackStyle,
+    WavetableStyle,
   };
   Q_ENUM(PlaybackStyle)
 
@@ -362,6 +411,8 @@ public:
   void setStartPositionSamples(int startPositionInSamples);
   float getStartPosition(int slice = -1) const;
   int getStartPositionSamples(int slice = -1) const;
+  Q_SIGNAL void startPositionChanged();
+
   float getStopPosition(int slice = -1) const;
   int getStopPositionSamples(int slice = -1) const;
 
@@ -386,18 +437,28 @@ public:
   void setLoopDeltaSamples(const int &newLoopDeltaSamples);
   Q_SIGNAL void loopDeltaChanged();
 
-  void setLength(float beat, int bpm);
-  void setLengthInSamples(int lengthInSamples);
+  float loopDelta2() const;
+  int loopDelta2Samples() const;
+  void setLoopDelta2(const float &newLoopDelta2);
+  void setLoopDelta2Samples(const int &newLoopDelta2Samples);
+  Q_SIGNAL void loopDelta2Changed();
+
+  bool snapLengthToBeat() const;
+  void setSnapLengthToBeat(const bool &snapLengthToBeat);
+  Q_SIGNAL void snapLengthToBeatChanged();
+  void setLengthBeats(float beat);
+  void setLengthSamples(int lengthInSamples);
   /**
    * \brief The length of the clip in beats
    * @return The length of the clip in beats (that is, in quarter notes)
    */
-  float getLengthInBeats() const;
+  float getLengthBeats() const;
   /**
    * \brief The length of the clip in samples
    * @return The length of the clip in samples
    */
-  int getLengthInSamples() const;
+  int getLengthSamples() const;
+  Q_SIGNAL void lengthChanged();
 
   /**
    * \brief Attempt to guess the beats per minute of the given slice
@@ -421,9 +482,16 @@ public:
   float pitchChangePrecalc() const;
   Q_SIGNAL void pitchChanged();
 
+  void setAutoSynchroniseSpeedRatio(const bool &autoSynchroniseSpeedRatio);
+  bool autoSynchroniseSpeedRatio() const;
+  Q_SIGNAL void autoSynchroniseSpeedRatioChanged();
   void setSpeedRatio(float speedRatio, bool immediate = false);
   float speedRatio() const;
   Q_SIGNAL void speedRatioChanged();
+
+  void setBpm(const float &bpm);
+  float bpm() const;
+  Q_SIGNAL void bpmChanged();
 
   float getGain() const;
   float getGainDB() const;
@@ -456,7 +524,12 @@ public:
   Q_INVOKABLE void play(bool forceLooping = true, int midiChannel = -1);
   // Midi channel logic as play(), except defaulting to stop all the things everywhere
   Q_INVOKABLE void stop(int midiChannel = -3);
+  // The duration of the sample itself, in seconds
   float getDuration() const;
+  // The duration of the sample itself, in samples
+  Q_INVOKABLE int getDurationSamples() const;
+  Q_SIGNAL void durationChanged();
+
   const char *getFileName() const;
   const char *getFilePath() const;
   void updateTempoAndPitch();

@@ -283,7 +283,7 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
             d->sourceSamplePosition = (int) ((d->clipCommand->setStartPosition ? d->clipCommand->startPosition : d->clip->getStartPosition(d->clipCommand->slice)) * sound->sourceSampleRate());
         }
 
-        d->playbackData.snappedToBeat = (trunc(d->clip->getLengthInBeats()) == d->clip->getLengthInBeats());
+        d->playbackData.snappedToBeat = (trunc(d->clip->getLengthBeats()) == d->clip->getLengthBeats());
         d->playbackData.isLooping = d->clipCommand->looping;
 
         d->lgain = clipCommand->volume;
