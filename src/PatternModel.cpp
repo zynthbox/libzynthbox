@@ -208,6 +208,21 @@ public Q_SLOTS:
         QVariantList clipIds;
         // qDebug() << Q_FUNC_INFO << q->sketchpadTrack() << q->partName();
         if (zlChannel) {
+            const QString zlSamplePickingStyle = zlChannel->property("samplePickingStyle").toString();
+            // static const QLatin1String sameOrFirstStyle{"same-or-first"};
+            static const QLatin1String sameStyle{"same"};
+            static const QLatin1String firstStyle{"first"};
+            static const QLatin1String allStyle{"all"};
+            if (zlSamplePickingStyle == allStyle) {
+                samplePickingStyle = ClipAudioSource::AllPickingStyle;
+            } else if (zlSamplePickingStyle == firstStyle) {
+                samplePickingStyle = ClipAudioSource::FirstPickingStyle;
+            } else if (zlSamplePickingStyle == sameStyle) {
+                samplePickingStyle = ClipAudioSource::SamePickingStyle;
+            } else {
+                // Default is same-or-first, so on real need to check here, and it's our delegated fallback option
+                samplePickingStyle = ClipAudioSource::SameOrFirstPickingStyle;
+            }
             const QVariantList channelSamples = zlChannel->property("samples").toList();
             QList<int> slotIndices{0, 1, 2, 3, 4};
             switch(samplePickingStyle) {
@@ -660,6 +675,7 @@ public:
                         command->looping = clip->looping();
                     }
                     listToPopulate->write(command, 0);
+                    // qDebug() << Q_FUNC_INFO << "Wrote command to list for" << clip;
                 }
                 // If our selection mode is a one-sample-only mode, bail now (that is,
                 // only AllPickingStyle wants us to pick more than one sample)
