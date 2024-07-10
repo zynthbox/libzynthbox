@@ -88,13 +88,21 @@ class ClipAudioSource : public QObject {
     /**
      * \brief The duration of the root slice in a number of beats (or quarter notes)
      * @see lengthSamples
+     * @see lengthSeconds
      */
     Q_PROPERTY(float lengthBeats READ getLengthBeats WRITE setLengthBeats NOTIFY lengthChanged)
     /**
      * \brief The duration of the root slice in samples
      * @see lengthBeats
+     * @see lengthSeconds
      */
     Q_PROPERTY(int lengthSamples READ getLengthSamples WRITE setLengthSamples NOTIFY lengthChanged)
+    /**
+     * \brief The duration of the root slice in seconds
+     * @see lengthBeats
+     * @see lengthSamples
+     */
+    Q_PROPERTY(float lengthSeconds READ getLengthSeconds NOTIFY lengthChanged)
     /**
      * \brief Whether or not this sample should be looped for playback (or single-shot so it auto-stops)
      * This can be overridden by the play function, where looping can be forced
@@ -458,6 +466,11 @@ public:
    * @return The length of the clip in samples
    */
   int getLengthSamples() const;
+  /*
+   * \brief Get the length of the clip in seconds
+   * @return the length of the clip in seconds
+   */
+  float getLengthSeconds() const;
   Q_SIGNAL void lengthChanged();
 
   /**

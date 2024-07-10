@@ -302,8 +302,8 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
       setSpeedRatio(1.0);
     }
     // Reset the length in beats to match
-    d->lengthInBeats = double(d->syncTimer->secondsToSubbeatCount(d->syncTimer->getBpm(), d->lengthInSeconds)) / double(d->syncTimer->getMultiplier());
-    Q_EMIT lengthChanged();
+    // d->lengthInBeats = double(d->syncTimer->secondsToSubbeatCount(d->bpm, d->lengthInSeconds)) / double(d->syncTimer->getMultiplier());
+    // Q_EMIT lengthChanged();
   };
   connect(SyncTimer::instance(), &SyncTimer::bpmChanged, this, [&updateBpmDependentValues](){ updateBpmDependentValues(); } );
   connect(this, &ClipAudioSource::bpmChanged, this, [&updateBpmDependentValues](){ updateBpmDependentValues(); } );
@@ -456,7 +456,7 @@ void ClipAudioSource::setLoopDelta(const float& newLoopDelta)
 {
   if (d->loopDelta != newLoopDelta) {
     d->loopDelta = newLoopDelta;
-    d->loopDeltaSamples = newLoopDelta / d->sampleRate;
+    d->loopDeltaSamples = newLoopDelta * d->sampleRate;
     Q_EMIT loopDeltaChanged();
   }
 }
@@ -465,7 +465,7 @@ void ClipAudioSource::setLoopDeltaSamples(const int& newLoopDeltaSamples)
 {
   if (d->loopDeltaSamples != newLoopDeltaSamples) {
     d->loopDeltaSamples = newLoopDeltaSamples;
-    d->loopDelta = newLoopDeltaSamples * d->sampleRate;
+    d->loopDelta = double(newLoopDeltaSamples) / d->sampleRate;
     Q_EMIT loopDeltaChanged();
   }
 }
@@ -484,7 +484,7 @@ void ClipAudioSource::setLoopDelta2(const float& newLoopDelta2)
 {
   if (d->loopDelta2 != newLoopDelta2) {
     d->loopDelta2 = newLoopDelta2;
-    d->loopDelta2Samples = newLoopDelta2 / d->sampleRate;
+    d->loopDelta2Samples = newLoopDelta2 * d->sampleRate;
     Q_EMIT loopDelta2Changed();
   }
 }
@@ -493,7 +493,7 @@ void ClipAudioSource::setLoopDelta2Samples(const int& newLoopDelta2Samples)
 {
   if (d->loopDelta2Samples != newLoopDelta2Samples) {
     d->loopDelta2Samples = newLoopDelta2Samples;
-    d->loopDelta2 = newLoopDelta2Samples * d->sampleRate;
+    d->loopDelta2 = double(newLoopDelta2Samples) / d->sampleRate;
     Q_EMIT loopDelta2Changed();
   }
 }
@@ -753,7 +753,7 @@ bool ClipAudioSource::snapLengthToBeat() const
 
 void ClipAudioSource::setLengthBeats(float beat) {
   // IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Interval:" << d->syncTimer->getInterval(bpm);
-  float lengthInSeconds = d->syncTimer->subbeatCountToSeconds(quint64(d->syncTimer->getBpm()), quint64((beat * d->syncTimer->getMultiplier())));
+  float lengthInSeconds = d->syncTimer->subbeatCountToSeconds(quint64(d->bpm), quint64((beat * d->syncTimer->getMultiplier())));
   if (lengthInSeconds != d->lengthInSeconds) {
     // IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Length to" << lengthInSeconds;
     d->lengthInSeconds = lengthInSeconds;
@@ -768,7 +768,7 @@ void ClipAudioSource::setLengthSamples(int lengthInSamples)
   if (d->lengthInSamples != lengthInSamples) {
     d->lengthInSamples = lengthInSamples;
     d->lengthInSeconds = double(lengthInSamples) / d->sampleRate;
-    d->lengthInBeats = double(d->syncTimer->secondsToSubbeatCount(d->syncTimer->getBpm(), d->lengthInSeconds)) / double(d->syncTimer->getMultiplier());
+    d->lengthInBeats = double(d->syncTimer->secondsToSubbeatCount(d->bpm, d->lengthInSeconds)) / double(d->syncTimer->getMultiplier());
     Q_EMIT lengthChanged();
   }
 }
@@ -781,6 +781,12 @@ int ClipAudioSource::getLengthSamples() const
 {
   return d->lengthInSamples;
 }
+
+float ClipAudioSource::getLengthSeconds() const
+{
+  return double(d->lengthInSamples) / d->sampleRate;
+}
+
 
 float ClipAudioSource::getDuration() const {
   return d->edit->getLength();
