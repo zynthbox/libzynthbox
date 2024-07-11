@@ -829,7 +829,8 @@ void ClipAudioSource::updateTempoAndPitch() {
 }
 
 void ClipAudioSource::Private::timerCallback() {
-  positionsModel->updatePositions();
+  // Calling this from a timer will lead to a bad time, make sure it happens somewhere more reasonable (like on the object's own thread, which in this case is the qml engine thread)
+  QMetaObject::invokeMethod(positionsModel, &ClipAudioSourcePositionsModel::updatePositions, Qt::QueuedConnection);
   syncAudioLevel();
 
   if (clip) {

@@ -41,7 +41,7 @@ public:
      */
     double firstProgress() const;
 
-    void updatePositions();
+    Q_INVOKABLE void updatePositions();
 private:
     std::unique_ptr<ClipAudioSourcePositionsModelPrivate> d;
 };
