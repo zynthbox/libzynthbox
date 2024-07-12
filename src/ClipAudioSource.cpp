@@ -229,6 +229,16 @@ public:
       nextGainUpdateTime = QDateTime::currentMSecsSinceEpoch() + 30;
     }
   }
+  void updateBpmDependentValues() {
+    if (autoSynchroniseSpeedRatio && bpm > 0) {
+      q->setSpeedRatio(syncTimer->getBpm() / d->bpm);
+    } else {
+      q->setSpeedRatio(1.0);
+    }
+    // Reset the length in beats to match
+    // lengthInBeats = double(d->syncTimer->secondsToSubbeatCount(bpm, lengthInSeconds)) / double(syncTimer->getMultiplier());
+    // Q_EMIT q->lengthChanged();
+  };
 private:
   void timerCallback() override;
 };
@@ -295,19 +305,9 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
   });
   setSlices(16);
 
-  auto updateBpmDependentValues = [this](){
-    if (d->autoSynchroniseSpeedRatio && d->bpm > 0) {
-      setSpeedRatio(SyncTimer::instance()->getBpm() / d->bpm);
-    } else {
-      setSpeedRatio(1.0);
-    }
-    // Reset the length in beats to match
-    // d->lengthInBeats = double(d->syncTimer->secondsToSubbeatCount(d->bpm, d->lengthInSeconds)) / double(d->syncTimer->getMultiplier());
-    // Q_EMIT lengthChanged();
-  };
-  connect(SyncTimer::instance(), &SyncTimer::bpmChanged, this, [&updateBpmDependentValues](){ updateBpmDependentValues(); } );
-  connect(this, &ClipAudioSource::bpmChanged, this, [&updateBpmDependentValues](){ updateBpmDependentValues(); } );
-  connect(this, &ClipAudioSource::autoSynchroniseSpeedRatioChanged, this, [&updateBpmDependentValues](){ updateBpmDependentValues(); } );
+  connect(d->syncTimer, &SyncTimer::bpmChanged, this, [this](){ d->updateBpmDependentValues(); } );
+  connect(this, &ClipAudioSource::bpmChanged, this, [this](){ d->updateBpmDependentValues(); } );
+  connect(this, &ClipAudioSource::autoSynchroniseSpeedRatioChanged, this, [this](){ d->updateBpmDependentValues(); } );
 }
 
 ClipAudioSource::~ClipAudioSource() {
