@@ -231,14 +231,14 @@ public:
   }
   void updateBpmDependentValues() {
     if (autoSynchroniseSpeedRatio && bpm > 0) {
-      q->setSpeedRatio(syncTimer->getBpm() / d->bpm);
+      q->setSpeedRatio(syncTimer->getBpm() / bpm);
     } else {
       q->setSpeedRatio(1.0);
     }
     // Reset the length in beats to match
     // lengthInBeats = double(d->syncTimer->secondsToSubbeatCount(bpm, lengthInSeconds)) / double(syncTimer->getMultiplier());
     // Q_EMIT q->lengthChanged();
-  };
+  }
 private:
   void timerCallback() override;
 };
