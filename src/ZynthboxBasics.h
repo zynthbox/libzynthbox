@@ -3,3 +3,4 @@
 #define ZynthboxSongCount 1
 #define ZynthboxTrackCount 10
 #define ZynthboxPartCount 5
+#define ZynthboxClipMaximumPositionCount 128

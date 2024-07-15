@@ -444,6 +444,11 @@ int Plugin::sketchpadPartCount() const
     return ZynthboxPartCount;
 }
 
+int Plugin::clipMaximumPositionCount() const
+{
+    return ZynthboxClipMaximumPositionCount;
+}
+
 QQmlEngine * Plugin::qmlEngine() const
 {
     if (m_qmlEngine == nullptr) {

@@ -66,6 +66,10 @@ class Plugin : public QObject {
      * \brief The amount of Parts in a Zynthbox Track
      */
     Q_PROPERTY(int sketchpadPartCount READ sketchpadPartCount CONSTANT)
+    /**
+     * \brief The number of positions held by a ClipAudioSourcePositionsModel
+     */
+    Q_PROPERTY(int clipMaximumPositionCount READ clipMaximumPositionCount CONSTANT)
 public:
     static Plugin* instance();
 
@@ -91,6 +95,7 @@ public:
     int sketchpadSongCount() const;
     int sketchpadTrackCount() const;
     int sketchpadPartCount() const;
+    int clipMaximumPositionCount() const;
 
     QQmlEngine *qmlEngine() const;
 private:
