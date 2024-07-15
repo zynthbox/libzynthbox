@@ -15,6 +15,10 @@ class ClipAudioSourcePositionsModel : public QAbstractListModel
      * \brief The highest gain among all positions in the model
      */
     Q_PROPERTY(float peakGain READ peakGain NOTIFY peakGainChanged)
+    /**
+     * \brief All of the position objects held by the model (it will contain ZynthboxClipMaximumPositionCount entries)
+     */
+    Q_PROPERTY(QVariantList positions READ positions CONSTANT)
 public:
     explicit ClipAudioSourcePositionsModel(ClipAudioSource *clip);
     ~ClipAudioSourcePositionsModel() override;
@@ -28,6 +32,8 @@ public:
     QHash<int, QByteArray> roleNames() const override;
     int rowCount(const QModelIndex &parent) const override;
     QVariant data(const QModelIndex &index, int role) const override;
+
+    QVariantList positions() const;
 
     Q_INVOKABLE void setPositionData(jack_nframes_t timestamp, ClipCommand *clipCommand, float gain, float progress, float pan);
     void setMostRecentPositionUpdate(jack_nframes_t timestamp);

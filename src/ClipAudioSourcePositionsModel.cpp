@@ -1,9 +1,10 @@
 #include "ClipAudioSourcePositionsModel.h"
+#include "ClipAudioSourcePositionsModelEntry.h"
 #include "ClipCommand.h"
+#include "ZynthboxBasics.h"
+
 #include <QDateTime>
 #include <QDebug>
-
-#define POSITION_COUNT 32
 
 #define DataRingSize 2048
 class DataRing {
@@ -78,12 +79,21 @@ struct PositionData {
 class ClipAudioSourcePositionsModelPrivate
 {
 public:
-    ClipAudioSourcePositionsModelPrivate() {
+    ClipAudioSourcePositionsModelPrivate(ClipAudioSourcePositionsModel *q)
+        : q(q)
+    {
         positionUpdates.name = "PositionUpdates";
+        for (int entryIndex = 0; entryIndex < ZynthboxClipMaximumPositionCount; ++entryIndex) {
+            ClipAudioSourcePositionsModelEntry *newEntry = new ClipAudioSourcePositionsModelEntry(q);
+            entries << newEntry;
+            objectedEntries << QVariant::fromValue<QObject*>(newEntry);
+        }
     }
     ~ClipAudioSourcePositionsModelPrivate() {
     }
-    PositionData positions[POSITION_COUNT];
+    ClipAudioSourcePositionsModel *q{nullptr};
+    QList<ClipAudioSourcePositionsModelEntry*> entries;
+    QVariantList objectedEntries;
     bool updatePeakGain{false};
     float peakGain{0.0f};
     jack_nframes_t mostRecentPositionUpdate{0};
@@ -94,7 +104,7 @@ public:
 
 ClipAudioSourcePositionsModel::ClipAudioSourcePositionsModel(ClipAudioSource *clip)
     : QAbstractListModel(clip)
-    , d(new ClipAudioSourcePositionsModelPrivate)
+    , d(new ClipAudioSourcePositionsModelPrivate(this))
 {
 }
 
@@ -116,32 +126,37 @@ int ClipAudioSourcePositionsModel::rowCount(const QModelIndex &parent) const
     if (parent.isValid()) {
         return 0;
     }
-    return POSITION_COUNT;
+    return ZynthboxClipMaximumPositionCount;
 }
 
 QVariant ClipAudioSourcePositionsModel::data(const QModelIndex &index, int role) const
 {
     QVariant result;
     if (checkIndex(index)) {
-        PositionData *position = &d->positions[index.row()];
+        ClipAudioSourcePositionsModelEntry *position = d->entries[index.row()];
         switch (role) {
             case PositionIDRole:
-                result.setValue<qint64>(position->clipCommand ? position->id : -1);
+                result.setValue<qint64>(position->m_clipCommand ? position->id() : -1);
                 break;
             case PositionProgressRole:
-                result.setValue<float>(position->clipCommand ? position->progress : 0);
+                result.setValue<float>(position->m_clipCommand ? position->progress() : 0);
                 break;
             case PositionGainRole:
-                result.setValue<float>(position->clipCommand ? position->gain : 0);
+                result.setValue<float>(position->m_clipCommand ? position->gain() : 0);
                 break;
             case PositionPanRole:
-                result.setValue<float>(position->clipCommand ? position->pan : 0);
+                result.setValue<float>(position->m_clipCommand ? position->pan() : 0);
                 break;
             default:
                 break;
         }
     }
     return result;
+}
+
+QVariantList ClipAudioSourcePositionsModel::positions() const
+{
+    return d->objectedEntries;
 }
 
 void ClipAudioSourcePositionsModel::setPositionData(jack_nframes_t timestamp, ClipCommand *clipCommand, float gain, float progress, float pan)
@@ -163,8 +178,8 @@ float ClipAudioSourcePositionsModel::peakGain()
         updatePositions();
         // Then update the peak gain
         float peak{0.0f};
-        for (int positionIndex = 0; positionIndex < POSITION_COUNT; ++positionIndex) {
-            peak = qMax(peak, d->positions[positionIndex].gain);
+        for (int positionIndex = 0; positionIndex < ZynthboxClipMaximumPositionCount; ++positionIndex) {
+            peak = qMax(peak, d->entries[positionIndex]->gain());
         }
         if (abs(d->peakGain - peak) > 0.01) {
             d->peakGain = peak;
@@ -178,10 +193,10 @@ float ClipAudioSourcePositionsModel::peakGain()
 double ClipAudioSourcePositionsModel::firstProgress() const
 {
     double progress{-1.0f};
-    for (int positionIndex = 0; positionIndex < POSITION_COUNT; ++positionIndex) {
-        const PositionData &position = d->positions[positionIndex];
-        if (position.id > -1) {
-            progress = position.progress;
+    for (int positionIndex = 0; positionIndex < ZynthboxClipMaximumPositionCount; ++positionIndex) {
+        const ClipAudioSourcePositionsModelEntry *position = d->entries[positionIndex];
+        if (position->id() > -1) {
+            progress = position->progress();
             break;
         }
     }
@@ -192,11 +207,11 @@ void ClipAudioSourcePositionsModel::updatePositions()
 {
     bool anyPositionUpdates{false};
     // Clear out all positions older than our grace time, so we can stuff things into the model
-    for (int positionIndex = 0; positionIndex < POSITION_COUNT; ++positionIndex) {
-        PositionData &position = d->positions[positionIndex];
-        if (position.keepUntil < d->mostRecentPositionUpdate) {
-            position.clipCommand = nullptr;
-            position.id = -1;
+    for (int positionIndex = 0; positionIndex < ZynthboxClipMaximumPositionCount; ++positionIndex) {
+        ClipAudioSourcePositionsModelEntry *position = d->entries[positionIndex];
+        if (position->m_keepUntil > -1 && position->m_keepUntil < d->mostRecentPositionUpdate) {
+            position->m_clipCommand = nullptr;
+            position->clear();
             anyPositionUpdates = true;
         }
     }
@@ -206,16 +221,13 @@ void ClipAudioSourcePositionsModel::updatePositions()
     ClipCommand *clipCommand;
     float progress, gain, pan;
     while (d->positionUpdates.read(&timestamp, &clipCommand, &progress, &gain, &pan)) {
-        for (positionIndex = 0; positionIndex < POSITION_COUNT; ++positionIndex) {
-            PositionData *position = &d->positions[positionIndex];
+        for (positionIndex = 0; positionIndex < ZynthboxClipMaximumPositionCount; ++positionIndex) {
+            ClipAudioSourcePositionsModelEntry *position = d->entries[positionIndex];
             // If this is the same clip command, or it's an empty position (which will not happen unless we haven't added updates for this command yet), add the data to this position
-            if (position->clipCommand == clipCommand || position->clipCommand == nullptr) {
-                position->clipCommand = clipCommand;
-                position->id = reinterpret_cast<qint64>(clipCommand);
-                position->progress = progress;
-                position->gain = gain;
-                position->pan = pan;
-                position->keepUntil = timestamp + d->updateGracePeriod;
+            if (position->m_clipCommand == clipCommand || position->m_clipCommand == nullptr) {
+                position->m_clipCommand = clipCommand;
+                position->updateData(reinterpret_cast<qint64>(clipCommand), progress, gain, pan);
+                position->m_keepUntil = timestamp + d->updateGracePeriod;
                 anyPositionUpdates = true;
                 break;
             }
@@ -224,7 +236,7 @@ void ClipAudioSourcePositionsModel::updatePositions()
     // Now notify that the model has changed its data (which is cheaper than a reset, as it updates existing delegates instead of remaking them)
     if (anyPositionUpdates) {
         QModelIndex topLeft{createIndex(0, 0)};
-        QModelIndex bottomRight{createIndex(POSITION_COUNT - 1, 0)};
+        QModelIndex bottomRight{createIndex(ZynthboxClipMaximumPositionCount - 1, 0)};
         dataChanged(topLeft, bottomRight, {PositionIDRole, PositionProgressRole, PositionGainRole, PositionPanRole});
     }
 }
