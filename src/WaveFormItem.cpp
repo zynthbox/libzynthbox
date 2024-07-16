@@ -11,6 +11,7 @@
 
 #include "WaveFormItem.h"
 #include "AudioLevels.h"
+#include "Plugin.h"
 
 #include <QPainter>
 #include <QDebug>
@@ -55,6 +56,7 @@ void WaveFormItem::setSource(QString &source)
     static const QLatin1String captureUri{"audioLevelsChannel:/capture"};
     static const QLatin1String globalUri{"audioLevelsChannel:/global"};
     static const QLatin1String portsUri{"audioLevelsChannel:/ports"};
+    static const QLatin1String clipUri{"clip:/"};
     if (source != m_source) {
         m_source = source;
         Q_EMIT sourceChanged();
@@ -78,6 +80,11 @@ void WaveFormItem::setSource(QString &source)
                 const int channelIndex = m_source.midRef(20).toInt();
                 m_externalThumbnailChannel = AudioLevels::instance()->audioLevelsChannel(channelIndex);
             }
+        } else if (m_source.startsWith(clipUri)) {
+            const int clipId = m_source.midRef(6).toInt();
+            ClipAudioSource *clip = Plugin::instance()->getClipById(clipId);
+            if (clip) {
+            }
         } else {
             m_thumbnail.clear();
 
@@ -98,6 +105,7 @@ void WaveFormItem::setSource(QString &source)
             m_externalThumbnail->addChangeListener(this);
         }
     }
+    m_rapidRepaintTimer->start();
 }
 
 qreal WaveFormItem::length() const
@@ -121,6 +129,7 @@ void WaveFormItem::setColor(const QColor &color)
 
     m_color = color;
     m_painterContext.setQBrush(m_color);
+    m_painterContext.setQPen(m_color);
     Q_EMIT colorChanged();
 }
 
@@ -199,13 +208,13 @@ void WaveFormItem::paint(QPainter *painter)
     } else {
         const int numChannels{m_thumbnail.getNumChannels()};
         if (numChannels == 1) {
-            m_thumbnail.drawChannel(m_juceGraphics, thumbnailBounds, m_start, qMin(m_end, m_thumbnail.getTotalLength()), 0, 1.0f);
+            m_thumbnail.drawChannel(m_juceGraphics, thumbnailBounds, true, {m_start, qMin(m_end, m_thumbnail.getTotalLength())}, 0, 1.0f);
         } else {
             const double spacing{height() / (numChannels + 1)};
             for (int channel = 0; channel < numChannels; ++channel) {
                 thumbnailBounds.setTop(channel * spacing);
                 thumbnailBounds.setHeight(height() - spacing);
-                m_thumbnail.drawChannel(m_juceGraphics, thumbnailBounds, m_start, qMin(m_end, m_thumbnail.getTotalLength()), channel, 1.0f);
+                m_thumbnail.drawChannel(m_juceGraphics, thumbnailBounds, true, {m_start, qMin(m_end, m_thumbnail.getTotalLength())}, channel, 1.0f);
             }
         }
         if (!m_thumbnail.isFullyLoaded()) {

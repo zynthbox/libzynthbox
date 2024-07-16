@@ -74,7 +74,7 @@ private:
     juce::Graphics m_juceGraphics;
     QColor m_color;
     std::unique_ptr<juce::AudioFormatReaderSource> m_readerSource;
-    juce::AudioThumbnail m_thumbnail;
+    tracktion_engine::TracktionThumbnail m_thumbnail;
     juce::AudioThumbnail *m_externalThumbnail{nullptr};
     AudioLevelsChannel *m_externalThumbnailChannel{nullptr};
     qreal m_start = 0;
