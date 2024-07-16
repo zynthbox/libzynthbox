@@ -13,6 +13,8 @@
 #include "JUCEHeaders.h"
 
 #include <QBrush>
+#include <QPen>
+#include <QPolygonF>
 
 class QPainter;
 using namespace juce;
@@ -28,6 +30,9 @@ public:
 
     void setQBrush(const QBrush &brush);
     QBrush qBrush() const;
+
+    void setQPen(const QPen &pen);
+    QPen qPen() const;
 
     bool isVectorDevice() const override;
     void setOrigin (Point<int>) override;
@@ -69,6 +74,8 @@ public:
 
 private:
     QBrush m_brush;
+    QPen m_pen;
     QPainter *m_painter = nullptr;
     juce::Font m_font;
+    QPolygonF qPath[128]; // This is frankly insanely deep, but... crazier things have happened, i feel
 };
