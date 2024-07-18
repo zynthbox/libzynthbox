@@ -14,6 +14,7 @@ struct ClipCommand {
     ClipCommand(ClipAudioSource *clip, int midiNote) : clip(clip), midiNote(midiNote) {};
     ClipAudioSource* clip{nullptr};
     int midiNote{-1};
+    int subvoice{-1};
     int midiChannel{-1};
     bool startPlayback{false};
     bool stopPlayback{false};
@@ -41,7 +42,7 @@ struct ClipCommand {
         return clip == other->clip
             && (
                 (changeSlice == true && other->changeSlice == true && slice == other->slice)
-                || (changeSlice == false && other->changeSlice == false && midiNote == other->midiNote && midiChannel == other->midiChannel)
+                || (changeSlice == false && other->changeSlice == false && midiNote == other->midiNote && subvoice == other->subvoice && midiChannel == other->midiChannel)
             );
     }
 
@@ -72,6 +73,8 @@ struct ClipCommand {
     static void clear(ClipCommand *command) {
         command->clip = nullptr;
         command->midiNote = -1;
+        command->subvoice = -1;
+        command->midiChannel = -1;
         command->startPlayback = false;
         command->stopPlayback = false;
         command->changeSlice = false;
