@@ -8,6 +8,7 @@
 
 #include <AudioLevels.h>
 #include <ClipAudioSource.h>
+#include <ClipAudioSourceSubvoiceSettings.h>
 #include <JackPassthrough.h>
 #include <JackPassthroughCompressor.h>
 #include <JackPassthroughFilter.h>

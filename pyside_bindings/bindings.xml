@@ -11,6 +11,7 @@
         <enum-type name="SamplePickingStyle" />
         <enum-type name="TimeStretchStyle" />
     </object-type>
+    <object-type name="ClipAudioSourceSubvoiceSettings"></object-type>
     <object-type name="JackPassthrough"></object-type>
     <object-type name="JackPassthroughCompressor"></object-type>
     <object-type name="JackPassthroughFilter">

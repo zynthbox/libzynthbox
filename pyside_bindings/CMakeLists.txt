@@ -4,6 +4,7 @@ set(bindings_typesystem ${CMAKE_CURRENT_SOURCE_DIR}/bindings.xml)
 set(generated_sources
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/audiolevels_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/clipaudiosource_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/clipaudiosourcesubvoicesettings_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/jackpassthrough_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/jackpassthroughcompressor_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/jackpassthroughfilter_wrapper.cpp
