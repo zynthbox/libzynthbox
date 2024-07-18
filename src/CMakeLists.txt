@@ -6,6 +6,7 @@ target_sources(libzynthbox
     PRIVATE
         Plugin.cpp
         ClipAudioSource.cpp
+        ClipAudioSourceSubvoiceSettings.cpp
         ClipAudioSourcePositionsModel.cpp
         ClipAudioSourcePositionsModelEntry.cpp
         MidiRouter.cpp
