@@ -654,28 +654,32 @@ public:
                     // if stop command and clip playback style is Oneshot, don't submit the stop command - just let it run out
                     // to force one-shots to stop, all-notes-off is handled by SamplerSynth directly
                 } else {
-                    ClipCommand *command = ClipCommand::channelCommand(clip, (byte1 & 0xf));
-                    command->startPlayback = !stopPlayback;
-                    command->stopPlayback = stopPlayback;
-                    if (command->startPlayback) {
-                        command->changeVolume = true;
-                        command->volume = float(byte3) / float(127);
+                    // subvoice -1 is conceptually the prime voice, anything from 0 inclusive to the amount non-inclusive are the subvoices
+                    for (int subvoice = -1; subvoice < clip->subvoiceCount(); ++subvoice) {
+                        ClipCommand *command = ClipCommand::channelCommand(clip, (byte1 & 0xf));
+                        command->startPlayback = !stopPlayback;
+                        command->stopPlayback = stopPlayback;
+                        command->subvoice = subvoice;
+                        if (command->startPlayback) {
+                            command->changeVolume = true;
+                            command->volume = float(byte3) / float(127);
+                        }
+                        if (command->stopPlayback) {
+                            // Don't actually set volume, just store the volume for velocity purposes... yes this is kind of a hack
+                            command->volume = float(byte3) / float(127);
+                        }
+                        if (noteDestination == SampleSlicedDestination) {
+                            command->midiNote = 60; // TODO see scribble-notes on the topic of more powerful slice playback
+                            command->changeSlice = true;
+                            command->slice = clip->sliceForMidiNote(byte2);
+                        } else {
+                            command->midiNote = byte2;
+                            command->changeLooping = true;
+                            command->looping = clip->looping();
+                        }
+                        listToPopulate->write(command, 0);
+                        // qDebug() << Q_FUNC_INFO << "Wrote command to list for" << clip;
                     }
-                    if (command->stopPlayback) {
-                        // Don't actually set volume, just store the volume for velocity purposes... yes this is kind of a hack
-                        command->volume = float(byte3) / float(127);
-                    }
-                    if (noteDestination == SampleSlicedDestination) {
-                        command->midiNote = 60; // TODO see scribble-notes on the topic of more powerful slice playback
-                        command->changeSlice = true;
-                        command->slice = clip->sliceForMidiNote(byte2);
-                    } else {
-                        command->midiNote = byte2;
-                        command->changeLooping = true;
-                        command->looping = clip->looping();
-                    }
-                    listToPopulate->write(command, 0);
-                    // qDebug() << Q_FUNC_INFO << "Wrote command to list for" << clip;
                 }
                 // If our selection mode is a one-sample-only mode, bail now (that is,
                 // only AllPickingStyle wants us to pick more than one sample)
