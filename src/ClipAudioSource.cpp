@@ -9,6 +9,7 @@
 */
 
 #include "ClipAudioSource.h"
+#include "ClipAudioSourceSubvoiceSettings.h"
 #include "ClipAudioSourcePositionsModel.h"
 
 #include <QDateTime>
@@ -82,6 +83,12 @@ public:
     for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
         sideChainGain[channelIndex] = new jack_default_audio_sample_t[8192](); // TODO This is an awkward assumption, there has to be a sensible way to do this - jack should know this, right?
     }
+    // Sub-voices
+    for (int subvoiceIndex = 0; subvoiceIndex < 16; ++subvoiceIndex) {
+      ClipAudioSourceSubvoiceSettings *newSubvoice = new ClipAudioSourceSubvoiceSettings(q);
+      subvoiceSettings << QVariant::fromValue<QObject*>(newSubvoice);
+      subvoiceSettingsActual << newSubvoice;
+    }
   }
   ClipAudioSource *q;
   const te::Engine &getEngine() const { return *engine; };
@@ -123,6 +130,10 @@ public:
   int sketchpadTrack{-1};
   int laneAffinity{0};
   ClipAudioSourcePositionsModel *positionsModel{nullptr};
+  // Subvoices (extra voices which are launched at the same time as the sound usually is, with a number of adjustments to some settings, specifically pan, pitch, and gain)
+  int subvoiceCount{0};
+  QVariantList subvoiceSettings;
+  QList<ClipAudioSourceSubvoiceSettings*> subvoiceSettingsActual;
   // Default is 16, but we also need to generate the positions, so that is set up in the ClipAudioSource ctor
   int slices{0};
   QVariantList slicePositions;
@@ -954,6 +965,29 @@ QObject *ClipAudioSource::playbackPositions()
 ClipAudioSourcePositionsModel *ClipAudioSource::playbackPositionsModel()
 {
     return d->positionsModel;
+}
+
+int ClipAudioSource::subvoiceCount() const
+{
+  return d->subvoiceCount;
+}
+
+void ClipAudioSource::setSubvoiceCount(const int& subvoiceCount)
+{
+  if (d->subvoiceCount != subvoiceCount) {
+    d->subvoiceCount = subvoiceCount;
+    Q_EMIT subvoiceCountChanged();
+  }
+}
+
+QVariantList ClipAudioSource::subvoiceSettings() const
+{
+  return d->subvoiceSettings;
+}
+
+const QList<ClipAudioSourceSubvoiceSettings*> & ClipAudioSource::subvoiceSettingsActual()
+{
+  return d->subvoiceSettingsActual;
 }
 
 int ClipAudioSource::slices() const
