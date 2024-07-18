@@ -1,6 +1,7 @@
 #include "SamplerSynthVoice.h"
 
 #include "ClipAudioSourcePositionsModel.h"
+#include "ClipAudioSourceSubvoiceSettings.h"
 #include "ClipCommand.h"
 #include "SamplerSynth.h"
 #include "SamplerSynthSound.h"
@@ -113,6 +114,7 @@ public:
     SamplerSynth *samplerSynth{nullptr};
     ClipCommand *clipCommand{nullptr};
     ClipAudioSource *clip{nullptr};
+    ClipAudioSourceSubvoiceSettings *subvoiceSettings{nullptr};
     SamplerSynthSound* sound{nullptr};
     double pitchRatio = 0;
     double sourceSamplePosition = 0;
@@ -274,14 +276,8 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
     if (auto sound = d->samplerSynth->clipToSound(clipCommand->clip)) {
         d->sound = sound;
         d->clip = sound->clip();
-
-        d->pitchRatio = std::pow(2.0, (clipCommand->midiNote - sound->rootMidiNote()) / 12.0) * sound->sampleRateRatio();
-        d->sourceSampleLength = d->clip->getDuration() * sound->sourceSampleRate() / d->clip->speedRatio();
-        if (d->clipCommand->changePitch && d->clipCommand->pitchChange < 0) {
-            d->sourceSamplePosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition : d->clip->getStopPosition(d->clipCommand->slice)) * sound->sourceSampleRate());
-        } else {
-            d->sourceSamplePosition = (int) ((d->clipCommand->setStartPosition ? d->clipCommand->startPosition : d->clip->getStartPosition(d->clipCommand->slice)) * sound->sourceSampleRate());
-        }
+        d->subvoiceSettings = clipCommand->subvoice == -1 ? nullptr : d->clip->subvoiceSettingsActual()[clipCommand->subvoice];
+        d->playbackData.sourceSampleRate = d->sound->sourceSampleRate();
 
         d->playbackData.snappedToBeat = (trunc(d->clip->getLengthBeats()) == d->clip->getLengthBeats());
         d->playbackData.isLooping = d->clipCommand->looping;
@@ -290,7 +286,7 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         d->rgain = clipCommand->volume;
 
         d->adsr.reset();
-        d->adsr.setSampleRate(sound->sourceSampleRate());
+        d->adsr.setSampleRate(d->playbackData.sourceSampleRate);
         d->adsr.setParameters(d->clip->granular() ? d->clip->grainADSR().getParameters() : d->clip->adsrParameters());
         isTailingOff = false;
         d->adsr.noteOn();
@@ -303,7 +299,6 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
             d->playbackData.inL = nullptr;
             d->playbackData.inR = nullptr;
         }
-        d->playbackData.sourceSampleRate = d->sound->sourceSampleRate();
         d->playbackData.sampleDuration = sound->length() - 1;
 
         // this bit is basically mtof - that is, converts a midi note to its equivalent expected frequency (here given a 440Hz concert tone), and it's going to be somewhere within a reasonable amount along the audible scale
@@ -314,7 +309,7 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         const double lowpassTan = std::tan(M_PI * lowpassAdjustmentInHz / d->playbackData.sourceSampleRate);
         d->playbackData.lowpassCoefficient = (lowpassTan - 1.f) / (lowpassTan + 1.f);
 
-        d->playbackData.pan = std::clamp(float(d->clip->pan()) + d->clipCommand->pan, -1.0f, 1.0f);
+        d->playbackData.pan = std::clamp(float(d->clip->pan()) + d->clipCommand->pan + (d->subvoiceSettings ? d->subvoiceSettings->pan() : 0.0f), -1.0f, 1.0f);
 
         d->playbackData.startPosition = (int) ((d->clipCommand->setStartPosition ? d->clipCommand->startPosition * d->playbackData.sourceSampleRate : d->clip->getStartPositionSamples(d->clipCommand->slice)));
         d->playbackData.stopPosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition * d->playbackData.sourceSampleRate : d->clip->getStopPositionSamples(d->clipCommand->slice)));
@@ -325,9 +320,17 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         d->playbackData.forwardTailingOffPosition = (d->playbackData.stopPosition - (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
         d->playbackData.backwardTailingOffPosition = (d->playbackData.startPosition + (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
 
+        d->pitchRatio = std::pow(2.0, (clipCommand->midiNote - sound->rootMidiNote()) / 12.0) * sound->sampleRateRatio();
+        d->sourceSampleLength = d->clip->getDuration() * d->playbackData.sourceSampleRate / d->clip->speedRatio();
+        if (d->clipCommand->changePitch && d->clipCommand->pitchChange < 0) {
+            d->sourceSamplePosition = d->playbackData.stopPosition;
+        } else {
+            d->sourceSamplePosition = d->playbackData.startPosition;
+        }
+
         if (d->clip->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
             d->soundTouch.setChannels(2);
-            d->soundTouch.setSampleRate(d->sound->sourceSampleRate());
+            d->soundTouch.setSampleRate(d->playbackData.sourceSampleRate);
             if (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchStandard) {
                 d->soundTouch.setSetting(SETTING_USE_AA_FILTER, 1); // Default when SOUNDTOUCH_PREVENT_CLICK_AT_RATE_CROSSOVER is not defined
                 d->soundTouch.setSetting(SETTING_AA_FILTER_LENGTH, 64); // Default value set in the RateTransposer ctor
@@ -430,7 +433,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
     // controlling loops and such), so let's make sure we do that once per process call
     // for any playing voice, in addition to when it starts
     if (d->clip && d->clipCommand) {
-        d->playbackData.pan = std::clamp(float(d->clip->pan()) + d->clipCommand->pan, -1.0f, 1.0f);
+        d->playbackData.pan = std::clamp(float(d->clip->pan()) + d->clipCommand->pan + (d->subvoiceSettings ? d->subvoiceSettings->pan() : 0.0f), -1.0f, 1.0f);
         d->playbackData.startPosition = (int) ((d->clipCommand->setStartPosition ? d->clipCommand->startPosition : d->clip->getStartPosition(d->clipCommand->slice)) * d->playbackData.sourceSampleRate);
         d->playbackData.stopPosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition : d->clip->getStopPosition(d->clipCommand->slice)) * d->playbackData.sourceSampleRate);
         d->playbackData.loopPosition = int((d->clip->getStartPosition(d->clipCommand->slice) + (d->clip->loopDelta() / d->clip->speedRatio())) * d->playbackData.sourceSampleRate);
@@ -509,10 +512,10 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
         }
         // Don't actually perform playback operations unless we've got something to play
         if (d->clip) {
-            const float clipPitchChange = (d->clipCommand->changePitch ? d->clipCommand->pitchChange * d->clip->pitchChangePrecalc() : d->clip->pitchChangePrecalc()) * d->sound->sampleRateRatio();
-            const float clipVolume = d->clip->volumeAbsolute() * d->clip->getGain();
-            const float lPan = 2 * (1.0 + d->playbackData.pan); // Used for m/s panning, to ensure the signal is proper, we need to multiply it by 2 eventually, so might as well pre-do that calculation here
-            const float rPan = 2 * (1.0 - d->playbackData.pan); // Used for m/s panning, to ensure the signal is proper, we need to multiply it by 2 eventually, so might as well pre-do that calculation here
+            const float clipPitchChange = (d->clipCommand->changePitch ? d->clipCommand->pitchChange * d->clip->pitchChangePrecalc() : d->clip->pitchChangePrecalc()) * (d->subvoiceSettings ? d->subvoiceSettings->pitchChangePrecalc() : 1.0f) * d->sound->sampleRateRatio();
+            const float clipVolume = d->clip->volumeAbsolute() * d->clip->getGain() * (d->subvoiceSettings ? d->subvoiceSettings->gain() : 1.0f);
+            const float lPan = 2 * (1.0 + qMax(-1.0f, (d->playbackData.pan))); // Used for m/s panning, to ensure the signal is proper, we need to multiply it by 2 eventually, so might as well pre-do that calculation here
+            const float rPan = 2 * (1.0 - qMax(-1.0f, (d->playbackData.pan))); // Used for m/s panning, to ensure the signal is proper, we need to multiply it by 2 eventually, so might as well pre-do that calculation here
 
             const float envelopeValue = d->adsr.getNextSample();
             float l{0};
