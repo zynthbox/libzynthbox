@@ -175,11 +175,12 @@ void WaveFormItem::changeListenerCallback(juce::ChangeBroadcaster *source)
 
 void WaveFormItem::thumbnailChanged()
 {
-    m_start = 0;
     if (m_externalThumbnail) {
-        m_end = m_externalThumbnail->getTotalLength();
+        m_start = qMin(m_start, m_externalThumbnail->getTotalLength());
+        m_end = qMin(m_end, m_externalThumbnail->getTotalLength());
     } else {
-        m_end = m_thumbnail.getTotalLength();
+        m_start = qMin(m_start, m_thumbnail.getTotalLength());
+        m_end = qMin(m_end, m_thumbnail.getTotalLength());
     }
 
     Q_EMIT startChanged();
