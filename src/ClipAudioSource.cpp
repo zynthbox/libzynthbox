@@ -295,7 +295,6 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
     IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Clip marked to be muted";
     setVolume(-100.0f);
   }
-  d->startTimerHz(30);
 
   d->positionsModel = new ClipAudioSourcePositionsModel(this);
   d->positionsModel->moveToThread(Plugin::instance()->qmlEngine()->thread());
@@ -319,6 +318,9 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
   connect(d->syncTimer, &SyncTimer::bpmChanged, this, [this](){ d->updateBpmDependentValues(); } );
   connect(this, &ClipAudioSource::bpmChanged, this, [this](){ d->updateBpmDependentValues(); } );
   connect(this, &ClipAudioSource::autoSynchroniseSpeedRatioChanged, this, [this](){ d->updateBpmDependentValues(); } );
+
+  // Make sure we do this last, so everything's actually done getting set up...
+  d->startTimerHz(60);
 }
 
 ClipAudioSource::~ClipAudioSource() {
