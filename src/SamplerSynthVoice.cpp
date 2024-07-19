@@ -478,7 +478,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                     // All Notes Off
                     stopNote(0, false, currentFrame);
                 } else {
-                    if (control == d->ccForLowpass) {
+                    if (isTailingOff == false && control == d->ccForLowpass) {
                         // Brightness control
                         value = std::clamp(value, 0.0f, 127.0f);
                         d->lowpassCutoff = (127.0f - value) / 127.0f;
@@ -487,7 +487,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                         const double tan = std::tan(M_PI * adjustmentInHz / d->playbackData.sourceSampleRate);
                         d->playbackData.lowpassCoefficient = (tan - 1.f) / (tan + 1.f);
                     }
-                    if (control == d->ccForHighpass) {
+                    if (isTailingOff == false && control == d->ccForHighpass) {
                         value = std::clamp(value, 0.0f, 127.0f);
                         d->highpassCutoff = value / 127.0f;
                         // Update the coefficient etc (see above for this hz number)
@@ -500,13 +500,13 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
         }
         while (d->pitchRing.readHead->processed == false && d->pitchRing.readHead->time == frame) {
             const float pitch = d->pitchRing.read(&dataChannel, &dataNote);
-            if (d->clipCommand && (dataChannel == -1 || (d->clipCommand && dataChannel == d->clipCommand->midiChannel))) {
+            if (isTailingOff == false && (d->clipCommand && (dataChannel == -1 || (d->clipCommand && dataChannel == d->clipCommand->midiChannel)))) {
                 d->pitchRatio = std::pow(2.0, (std::clamp(pitch + double(d->clipCommand->midiNote), 0.0, 127.0) - double(d->sound->rootMidiNote())) / 12.0) * d->sound->sampleRateRatio();
             }
         }
         while (d->aftertouchRing.readHead->processed == false && d->aftertouchRing.readHead->time == frame) {
             const float aftertouch = d->aftertouchRing.read(&dataChannel, &dataNote);
-            if (d->clipCommand && (dataChannel == -1 || (d->clipCommand && dataChannel == d->clipCommand->midiChannel)) && (dataNote == -1 || (d->clipCommand && dataNote == d->clipCommand->midiNote))) {
+            if (isTailingOff == false && (d->clipCommand && (dataChannel == -1 || (d->clipCommand && dataChannel == d->clipCommand->midiChannel)) && (dataNote == -1 || (d->clipCommand && dataNote == d->clipCommand->midiNote)))) {
                 d->lgain = d->rgain = d->clipCommand->volume = (aftertouch/127.0f);
             }
         }
