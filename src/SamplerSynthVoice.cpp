@@ -676,11 +676,11 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                     } else {
                         if (d->sourceSamplePosition >= d->playbackData.stopPosition)
                         {
-                            stopNote(d->targetGain, false, currentFrame);
                             // Before we stop, send out one last update for this command
                             if (d->clip && d->clip->playbackPositionsModel()) {
                                 d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
                             }
+                            stopNote(d->targetGain, false, currentFrame);
                         } else if (isTailingOff == false && d->sourceSamplePosition >= d->playbackData.forwardTailingOffPosition) {
                             stopNote(d->targetGain, true, currentFrame);
                         }
@@ -696,17 +696,21 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                     } else {
                         if (d->sourceSamplePosition <= d->playbackData.startPosition)
                         {
-                            stopNote(d->targetGain, false, currentFrame);
                             // Before we stop, send out one last update for this command
                             if (d->clip && d->clip->playbackPositionsModel()) {
                                 d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
                             }
+                            stopNote(d->targetGain, false, currentFrame);
                         } else if (isTailingOff == false && d->sourceSamplePosition <= d->playbackData.backwardTailingOffPosition) {
                             stopNote(d->targetGain, true, currentFrame);
                         }
                     }
                 }
             } else {
+                // Before we stop, send out one last update for this command
+                if (d->clip && d->clip->playbackPositionsModel()) {
+                    d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
+                }
                 stopNote(d->targetGain, false, currentFrame);
             }
         }
