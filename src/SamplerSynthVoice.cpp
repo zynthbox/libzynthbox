@@ -14,7 +14,7 @@ namespace tracktion_engine {
 #include <tracktion_engine/3rd_party/soundtouch/include/SoundTouch.h>
 };
 
-#define DataRingSize 128
+#define DataRingSize 256
 class DataRing {
 public:
     struct alignas(64) Entry {
@@ -121,7 +121,7 @@ public:
     double soundTouchSamplePositionL{0.0f}, soundTouchSamplePositionR{0.0f};
     float soundTouchIncrementL{1.0f}, soundTouchIncrementR{1.0f};
     double sourceSampleLength = 0;
-    float lgain = 0, rgain = 0;
+    float targetGain = 0, lgain = 0, rgain = 0;
     // Used to make sure the first sample on looped playback is interpolated to an empty previous sample, rather than the previous sample in the loop
     bool firstRoll{false};
 
@@ -205,6 +205,7 @@ void SamplerSynthVoice::setCurrentCommand(ClipCommand *clipCommand)
             d->clipCommand->changeVolume = true;
             d->lgain = d->clipCommand->volume;
             d->rgain = d->clipCommand->volume;
+            d->targetGain = d->clipCommand->volume;
         }
         if (clipCommand->changeSlice) {
             d->clipCommand->slice = clipCommand->slice;
@@ -282,8 +283,10 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         d->playbackData.snappedToBeat = (trunc(d->clip->getLengthBeats()) == d->clip->getLengthBeats());
         d->playbackData.isLooping = d->clipCommand->looping;
 
-        d->lgain = clipCommand->volume;
-        d->rgain = clipCommand->volume;
+        d->targetGain = clipCommand->volume;
+        d->lgain = 0;
+        d->rgain = 0;
+        d->clipCommand->volume = 0;
 
         d->adsr.reset();
         d->adsr.setSampleRate(d->playbackData.sourceSampleRate);
@@ -507,7 +510,25 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
         while (d->aftertouchRing.readHead->processed == false && d->aftertouchRing.readHead->time == frame) {
             const float aftertouch = d->aftertouchRing.read(&dataChannel, &dataNote);
             if (isTailingOff == false && (d->clipCommand && (dataChannel == -1 || (d->clipCommand && dataChannel == d->clipCommand->midiChannel)) && (dataNote == -1 || (d->clipCommand && dataNote == d->clipCommand->midiNote)))) {
-                d->lgain = d->rgain = d->clipCommand->volume = (aftertouch/127.0f);
+                // const float previousGain = d->lgain;
+                // d->lgain = d->rgain = d->clipCommand->volume = (aftertouch/127.0f);
+                d->targetGain = (aftertouch/127.0f);
+                // if (d->subvoiceSettings == nullptr) { qDebug() << d->clip << "On frame" << currentFrame << "gain changed by" << d->lgain - previousGain << "from" << previousGain << "to" << d->lgain; }
+            }
+        }
+        if (d->clipCommand) {
+            float targetGainDelta{abs(d->targetGain - d->lgain)};
+            if (targetGainDelta > 0.000001) {
+                static const float maxGainChangePerFrame{0.0001f};
+                float newGain{0.0f};
+                if (d->targetGain > d->lgain) {
+                    newGain = d->lgain + qMin(targetGainDelta, maxGainChangePerFrame);
+                } else {
+                    newGain = d->lgain - qMin(targetGainDelta, maxGainChangePerFrame);
+                }
+                d->lgain = d->rgain = d->clipCommand->volume = newGain;
+            } else {
+                d->lgain = d->rgain = d->clipCommand->volume = d->targetGain;
             }
         }
         // Don't actually perform playback operations unless we've got something to play
@@ -655,13 +676,13 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                     } else {
                         if (d->sourceSamplePosition >= d->playbackData.stopPosition)
                         {
-                            stopNote(d->clipCommand->volume, false, currentFrame);
+                            stopNote(d->targetGain, false, currentFrame);
                             // Before we stop, send out one last update for this command
                             if (d->clip && d->clip->playbackPositionsModel()) {
                                 d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
                             }
                         } else if (isTailingOff == false && d->sourceSamplePosition >= d->playbackData.forwardTailingOffPosition) {
-                            stopNote(d->clipCommand->volume, true, currentFrame);
+                            stopNote(d->targetGain, true, currentFrame);
                         }
                     }
                 } else {
@@ -675,18 +696,18 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                     } else {
                         if (d->sourceSamplePosition <= d->playbackData.startPosition)
                         {
-                            stopNote(d->clipCommand->volume, false, currentFrame);
+                            stopNote(d->targetGain, false, currentFrame);
                             // Before we stop, send out one last update for this command
                             if (d->clip && d->clip->playbackPositionsModel()) {
                                 d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
                             }
                         } else if (isTailingOff == false && d->sourceSamplePosition <= d->playbackData.backwardTailingOffPosition) {
-                            stopNote(d->clipCommand->volume, true, currentFrame);
+                            stopNote(d->targetGain, true, currentFrame);
                         }
                     }
                 }
             } else {
-                stopNote(d->clipCommand->volume, false, currentFrame);
+                stopNote(d->targetGain, false, currentFrame);
             }
         }
     }
