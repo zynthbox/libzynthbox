@@ -557,7 +557,7 @@ int ClipAudioSource::getStopPositionSamples(int slice) const
   if (slice > -1 && slice + 1 < d->slicePositionsCache.length()) {
     return d->startPositionInSamples + (d->lengthInSamples * d->slicePositionsCache[slice + 1]);
   } else {
-    return d->startPositionInSamples * d->lengthInSamples;
+    return d->startPositionInSamples + d->lengthInSamples;
   }
 }
 
@@ -766,7 +766,8 @@ bool ClipAudioSource::snapLengthToBeat() const
 
 void ClipAudioSource::setLengthBeats(float beat) {
   // IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Interval:" << d->syncTimer->getInterval(bpm);
-  float lengthInSeconds = d->syncTimer->subbeatCountToSeconds(quint64(d->bpm), quint64((beat * d->syncTimer->getMultiplier())));
+  float lengthInSeconds = d->syncTimer->subbeatCountToSeconds(quint64(d->bpm == 0 ? d->syncTimer->getBpm() : d->bpm), quint64((beat * d->syncTimer->getMultiplier())));
+  // qDebug() << Q_FUNC_INFO << beat << d->bpm << d->syncTimer->getBpm() << lengthInSeconds << d->sampleRate << lengthInSeconds * d->sampleRate;
   if (lengthInSeconds != d->lengthInSeconds) {
     // IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Length to" << lengthInSeconds;
     d->lengthInSeconds = lengthInSeconds;
@@ -781,7 +782,7 @@ void ClipAudioSource::setLengthSamples(int lengthInSamples)
   if (d->lengthInSamples != lengthInSamples) {
     d->lengthInSamples = lengthInSamples;
     d->lengthInSeconds = double(lengthInSamples) / d->sampleRate;
-    d->lengthInBeats = double(d->syncTimer->secondsToSubbeatCount(d->bpm, d->lengthInSeconds)) / double(d->syncTimer->getMultiplier());
+    d->lengthInBeats = double(d->syncTimer->secondsToSubbeatCount(d->bpm == 0 ? d->syncTimer->getBpm() : d->bpm, d->lengthInSeconds)) / double(d->syncTimer->getMultiplier());
     Q_EMIT lengthChanged();
   }
 }
