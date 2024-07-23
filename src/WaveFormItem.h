@@ -78,7 +78,7 @@ private:
     tracktion_engine::TracktionThumbnail *m_externalThumbnail{nullptr};
     AudioLevelsChannel *m_externalThumbnailChannel{nullptr};
     qreal m_start = 0;
-    qreal m_end = 0;
+    qreal m_end = -1;
 };
 Q_DECLARE_METATYPE(WaveFormItem*)
 

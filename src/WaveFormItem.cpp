@@ -175,17 +175,6 @@ void WaveFormItem::changeListenerCallback(juce::ChangeBroadcaster *source)
 
 void WaveFormItem::thumbnailChanged()
 {
-    if (m_externalThumbnail) {
-        m_start = qMin(m_start, m_externalThumbnail->getTotalLength());
-        m_end = qMin(m_end, m_externalThumbnail->getTotalLength());
-    } else {
-        m_start = qMin(m_start, m_thumbnail.getTotalLength());
-        m_end = qMin(m_end, m_thumbnail.getTotalLength());
-    }
-
-    Q_EMIT startChanged();
-    Q_EMIT endChanged();
-    Q_EMIT sourceChanged();
     Q_EMIT lengthChanged();
     update();
 }
@@ -195,27 +184,29 @@ void WaveFormItem::paint(QPainter *painter)
     m_painterContext.setPainter(painter);
     juce::Rectangle<int> thumbnailBounds (0, 0, width(), height());
     if (m_externalThumbnail) {
+        const double actualEnd{qMin(m_end == -1 ? m_externalThumbnail->getTotalLength() : m_end, m_externalThumbnail->getTotalLength())};
         const int numChannels{m_externalThumbnail->getNumChannels()};
         if (numChannels == 1) {
-            m_externalThumbnail->drawChannel(m_juceGraphics, thumbnailBounds, true, {m_start, qMin(m_end, m_externalThumbnail->getTotalLength())}, 0, 1.0f);
+            m_externalThumbnail->drawChannel(m_juceGraphics, thumbnailBounds, true, {qMin(m_start, actualEnd), actualEnd}, 0, 1.0f);
         } else {
             const double spacing{height() / (numChannels + 1)};
             for (int channel = 0; channel < numChannels; ++channel) {
                 thumbnailBounds.setTop(channel * spacing);
                 thumbnailBounds.setHeight(height() - spacing);
-                m_externalThumbnail->drawChannel(m_juceGraphics, thumbnailBounds, true, {m_start, qMin(m_end, m_externalThumbnail->getTotalLength())}, channel, 1.0f);
+                m_externalThumbnail->drawChannel(m_juceGraphics, thumbnailBounds, true, {qMin(m_start, actualEnd), actualEnd}, channel, 1.0f);
             }
         }
     } else {
+        const double actualEnd{qMin(m_end == -1 ? m_thumbnail.getTotalLength() : m_end, m_thumbnail.getTotalLength())};
         const int numChannels{m_thumbnail.getNumChannels()};
         if (numChannels == 1) {
-            m_thumbnail.drawChannel(m_juceGraphics, thumbnailBounds, true, {m_start, qMin(m_end, m_thumbnail.getTotalLength())}, 0, 1.0f);
+            m_thumbnail.drawChannel(m_juceGraphics, thumbnailBounds, true, {qMin(m_start, actualEnd), actualEnd}, 0, 1.0f);
         } else {
             const double spacing{height() / (numChannels + 1)};
             for (int channel = 0; channel < numChannels; ++channel) {
                 thumbnailBounds.setTop(channel * spacing);
                 thumbnailBounds.setHeight(height() - spacing);
-                m_thumbnail.drawChannel(m_juceGraphics, thumbnailBounds, true, {m_start, qMin(m_end, m_thumbnail.getTotalLength())}, channel, 1.0f);
+                m_thumbnail.drawChannel(m_juceGraphics, thumbnailBounds, true, {qMin(m_start, actualEnd), actualEnd}, channel, 1.0f);
             }
         }
         if (!m_thumbnail.isFullyLoaded()) {
