@@ -96,7 +96,6 @@ public:
 
   te::Engine *engine{nullptr};
   std::unique_ptr<te::Edit> edit;
-  bool isRendering{false};
   SyncTimer *syncTimer;
   juce::File givenFile;
   juce::String chosenPath;
@@ -246,9 +245,6 @@ public:
     } else {
       q->setSpeedRatio(1.0);
     }
-    // Reset the length in beats to match
-    // lengthInBeats = double(d->syncTimer->secondsToSubbeatCount(bpm, lengthInSeconds)) / double(syncTimer->getMultiplier());
-    // Q_EMIT q->lengthChanged();
   }
 private:
   void timerCallback() override;
@@ -617,15 +613,6 @@ void ClipAudioSource::setPitch(float pitchChange, bool /*immediate*/) {
   d->pitchChange = pitchChange;
   d->pitchChangePrecalc = std::pow(2.0, d->pitchChange / 12.0) /* * sampleRate() / sampleRate() */; // should this perhaps be a sound sample rate over playback sample rate thing?
   Q_EMIT pitchChanged();
-  // TODO Offline pitch shifting seems... to just outright be not working? Not sure i understand, i'm sure it worked at some point, but it looks to be entirely ignored when the rendering happens...
-  // d->isRendering = true;
-  // if (immediate) {
-    // if (auto clip = d->clip) {
-      // clip->setPitchChange(d->pitchChange);
-    // }
-  // } else {
-    // updateTempoAndPitch();
-  // }
 }
 
 float ClipAudioSource::pitch() const
@@ -651,18 +638,10 @@ bool ClipAudioSource::autoSynchroniseSpeedRatio() const
   return d->autoSynchroniseSpeedRatio;
 }
 
-void ClipAudioSource::setSpeedRatio(float speedRatio, bool immediate) {
+void ClipAudioSource::setSpeedRatio(float speedRatio, bool /*immediate*/) {
   IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Speed to" << speedRatio;
   d->speedRatio = speedRatio;
   Q_EMIT speedRatioChanged();
-  d->isRendering = true;
-  if (immediate) {
-    if (auto clip = d->clip) {
-      clip->setSpeedRatio(d->speedRatio);
-    }
-  } else {
-    updateTempoAndPitch();
-  }
 }
 
 float ClipAudioSource::speedRatio() const
@@ -834,27 +813,10 @@ tracktion_engine::AudioFile ClipAudioSource::getPlaybackFile() const {
     return te::AudioFile(*d->engine);
 }
 
-void ClipAudioSource::updateTempoAndPitch() {
-  if (auto clip = d->clip) {
-    IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Updating speedRatio(" << d->speedRatio << ") and pitch(" << d->pitchChange << ")";
-    // clip->setPitchChange(d->pitchChange);
-    clip->setSpeedRatio(d->speedRatio);
-  }
-}
-
 void ClipAudioSource::Private::timerCallback() {
   // Calling this from a timer will lead to a bad time, make sure it happens somewhere more reasonable (like on the object's own thread, which in this case is the qml engine thread)
   QMetaObject::invokeMethod(positionsModel, &ClipAudioSourcePositionsModel::updatePositions, Qt::QueuedConnection);
   syncAudioLevel();
-
-  if (clip) {
-    if (!clip->needsRender() && isRendering) {
-        isRendering = false;
-        Q_EMIT q->playbackFileChanged();
-        adsr.setSampleRate(clip->getAudioFile().getSampleRate());
-        adsr.setParameters(adsr.getParameters());
-    }
-  }
 }
 
 void ClipAudioSource::play(bool forceLooping, int midiChannel) {

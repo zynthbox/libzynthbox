@@ -557,7 +557,6 @@ public:
 
   const char *getFileName() const;
   const char *getFilePath() const;
-  void updateTempoAndPitch();
 
   double sampleRate() const;
 
