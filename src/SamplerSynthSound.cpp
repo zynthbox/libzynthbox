@@ -79,7 +79,6 @@ SamplerSynthSound::SamplerSynthSound(ClipAudioSource *clip)
     rightBuffer = new float[d->audioBufferLength]();
     d->clip = clip;
     d->loadSoundData();
-    QObject::connect(clip, &ClipAudioSource::speedRatioChanged, &d->soundLoader, [this](){ isValid = false; if (d->data) { d->length = 0; d->data.release(); } }, Qt::QueuedConnection);
     QObject::connect(clip, &ClipAudioSource::playbackFileChanged, &d->soundLoader, [this](){ isValid = false; d->soundLoader.start(1); }, Qt::QueuedConnection);
 }
 
