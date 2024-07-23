@@ -86,6 +86,8 @@ public:
     int stopPosition{0};
     double forwardTailingOffPosition{0};
     double backwardTailingOffPosition{0};
+    double tempo{1.0};
+    double pitch{1.0};
 };
 
 class SamplerSynthVoicePrivate {
@@ -323,8 +325,8 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         d->playbackData.forwardTailingOffPosition = (d->playbackData.stopPosition - (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
         d->playbackData.backwardTailingOffPosition = (d->playbackData.startPosition + (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
 
-        d->pitchRatio = std::pow(2.0, (clipCommand->midiNote - sound->rootMidiNote()) / 12.0) * sound->sampleRateRatio();
-        d->sourceSampleLength = d->clip->getDuration() * d->playbackData.sourceSampleRate / d->clip->speedRatio();
+        d->pitchRatio = std::pow(2.0, (clipCommand->midiNote - sound->rootMidiNote()) / 12.0);
+        d->sourceSampleLength = d->clip->getDurationSamples();
         if (d->clipCommand->changePitch && d->clipCommand->pitchChange < 0) {
             d->sourceSamplePosition = d->playbackData.stopPosition;
         } else {
@@ -504,7 +506,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
         while (d->pitchRing.readHead->processed == false && d->pitchRing.readHead->time == frame) {
             const float pitch = d->pitchRing.read(&dataChannel, &dataNote);
             if (isTailingOff == false && (d->clipCommand && (dataChannel == -1 || (d->clipCommand && dataChannel == d->clipCommand->midiChannel)))) {
-                d->pitchRatio = std::pow(2.0, (std::clamp(pitch + double(d->clipCommand->midiNote), 0.0, 127.0) - double(d->sound->rootMidiNote())) / 12.0) * d->sound->sampleRateRatio();
+                d->pitchRatio = std::pow(2.0, (std::clamp(pitch + double(d->clipCommand->midiNote), 0.0, 127.0) - double(d->sound->rootMidiNote())) / 12.0);
             }
         }
         while (d->aftertouchRing.readHead->processed == false && d->aftertouchRing.readHead->time == frame) {
@@ -533,7 +535,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
         }
         // Don't actually perform playback operations unless we've got something to play
         if (d->clip) {
-            const float clipPitchChange = (d->clipCommand->changePitch ? d->clipCommand->pitchChange * d->clip->pitchChangePrecalc() : d->clip->pitchChangePrecalc()) * (d->subvoiceSettings ? d->subvoiceSettings->pitchChangePrecalc() : 1.0f) * d->sound->sampleRateRatio();
+            const float clipPitchChange = (d->clipCommand->changePitch ? d->clipCommand->pitchChange * d->clip->pitchChangePrecalc() : d->clip->pitchChangePrecalc()) * (d->subvoiceSettings ? d->subvoiceSettings->pitchChangePrecalc() : 1.0f);
             const float clipVolume = d->clip->volumeAbsolute() * d->clip->getGain() * (d->subvoiceSettings ? d->subvoiceSettings->gain() : 1.0f);
             const float lPan = 2 * (1.0 + qMax(-1.0f, (d->playbackData.pan))); // Used for m/s panning, to ensure the signal is proper, we need to multiply it by 2 eventually, so might as well pre-do that calculation here
             const float rPan = 2 * (1.0 - qMax(-1.0f, (d->playbackData.pan))); // Used for m/s panning, to ensure the signal is proper, we need to multiply it by 2 eventually, so might as well pre-do that calculation here
@@ -544,15 +546,32 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
             const int sampleIndex{int(d->sourceSamplePosition)};
             float modIntegral{0};
             const float fraction = std::modf(d->sourceSamplePosition, &modIntegral);
-            const double pitchRatio{d->pitchRatio * clipPitchChange};
+            const double pitchRatio{d->pitchRatio * clipPitchChange * d->clip->speedRatio() * d->sound->sampleRateRatio()};
             if ((fraction < 0.0001f && pitchRatio == 1.0f) || d->clip->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
-                // If we're just doing un-pitch-shifted playback, don't bother interpolating,
-                // just grab the sample as given and adjust according to the requests, might
-                // as well save a bit of processing (it's a very common case, and used for
-                // e.g. the metronome ticks, and we do want that stuff to be as low impact
-                // as we can reasonably make it).
-                if (d->clip->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
-                    d->soundTouch.setPitch(pitchRatio);
+                if (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchOff) {
+                    // If we're just doing un-pitch-shifted playback, don't bother interpolating,
+                    // just grab the sample as given and adjust according to the requests, might
+                    // as well save a bit of processing (it's a very common case, and used for
+                    // e.g. the metronome ticks, and we do want that stuff to be as low impact
+                    // as we can reasonably make it).
+                    l = sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inL[sampleIndex] * d->lgain * envelopeValue * clipVolume : 0;
+                    r = d->playbackData.inR != nullptr && sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inR[sampleIndex] * d->rgain * envelopeValue * clipVolume : l;
+                } else {
+                    // If we're doing timestretched playback, then always pass things through
+                    // our SoundTouch instance, and adjust its pitch and rate accordingly
+                    const double newTempo{d->clip->speedRatio() * d->sound->sampleRateRatio()};
+                    if (d->playbackData.tempo != newTempo) {
+                        // When tempo changes, reset to "actual playback position" and re-prime soundtouch
+                        d->playbackData.tempo = newTempo;
+                        d->soundTouch.clear();
+                        d->soundTouch.setTempo(newTempo);
+                        d->soundTouchSamplePositionL = d->soundTouchSamplePositionR = d->sourceSamplePosition;
+                    }
+                    const double newPitchRatio{d->pitchRatio * clipPitchChange};
+                    if (d->playbackData.pitch != newPitchRatio) {
+                        d->playbackData.pitch = newPitchRatio;
+                        d->soundTouch.setPitch(newPitchRatio);
+                    }
                     bool firstGo{true}; // For some reason, soundTouch will insist that is is never empty if you're pitching up? Don't understand, but... just feed it some noises, i guess, this works
                     while (firstGo || d->soundTouch.isEmpty()) {
                         d->timeStretchingInput[0] = nextSample(d->playbackData.inL, &d->soundTouchSamplePositionL, &d->soundTouchIncrementL, d->playbackData.startPosition, d->playbackData.stopPosition, d->playbackData.loopPosition, ClipAudioSource::ForwardLoop);
@@ -563,9 +582,6 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                     d->soundTouch.receiveSamples(d->timeStretchingOutput, 1);
                     l = d->timeStretchingOutput[0] * d->lgain * envelopeValue * clipVolume;
                     r = d->timeStretchingOutput[1] * d->rgain * envelopeValue * clipVolume;
-                } else {
-                    l = sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inL[sampleIndex] * d->lgain * envelopeValue * clipVolume : 0;
-                    r = d->playbackData.inR != nullptr && sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inR[sampleIndex] * d->rgain * envelopeValue * clipVolume : l;
                 }
             } else {
                 // Use Hermite interpolation to ensure out sound data is reasonably on the expected
@@ -660,11 +676,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
             *(d->sound->leftBuffer + int(frame)) += l;
             *(d->sound->rightBuffer + int(frame)) += r;
 
-            if (d->clip->timeStretchStyle()) {
-                d->sourceSamplePosition += 1.0f;
-            } else {
-                d->sourceSamplePosition += pitchRatio;
-            }
+            d->sourceSamplePosition += pitchRatio;
 
             if (d->adsr.isActive()) {
                 if (pitchRatio > 0) {
