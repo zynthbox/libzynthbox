@@ -512,10 +512,11 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
         while (d->aftertouchRing.readHead->processed == false && d->aftertouchRing.readHead->time == frame) {
             const float aftertouch = d->aftertouchRing.read(&dataChannel, &dataNote);
             if (isTailingOff == false && (d->clipCommand && (dataChannel == -1 || (d->clipCommand && dataChannel == d->clipCommand->midiChannel)) && (dataNote == -1 || (d->clipCommand && dataNote == d->clipCommand->midiNote)))) {
-                // const float previousGain = d->lgain;
-                // d->lgain = d->rgain = d->clipCommand->volume = (aftertouch/127.0f);
-                d->targetGain = (aftertouch/127.0f);
-                // if (d->subvoiceSettings == nullptr) { qDebug() << d->clip << "On frame" << currentFrame << "gain changed by" << d->lgain - previousGain << "from" << previousGain << "to" << d->lgain; }
+                // const float previousGain = d->targetGain;
+                static constexpr float minGainDB{-24.f};
+                static constexpr float maxGainDB{0.0f};
+                d->targetGain = juce::Decibels::decibelsToGain(juce::jmap((aftertouch/127.0f), 0.0f, 1.0f, minGainDB, maxGainDB), minGainDB);
+                // if (d->subvoiceSettings == nullptr) { qDebug() << d->clip << "On frame" << currentFrame << "target gain changed by" << d->targetGain - previousGain << "from" << previousGain << "to" << d->targetGain << "with current gain at" << d->lgain; }
             }
         }
         if (d->clipCommand) {
