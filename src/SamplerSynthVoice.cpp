@@ -231,7 +231,7 @@ void SamplerSynthVoice::setModwheel(int modwheelValue)
     d->initialCC[1] = modwheelValue;
 }
 
-static inline float nextSample(const float *source, double *currentPosition, float *increment, const float &firstSample, const float &lastSample, const float &loopPosition, const ClipAudioSource::LoopStyle &loopStyle) {
+static inline float nextSample(const float *source, const int &sourceLength, double *currentPosition, float *increment, const float &firstSample, const float &lastSample, const float &loopPosition, const ClipAudioSource::LoopStyle &loopStyle) {
     *currentPosition += *increment;
     if (*increment > 0) {
         // Currently moving forward
@@ -271,7 +271,7 @@ static inline float nextSample(const float *source, double *currentPosition, flo
             }
         }
     }
-    return source[int(*currentPosition)];
+    return (source != nullptr && int(*currentPosition) < sourceLength) ? source[int(*currentPosition)] : 0;
 }
 
 void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t timestamp)
@@ -575,8 +575,8 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                     }
                     bool firstGo{true}; // For some reason, soundTouch will insist that is is never empty if you're pitching up? Don't understand, but... just feed it some noises, i guess, this works
                     while (firstGo || d->soundTouch.isEmpty()) {
-                        d->timeStretchingInput[0] = nextSample(d->playbackData.inL, &d->soundTouchSamplePositionL, &d->soundTouchIncrementL, d->playbackData.startPosition, d->playbackData.stopPosition, d->playbackData.loopPosition, ClipAudioSource::ForwardLoop);
-                        d->timeStretchingInput[1] = nextSample(d->playbackData.inR, &d->soundTouchSamplePositionR, &d->soundTouchIncrementR, d->playbackData.startPosition, d->playbackData.stopPosition, d->playbackData.loopPosition, ClipAudioSource::ForwardLoop);
+                        d->timeStretchingInput[0] = nextSample(d->playbackData.inL, d->sound->length(), &d->soundTouchSamplePositionL, &d->soundTouchIncrementL, d->playbackData.startPosition, d->playbackData.stopPosition, d->playbackData.loopPosition, ClipAudioSource::ForwardLoop);
+                        d->timeStretchingInput[1] = nextSample(d->playbackData.inR, d->sound->length(), &d->soundTouchSamplePositionR, &d->soundTouchIncrementR, d->playbackData.startPosition, d->playbackData.stopPosition, d->playbackData.loopPosition, ClipAudioSource::ForwardLoop);
                         d->soundTouch.putSamples(d->timeStretchingInput, 1);
                         firstGo = false;
                     }
