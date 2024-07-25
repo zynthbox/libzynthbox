@@ -14,7 +14,8 @@ public:
         Entry *next{nullptr};
         ClipCommand *clipCommand{nullptr};
         float progress{0.0f};
-        float gain{0.0f};
+        float gainLeft{0.0f};
+        float gainRight{0.0f};
         float pan{0.0f};
         jack_nframes_t timestamp{0};
         bool processed{true};
@@ -30,7 +31,7 @@ public:
         readHead = writeHead = ringData;
     }
     ~DataRing() {}
-    void write(jack_nframes_t timestamp, ClipCommand *clipCommand, float progress, float gain, float pan) {
+    void write(const jack_nframes_t &timestamp, ClipCommand *clipCommand, const float &progress, const float &gainLeft, const float &gainRight, const float &pan) {
         Entry *entry = writeHead;
         writeHead = writeHead->next;
         if (entry->processed == false) {
@@ -38,7 +39,8 @@ public:
         }
         entry->clipCommand = clipCommand;
         entry->progress = progress;
-        entry->gain = gain;
+        entry->gainLeft = gainLeft;
+        entry->gainRight = gainRight;
         entry->pan = pan;
         entry->timestamp = timestamp;
         entry->processed = false;
@@ -47,13 +49,14 @@ public:
      * \brief Attempt to read the data out of the ring, until there are no more unprocessed entries
      * @return Whether or not the read was valid
      */
-    bool read(jack_nframes_t *timestamp, ClipCommand **clipCommand, float *progress, float *gain, float *pan) {
+    bool read(jack_nframes_t *timestamp, ClipCommand **clipCommand, float *progress, float *gainLeft, float *gainRight, float *pan) {
         if (readHead->processed == false) {
             Entry *entry = readHead;
             readHead = readHead->next;
             *clipCommand = entry->clipCommand;
             *progress = entry->progress;
-            *gain = entry->gain;
+            *gainLeft = entry->gainLeft;
+            *gainRight = entry->gainRight;
             *pan = entry->pan;
             *timestamp = entry->timestamp;
             entry->processed = true;
@@ -96,6 +99,8 @@ public:
     QVariantList objectedEntries;
     bool updatePeakGain{false};
     float peakGain{0.0f};
+    float peakGainLeft{0.0f};
+    float peakGainRight{0.0f};
     jack_nframes_t mostRecentPositionUpdate{0};
     // ui update period, or double the frame size, which ever is larger
     jack_nframes_t updateGracePeriod{2048};
@@ -116,6 +121,8 @@ QHash<int, QByteArray> ClipAudioSourcePositionsModel::roleNames() const
         {PositionIDRole, "positionID"},
         {PositionProgressRole, "positionProgress"},
         {PositionGainRole, "positionGain"},
+        {PositionGainLeftRole, "positionGainLeft"},
+        {PositionGainRightRole, "positionGainRight"},
         {PositionPanRole, "positionPan"},
     };
     return roleNames;
@@ -144,6 +151,12 @@ QVariant ClipAudioSourcePositionsModel::data(const QModelIndex &index, int role)
             case PositionGainRole:
                 result.setValue<float>(position->m_clipCommand ? position->gain() : 0);
                 break;
+            case PositionGainLeftRole:
+                result.setValue<float>(position->m_clipCommand ? position->gainLeft() : 0);
+                break;
+            case PositionGainRightRole:
+                result.setValue<float>(position->m_clipCommand ? position->gainRight() : 0);
+                break;
             case PositionPanRole:
                 result.setValue<float>(position->m_clipCommand ? position->pan() : 0);
                 break;
@@ -159,9 +172,9 @@ QVariantList ClipAudioSourcePositionsModel::positions() const
     return d->objectedEntries;
 }
 
-void ClipAudioSourcePositionsModel::setPositionData(jack_nframes_t timestamp, ClipCommand *clipCommand, float gain, float progress, float pan)
+void ClipAudioSourcePositionsModel::setPositionData(const jack_nframes_t &timestamp, ClipCommand *clipCommand, const float &gainLeft, const float &gainRight, const float &progress, const float &pan)
 {
-    d->positionUpdates.write(timestamp, clipCommand, progress, gain, pan);
+    d->positionUpdates.write(timestamp, clipCommand, progress, gainLeft, gainRight, pan);
     d->mostRecentPositionUpdate = timestamp; // we can safely do this without checking, as this timestamp will always grow
     d->updatePeakGain = true;
 }
@@ -177,17 +190,35 @@ float ClipAudioSourcePositionsModel::peakGain()
         // First update the positions given new data
         updatePositions();
         // Then update the peak gain
-        float peak{0.0f};
+        float peakLeft{0.0f}, peakRight{0.0f};
         for (int positionIndex = 0; positionIndex < ZynthboxClipMaximumPositionCount; ++positionIndex) {
-            peak = qMax(peak, d->entries[positionIndex]->gain());
+            peakLeft = qMax(peakLeft, d->entries[positionIndex]->gainLeft());
+            peakRight = qMax(peakRight, d->entries[positionIndex]->gainRight());
         }
-        if (abs(d->peakGain - peak) > 0.01) {
-            d->peakGain = peak;
+        const float peakBoth{qMax(peakLeft, peakRight)};
+        if (abs(d->peakGain - peakBoth) > 0.001) {
+            d->peakGain = peakBoth;
+        }
+        if (abs(d->peakGainLeft - peakLeft) > 0.001) {
+            d->peakGainLeft = peakLeft;
+        }
+        if (abs(d->peakGainRight - peakRight) > 0.001) {
+            d->peakGainRight = peakRight;
         }
         d->updatePeakGain = false;
         QMetaObject::invokeMethod(this, "peakGainChanged", Qt::QueuedConnection);
     }
     return d->peakGain;
+}
+
+float ClipAudioSourcePositionsModel::peakGainLeft() const
+{
+    return d->peakGainLeft;
+}
+
+float ClipAudioSourcePositionsModel::peakGainRight() const
+{
+    return d->peakGainRight;
 }
 
 double ClipAudioSourcePositionsModel::firstProgress() const
@@ -219,14 +250,14 @@ void ClipAudioSourcePositionsModel::updatePositions()
     int positionIndex{0};
     jack_nframes_t timestamp;
     ClipCommand *clipCommand;
-    float progress, gain, pan;
-    while (d->positionUpdates.read(&timestamp, &clipCommand, &progress, &gain, &pan)) {
+    float progress, gainLeft, gainRight, pan;
+    while (d->positionUpdates.read(&timestamp, &clipCommand, &progress, &gainLeft, &gainRight, &pan)) {
         for (positionIndex = 0; positionIndex < ZynthboxClipMaximumPositionCount; ++positionIndex) {
             ClipAudioSourcePositionsModelEntry *position = d->entries[positionIndex];
             // If this is the same clip command, or it's an empty position (which will not happen unless we haven't added updates for this command yet), add the data to this position
             if (position->m_clipCommand == clipCommand || position->m_clipCommand == nullptr) {
                 position->m_clipCommand = clipCommand;
-                position->updateData(reinterpret_cast<qint64>(clipCommand), progress, gain, pan);
+                position->updateData(reinterpret_cast<qint64>(clipCommand), progress, gainLeft, gainRight, pan);
                 position->m_keepUntil = timestamp + d->updateGracePeriod;
                 anyPositionUpdates = true;
                 break;

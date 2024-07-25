@@ -15,6 +15,8 @@ class ClipAudioSourcePositionsModel : public QAbstractListModel
      * \brief The highest gain among all positions in the model
      */
     Q_PROPERTY(float peakGain READ peakGain NOTIFY peakGainChanged)
+    Q_PROPERTY(float peakGainLeft READ peakGainLeft NOTIFY peakGainChanged)
+    Q_PROPERTY(float peakGainRight READ peakGainRight NOTIFY peakGainChanged)
     /**
      * \brief All of the position objects held by the model (it will contain ZynthboxClipMaximumPositionCount entries)
      */
@@ -27,6 +29,8 @@ public:
         PositionIDRole = Qt::UserRole + 1,
         PositionProgressRole,
         PositionGainRole,
+        PositionGainLeftRole,
+        PositionGainRightRole,
         PositionPanRole,
     };
     QHash<int, QByteArray> roleNames() const override;
@@ -35,10 +39,12 @@ public:
 
     QVariantList positions() const;
 
-    Q_INVOKABLE void setPositionData(jack_nframes_t timestamp, ClipCommand *clipCommand, float gain, float progress, float pan);
+    Q_INVOKABLE void setPositionData(const jack_nframes_t &timestamp, ClipCommand *clipCommand, const float &gainLeft, const float &gainRight, const float &progress, const float &pan);
     void setMostRecentPositionUpdate(jack_nframes_t timestamp);
 
     float peakGain();
+    float peakGainLeft() const;
+    float peakGainRight() const;
     Q_SIGNAL void peakGainChanged();
 
     /**

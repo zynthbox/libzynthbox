@@ -424,7 +424,7 @@ inline float interpolateHermite4pt3oX(float x0, float x1, float x2, float x3, fl
 static const double highpassSign{-1.f};
 void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jack_default_audio_sample_t */*rightBuffer*/, jack_nframes_t nframes, jack_nframes_t current_frames, jack_time_t /*current_usecs*/, jack_time_t /*next_usecs*/, float /*period_usecs*/)
 {
-    float peakGain{0.0f};
+    float peakGainLeft{0.0f}, peakGainRight{0.0f};
     int dataChannel{0}, dataNote{0};
 
     // First, a quick sanity check, just to be on the safe side:
@@ -666,9 +666,11 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                 r = 0.5f * (r + allpassFilteredSampleR);
             }
 
-            const float newGain{l + r};
-            if (newGain > peakGain) {
-                peakGain = newGain;
+            if (l > peakGainLeft) {
+                peakGainLeft = l;
+            }
+            if (r > peakGainRight) {
+                peakGainRight = r;
             }
 
             // Add the playback data into the current sound's playback buffer at the current frame position
@@ -691,7 +693,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                         {
                             // Before we stop, send out one last update for this command
                             if (d->clip && d->clip->playbackPositionsModel()) {
-                                d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
+                                d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGainLeft, peakGainRight, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
                             }
                             stopNote(d->targetGain, false, currentFrame);
                         } else if (isTailingOff == false && d->sourceSamplePosition >= d->playbackData.forwardTailingOffPosition) {
@@ -711,7 +713,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                         {
                             // Before we stop, send out one last update for this command
                             if (d->clip && d->clip->playbackPositionsModel()) {
-                                d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
+                                d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGainLeft, peakGainRight, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
                             }
                             stopNote(d->targetGain, false, currentFrame);
                         } else if (isTailingOff == false && d->sourceSamplePosition <= d->playbackData.backwardTailingOffPosition) {
@@ -722,7 +724,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
             } else {
                 // Before we stop, send out one last update for this command
                 if (d->clip && d->clip->playbackPositionsModel()) {
-                    d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
+                    d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGainLeft, peakGainRight, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
                 }
                 stopNote(d->targetGain, false, currentFrame);
             }
@@ -734,6 +736,6 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
     // - Read ring in UI thread, update all data entries, and... we probably need a lot more potential positions (like maybe 32 voices times about ten? Call it 256 for no particular reason?)
     // Because it might have gone away after being stopped above, so let's try and not crash
     if (d->clip && d->clip->playbackPositionsModel()) {
-        d->clip->playbackPositionsModel()->setPositionData(current_frames + nframes, d->clipCommand, peakGain * 0.5f, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
+        d->clip->playbackPositionsModel()->setPositionData(current_frames + nframes, d->clipCommand, peakGainLeft, peakGainRight, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
     }
 }
