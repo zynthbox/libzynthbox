@@ -88,6 +88,7 @@ public:
     double backwardTailingOffPosition{0};
     double tempo{1.0};
     double pitch{1.0};
+    bool firstGo{true};
 };
 
 class SamplerSynthVoicePrivate {
@@ -333,6 +334,9 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
             d->sourceSamplePosition = d->playbackData.startPosition;
         }
 
+        d->playbackData.pitch = 1.0;
+        d->playbackData.tempo = 1.0;
+        d->playbackData.firstGo = true;
         if (d->clip->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
             d->soundTouch.setChannels(2);
             d->soundTouch.setSampleRate(d->playbackData.sourceSampleRate);
@@ -561,7 +565,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                     // If we're doing timestretched playback, then always pass things through
                     // our SoundTouch instance, and adjust its pitch and rate accordingly
                     const double newTempo{d->clip->speedRatio() * d->sound->sampleRateRatio()};
-                    if (d->playbackData.tempo != newTempo) {
+                    if (abs(d->playbackData.tempo - newTempo) > 0.0001) {
                         // When tempo changes, reset to "actual playback position" and re-prime soundtouch
                         d->playbackData.tempo = newTempo;
                         d->soundTouch.clear();
@@ -573,12 +577,11 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                         d->playbackData.pitch = newPitchRatio;
                         d->soundTouch.setPitch(newPitchRatio);
                     }
-                    bool firstGo{true}; // For some reason, soundTouch will insist that is is never empty if you're pitching up? Don't understand, but... just feed it some noises, i guess, this works
-                    while (firstGo || d->soundTouch.isEmpty()) {
+                    while (d->playbackData.firstGo || d->soundTouch.isEmpty()) {
                         d->timeStretchingInput[0] = nextSample(d->playbackData.inL, d->sound->length(), &d->soundTouchSamplePositionL, &d->soundTouchIncrementL, d->playbackData.startPosition, d->playbackData.stopPosition, d->playbackData.loopPosition, ClipAudioSource::ForwardLoop);
                         d->timeStretchingInput[1] = nextSample(d->playbackData.inR, d->sound->length(), &d->soundTouchSamplePositionR, &d->soundTouchIncrementR, d->playbackData.startPosition, d->playbackData.stopPosition, d->playbackData.loopPosition, ClipAudioSource::ForwardLoop);
                         d->soundTouch.putSamples(d->timeStretchingInput, 1);
-                        firstGo = false;
+                        d->playbackData.firstGo = false;
                     }
                     d->soundTouch.receiveSamples(d->timeStretchingOutput, 1);
                     l = d->timeStretchingOutput[0] * d->lgain * envelopeValue * clipVolume;
