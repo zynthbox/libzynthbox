@@ -99,7 +99,7 @@ juce::AudioBuffer<float> *SamplerSynthSound::audioData() const noexcept
     return d->data.get();
 }
 
-int SamplerSynthSound::length() const
+const int & SamplerSynthSound::length() const
 {
     return d->length;
 }

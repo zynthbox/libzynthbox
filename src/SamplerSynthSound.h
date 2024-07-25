@@ -9,7 +9,7 @@ public:
     ~SamplerSynthSound();
     ClipAudioSource *clip() const;
     juce::AudioBuffer<float>* audioData() const noexcept;
-    int length() const;
+    const int &length() const;
     int startPosition(int slice = 0) const;
     int stopPosition(int slice = 0) const;
     int rootMidiNote() const;
