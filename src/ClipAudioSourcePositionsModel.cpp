@@ -6,7 +6,7 @@
 #include <QDateTime>
 #include <QDebug>
 
-#define DataRingSize 4096
+#define DataRingSize 16384
 class DataRing {
 public:
     struct alignas(64) Entry {
