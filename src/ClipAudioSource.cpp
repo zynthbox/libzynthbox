@@ -92,12 +92,11 @@ public:
   }
   ClipAudioSource *q;
   const te::Engine &getEngine() const { return *engine; };
-  te::WaveAudioClip::Ptr clip{nullptr};
 
   te::Engine *engine{nullptr};
-  std::unique_ptr<te::Edit> edit;
   SyncTimer *syncTimer;
   juce::File givenFile;
+  tracktion_engine::AudioFile *audioFile{nullptr};
   juce::String chosenPath;
   juce::String fileName;
   QString filePath;
@@ -114,7 +113,6 @@ public:
   float loopDelta2{0.0f};
   int loopDelta2Samples{0};
   float gain{1.0f};
-  float volumeAbsolute{-1.0f}; // This is a cached value
   TimeStretchStyle timeStretchLive{ClipAudioSource::TimeStretchOff};
   float pitchChange = 0;
   float pitchChangePrecalc = 1.0f;
@@ -266,30 +264,21 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
   IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Opening file:" << filepath;
 
   d->givenFile = juce::File(filepath);
+  d->audioFile = new tracktion_engine::AudioFile(*d->engine, d->givenFile);
 
   const File editFile = File::createTempFile("editFile");
 
-  d->edit = te::createEmptyEdit(*d->engine, editFile);
-  d->clip = Helper::loadAudioFileAsClip(*d->edit, d->givenFile);
-
   d->fileName = d->givenFile.getFileName();
   d->filePath = QString::fromUtf8(filepath);
-  d->lengthInSeconds = d->edit->getLength();
-
-  if (d->clip) {
-    d->clip->setAutoTempo(false);
-    d->clip->setAutoPitch(false);
-    d->clip->setTimeStretchMode(te::TimeStretcher::defaultMode);
-    d->sampleRate = d->clip->getAudioFile().getSampleRate();
-    d->adsr.setSampleRate(d->sampleRate);
-    d->lengthInSamples = d->clip->getAudioFile().getLengthInSamples();
-  }
+  d->sampleRate = d->audioFile->getSampleRate();
+  d->adsr.setSampleRate(d->sampleRate);
+  setLengthSamples(d->audioFile->getLengthInSamples());
   // Initially set the length in seconds to the full duration of the sample,
   // let the user set it to something else later on if they want to
 
   if (muted) {
     IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Clip marked to be muted";
-    setVolume(-100.0f);
+    setGainAbsolute(0.0f);
   }
 
   d->positionsModel = new ClipAudioSourcePositionsModel(this);
@@ -326,7 +315,7 @@ ClipAudioSource::~ClipAudioSource() {
   Helper::callFunctionOnMessageThread(
     [&]() {
       d->stopTimer();
-      d->edit.reset();
+      delete d->audioFile;
     }, true);
 }
 
@@ -425,8 +414,8 @@ void ClipAudioSource::setPlaybackStyle(const PlaybackStyle& playbackStyle)
         setLooping(true);
         setGranular(false);
         setLoopDeltaSamples(0);
-        if (d->lengthInSamples > (d->clip->getAudioFile().getLengthInSamples() / 4)) {
-          setLengthSamples(d->clip->getAudioFile().getLengthInSamples() / 32);
+        if (d->lengthInSamples > (d->audioFile->getLengthInSamples() / 4)) {
+          setLengthSamples(d->audioFile->getLengthInSamples() / 32);
         }
         // TODO Maybe we should do something clever like make some reasonable assumptions here if length is unreasonably large for a wavetable and then lock the wavetable position to a multiple of that when switching? Or is that too destructive?
         break;
@@ -517,7 +506,7 @@ void ClipAudioSource::setStartPositionSamples(int startPositionInSamples)
     d->startPositionInSamples = jmax(0, startPositionInSamples);
     d->startPositionInSeconds = double(startPositionInSamples) / d->sampleRate;
     Q_EMIT startPositionChanged();
-    IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Start Position to" << d->startPositionInSeconds << "seconds, meaning" << d->startPositionInSamples << "samples of" << d->clip->getAudioFile().getLengthInSamples();
+    IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Start Position to" << d->startPositionInSeconds << "seconds, meaning" << d->startPositionInSamples << "samples of" << d->audioFile->getLengthInSamples();
   }
 }
 
@@ -560,38 +549,35 @@ int ClipAudioSource::getStopPositionSamples(int slice) const
 float ClipAudioSource::guessBPM(int slice) const
 {
   float guessedBPM{0.0f};
-  if (auto clip = d->clip) {
-    // Set up our basic prerequisite knowledge
-    tracktion_engine::AudioFile audioFile = clip->getAudioFile();
-    const int numChannels{audioFile.getNumChannels()};
-    int startSample = audioFile.getLengthInSamples() * getStartPosition(slice);
-    int lastSample = audioFile.getLengthInSamples() * getStopPosition(slice);
-    // Pull the samples we want out of the reader and stuff them into the bpm detector
-    const int numSamples{numChannels * (lastSample - startSample)};
-    juce::int64 numLeft{numSamples};
-    const int blockSize{65536};
-    const bool useRightChan{numChannels > 1};
-    AudioFormatReader *reader{audioFile.getFormat()->createReaderFor(d->givenFile.createInputStream().release(), true)};
-    tracktion_engine::soundtouch::BPMDetect bpmDetector(numChannels, audioFile.getSampleRate());
-    juce::AudioBuffer<float> fileBuffer(jmin(2, numChannels), lastSample - startSample);
-    while (numLeft > 0)
-    {
-      // Either read our desired block size, or whatever is left, whichever is shorter
-      const int numThisTime = (int) juce::jmin (numLeft, (juce::int64) blockSize);
-      // Get the data and stuff it into a buffer
-      reader->read(&fileBuffer, 0, numThisTime, startSample, true, useRightChan);
-      // Create an interleaved selection of samples as we want them
-      tracktion_engine::AudioScratchBuffer scratch(1, numThisTime * numChannels);
-      float* interleaved = scratch.buffer.getWritePointer(0);
-      juce::AudioDataConverters::interleaveSamples(fileBuffer.getArrayOfReadPointers(), interleaved, numThisTime, numChannels);
-      // Pass them along to the bpm detector for processing
-      bpmDetector.inputSamples(interleaved, numThisTime);
-      // Next run...
-      startSample += numThisTime;
-      numLeft -= numThisTime;
-    }
-    guessedBPM = bpmDetector.getBpm();
+  // Set up our basic prerequisite knowledge
+  const int numChannels{d->audioFile->getNumChannels()};
+  int startSample = d->audioFile->getLengthInSamples() * getStartPosition(slice);
+  int lastSample = d->audioFile->getLengthInSamples() * getStopPosition(slice);
+  // Pull the samples we want out of the reader and stuff them into the bpm detector
+  const int numSamples{numChannels * (lastSample - startSample)};
+  juce::int64 numLeft{numSamples};
+  const int blockSize{65536};
+  const bool useRightChan{numChannels > 1};
+  AudioFormatReader *reader{d->audioFile->getFormat()->createReaderFor(d->givenFile.createInputStream().release(), true)};
+  tracktion_engine::soundtouch::BPMDetect bpmDetector(numChannels, d->audioFile->getSampleRate());
+  juce::AudioBuffer<float> fileBuffer(jmin(2, numChannels), lastSample - startSample);
+  while (numLeft > 0)
+  {
+    // Either read our desired block size, or whatever is left, whichever is shorter
+    const int numThisTime = (int) juce::jmin (numLeft, (juce::int64) blockSize);
+    // Get the data and stuff it into a buffer
+    reader->read(&fileBuffer, 0, numThisTime, startSample, true, useRightChan);
+    // Create an interleaved selection of samples as we want them
+    tracktion_engine::AudioScratchBuffer scratch(1, numThisTime * numChannels);
+    float* interleaved = scratch.buffer.getWritePointer(0);
+    juce::AudioDataConverters::interleaveSamples(fileBuffer.getArrayOfReadPointers(), interleaved, numThisTime, numChannels);
+    // Pass them along to the bpm detector for processing
+    bpmDetector.inputSamples(interleaved, numThisTime);
+    // Next run...
+    startSample += numThisTime;
+    numLeft -= numThisTime;
   }
+  guessedBPM = bpmDetector.getBpm();
   return guessedBPM;
 }
 
@@ -695,41 +681,6 @@ void ClipAudioSource::setGainAbsolute(const float &gainAbsolute)
   setGain(juce::Decibels::decibelsToGain(juce::jmap(gainAbsolute, 0.0f, 1.0f, -maxGainDB, maxGainDB), -maxGainDB));
 }
 
-void ClipAudioSource::setVolume(float vol) {
-  if (auto clip = d->clip) {
-    IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting volume:" << vol;
-    // Knowing that -40 is our "be quiet now thanks" volume level, but tracktion thinks it should be -100, we'll just adjust that a bit
-    // It means the last step is a bigger jump than perhaps desirable, but it'll still be more correct
-    if (vol <= -40.0f) {
-      clip->edit.setMasterVolumeSliderPos(0);
-    } else {
-      clip->edit.setMasterVolumeSliderPos(te::decibelsToVolumeFaderPosition(vol));
-    }
-    d->volumeAbsolute = clip->edit.getMasterVolumePlugin()->getSliderPos();
-    Q_EMIT volumeAbsoluteChanged();
-  }
-}
-
-void ClipAudioSource::setVolumeAbsolute(float vol)
-{
-  if (auto clip = d->clip) {
-    IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting volume absolutely:" << vol;
-    clip->edit.setMasterVolumeSliderPos(qMax(0.0f, qMin(vol, 1.0f)));
-    d->volumeAbsolute = clip->edit.getMasterVolumePlugin()->getSliderPos();
-    Q_EMIT volumeAbsoluteChanged();
-  }
-}
-
-float ClipAudioSource::volumeAbsolute() const
-{
-  if (d->volumeAbsolute < 0) {
-    if (auto clip = d->clip) {
-      d->volumeAbsolute = clip->edit.getMasterVolumePlugin()->getSliderPos();
-    }
-  }
-  return d->volumeAbsolute;
-}
-
 void ClipAudioSource::setSnapLengthToBeat(const bool& snapLengthToBeat)
 {
   if (d->snapLengthToBeat != snapLengthToBeat) {
@@ -782,15 +733,12 @@ float ClipAudioSource::getLengthSeconds() const
 
 
 float ClipAudioSource::getDuration() const {
-  return d->edit->getLength();
+  return d->audioFile->getLength();
 }
 
 int ClipAudioSource::getDurationSamples() const
 {
-  if (d->clip) {
-    return d->clip->getAudioFile().getLengthInSamples();
-  }
-  return 0;
+  return d->audioFile->getLengthInSamples();
 }
 
 const char *ClipAudioSource::getFileName() const {
@@ -803,14 +751,11 @@ double ClipAudioSource::sampleRate() const
 }
 
 const char *ClipAudioSource::getFilePath() const {
-    return d->filePath.toUtf8();
+  return d->filePath.toUtf8();
 }
 
 tracktion_engine::AudioFile ClipAudioSource::getPlaybackFile() const {
-    if (const auto& clip = d->clip) {
-        return clip->getPlaybackFile();
-    }
-    return te::AudioFile(*d->engine);
+  return tracktion_engine::AudioFile(*d->audioFile);
 }
 
 void ClipAudioSource::Private::timerCallback() {
@@ -820,8 +765,7 @@ void ClipAudioSource::Private::timerCallback() {
 }
 
 void ClipAudioSource::play(bool forceLooping, int midiChannel) {
-  auto clip = d->clip;
-  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Starting clip " << this << d->filePath << " which is really " << clip.get() << " in a " << (forceLooping ? "looping" : "non-looping") << " manner from " << d->startPositionInSeconds << " and for " << d->lengthInSeconds << " seconds at volume " << (clip  && clip->edit.getMasterVolumePlugin().get() ? clip->edit.getMasterVolumePlugin()->volume : 0);
+  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Starting clip " << this << d->filePath << " which is really " << d->audioFile << " in a " << (forceLooping ? "looping" : "non-looping") << " manner from " << d->startPositionInSeconds << " and for " << d->lengthInSeconds << " seconds";
 
   ClipCommand *command = ClipCommand::channelCommand(this, midiChannel);
   command->midiNote = 60;

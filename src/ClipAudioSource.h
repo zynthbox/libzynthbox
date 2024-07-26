@@ -157,10 +157,6 @@ class ClipAudioSource : public QObject {
      */
     Q_PROPERTY(float gainDb READ getGainDB NOTIFY gainChanged)
     /**
-     * \brief The volume of the clip in an absolute style (from 0.0 through 1.0)
-     */
-    Q_PROPERTY(float volumeAbsolute READ volumeAbsolute WRITE setVolumeAbsolute NOTIFY volumeAbsoluteChanged)
-    /**
      * \brief The current audio level in dB as a float (might be anywhere from -200 to 30, but can exist above that level as well)
      */
     Q_PROPERTY(float audioLevel READ audioLevel NOTIFY audioLevelChanged)
@@ -526,18 +522,6 @@ public:
   void setGainAbsolute(const float &gainAbsolute);
   Q_SIGNAL void gainChanged();
 
-  void setVolume(float vol);
-  /**
-   * \brief Set the volume by "slider position" (0.0 through 1.0)
-   * @param vol The volume you wish to set, using tracktion's slider position notation (0.0 through 1.0)
-   */
-  void setVolumeAbsolute(float vol);
-  /**
-   * \brief Get the volume in "slider position" (0.0 through 1.0)
-   * @return A number from 0.0 through 1.0 - that is, tracktion's slider position notation
-   */
-  float volumeAbsolute() const;
-  Q_SIGNAL void volumeAbsoluteChanged();
   /**
    * \brief Starts playing, by default by forcing looping and on the global channel
    * Using the channel logic from SamplerSynth, -1 is the global channel (set lane
