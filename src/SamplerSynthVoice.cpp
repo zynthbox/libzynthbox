@@ -541,7 +541,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
         // Don't actually perform playback operations unless we've got something to play
         if (d->clip) {
             const float clipPitchChange = (d->clipCommand->changePitch ? d->clipCommand->pitchChange * d->clip->pitchChangePrecalc() : d->clip->pitchChangePrecalc()) * (d->subvoiceSettings ? d->subvoiceSettings->pitchChangePrecalc() : 1.0f);
-            const float clipVolume = d->clip->volumeAbsolute() * d->clip->getGain() * (d->subvoiceSettings ? d->subvoiceSettings->gain() : 1.0f);
+            const float clipGain = d->clip->getGain() * (d->subvoiceSettings ? d->subvoiceSettings->gain() : 1.0f);
             const float lPan = 2 * (1.0 + qMax(-1.0f, (d->playbackData.pan))); // Used for m/s panning, to ensure the signal is proper, we need to multiply it by 2 eventually, so might as well pre-do that calculation here
             const float rPan = 2 * (1.0 - qMax(-1.0f, (d->playbackData.pan))); // Used for m/s panning, to ensure the signal is proper, we need to multiply it by 2 eventually, so might as well pre-do that calculation here
 
@@ -559,8 +559,8 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                     // as well save a bit of processing (it's a very common case, and used for
                     // e.g. the metronome ticks, and we do want that stuff to be as low impact
                     // as we can reasonably make it).
-                    l = sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inL[sampleIndex] * d->lgain * envelopeValue * clipVolume : 0;
-                    r = d->playbackData.inR != nullptr && sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inR[sampleIndex] * d->rgain * envelopeValue * clipVolume : l;
+                    l = sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inL[sampleIndex] * d->lgain * envelopeValue * clipGain : 0;
+                    r = d->playbackData.inR != nullptr && sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inR[sampleIndex] * d->rgain * envelopeValue * clipGain : l;
                 } else {
                     // If we're doing timestretched playback, then always pass things through
                     // our SoundTouch instance, and adjust its pitch and rate accordingly
@@ -584,8 +584,8 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                         d->playbackData.firstGo = false;
                     }
                     d->soundTouch.receiveSamples(d->timeStretchingOutput, 1);
-                    l = d->timeStretchingOutput[0] * d->lgain * envelopeValue * clipVolume;
-                    r = d->timeStretchingOutput[1] * d->rgain * envelopeValue * clipVolume;
+                    l = d->timeStretchingOutput[0] * d->lgain * envelopeValue * clipGain;
+                    r = d->timeStretchingOutput[1] * d->rgain * envelopeValue * clipGain;
                 }
             } else {
                 // Use Hermite interpolation to ensure out sound data is reasonably on the expected
@@ -619,7 +619,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                 const float l1 = d->playbackData.sampleDuration < sampleIndex ? 0 : d->playbackData.inL[(int)sampleIndex];
                 const float l2 = d->playbackData.sampleDuration < nextSampleIndex || nextSampleIndex == -1 ? 0 : d->playbackData.inL[(int)nextSampleIndex];
                 const float l3 = d->playbackData.sampleDuration < nextNextSampleIndex || nextNextSampleIndex == -1 ? 0 : d->playbackData.inL[(int)nextNextSampleIndex];
-                l = interpolateHermite4pt3oX(l0, l1, l2, l3, fraction) * d->lgain * envelopeValue * clipVolume;
+                l = interpolateHermite4pt3oX(l0, l1, l2, l3, fraction) * d->lgain * envelopeValue * clipGain;
                 if (d->playbackData.inR == nullptr) {
                     r = l;
                 } else {
@@ -627,7 +627,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                     const float r1 = d->playbackData.sampleDuration < sampleIndex ? 0 : d->playbackData.inR[(int)sampleIndex];
                     const float r2 = d->playbackData.sampleDuration < nextSampleIndex || nextSampleIndex == -1 ? 0 : d->playbackData.inR[(int)nextSampleIndex];
                     const float r3 = d->playbackData.sampleDuration < nextNextSampleIndex || nextNextSampleIndex == -1 ? 0 : d->playbackData.inR[(int)nextNextSampleIndex];
-                    r = interpolateHermite4pt3oX(r0, r1, r2, r3, fraction) * d->rgain * envelopeValue * clipVolume;
+                    r = interpolateHermite4pt3oX(r0, r1, r2, r3, fraction) * d->rgain * envelopeValue * clipGain;
                 }
             }
             // The sound data might possibly disappear while we're attempting to play,
