@@ -264,17 +264,13 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
   IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Opening file:" << filepath;
 
   d->givenFile = juce::File(filepath);
-  d->audioFile = new tracktion_engine::AudioFile(*d->engine, d->givenFile);
-
-  const File editFile = File::createTempFile("editFile");
-
   d->fileName = d->givenFile.getFileName();
   d->filePath = QString::fromUtf8(filepath);
+  d->audioFile = new tracktion_engine::AudioFile(*d->engine, d->givenFile);
   d->sampleRate = d->audioFile->getSampleRate();
   d->adsr.setSampleRate(d->sampleRate);
+  d->adsr.setParameters({0.0f, 0.0f, 1.0f, 0.0f});
   setLengthSamples(d->audioFile->getLengthInSamples());
-  // Initially set the length in seconds to the full duration of the sample,
-  // let the user set it to something else later on if they want to
 
   if (muted) {
     IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Clip marked to be muted";
