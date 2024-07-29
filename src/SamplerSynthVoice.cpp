@@ -175,8 +175,8 @@ void SamplerSynthVoice::handleCommand(ClipCommand* clipCommand, jack_nframes_t t
             availableAfter = UINT_MAX;
         } else {
             const double sourceSampleRate{clipCommand->clip->sampleRate()};
-            const double startPosition = (int) ((clipCommand->setStartPosition ? clipCommand->startPosition : clipCommand->clip->getStartPosition(clipCommand->slice)) * sourceSampleRate);
-            const double stopPosition = (int) ((clipCommand->setStopPosition ? clipCommand->stopPosition : clipCommand->clip->getStopPosition(clipCommand->slice)) * sourceSampleRate);
+            const double startPosition = (int) ((clipCommand->setStartPosition ? clipCommand->startPosition * sourceSampleRate : clipCommand->clip->getStartPositionSamples(clipCommand->slice)));
+            const double stopPosition = (int) ((clipCommand->setStopPosition ? clipCommand->stopPosition * sourceSampleRate : clipCommand->clip->getStopPositionSamples(clipCommand->slice)));
             availableAfter = timestamp + (stopPosition - startPosition);
         }
         mostRecentStartCommand = clipCommand;
@@ -215,7 +215,7 @@ void SamplerSynthVoice::setCurrentCommand(ClipCommand *clipCommand)
         }
         if (clipCommand->startPlayback) {
             // This should be interpreted as "restart playback" in this case, so... reset the current position
-            d->sourceSamplePosition = (int) (d->clip->getStartPosition(d->clipCommand->slice) * d->clip->sampleRate());
+            d->sourceSamplePosition = d->clip->getStartPositionSamples(d->clipCommand->slice);
         }
         if (clipCommand->changePan) {
             d->clipCommand->pan = clipCommand->pan;
@@ -443,9 +443,9 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
     // for any playing voice, in addition to when it starts
     if (d->clip && d->clipCommand) {
         d->playbackData.pan = std::clamp(float(d->clip->pan()) + d->clipCommand->pan + (d->subvoiceSettings ? d->subvoiceSettings->pan() : 0.0f), -1.0f, 1.0f);
-        d->playbackData.startPosition = (int) ((d->clipCommand->setStartPosition ? d->clipCommand->startPosition : d->clip->getStartPosition(d->clipCommand->slice)) * d->playbackData.sourceSampleRate);
-        d->playbackData.stopPosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition : d->clip->getStopPosition(d->clipCommand->slice)) * d->playbackData.sourceSampleRate);
-        d->playbackData.loopPosition = int((d->clip->getStartPosition(d->clipCommand->slice) + (d->clip->loopDelta() / d->clip->speedRatio())) * d->playbackData.sourceSampleRate);
+        d->playbackData.startPosition = (int) ((d->clipCommand->setStartPosition ? d->clipCommand->startPosition * d->playbackData.sourceSampleRate : d->clip->getStartPositionSamples(d->clipCommand->slice)));
+        d->playbackData.stopPosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition * d->playbackData.sourceSampleRate : d->clip->getStopPositionSamples(d->clipCommand->slice)));
+        d->playbackData.loopPosition = d->clip->getStartPositionSamples(d->clipCommand->slice) + d->clip->loopDeltaSamples();
         if (d->playbackData.loopPosition >= d->playbackData.stopPosition) {
             d->playbackData.loopPosition = d->playbackData.startPosition;
         }
