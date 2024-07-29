@@ -30,7 +30,7 @@ struct ClipCommand {
     bool changeGainDb{false};
     float gainDb{0.0f};
     bool changeVolume{false};
-    float volume{0.0f};
+    float volume{1.0f};
     bool changePan{false};
     float pan{0.0f};
     bool setStartPosition{false};
@@ -88,7 +88,7 @@ struct ClipCommand {
         command->changeGainDb = false;
         command->gainDb = 0.0f;
         command->changeVolume = false;
-        command->volume = 0.0f;
+        command->volume = 1.0f;
         command->changePan = false;
         command->pan = 0.0f;
         command->setStartPosition = false;
