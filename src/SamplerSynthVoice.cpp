@@ -88,7 +88,6 @@ public:
     double backwardTailingOffPosition{0};
     double tempo{1.0};
     double pitch{1.0};
-    bool firstGo{true};
 };
 
 class SamplerSynthVoicePrivate {
@@ -126,7 +125,7 @@ public:
     double sourceSampleLength = 0;
     float targetGain = 0, lgain = 0, rgain = 0;
     // Used to make sure the first sample on looped playback is interpolated to an empty previous sample, rather than the previous sample in the loop
-    bool firstRoll{false};
+    bool firstRoll{true};
 
     float initialCC[128];
     int ccForHighpass{74};
@@ -138,6 +137,9 @@ public:
 
     float timeStretchingInput[2];
     float timeStretchingOutput[2];
+    uint64_t samplesFedToSoundtouch{0}; // During playback, we essentially need to ensure that this is at least initialSampleLatency more than soundTouchPlaybackPosition
+    uint64_t initialSampleLatency{0};
+    uint64_t soundTouchFetchedSamples{0};
     tracktion_engine::soundtouch::SoundTouch soundTouch;
 
     PlaybackData playbackData;
@@ -336,7 +338,6 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
 
         d->playbackData.pitch = 1.0;
         d->playbackData.tempo = 1.0;
-        d->playbackData.firstGo = true;
         if (d->clip->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
             d->soundTouch.setChannels(2);
             d->soundTouch.setSampleRate(d->playbackData.sourceSampleRate);
@@ -358,6 +359,8 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
             d->soundTouchSamplePositionR = d->sourceSamplePosition;
             d->soundTouchIncrementL = 1.0f;
             d->soundTouchIncrementR = 1.0f;
+            d->samplesFedToSoundtouch = d->soundTouchFetchedSamples = 0;
+            d->initialSampleLatency = uint64_t(d->soundTouch.getSetting(SETTING_INITIAL_LATENCY));
         }
 
         if (clipCommand->looping == true) {
@@ -568,22 +571,28 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                     if (abs(d->playbackData.tempo - newTempo) > 0.0001) {
                         // When tempo changes, reset to "actual playback position" and re-prime soundtouch
                         d->playbackData.tempo = newTempo;
-                        d->soundTouch.clear();
+                        // d->soundTouch.clear();
                         d->soundTouch.setTempo(newTempo);
-                        d->soundTouchSamplePositionL = d->soundTouchSamplePositionR = d->sourceSamplePosition;
+                        // Do we still need to clear and reset the positions here? (needs testing out some... in particular, it might move out of sync when shifting tempo, not sure)
+                        // If so, we'll also need to reset the fetched and fed samples here
+                        // d->soundTouchSamplePositionL = d->soundTouchSamplePositionR = d->sourceSamplePosition;
+                        d->initialSampleLatency = uint64_t(d->soundTouch.getSetting(SETTING_INITIAL_LATENCY));
                     }
                     const double newPitchRatio{d->pitchRatio * clipPitchChange};
                     if (d->playbackData.pitch != newPitchRatio) {
                         d->playbackData.pitch = newPitchRatio;
                         d->soundTouch.setPitch(newPitchRatio);
+                        d->initialSampleLatency = uint64_t(d->soundTouch.getSetting(SETTING_INITIAL_LATENCY));
                     }
-                    while (d->playbackData.firstGo || d->soundTouch.isEmpty()) {
+                    const uint64_t requiredSampleFeed{d->soundTouchFetchedSamples + d->initialSampleLatency};
+                    while (d->samplesFedToSoundtouch < requiredSampleFeed) {
                         d->timeStretchingInput[0] = nextSample(d->playbackData.inL, d->sound->length(), &d->soundTouchSamplePositionL, &d->soundTouchIncrementL, d->playbackData.startPosition, d->playbackData.stopPosition, d->playbackData.loopPosition, ClipAudioSource::ForwardLoop);
                         d->timeStretchingInput[1] = nextSample(d->playbackData.inR, d->sound->length(), &d->soundTouchSamplePositionR, &d->soundTouchIncrementR, d->playbackData.startPosition, d->playbackData.stopPosition, d->playbackData.loopPosition, ClipAudioSource::ForwardLoop);
                         d->soundTouch.putSamples(d->timeStretchingInput, 1);
-                        d->playbackData.firstGo = false;
+                        ++(d->samplesFedToSoundtouch);
                     }
                     d->soundTouch.receiveSamples(d->timeStretchingOutput, 1);
+                    ++(d->soundTouchFetchedSamples);
                     l = d->timeStretchingOutput[0] * d->lgain * envelopeValue * clipGain;
                     r = d->timeStretchingOutput[1] * d->rgain * envelopeValue * clipGain;
                 }
