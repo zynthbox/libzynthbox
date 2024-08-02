@@ -44,6 +44,7 @@ target_sources(libzynthbox
         KeyScales.cpp
         Chords.cpp
         ProcessWrapper.cpp
+        AdjectiveNoun.cpp
 )
 target_compile_definitions(libzynthbox
     PUBLIC

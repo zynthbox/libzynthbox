@@ -61,6 +61,7 @@
 #include "JackPassthroughFilter.h"
 #include "JackPassthroughVisualiserItem.h"
 #include "ZynthboxBasics.h"
+#include "AdjectiveNoun.h"
 
 #include "Plugin.h"
 
@@ -187,10 +188,10 @@ void Plugin::initialize()
     auto juceInitialiser = [&]() {
         qDebug() << "Instantiating tracktion engine";
         tracktionEngine = new te::Engine("libzynthbox", nullptr, std::make_unique<ZLEngineBehavior>());
-        qDebug() << "Setting device type to ALSA";
-        tracktionEngine->getDeviceManager().deviceManager.setCurrentAudioDeviceType("ALSA", true);
-        qDebug() << "Initialising device manager";
-        tracktionEngine->getDeviceManager().initialise(0, 2);
+        // qDebug() << "Setting device type to ALSA";
+        // tracktionEngine->getDeviceManager().deviceManager.setCurrentAudioDeviceType("ALSA", true);
+        // qDebug() << "Initialising device manager";
+        // tracktionEngine->getDeviceManager().initialise(0, 2);
         qDebug() << "Initialisation completed";
         initialisationCompleted = true;
     };
@@ -384,6 +385,13 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
         Chords *chords = Chords::instance();
         QQmlEngine::setObjectOwnership(chords, QQmlEngine::CppOwnership);
         return chords;
+    });
+    qmlRegisterSingletonType<AdjectiveNoun>(uri, 1, 0, "AdjectiveNoun", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
+        Q_UNUSED(engine)
+        Q_UNUSED(scriptEngine)
+        AdjectiveNoun *adjectiveNoun = AdjectiveNoun::instance();
+        QQmlEngine::setObjectOwnership(adjectiveNoun, QQmlEngine::CppOwnership);
+        return adjectiveNoun;
     });
     qmlRegisterType<WaveFormItem>(uri, 1, 0, "WaveFormItem");
     qmlRegisterType<JackPassthroughVisualiserItem>(uri, 1, 0, "JackPassthroughVisualiserItem");
