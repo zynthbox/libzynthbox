@@ -341,6 +341,7 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         if (d->clip->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
             d->soundTouch.setChannels(2);
             d->soundTouch.setSampleRate(d->playbackData.sourceSampleRate);
+            d->soundTouch.setSetting(SETTING_USE_QUICKSEEK, 1);
             if (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchStandard) {
                 d->soundTouch.setSetting(SETTING_USE_AA_FILTER, 1); // Default when SOUNDTOUCH_PREVENT_CLICK_AT_RATE_CROSSOVER is not defined
                 d->soundTouch.setSetting(SETTING_AA_FILTER_LENGTH, 64); // Default value set in the RateTransposer ctor
