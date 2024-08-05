@@ -83,6 +83,7 @@ target_link_libraries(libzynthbox
         "-lcurl"
         "-lfftw3"
     PUBLIC
+        OpenMP::OpenMP_CXX
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags
