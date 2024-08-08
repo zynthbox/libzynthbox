@@ -10,10 +10,6 @@
 #include <QDebug>
 #include <QtMath>
 
-namespace tracktion_engine {
-#include <tracktion_engine/3rd_party/soundtouch/include/SoundTouch.h>
-};
-
 #define DataRingSize 256
 class DataRing {
 public:
@@ -120,9 +116,6 @@ public:
     SamplerSynthSound* sound{nullptr};
     double pitchRatio = 0;
     double sourceSamplePosition = 0;
-    double soundTouchSamplePositionL{0.0f}, soundTouchSamplePositionR{0.0f};
-    float soundTouchIncrementL{1.0f}, soundTouchIncrementR{1.0f};
-    double sourceSampleLength = 0;
     float targetGain = 0, lgain = 0, rgain = 0;
     // Used to make sure the first sample on looped playback is interpolated to an empty previous sample, rather than the previous sample in the loop
     bool firstRoll{true};
@@ -134,13 +127,6 @@ public:
     float highpassCutoff{0.0f};
     float allpassBufferL{0.0f};
     float allpassBufferR{0.0f};
-
-    float timeStretchingInput[2];
-    float timeStretchingOutput[2];
-    uint64_t samplesFedToSoundtouch{0}; // During playback, we essentially need to ensure that this is at least initialSampleLatency more than soundTouchPlaybackPosition
-    uint64_t initialSampleLatency{0};
-    uint64_t soundTouchFetchedSamples{0};
-    tracktion_engine::soundtouch::SoundTouch soundTouch;
 
     PlaybackData playbackData;
 };
@@ -307,7 +293,7 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
             d->playbackData.inL = nullptr;
             d->playbackData.inR = nullptr;
         }
-        d->playbackData.sampleDuration = sound->length() - 1;
+        d->playbackData.sampleDuration = sound->length();
 
         // this bit is basically mtof - that is, converts a midi note to its equivalent expected frequency (here given a 440Hz concert tone), and it's going to be somewhere within a reasonable amount along the audible scale
         const float highpassAdjustmentInHz = pow(2, ((127.0f * d->highpassCutoff) - 69) / 12) * 440;
@@ -318,50 +304,20 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         d->playbackData.lowpassCoefficient = (lowpassTan - 1.f) / (lowpassTan + 1.f);
 
         d->playbackData.pan = std::clamp(float(d->clip->pan()) + d->clipCommand->pan + (d->subvoiceSettings ? d->subvoiceSettings->pan() : 0.0f), -1.0f, 1.0f);
-
-        d->playbackData.startPosition = (int) ((d->clipCommand->setStartPosition ? d->clipCommand->startPosition * d->playbackData.sourceSampleRate : d->clip->getStartPositionSamples(d->clipCommand->slice)));
-        d->playbackData.stopPosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition * d->playbackData.sourceSampleRate : d->clip->getStopPositionSamples(d->clipCommand->slice)));
-        d->playbackData.loopPosition = d->clip->getStartPositionSamples(d->clipCommand->slice) + d->clip->loopDeltaSamples();
+        d->playbackData.startPosition = double((d->clipCommand->setStartPosition ? d->clipCommand->startPosition * d->playbackData.sourceSampleRate : d->clip->getStartPositionSamples(d->clipCommand->slice))) / d->sound->stretchRate();
+        d->playbackData.stopPosition = double((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition * d->playbackData.sourceSampleRate : d->clip->getStopPositionSamples(d->clipCommand->slice))) / d->sound->stretchRate();
+        d->playbackData.loopPosition = double((d->clip->getStartPositionSamples(d->clipCommand->slice) + d->clip->loopDeltaSamples()) * d->playbackData.sourceSampleRate) / d->sound->stretchRate();
         if (d->playbackData.loopPosition >= d->playbackData.stopPosition) {
             d->playbackData.loopPosition = d->playbackData.startPosition;
         }
-        d->playbackData.forwardTailingOffPosition = (d->playbackData.stopPosition - (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
-        d->playbackData.backwardTailingOffPosition = (d->playbackData.startPosition + (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
+        d->playbackData.forwardTailingOffPosition = d->playbackData.stopPosition - (double(d->adsr.getParameters().release * d->playbackData.sourceSampleRate) / d->sound->stretchRate());
+        d->playbackData.backwardTailingOffPosition = d->playbackData.startPosition + (double(d->adsr.getParameters().release * d->playbackData.sourceSampleRate) / d->sound->stretchRate());
 
         d->pitchRatio = std::pow(2.0, (clipCommand->midiNote - sound->rootMidiNote()) / 12.0);
-        d->sourceSampleLength = d->clip->getDurationSamples();
         if (d->clipCommand->changePitch && d->clipCommand->pitchChange < 0) {
             d->sourceSamplePosition = d->playbackData.stopPosition;
         } else {
             d->sourceSamplePosition = d->playbackData.startPosition;
-        }
-
-        d->playbackData.pitch = 1.0;
-        d->playbackData.tempo = 1.0;
-        if (d->clip->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
-            d->soundTouch.setChannels(2);
-            d->soundTouch.setSampleRate(d->playbackData.sourceSampleRate);
-            d->soundTouch.setSetting(SETTING_USE_QUICKSEEK, 1);
-            if (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchStandard) {
-                d->soundTouch.setSetting(SETTING_USE_AA_FILTER, 1); // Default when SOUNDTOUCH_PREVENT_CLICK_AT_RATE_CROSSOVER is not defined
-                d->soundTouch.setSetting(SETTING_AA_FILTER_LENGTH, 64); // Default value set in the RateTransposer ctor
-                d->soundTouch.setSetting(SETTING_USE_QUICKSEEK, 0); // Default value set in TDStretch ctor
-                d->soundTouch.setSetting(SETTING_SEQUENCE_MS, 0); // Default value - defined as DEFAULT_SEQUENCE_MS USE_AUTO_SEQUENCE_LEN ( = 0)
-                d->soundTouch.setSetting(SETTING_SEEKWINDOW_MS, 0); // Default value - defined as DEFAULT_SEEKWINDOW_MS USE_AUTO_SEEKWINDOW_LEN ( = 0)
-            } else if (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchBetter) {
-                // The settings used by the tracktion timestretcher's SoundTouchBetter setting
-                d->soundTouch.setSetting(SETTING_USE_AA_FILTER, 1);
-                d->soundTouch.setSetting(SETTING_AA_FILTER_LENGTH, 64);
-                d->soundTouch.setSetting(SETTING_USE_QUICKSEEK, 0);
-                d->soundTouch.setSetting(SETTING_SEQUENCE_MS, 60);
-                d->soundTouch.setSetting(SETTING_SEEKWINDOW_MS, 25);
-            }
-            d->soundTouchSamplePositionL = d->sourceSamplePosition;
-            d->soundTouchSamplePositionR = d->sourceSamplePosition;
-            d->soundTouchIncrementL = 1.0f;
-            d->soundTouchIncrementR = 1.0f;
-            d->samplesFedToSoundtouch = d->soundTouchFetchedSamples = 0;
-            d->initialSampleLatency = uint64_t(d->soundTouch.getSetting(SETTING_INITIAL_LATENCY));
         }
 
         if (clipCommand->looping == true) {
@@ -386,7 +342,6 @@ void SamplerSynthVoice::stopNote(float velocity, bool allowTailOff, jack_nframes
     }
     else
     {
-        d->soundTouch.clear();
         d->adsr.reset();
         if (d->clip) {
             d->clip = nullptr;
@@ -446,15 +401,24 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
     // controlling loops and such), so let's make sure we do that once per process call
     // for any playing voice, in addition to when it starts
     if (d->clip && d->clipCommand) {
+        d->playbackData.data = d->sound->audioData();
+        if (d->playbackData.data) {
+            d->playbackData.inL = d->playbackData.data->getReadPointer(0);
+            d->playbackData.inR = d->playbackData.data->getNumChannels() > 1 ? d->playbackData.data->getReadPointer(1) : d->playbackData.inL;
+        } else {
+            d->playbackData.inL = nullptr;
+            d->playbackData.inR = nullptr;
+        }
+        d->playbackData.sampleDuration = d->sound->length();
         d->playbackData.pan = std::clamp(float(d->clip->pan()) + d->clipCommand->pan + (d->subvoiceSettings ? d->subvoiceSettings->pan() : 0.0f), -1.0f, 1.0f);
-        d->playbackData.startPosition = (int) ((d->clipCommand->setStartPosition ? d->clipCommand->startPosition * d->playbackData.sourceSampleRate : d->clip->getStartPositionSamples(d->clipCommand->slice)));
-        d->playbackData.stopPosition = (int) ((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition * d->playbackData.sourceSampleRate : d->clip->getStopPositionSamples(d->clipCommand->slice)));
-        d->playbackData.loopPosition = d->clip->getStartPositionSamples(d->clipCommand->slice) + d->clip->loopDeltaSamples();
+        d->playbackData.startPosition = double((d->clipCommand->setStartPosition ? d->clipCommand->startPosition * d->playbackData.sourceSampleRate : d->clip->getStartPositionSamples(d->clipCommand->slice))) / d->sound->stretchRate();
+        d->playbackData.stopPosition = double((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition * d->playbackData.sourceSampleRate : d->clip->getStopPositionSamples(d->clipCommand->slice))) / d->sound->stretchRate();
+        d->playbackData.loopPosition = double((d->clip->getStartPositionSamples(d->clipCommand->slice) + d->clip->loopDeltaSamples()) * d->playbackData.sourceSampleRate) / d->sound->stretchRate();
         if (d->playbackData.loopPosition >= d->playbackData.stopPosition) {
             d->playbackData.loopPosition = d->playbackData.startPosition;
         }
-        d->playbackData.forwardTailingOffPosition = (d->playbackData.stopPosition - (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
-        d->playbackData.backwardTailingOffPosition = (d->playbackData.startPosition + (d->adsr.getParameters().release * d->playbackData.sourceSampleRate));
+        d->playbackData.forwardTailingOffPosition = d->playbackData.stopPosition - (double(d->adsr.getParameters().release * d->playbackData.sourceSampleRate) / d->sound->stretchRate());
+        d->playbackData.backwardTailingOffPosition = d->playbackData.startPosition + (double(d->adsr.getParameters().release * d->playbackData.sourceSampleRate) / d->sound->stretchRate());
     }
 
     // Process each frame in turn (any commands that want handling for a given frame, control changes, that sort of thing, and finally the audio itself)
@@ -544,7 +508,10 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
         }
         // Don't actually perform playback operations unless we've got something to play
         if (d->clip) {
-            const float clipPitchChange = (d->clipCommand->changePitch ? d->clipCommand->pitchChange * d->clip->pitchChangePrecalc() : d->clip->pitchChangePrecalc()) * (d->subvoiceSettings ? d->subvoiceSettings->pitchChangePrecalc() : 1.0f);
+            // If we're using timestretching for our clip shifting, then we should not also be applying the clip's pitch shifting here
+            const float clipPitchChange = d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchOff
+                ? (d->clipCommand->changePitch ? d->clipCommand->pitchChange * d->clip->pitchChangePrecalc() : d->clip->pitchChangePrecalc()) * (d->subvoiceSettings ? d->subvoiceSettings->pitchChangePrecalc() : 1.0f)
+                : (d->clipCommand->changePitch ? d->clipCommand->pitchChange : 1.0f) * (d->subvoiceSettings ? d->subvoiceSettings->pitchChangePrecalc() : 1.0f);
             const float clipGain = d->clip->getGain() * (d->subvoiceSettings ? d->subvoiceSettings->gain() : 1.0f);
             const float lPan = 2 * (1.0 + qMax(-1.0f, (d->playbackData.pan))); // Used for m/s panning, to ensure the signal is proper, we need to multiply it by 2 eventually, so might as well pre-do that calculation here
             const float rPan = 2 * (1.0 - qMax(-1.0f, (d->playbackData.pan))); // Used for m/s panning, to ensure the signal is proper, we need to multiply it by 2 eventually, so might as well pre-do that calculation here
@@ -555,48 +522,16 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
             const int sampleIndex{int(d->sourceSamplePosition)};
             float modIntegral{0};
             const float fraction = std::modf(d->sourceSamplePosition, &modIntegral);
-            const double pitchRatio{d->pitchRatio * clipPitchChange * d->clip->speedRatio() * d->sound->sampleRateRatio()};
-            if ((fraction < 0.0001f && pitchRatio == 1.0f) || d->clip->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
-                if (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchOff) {
-                    // If we're just doing un-pitch-shifted playback, don't bother interpolating,
-                    // just grab the sample as given and adjust according to the requests, might
-                    // as well save a bit of processing (it's a very common case, and used for
-                    // e.g. the metronome ticks, and we do want that stuff to be as low impact
-                    // as we can reasonably make it).
-                    l = sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inL[sampleIndex] * d->lgain * envelopeValue * clipGain : 0;
-                    r = d->playbackData.inR != nullptr && sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inR[sampleIndex] * d->rgain * envelopeValue * clipGain : l;
-                } else {
-                    // If we're doing timestretched playback, then always pass things through
-                    // our SoundTouch instance, and adjust its pitch and rate accordingly
-                    const double newTempo{d->clip->speedRatio() * d->sound->sampleRateRatio()};
-                    if (abs(d->playbackData.tempo - newTempo) > 0.0001) {
-                        // When tempo changes, reset to "actual playback position" and re-prime soundtouch
-                        d->playbackData.tempo = newTempo;
-                        // d->soundTouch.clear();
-                        d->soundTouch.setTempo(newTempo);
-                        // Do we still need to clear and reset the positions here? (needs testing out some... in particular, it might move out of sync when shifting tempo, not sure)
-                        // If so, we'll also need to reset the fetched and fed samples here
-                        // d->soundTouchSamplePositionL = d->soundTouchSamplePositionR = d->sourceSamplePosition;
-                        d->initialSampleLatency = uint64_t(d->soundTouch.getSetting(SETTING_INITIAL_LATENCY));
-                    }
-                    const double newPitchRatio{d->pitchRatio * clipPitchChange};
-                    if (d->playbackData.pitch != newPitchRatio) {
-                        d->playbackData.pitch = newPitchRatio;
-                        d->soundTouch.setPitch(newPitchRatio);
-                        d->initialSampleLatency = uint64_t(d->soundTouch.getSetting(SETTING_INITIAL_LATENCY));
-                    }
-                    const uint64_t requiredSampleFeed{d->soundTouchFetchedSamples + d->initialSampleLatency};
-                    while (d->samplesFedToSoundtouch < requiredSampleFeed) {
-                        d->timeStretchingInput[0] = nextSample(d->playbackData.inL, d->sound->length(), &d->soundTouchSamplePositionL, &d->soundTouchIncrementL, d->playbackData.startPosition, d->playbackData.stopPosition, d->playbackData.loopPosition, ClipAudioSource::ForwardLoop);
-                        d->timeStretchingInput[1] = nextSample(d->playbackData.inR, d->sound->length(), &d->soundTouchSamplePositionR, &d->soundTouchIncrementR, d->playbackData.startPosition, d->playbackData.stopPosition, d->playbackData.loopPosition, ClipAudioSource::ForwardLoop);
-                        d->soundTouch.putSamples(d->timeStretchingInput, 1);
-                        ++(d->samplesFedToSoundtouch);
-                    }
-                    d->soundTouch.receiveSamples(d->timeStretchingOutput, 1);
-                    ++(d->soundTouchFetchedSamples);
-                    l = d->timeStretchingOutput[0] * d->lgain * envelopeValue * clipGain;
-                    r = d->timeStretchingOutput[1] * d->rgain * envelopeValue * clipGain;
-                }
+            // If we're using timestretching for our clip's pitch shifting, then we also should not be applying the speed ratio here
+            const double pitchRatio{d->pitchRatio * clipPitchChange * (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchOff ? d->clip->speedRatio() : 1.0f) * d->sound->sampleRateRatio()};
+            if ((fraction < 0.0001f && pitchRatio == 1.0f)) {
+                // If we're just doing un-pitch-shifted playback, don't bother interpolating,
+                // just grab the sample as given and adjust according to the requests, might
+                // as well save a bit of processing (it's a very common case, and used for
+                // e.g. the metronome ticks and sketches, and we do want that stuff to be as
+                // low impact as we can reasonably make it).
+                l = sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inL[sampleIndex] * d->lgain * envelopeValue * clipGain : 0;
+                r = d->playbackData.inR != nullptr && sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inR[sampleIndex] * d->rgain * envelopeValue * clipGain : l;
             } else {
                 // Use Hermite interpolation to ensure out sound data is reasonably on the expected
                 // curve. We could use linear interpolation, but Hermite is cheap enough that it's
@@ -706,7 +641,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                         {
                             // Before we stop, send out one last update for this command
                             if (d->clip && d->clip->playbackPositionsModel()) {
-                                d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGainLeft, peakGainRight, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
+                                d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGainLeft, peakGainRight, d->sourceSamplePosition / d->playbackData.sampleDuration, d->playbackData.pan);
                             }
                             stopNote(d->targetGain, false, currentFrame);
                         } else if (isTailingOff == false && d->sourceSamplePosition >= d->playbackData.forwardTailingOffPosition) {
@@ -726,7 +661,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                         {
                             // Before we stop, send out one last update for this command
                             if (d->clip && d->clip->playbackPositionsModel()) {
-                                d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGainLeft, peakGainRight, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
+                                d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGainLeft, peakGainRight, d->sourceSamplePosition / d->playbackData.sampleDuration, d->playbackData.pan);
                             }
                             stopNote(d->targetGain, false, currentFrame);
                         } else if (isTailingOff == false && d->sourceSamplePosition <= d->playbackData.backwardTailingOffPosition) {
@@ -737,7 +672,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
             } else {
                 // Before we stop, send out one last update for this command
                 if (d->clip && d->clip->playbackPositionsModel()) {
-                    d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGainLeft, peakGainRight, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
+                    d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGainLeft, peakGainRight, d->sourceSamplePosition / d->playbackData.sampleDuration, d->playbackData.pan);
                 }
                 stopNote(d->targetGain, false, currentFrame);
             }
@@ -749,6 +684,6 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
     // - Read ring in UI thread, update all data entries, and... we probably need a lot more potential positions (like maybe 32 voices times about ten? Call it 256 for no particular reason?)
     // Because it might have gone away after being stopped above, so let's try and not crash
     if (d->clip && d->clip->playbackPositionsModel()) {
-        d->clip->playbackPositionsModel()->setPositionData(current_frames + nframes, d->clipCommand, peakGainLeft, peakGainRight, d->sourceSamplePosition / d->sourceSampleLength, d->playbackData.pan);
+        d->clip->playbackPositionsModel()->setPositionData(current_frames + nframes, d->clipCommand, peakGainLeft, peakGainRight, d->sourceSamplePosition / d->playbackData.sampleDuration, d->playbackData.pan);
     }
 }
