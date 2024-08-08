@@ -73,7 +73,6 @@ private:
     QPainterContext m_painterContext;
     juce::Graphics m_juceGraphics;
     QColor m_color;
-    std::unique_ptr<juce::AudioFormatReaderSource> m_readerSource;
     tracktion_engine::TracktionThumbnail m_thumbnail;
     tracktion_engine::TracktionThumbnail *m_externalThumbnail{nullptr};
     AudioLevelsChannel *m_externalThumbnailChannel{nullptr};

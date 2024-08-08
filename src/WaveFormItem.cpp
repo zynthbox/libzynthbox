@@ -12,6 +12,8 @@
 #include "WaveFormItem.h"
 #include "AudioLevels.h"
 #include "Plugin.h"
+#include "SamplerSynth.h"
+#include "SamplerSynthSound.h"
 
 #include <QPainter>
 #include <QDebug>
@@ -83,19 +85,18 @@ void WaveFormItem::setSource(QString &source)
         } else if (m_source.startsWith(clipUri)) {
             const int clipId = m_source.midRef(6).toInt();
             ClipAudioSource *clip = Plugin::instance()->getClipById(clipId);
+            // qDebug() << Q_FUNC_INFO << "Fetching clip with ID" << clipId << "which translates to clip for filename" << m_clip->getFileName();
             if (clip) {
+                SamplerSynthSound *sound = SamplerSynth::instance()->clipToSound(clip);
+                // This really shouldn't be possible, but say someone somehow managed to attempt to show the thumbnail for a clip in the moment between it being created and registered
+                if (sound) {
+                    m_externalThumbnail = sound->thumbnail();
+                }
             }
         } else {
             m_thumbnail.clear();
-
             juce::File file(source.toUtf8().constData());
-            auto *reader = AudioLevels::instance()->m_formatManager.createReaderFor(file);
-
-            if (reader != nullptr) {
-                std::unique_ptr<juce::AudioFormatReaderSource> newSource(new juce::AudioFormatReaderSource(reader, true));
-                m_thumbnail.setSource(new juce::FileInputSource(file));
-                m_readerSource.reset(newSource.release());
-            }
+            m_thumbnail.setSource(new juce::FileInputSource(file));
         }
 
         if (m_externalThumbnailChannel) {
@@ -196,6 +197,10 @@ void WaveFormItem::paint(QPainter *painter)
                 m_externalThumbnail->drawChannel(m_juceGraphics, thumbnailBounds, true, {qMin(m_start, actualEnd), actualEnd}, channel, 1.0f);
             }
         }
+        if (!m_externalThumbnail->isFullyLoaded()) {
+            // qDebug() << Q_FUNC_INFO << m_externalThumbnail << "is not fully loaded yet, schedule a repaint...";
+            QMetaObject::invokeMethod(m_repaintTimer, "start", Qt::QueuedConnection);
+        }
     } else {
         const double actualEnd{qMin(m_end == -1 ? m_thumbnail.getTotalLength() : m_end, m_thumbnail.getTotalLength())};
         const int numChannels{m_thumbnail.getNumChannels()};
@@ -210,7 +215,7 @@ void WaveFormItem::paint(QPainter *painter)
             }
         }
         if (!m_thumbnail.isFullyLoaded()) {
-            // qDebug() << Q_FUNC_INFO << m_source << "is not fully loaded yet, schedule a repaint...";
+            // qDebug() << Q_FUNC_INFO << m_thumbnail << "is not fully loaded yet, schedule a repaint...";
             QMetaObject::invokeMethod(m_repaintTimer, "start", Qt::QueuedConnection);
         }
     }
