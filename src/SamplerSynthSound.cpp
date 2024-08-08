@@ -1,5 +1,6 @@
 
 #include "SamplerSynthSound.h"
+#include "AudioLevels.h"
 #include "SamplerSynth.h"
 #include "JUCEHeaders.h"
 
@@ -20,7 +21,7 @@ namespace tracktion_engine {
 class SamplerSynthSoundTimestretcher : public QObject, public QRunnable {
     Q_OBJECT
 public:
-    explicit SamplerSynthSoundTimestretcher(const ClipAudioSource *clip, const juce::AudioBuffer<float> *inputData, SamplerSynthSoundPrivate *parent = nullptr);
+    explicit SamplerSynthSoundTimestretcher(ClipAudioSource *clip, const juce::AudioBuffer<float> *inputData, SamplerSynthSoundPrivate *parent = nullptr);
     ~SamplerSynthSoundTimestretcher() override;
 
     void run() override;
@@ -39,6 +40,7 @@ Q_OBJECT
 public:
     SamplerSynthSoundPrivate(SamplerSynthSound *q)
         : q(q)
+        , thumbnail(512, AudioLevels::instance()->m_formatManager, AudioLevels::instance()->m_thumbnailsCache)
     {
         soundLoader.moveToThread(qApp->thread());
         soundLoader.setInterval(1);
@@ -48,6 +50,11 @@ public:
         playbackDataUpdater.setInterval(0);
         playbackDataUpdater.setSingleShot(true);
         connect(&playbackDataUpdater, &QTimer::timeout, this, &SamplerSynthSoundPrivate::updatePlaybackDataActual);
+    }
+    ~SamplerSynthSoundPrivate() {
+        if (thumbnailSource) {
+            delete thumbnailSource;
+        }
     }
 
     SamplerSynthSound *q{nullptr};
@@ -59,9 +66,13 @@ public:
     size_t audioBufferLength{8192};
 
     ClipAudioSource *clip{nullptr};
+    juce::FileInputSource *thumbnailSource{nullptr};
+    tracktion_engine::TracktionThumbnail thumbnail;
 
     bool loadingSoundDataPostponed{false};
     void loadSoundData() {
+        clip->startProcessing("Loading...");
+        thumbnail.clear();
         if (QFileInfo(clip->getPlaybackFile().getFile().getFullPathName().toRawUTF8()).exists()) {
             if (loadingSoundDataPostponed) {
                 qDebug() << Q_FUNC_INFO << "Loading sound data for" << clip->getFilePath();
@@ -90,13 +101,21 @@ public:
                 }
                 qDebug() << Q_FUNC_INFO << "Loaded data at sample rate" << sourceSampleRate << "from playback file" << clip->getPlaybackFile().getFile().getFullPathName().toRawUTF8();
                 delete format;
+                juce::FileInputSource *newSource{new juce::FileInputSource(file)};
+                thumbnail.setSource(newSource);
+                if (thumbnailSource) {
+                    delete thumbnailSource;
+                }
+                thumbnailSource = newSource;
             } else {
                 qWarning() << Q_FUNC_INFO << "Failed to create a format reader for" << file.getFullPathName().toUTF8();
             }
+            clip->endProcessing();
         } else {
             qDebug() << Q_FUNC_INFO << "Postponing loading sound data for" << clip->getFilePath() << "100ms as the playback file is not there yet...";
             loadingSoundDataPostponed = true;
             soundLoader.start(100);
+            clip->setProcessingDescription("Waiting For File...");
         }
     }
 
@@ -117,6 +136,7 @@ public:
             completedTimeStretcher = nullptr;
             timeStretcherNeedsChanging = true;
         } else {
+            clip->startProcessing("Stretching Time...");
             activeTimeStretcher = new SamplerSynthSoundTimestretcher(clip, data.get(), this);
             // qDebug() << Q_FUNC_INFO << "Creating new timestretcher for clip" << clip->getFileName() << "with style" << clip->timeStretchStyle() << "pitch" << clip->pitch() << "and speed ratio" << clip->speedRatio() << activeTimeStretcher;
             connect(activeTimeStretcher, &SamplerSynthSoundTimestretcher::done, this, &SamplerSynthSoundPrivate::timeStretcherCompleted, Qt::QueuedConnection);
@@ -137,6 +157,7 @@ public:
         activeTimeStretcher = nullptr;
         completedTimeStretcher->disconnect();
         timeStretcherNeedsChanging = true;
+        clip->endProcessing();
     }
     SamplerSynthSoundTimestretcher *playbackTimeStretcher{nullptr};
 };
@@ -225,12 +246,17 @@ const double & SamplerSynthSound::sampleRateRatio() const
     return d->sampleRateRatio;
 }
 
+tracktion_engine::TracktionThumbnail * SamplerSynthSound::thumbnail()
+{
+    return &d->thumbnail;
+}
+
 class SamplerSynthSoundTimestretcher::Private {
 public:
     Private() {}
     ~Private() {}
     SamplerSynthSoundPrivate *parent{nullptr};
-    const ClipAudioSource *clip{nullptr};
+    ClipAudioSource *clip{nullptr};
     const juce::AudioBuffer<float> *inputData{nullptr};
     tracktion_engine::soundtouch::SoundTouch soundTouch;
 
@@ -242,7 +268,7 @@ public:
     }
 };
 
-SamplerSynthSoundTimestretcher::SamplerSynthSoundTimestretcher(const ClipAudioSource *clip, const juce::AudioBuffer<float> *inputData, SamplerSynthSoundPrivate *parent)
+SamplerSynthSoundTimestretcher::SamplerSynthSoundTimestretcher(ClipAudioSource *clip, const juce::AudioBuffer<float> *inputData, SamplerSynthSoundPrivate *parent)
     : QObject(nullptr)
     , d(new Private)
 {
@@ -327,6 +353,7 @@ void SamplerSynthSoundTimestretcher::run()
         if (d->isAborted()) {
             break;
         }
+        d->clip->setProcessingProgress(float(numSamples - numLeft) / float(numSamples));
         // Either read our desired block size, or whatever is left, whichever is shorter
         const int numThisTime{int(qMin(numLeft, qint64(blockSize)))};
         // qDebug() << Q_FUNC_INFO << "Operating on" << numThisTime << "samples, with" << numLeft << "remaining";
@@ -350,7 +377,7 @@ void SamplerSynthSoundTimestretcher::run()
             // Retrieve whatever remaining samples might exist
             fetchReadySamples();
             if (d->isAborted() == false) {
-                const int previousSize{data.getNumSamples()};
+                // const int previousSize{data.getNumSamples()};
                 // Resize the buffer to be the exact size we're supposed to have been given
                 data.setSize(d->inputData->getNumChannels(), d->inputData->getNumSamples() * d->soundTouch.getInputOutputSampleRatio(), true);
                 sampleLength = data.getNumSamples();
