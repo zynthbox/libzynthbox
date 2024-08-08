@@ -6,8 +6,33 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QFileInfo>
+#include <QMutex>
+#include <QMutexLocker>
+#include <QRunnable>
 #include <QString>
 #include <QTimer>
+#include <QThreadPool>
+
+namespace tracktion_engine {
+#include <tracktion_engine/3rd_party/soundtouch/include/SoundTouch.h>
+};
+
+class SamplerSynthSoundTimestretcher : public QObject, public QRunnable {
+    Q_OBJECT
+public:
+    explicit SamplerSynthSoundTimestretcher(const ClipAudioSource *clip, const juce::AudioBuffer<float> *inputData, SamplerSynthSoundPrivate *parent = nullptr);
+    ~SamplerSynthSoundTimestretcher() override;
+
+    void run() override;
+    Q_SLOT void abort();
+    Q_SIGNAL void done();
+    juce::AudioBuffer<float> data;
+    int sampleLength{0};
+    double stretchRate{1.0f};
+private:
+    class Private;
+    Private* d{nullptr};
+};
 
 class SamplerSynthSoundPrivate : public QObject {
 Q_OBJECT
@@ -19,6 +44,10 @@ public:
         soundLoader.setInterval(1);
         soundLoader.setSingleShot(true);
         connect(&soundLoader, &QTimer::timeout, this, &SamplerSynthSoundPrivate::loadSoundData);
+        playbackDataUpdater.moveToThread(qApp->thread());
+        playbackDataUpdater.setInterval(0);
+        playbackDataUpdater.setSingleShot(true);
+        connect(&playbackDataUpdater, &QTimer::timeout, this, &SamplerSynthSoundPrivate::updatePlaybackDataActual);
     }
 
     SamplerSynthSound *q{nullptr};
@@ -70,6 +99,46 @@ public:
             soundLoader.start(100);
         }
     }
+
+    QTimer playbackDataUpdater;
+    void updatePlaybackData() {
+        playbackDataUpdater.start();
+    }
+    SamplerSynthSoundTimestretcher *activeTimeStretcher{nullptr};
+    void updatePlaybackDataActual() {
+        if (activeTimeStretcher) {
+            // qDebug() << Q_FUNC_INFO << "Existing timestretcher active, disconnecting, aborting, and removing" << activeTimeStretcher;
+            activeTimeStretcher->disconnect();
+            connect(activeTimeStretcher, &SamplerSynthSoundTimestretcher::done, activeTimeStretcher, &QObject::deleteLater, Qt::QueuedConnection);
+            activeTimeStretcher->abort();
+        }
+        if (clip->timeStretchStyle() == ClipAudioSource::TimeStretchOff) {
+            // qDebug() << Q_FUNC_INFO << "No time stretching required for clip" << clip->getFileName();
+            completedTimeStretcher = nullptr;
+            timeStretcherNeedsChanging = true;
+        } else {
+            activeTimeStretcher = new SamplerSynthSoundTimestretcher(clip, data.get(), this);
+            // qDebug() << Q_FUNC_INFO << "Creating new timestretcher for clip" << clip->getFileName() << "with style" << clip->timeStretchStyle() << "pitch" << clip->pitch() << "and speed ratio" << clip->speedRatio() << activeTimeStretcher;
+            connect(activeTimeStretcher, &SamplerSynthSoundTimestretcher::done, this, &SamplerSynthSoundPrivate::timeStretcherCompleted, Qt::QueuedConnection);
+            QThreadPool::globalInstance()->start(activeTimeStretcher);
+        }
+    }
+    SamplerSynthSoundTimestretcher *completedTimeStretcher{nullptr};
+    bool timeStretcherNeedsChanging{false};
+    Q_SLOT void timeStretcherCompleted() {
+        // Swapping the playback timestretcher instance out needs to be done in the jack process loop, to ensure it doesn't end up getting swapped half way through a run
+        if (completedTimeStretcher) {
+            // qDebug() << Q_FUNC_INFO << "We've got an old completed timestretcher, so let's get rid of that";
+            SamplerSynthSoundTimestretcher *oldCompleted = completedTimeStretcher;
+            completedTimeStretcher = nullptr;
+            oldCompleted->deleteLater();
+        }
+        completedTimeStretcher = activeTimeStretcher;
+        activeTimeStretcher = nullptr;
+        completedTimeStretcher->disconnect();
+        timeStretcherNeedsChanging = true;
+    }
+    SamplerSynthSoundTimestretcher *playbackTimeStretcher{nullptr};
 };
 
 SamplerSynthSound::SamplerSynthSound(ClipAudioSource *clip)
@@ -80,6 +149,9 @@ SamplerSynthSound::SamplerSynthSound(ClipAudioSource *clip)
     d->clip = clip;
     d->loadSoundData();
     QObject::connect(clip, &ClipAudioSource::playbackFileChanged, &d->soundLoader, [this](){ isValid = false; d->soundLoader.start(1); }, Qt::QueuedConnection);
+    QObject::connect(clip, &ClipAudioSource::timeStretchStyleChanged, d, [this](){ d->updatePlaybackData(); });
+    QObject::connect(clip, &ClipAudioSource::speedRatioChanged, d, [this](){ d->updatePlaybackData(); });
+    QObject::connect(clip, &ClipAudioSource::pitchChanged, d, [this](){ d->updatePlaybackData(); });
 }
 
 SamplerSynthSound::~SamplerSynthSound()
@@ -96,11 +168,26 @@ ClipAudioSource *SamplerSynthSound::clip() const
 
 juce::AudioBuffer<float> *SamplerSynthSound::audioData() const noexcept
 {
+    if (d->timeStretcherNeedsChanging) {
+        if (d->playbackTimeStretcher) {
+            // As this posts an event, it doesn't actually do any major memory type stuff, so we can get away with doing it in the process loop
+            d->playbackTimeStretcher->deleteLater();
+        }
+        d->playbackTimeStretcher = d->completedTimeStretcher;
+        d->completedTimeStretcher = nullptr;
+        d->timeStretcherNeedsChanging = false;
+    }
+    if (d->playbackTimeStretcher && d->clip->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
+        return &d->playbackTimeStretcher->data;
+    }
     return d->data.get();
 }
 
 const int & SamplerSynthSound::length() const
 {
+    if (d->playbackTimeStretcher && d->clip->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
+        return d->playbackTimeStretcher->sampleLength;
+    }
     return d->length;
 }
 
@@ -119,14 +206,161 @@ int SamplerSynthSound::rootMidiNote() const
     return d->clip->rootNote();
 }
 
-double SamplerSynthSound::sourceSampleRate() const
+const double & SamplerSynthSound::sourceSampleRate() const
 {
     return d->sourceSampleRate;
 }
 
-double SamplerSynthSound::sampleRateRatio() const
+const double & SamplerSynthSound::stretchRate() const
+{
+    static const double noStretch{1.0};
+    if (d->playbackTimeStretcher && d->clip->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
+        return d->playbackTimeStretcher->stretchRate;
+    }
+    return noStretch;
+}
+
+const double & SamplerSynthSound::sampleRateRatio() const
 {
     return d->sampleRateRatio;
+}
+
+class SamplerSynthSoundTimestretcher::Private {
+public:
+    Private() {}
+    ~Private() {}
+    SamplerSynthSoundPrivate *parent{nullptr};
+    const ClipAudioSource *clip{nullptr};
+    const juce::AudioBuffer<float> *inputData{nullptr};
+    tracktion_engine::soundtouch::SoundTouch soundTouch;
+
+    bool abort{false};
+    QMutex abortMutex;
+    bool isAborted() {
+        QMutexLocker locker(&abortMutex);
+        return abort;
+    }
+};
+
+SamplerSynthSoundTimestretcher::SamplerSynthSoundTimestretcher(const ClipAudioSource *clip, const juce::AudioBuffer<float> *inputData, SamplerSynthSoundPrivate *parent)
+    : QObject(nullptr)
+    , d(new Private)
+{
+    static int consequtive{0};
+    ++consequtive;
+    setObjectName(QString("TimeStretcher-%1").arg(consequtive));
+    d->parent = parent;
+    d->clip = clip;
+    d->inputData = inputData;
+    setAutoDelete(false);
+}
+
+SamplerSynthSoundTimestretcher::~SamplerSynthSoundTimestretcher()
+{
+    qDebug() << Q_FUNC_INFO << this;
+    delete d;
+}
+
+void SamplerSynthSoundTimestretcher::abort()
+{
+    QMutexLocker locker(&d->abortMutex);
+    d->abort = true;
+}
+
+void SamplerSynthSoundTimestretcher::run()
+{
+    d->soundTouch.setChannels(uint(d->inputData->getNumChannels()));
+    d->soundTouch.setSampleRate(d->parent->sourceSampleRate);
+    if (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchStandard) {
+        d->soundTouch.setSetting(SETTING_USE_AA_FILTER, 1); // Default when SOUNDTOUCH_PREVENT_CLICK_AT_RATE_CROSSOVER is not defined
+        d->soundTouch.setSetting(SETTING_AA_FILTER_LENGTH, 64); // Default value set in the RateTransposer ctor
+        d->soundTouch.setSetting(SETTING_USE_QUICKSEEK, 0); // Default value set in TDStretch ctor
+        d->soundTouch.setSetting(SETTING_SEQUENCE_MS, 0); // Default value - defined as DEFAULT_SEQUENCE_MS USE_AUTO_SEQUENCE_LEN ( = 0)
+        d->soundTouch.setSetting(SETTING_SEEKWINDOW_MS, 0); // Default value - defined as DEFAULT_SEEKWINDOW_MS USE_AUTO_SEEKWINDOW_LEN ( = 0)
+    } else if (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchBetter) {
+        // The settings used by the tracktion timestretcher's SoundTouchBetter setting
+        d->soundTouch.setSetting(SETTING_USE_AA_FILTER, 1);
+        d->soundTouch.setSetting(SETTING_AA_FILTER_LENGTH, 64);
+        d->soundTouch.setSetting(SETTING_USE_QUICKSEEK, 0);
+        d->soundTouch.setSetting(SETTING_SEQUENCE_MS, 60);
+        d->soundTouch.setSetting(SETTING_SEEKWINDOW_MS, 25);
+    }
+    d->soundTouch.setTempo(d->clip->speedRatio());
+    d->soundTouch.setPitch(d->clip->pitchChangePrecalc());
+
+    int startSample{0};
+    const int numChannels{d->inputData->getNumChannels()};
+    const int numSamples{d->inputData->getNumSamples()};
+    qint64 numLeft{numSamples};
+    const size_t blockSize{512};
+    const size_t stereoBlockSize{1024};
+    float readBuffer[stereoBlockSize];
+    int sampleWritePosition{0};
+    auto fetchReadySamples = [this, &readBuffer, &sampleWritePosition, numChannels](){
+        int nSamples{0};
+        do {
+            if (d->isAborted()) {
+                break;
+            }
+            nSamples = int(d->soundTouch.receiveSamples(readBuffer, blockSize));
+            // Write the interleaved data into the buffer
+            for (int channelIndex = 0; channelIndex < numChannels; ++channelIndex) {
+                const float* channelSource = readBuffer + channelIndex;
+                for (int sampleIndex = 0; sampleIndex < nSamples; ++sampleIndex) {
+                    if (sampleWritePosition + sampleIndex > data.getNumSamples()) {
+                        qWarning() << Q_FUNC_INFO << "The write position is now larger than the amount of space we've got for samples. We've got space for" << data.getNumSamples() << "and were asked to write into at least position" << sampleWritePosition + sampleIndex;
+                    }
+                    data.setSample(channelIndex, sampleWritePosition + sampleIndex, *channelSource);
+                    channelSource += numChannels;
+                }
+            }
+            sampleWritePosition += nSamples;
+        } while (nSamples != 0);
+    };
+    // Resize the buffer to be able to fit the new samples (setting it just a little higher than we
+    // actually need, to make sure we have enough space for all the samples, as flushing SoundTouch
+    // will produce potentially some blank samples at the end to fill the output buffer up)
+    const int initialFeedSize = d->soundTouch.getSetting(SETTING_INITIAL_LATENCY);
+    data.setSize(d->inputData->getNumChannels(), d->inputData->getNumSamples() * d->soundTouch.getInputOutputSampleRatio() + initialFeedSize, true);
+    // qDebug() << Q_FUNC_INFO << "Set the size of our output buffer to" << data.getNumSamples() << "based on" << d->inputData->getNumSamples() << "input samples, an output ratio of" << d->soundTouch.getInputOutputSampleRatio() << "and initial feed size of" << initialFeedSize;
+    while (numLeft > 0) {
+        if (d->isAborted()) {
+            break;
+        }
+        // Either read our desired block size, or whatever is left, whichever is shorter
+        const int numThisTime{int(qMin(numLeft, qint64(blockSize)))};
+        // qDebug() << Q_FUNC_INFO << "Operating on" << numThisTime << "samples, with" << numLeft << "remaining";
+        // Create a scratch buffer to contain the interleaved samples to send to SoundTouch
+        float interleaveBuffer[stereoBlockSize];
+        // Create an interleaved selection of samples as SoundTouch wants them
+        const float *inputArray[2]{d->inputData->getReadPointer(0, startSample), d->inputData->getReadPointer(1, startSample)};
+        juce::AudioDataConverters::interleaveSamples(inputArray, interleaveBuffer, numThisTime, numChannels);
+        // Now feed stuff into SoundTouch
+        d->soundTouch.putSamples(interleaveBuffer, uint(numThisTime));
+        // If there are any samples ready, pull them out
+        fetchReadySamples();
+        // Next run...
+        startSample += numThisTime;
+        numLeft -= numThisTime;
+    }
+    if (d->isAborted() == false) {
+        // Make sure that we're blushed out whatever's left in the algorithm (note there will likely be empty samples at the end)
+        d->soundTouch.flush();
+        if (d->isAborted() == false) {
+            // Retrieve whatever remaining samples might exist
+            fetchReadySamples();
+            if (d->isAborted() == false) {
+                const int previousSize{data.getNumSamples()};
+                // Resize the buffer to be the exact size we're supposed to have been given
+                data.setSize(d->inputData->getNumChannels(), d->inputData->getNumSamples() * d->soundTouch.getInputOutputSampleRatio(), true);
+                sampleLength = data.getNumSamples();
+                stretchRate = d->clip->speedRatio();
+                // qDebug() << Q_FUNC_INFO << "Sample has been stretched and whatnot, and the rate by which that is a thing is" << stretchRate << "after reducing the buffer size by" << previousSize - sampleLength;
+            }
+        }
+    }
+    // And finally, tell anybody who cares that we're done
+    Q_EMIT done();
 }
 
 // Since our pimpl is a qobject, let's make sure we do it properly
