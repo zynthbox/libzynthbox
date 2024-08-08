@@ -124,6 +124,8 @@ public:
   double currentLeveldB{-400.0};
   double prevLeveldB{-400.0};
   int id{0};
+  float processingProgress{-1.0f};
+  QString processingDescription;
   int sketchpadTrack{-1};
   int laneAffinity{0};
   ClipAudioSourcePositionsModel *positionsModel{nullptr};
@@ -812,6 +814,43 @@ void ClipAudioSource::setId(int id)
         d->id = id;
         Q_EMIT idChanged();
     }
+}
+
+void ClipAudioSource::setProcessingProgress(const float& processingProgress)
+{
+  if (d->processingProgress != processingProgress) {
+    d->processingProgress = processingProgress;
+    Q_EMIT processingProgressChanged();
+  }
+}
+
+void ClipAudioSource::startProcessing(const QString& description)
+{
+  setProcessingProgress(0.0);
+  setProcessingDescription(description);
+}
+
+void ClipAudioSource::endProcessing()
+{
+  setProcessingProgress(-1.0f);
+}
+
+const float & ClipAudioSource::processingProgress() const
+{
+  return d->processingProgress;
+}
+
+void ClipAudioSource::setProcessingDescription(const QString& processingDescription)
+{
+  if (d->processingDescription != processingDescription) {
+    d->processingDescription = processingDescription;
+    Q_EMIT processingDescriptionChanged();
+  }
+}
+
+const QString & ClipAudioSource::processingDescription() const
+{
+  return d->processingDescription;
 }
 
 int ClipAudioSource::sketchpadTrack() const

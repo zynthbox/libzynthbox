@@ -36,6 +36,19 @@ class ClipAudioSource : public QObject {
     Q_OBJECT
     Q_PROPERTY(int id READ id WRITE setId NOTIFY idChanged)
     /**
+     * \brief How far along in a processing operation the clip is (for example timestretching)
+     * The values are to be interpreted as:
+     * * [0.0:0.0]: Processing has started, but we don't know how far along it is
+     * * ]0.0:1.0[: Processing is under way and we know how far along we are
+     * * [1.0:1.0]: Processing is being finished up
+     * * -1: There is no processing currently ongoing
+     */
+    Q_PROPERTY(float processingProgress READ processingProgress NOTIFY processingProgressChanged)
+    /**
+     * \brief A description of what is currently happening
+     */
+    Q_PROPERTY(QString processingDescription READ processingDescription NOTIFY processingDescriptionChanged)
+    /**
      * \brief The way in which SamplerSynth will perform playback
      * @default NonLoopingPlaybackStyle
      * Setting this to various modes will result in other properties changing as well
@@ -550,6 +563,15 @@ public:
   int id() const;
   void setId(int id);
   Q_SIGNAL void idChanged();
+
+  void setProcessingProgress(const float &processingProgress);
+  void startProcessing(const QString &description = {});
+  void endProcessing();
+  const float &processingProgress() const;
+  Q_SIGNAL void processingProgressChanged();
+  void setProcessingDescription(const QString &processingDescription);
+  const QString &processingDescription() const;
+  Q_SIGNAL void processingDescriptionChanged();
 
   int sketchpadTrack() const;
   void setSketchpadTrack(const int &newValue);
