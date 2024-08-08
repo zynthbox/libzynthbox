@@ -13,9 +13,11 @@ public:
     int startPosition(int slice = 0) const;
     int stopPosition(int slice = 0) const;
     int rootMidiNote() const;
-    double sourceSampleRate() const;
+    const double &sourceSampleRate() const;
+    // The amount of stretch applied to the sample compared to the source version (will be 1.0 if time stretching is disabled)
+    const double &stretchRate() const;
     // The ratio between the loaded sample's sample rate, and the one in jack
-    double sampleRateRatio() const;
+    const double &sampleRateRatio() const;
     bool isValid{false};
 
     jack_port_t *leftPort{nullptr};
