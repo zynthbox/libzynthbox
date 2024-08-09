@@ -295,7 +295,11 @@ void SamplerSynthSoundTimestretcher::abort()
 
 void SamplerSynthSoundTimestretcher::run()
 {
-    d->soundTouch.setChannels(uint(d->inputData->getNumChannels()));
+    // Our system's based around stereo playback, so... no reason to try and do more than that
+    const int numChannels{d->inputData->getNumChannels() == 1 ? 1 : 2};
+    const int numSamples{d->inputData->getNumSamples()};
+
+    d->soundTouch.setChannels(uint(numChannels));
     d->soundTouch.setSampleRate(d->parent->sourceSampleRate);
     if (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchStandard) {
         d->soundTouch.setSetting(SETTING_USE_AA_FILTER, 1); // Default when SOUNDTOUCH_PREVENT_CLICK_AT_RATE_CROSSOVER is not defined
@@ -314,25 +318,28 @@ void SamplerSynthSoundTimestretcher::run()
     d->soundTouch.setTempo(d->clip->speedRatio());
     d->soundTouch.setPitch(d->clip->pitchChangePrecalc());
 
-    int startSample{0};
-    const int numChannels{d->inputData->getNumChannels()};
-    const int numSamples{d->inputData->getNumSamples()};
-    qint64 numLeft{numSamples};
+    // Resize the buffer to be able to fit the new samples (setting it just a little higher than we
+    // actually need, to make sure we have enough space for all the samples, as flushing SoundTouch
+    // will produce potentially some blank samples at the end to fill the output buffer up)
+    const int initialFeedSize = d->soundTouch.getSetting(SETTING_INITIAL_LATENCY);
+    data.setSize(numChannels, numSamples * d->soundTouch.getInputOutputSampleRatio() + initialFeedSize, true);
+    // qDebug() << Q_FUNC_INFO << "Set the size of our output buffer to" << data.getNumSamples() << "based on" << numSamples << "input samples, an output ratio of" << d->soundTouch.getInputOutputSampleRatio() << "and initial feed size of" << initialFeedSize;
+
     const size_t blockSize{512};
     const size_t stereoBlockSize{1024};
     float readBuffer[stereoBlockSize];
     int sampleWritePosition{0};
     auto fetchReadySamples = [this, &readBuffer, &sampleWritePosition, numChannels](){
-        int nSamples{0};
+        int retrievedSamplesCount{0};
         do {
             if (d->isAborted()) {
                 break;
             }
-            nSamples = int(d->soundTouch.receiveSamples(readBuffer, blockSize));
+            retrievedSamplesCount = int(d->soundTouch.receiveSamples(readBuffer, blockSize));
             // Write the interleaved data into the buffer
             for (int channelIndex = 0; channelIndex < numChannels; ++channelIndex) {
                 const float* channelSource = readBuffer + channelIndex;
-                for (int sampleIndex = 0; sampleIndex < nSamples; ++sampleIndex) {
+                for (int sampleIndex = 0; sampleIndex < retrievedSamplesCount; ++sampleIndex) {
                     if (sampleWritePosition + sampleIndex > data.getNumSamples()) {
                         qWarning() << Q_FUNC_INFO << "The write position is now larger than the amount of space we've got for samples. We've got space for" << data.getNumSamples() << "and were asked to write into at least position" << sampleWritePosition + sampleIndex;
                     }
@@ -340,15 +347,14 @@ void SamplerSynthSoundTimestretcher::run()
                     channelSource += numChannels;
                 }
             }
-            sampleWritePosition += nSamples;
-        } while (nSamples != 0);
+            sampleWritePosition += retrievedSamplesCount;
+        } while (retrievedSamplesCount != 0);
     };
-    // Resize the buffer to be able to fit the new samples (setting it just a little higher than we
-    // actually need, to make sure we have enough space for all the samples, as flushing SoundTouch
-    // will produce potentially some blank samples at the end to fill the output buffer up)
-    const int initialFeedSize = d->soundTouch.getSetting(SETTING_INITIAL_LATENCY);
-    data.setSize(d->inputData->getNumChannels(), d->inputData->getNumSamples() * d->soundTouch.getInputOutputSampleRatio() + initialFeedSize, true);
-    // qDebug() << Q_FUNC_INFO << "Set the size of our output buffer to" << data.getNumSamples() << "based on" << d->inputData->getNumSamples() << "input samples, an output ratio of" << d->soundTouch.getInputOutputSampleRatio() << "and initial feed size of" << initialFeedSize;
+
+    int startSample{0};
+    qint64 numLeft{numSamples};
+    // Create a scratch buffer to contain the interleaved samples to send to SoundTouch
+    float interleaveBuffer[stereoBlockSize];
     while (numLeft > 0) {
         if (d->isAborted()) {
             break;
@@ -357,13 +363,17 @@ void SamplerSynthSoundTimestretcher::run()
         // Either read our desired block size, or whatever is left, whichever is shorter
         const int numThisTime{int(qMin(numLeft, qint64(blockSize)))};
         // qDebug() << Q_FUNC_INFO << "Operating on" << numThisTime << "samples, with" << numLeft << "remaining";
-        // Create a scratch buffer to contain the interleaved samples to send to SoundTouch
-        float interleaveBuffer[stereoBlockSize];
-        // Create an interleaved selection of samples as SoundTouch wants them
-        const float *inputArray[2]{d->inputData->getReadPointer(0, startSample), d->inputData->getReadPointer(1, startSample)};
-        juce::AudioDataConverters::interleaveSamples(inputArray, interleaveBuffer, numThisTime, numChannels);
         // Now feed stuff into SoundTouch
-        d->soundTouch.putSamples(interleaveBuffer, uint(numThisTime));
+        if (numChannels == 1) {
+            // For a single channel, we can just pass that single channel's read pointer
+            d->soundTouch.putSamples(d->inputData->getReadPointer(0, startSample), uint(numThisTime));
+        } else {
+            // For stereo content, create an interleaved selection of samples as SoundTouch wants them
+            const float *inputArray[2]{d->inputData->getReadPointer(0, startSample), d->inputData->getReadPointer(1, startSample)};
+            juce::AudioDataConverters::interleaveSamples(inputArray, interleaveBuffer, numThisTime, numChannels);
+            // Now feed stuff into SoundTouch
+            d->soundTouch.putSamples(interleaveBuffer, uint(numThisTime));
+        }
         // If there are any samples ready, pull them out
         fetchReadySamples();
         // Next run...
@@ -379,7 +389,7 @@ void SamplerSynthSoundTimestretcher::run()
             if (d->isAborted() == false) {
                 // const int previousSize{data.getNumSamples()};
                 // Resize the buffer to be the exact size we're supposed to have been given
-                data.setSize(d->inputData->getNumChannels(), d->inputData->getNumSamples() * d->soundTouch.getInputOutputSampleRatio(), true);
+                data.setSize(numChannels, numSamples * d->soundTouch.getInputOutputSampleRatio(), true);
                 sampleLength = data.getNumSamples();
                 stretchRate = d->clip->speedRatio();
                 // qDebug() << Q_FUNC_INFO << "Sample has been stretched and whatnot, and the rate by which that is a thing is" << stretchRate << "after reducing the buffer size by" << previousSize - sampleLength;
