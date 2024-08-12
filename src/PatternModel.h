@@ -264,6 +264,20 @@ class PatternModel : public NotesModel
      */
     Q_PROPERTY(bool recordLive READ recordLive WRITE setRecordLive NOTIFY recordLiveChanged)
     /**
+     * \brief How tightly to quantize note start and duration points when performing live recording on the pattern
+     * The value is 96th of a beat (or 1/384th of a bar), and defines the grid size to which note
+     * start and end points are quantized
+     *
+     * 1 translates to quantizing being disabled (as that is the tightest timing we operate on), 0 (default)
+     * will quantize to the pattern's step length, and the maximum of 1536 is a somewhat arbitrarily chosen 4
+     * bars worth of steps
+     *
+     * @default 0 meaning the same as the step length
+     * @minimum 0
+     * @maximum 1536
+     */
+    Q_PROPERTY(int liveRecordingQuantizingAmount READ liveRecordingQuantizingAmount WRITE setLiveRecordingQuantizingAmount NOTIFY liveRecordingQuantizingAmountChanged)
+    /**
      * \brief What source live recording should listen for midi events on (defaults to the pattern's associated track, and is not persisted)
      * This can be one of the following:
      * * sketchpadTrack:-1 - for the "current" track (the default - will also be be used as fallback if given a value that is not supported)
@@ -599,6 +613,9 @@ public:
     void setRecordLive(bool recordLive);
     bool recordLive() const;
     Q_SIGNAL void recordLiveChanged();
+    void setLiveRecordingQuantizingAmount(const int &liveRecordingQuantizingAmount);
+    int liveRecordingQuantizingAmount() const;
+    Q_SIGNAL void liveRecordingQuantizingAmountChanged();
     void setLiveRecordingSource(const QString &newLiveRecordingSource);
     QString liveRecordingSource() const;
     Q_SIGNAL void liveRecordingSourceChanged();

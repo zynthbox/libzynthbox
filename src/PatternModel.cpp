@@ -499,6 +499,7 @@ public:
     int patternTickToSyncTimerTick{0};
 
     bool recordingLive{false};
+    int liveRecordingQuantizingAmount{0};
     QString liveRecordingSource;
     // First look at the external device id - if we're listening only to that, make sure we're doing that first
     QString liveRecordingSourceExternalDeviceId;
@@ -1835,6 +1836,19 @@ bool PatternModel::recordLive() const
     return d->recordingLive;
 }
 
+void PatternModel::setLiveRecordingQuantizingAmount(const int& liveRecordingQuantizingAmount)
+{
+    if (d->liveRecordingQuantizingAmount != liveRecordingQuantizingAmount) {
+        d->liveRecordingQuantizingAmount = liveRecordingQuantizingAmount;
+        Q_EMIT liveRecordingQuantizingAmountChanged();
+    }
+}
+
+int PatternModel::liveRecordingQuantizingAmount() const
+{
+    return d->liveRecordingQuantizingAmount;
+}
+
 void PatternModel::setLiveRecordingSource(const QString& newLiveRecordingSource)
 {
     static const QLatin1String sketchpadTrackSource{"sketchpadTrack:"};
@@ -2278,8 +2292,10 @@ void ZLPatternSynchronisationManager::addRecordedNote(void *recordedNote)
     // Note duration in the majority of this is in pattern ticks (that is, 1/128th of a bar), so let's trim things down a bit
     qint64 noteDuration = q->stepLength() / q->d->patternTickToSyncTimerTick;
 
-    // Unless we're in the "all the zoomies" mode where each step is one pattern tick, allow for a deviation of 2 before auto-quantizing
-    int deviationAllowance = qMin(qint64(2), noteDuration);
+    // Quantize the two timestamps to the grid we've been asked to use
+    const double quantizingAmount{q->d->liveRecordingQuantizingAmount == 0 ? q->stepLength() : double(q->d->liveRecordingQuantizingAmount)};
+    newNote->timestamp = quantizingAmount * qRound(double(newNote->timestamp) / quantizingAmount);
+    newNote->endTimestamp = quantizingAmount * qRound(double(newNote->endTimestamp) / quantizingAmount);
 
     // convert the timer ticks to pattern ticks, and adjust for whatever was the most recent restart of the pattern's playback
     newNote->timestamp = (newNote->timestamp - quint64(q->d->mostRecentStartTimestamp)) / quint64(q->d->patternTickToSyncTimerTick);
@@ -2288,26 +2304,10 @@ void ZLPatternSynchronisationManager::addRecordedNote(void *recordedNote)
     const double normalisedTimestamp{double(qint64(newNote->timestamp) % (q->patternLength() * noteDuration))};
     newNote->step = normalisedTimestamp / noteDuration;
     newNote->delay = normalisedTimestamp - (newNote->step * noteDuration);
+    newNote->duration = newNote->endTimestamp - newNote->timestamp;
 
     int row = (newNote->step / q->width()) % q->availableBars();
     int column = newNote->step - (row * q->width());
-
-    // Sanity check the delay - if it's within a small amount of the start position of the current step, or very near
-    // the next step, assume it wants to be quantized and make sure we're setting it on the appropriate step)
-    if (newNote->delay < deviationAllowance) {
-        newNote->delay = 0;
-    } else if (noteDuration - newNote->delay < deviationAllowance) {
-        newNote->step = (newNote->step + 1) % q->patternLength();
-        row = (newNote->step / q->width()) % q->availableBars();
-        column = newNote->step - (row * q->width());
-        newNote->delay = 0;
-    }
-
-    newNote->duration = newNote->endTimestamp - newNote->timestamp;
-    // Sanity check the duration - if it's within a small amount of the length of the pattern's note, reset it to 0 (for auto-quantizing)
-    if (abs(newNote->duration - qint64(noteDuration)) < deviationAllowance) {
-        newNote->duration = 0;
-    }
 
     // Now let's make sure that if there's already a note with this note value on the given step, we change that instead of adding a new one
     newNote->row = q->bankOffset() + row; // reset row to the internal actual row (otherwise we'd end up with the wrong one)
@@ -2342,7 +2342,7 @@ void ZLPatternSynchronisationManager::addRecordedNote(void *recordedNote)
         q->setSubnoteMetadata(newNote->row, newNote->column, subnoteIndex, "velocity", newNote->velocity);
         q->setSubnoteMetadata(newNote->row, newNote->column, subnoteIndex, "duration", newNote->duration);
         q->setSubnoteMetadata(newNote->row, newNote->column, subnoteIndex, "delay", newNote->delay);
-        qDebug() << Q_FUNC_INFO << "Handled a recorded new note:" << newNote << newNote->timestamp << newNote->endTimestamp << newNote->step << newNote->row << newNote->column << newNote->midiNote << newNote->velocity << newNote->delay << newNote->duration << "with deviation allowance" << deviationAllowance;
+        qDebug() << Q_FUNC_INFO << "Handled a recorded new note:" << newNote << newNote->timestamp << newNote->endTimestamp << newNote->step << newNote->row << newNote->column << newNote->midiNote << newNote->velocity << newNote->delay << newNote->duration;
     }
 
     // And at the end, get rid of the thing
