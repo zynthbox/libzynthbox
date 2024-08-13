@@ -2234,7 +2234,7 @@ void PatternModel::handleMidiMessage(const MidiRouter::ListenerPort &port, const
 {
     if (d->liveRecordingSourceExternalDeviceId.isEmpty()
             ? d->liveRecordingSourceSketchpadTrack == -1
-                ? port == MidiRouter::ListenerPort::PassthroughPort
+                ? (port == MidiRouter::ListenerPort::HardwareInPassthroughPort || port == MidiRouter::ListenerPort::InternalControllerPassthroughPort) // Ignoring events that are from the sequencer, only controller things interest us here
                     ? sketchpadTrack == d->sketchpadTrack
                     : sketchpadTrack == d->liveRecordingSourceSketchpadTrack
                 : false
