@@ -105,8 +105,11 @@ public:
             errorCode = jack_midi_event_write(outputBuffer, std::clamp<jack_nframes_t>(jack_time_to_frames(client, nextMidiTick) - current_frames, 0, nframes - 1), &midiTickEvent, 1);
             if (errorCode == ENOBUFS) {
                 qWarning() << "Ran out of space while writing ticks to the buffer, how did this even happen?!";
-            } else if (errorCode != 0) {
-                qWarning() << Q_FUNC_INFO << "Error writing midi event at time point" << std::clamp<jack_nframes_t>(jack_time_to_frames(client, nextMidiTick) - current_frames, 0, nframes - 1) << "with error:" << -errorCode << strerror(-errorCode);
+            // Disabling this because it's a bit noisy on startup, and it basically just means "we had an xrun" anyway,
+            // so... just ignore that here, we've got other things to worry about if that happens, and also it happens
+            // on startup, when loading lots of things, which is a bit ugly, and also at that point irrelevant
+            // } else if (errorCode != 0) {
+                // qWarning() << Q_FUNC_INFO << "Error writing midi event at time point" << std::clamp<jack_nframes_t>(jack_time_to_frames(client, nextMidiTick) - current_frames, 0, nframes - 1) << "with error:" << -errorCode << strerror(-errorCode);
             }
             nextMidiTick += 10000;
         }
