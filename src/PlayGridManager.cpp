@@ -160,6 +160,19 @@ public:
             internalPassthroughActiveNotes = activated;
             Q_EMIT q->internalPassthroughActiveNotesChanged();
         });
+        internalControllerPassthroughActiveNotesUpdater = new QTimer(q);
+        internalControllerPassthroughActiveNotesUpdater->setSingleShot(true);
+        internalControllerPassthroughActiveNotesUpdater->setInterval(0);
+        connect(internalControllerPassthroughActiveNotesUpdater, &QTimer::timeout, q, [this, q](){
+            QStringList activated;
+            for (int i = 0; i < 128; ++i) {
+                if (internalControllerPassthroughNoteActivations[i]) {
+                    activated << midiNoteNames[i];
+                }
+            }
+            internalControllerPassthroughActiveNotes = activated;
+            Q_EMIT q->internalControllerPassthroughActiveNotesChanged();
+        });
         hardwareInActiveNotesUpdater = new QTimer(q);
         hardwareInActiveNotesUpdater->setSingleShot(true);
         hardwareInActiveNotesUpdater->setInterval(0);
@@ -189,6 +202,7 @@ public:
         for (int i = 0; i < 128; ++i) {
             noteActivations[i] = 0;
             internalPassthroughNoteActivations[i] = 0;
+            internalControllerPassthroughNoteActivations[i] = 0;
             hardwareInNoteActivations[i] = 0;
             hardwareOutNoteActivations[i] = 0;
         }
@@ -230,15 +244,18 @@ public:
     int noteActivations[128];
     QTimer *activeNotesUpdater;
     QStringList activeNotes;
+    int internalPassthroughNoteActivations[128];
     QTimer *internalPassthroughActiveNotesUpdater;
     QStringList internalPassthroughActiveNotes;
+    int internalControllerPassthroughNoteActivations[128];
+    QTimer *internalControllerPassthroughActiveNotesUpdater;
+    QStringList internalControllerPassthroughActiveNotes;
     int hardwareInNoteActivations[128];
     QTimer *hardwareInActiveNotesUpdater;
     QStringList hardwareInActiveNotes;
     int hardwareOutNoteActivations[128];
     QTimer *hardwareOutActiveNotesUpdater;
     QStringList hardwareOutActiveNotes;
-    int internalPassthroughNoteActivations[128];
 
     int currentSketchpadTrack{0};
 
@@ -322,12 +339,20 @@ public:
                 }
                 break;
             case MidiRouter::InternalPassthroughPort:
-            case MidiRouter::InternalControllerPassthroughPort:
                 if (size == 3) {
                     if (0x79 < byte1 && byte1 < 0xA0) {
                         const bool setOn{0x8F < byte1 && byte3 > 0};
                         internalPassthroughNoteActivations[byte2] = setOn ? 1 : 0;
                         internalPassthroughActiveNotesUpdater->start();
+                    }
+                }
+                break;
+            case MidiRouter::InternalControllerPassthroughPort:
+                if (size == 3) {
+                    if (0x79 < byte1 && byte1 < 0xA0) {
+                        const bool setOn{0x8F < byte1 && byte3 > 0};
+                        internalControllerPassthroughNoteActivations[byte2] = setOn ? 1 : 0;
+                        internalControllerPassthroughActiveNotesUpdater->start();
                     }
                 }
                 break;
@@ -992,6 +1017,11 @@ QStringList PlayGridManager::activeNotes() const
 QStringList PlayGridManager::internalPassthroughActiveNotes() const
 {
     return d->internalPassthroughActiveNotes;
+}
+
+QStringList PlayGridManager::internalControllerPassthroughActiveNotes() const
+{
+    return d->internalControllerPassthroughActiveNotes;
 }
 
 QStringList PlayGridManager::hardwareInActiveNotes() const

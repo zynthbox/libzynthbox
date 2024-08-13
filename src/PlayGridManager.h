@@ -75,9 +75,13 @@ class PlayGridManager : public QObject
      */
     Q_PROPERTY(QStringList activeNotes READ activeNotes NOTIFY activeNotesChanged)
     /**
-     * \brief A list with the names of all the midi notes which are currently active somewhere that is not a hardware in or out port
+     * \brief A list with the names of all the midi notes which are currently active in the sequencer
      */
     Q_PROPERTY(QStringList internalPassthroughActiveNotes READ internalPassthroughActiveNotes NOTIFY internalPassthroughActiveNotesChanged)
+    /**
+     * \brief A list with the names of all the midi notes which are currently active in the internal controller
+     */
+    Q_PROPERTY(QStringList internalControllerPassthroughActiveNotes READ internalControllerPassthroughActiveNotes NOTIFY internalControllerPassthroughActiveNotesChanged)
     /**
      * \brief A list with the names of all the midi notes which are currently active on a hardware input device
      */
@@ -293,6 +297,8 @@ public:
     Q_SIGNAL void activeNotesChanged();
     QStringList internalPassthroughActiveNotes() const;
     Q_SIGNAL void internalPassthroughActiveNotesChanged();
+    QStringList internalControllerPassthroughActiveNotes() const;
+    Q_SIGNAL void internalControllerPassthroughActiveNotesChanged();
     QStringList hardwareInActiveNotes() const;
     Q_SIGNAL void hardwareInActiveNotesChanged();
     QStringList hardwareOutActiveNotes() const;
