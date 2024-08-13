@@ -26,6 +26,7 @@ public:
         TimeCodeGeneratorType = 0x4,
         HardwareDeviceType = 0x8,
         MasterTrackType = 0x16,
+        SequencerType = 0x32,
     };
     Q_DECLARE_FLAGS(DeviceTypes, DeviceType)
     explicit MidiRouterDevice(jack_client_t *jackClient, MidiRouter *parent = nullptr);
