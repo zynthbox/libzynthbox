@@ -137,8 +137,9 @@ public:
         UnknownPort = -1,
         PassthroughPort = 0,
         InternalPassthroughPort = 1,
-        HardwareInPassthroughPort = 2,
-        ExternalOutPort = 3,
+        InternalControllerPassthroughPort = 2,
+        HardwareInPassthroughPort = 3,
+        ExternalOutPort = 4,
     };
     Q_ENUM( ListenerPort )
 // Ouch not cool hack: https://forum.qt.io/topic/130255/shiboken-signals-don-t-work
