@@ -180,12 +180,15 @@ public:
         internalPassthroughListener.identifier = MidiRouter::InternalPassthroughPort;
         internalPassthroughListener.waitTime = 5;
         listenerPorts[1] = &internalPassthroughListener;
+        internalControllerPassthroughListener.identifier = MidiRouter::InternalControllerPassthroughPort;
+        internalControllerPassthroughListener.waitTime = 5;
+        listenerPorts[2] = &internalControllerPassthroughListener;
         hardwareInListener.identifier = MidiRouter::HardwareInPassthroughPort;
         hardwareInListener.waitTime = 5;
-        listenerPorts[2] = &hardwareInListener;
+        listenerPorts[3] = &hardwareInListener;
         externalOutListener.identifier = MidiRouter::ExternalOutPort;
         externalOutListener.waitTime = 5;
-        listenerPorts[3] = &externalOutListener;
+        listenerPorts[4] = &externalOutListener;
         syncTimer = SyncTimer::instance();
     };
     ~MidiRouterPrivate() {
@@ -230,9 +233,10 @@ public:
 
     MidiListenerPort passthroughListener;
     MidiListenerPort internalPassthroughListener;
+    MidiListenerPort internalControllerPassthroughListener;
     MidiListenerPort hardwareInListener;
     MidiListenerPort externalOutListener;
-    MidiListenerPort* listenerPorts[4];
+    MidiListenerPort* listenerPorts[5];
 
     void connectPorts(const QString &from, const QString &to) {
         int result = jack_connect(jackClient, from.toUtf8(), to.toUtf8());
@@ -295,6 +299,7 @@ public:
             MidiRouterDevice *eventDevice{nullptr};
             SketchpadTrackInfo *currentTrack{nullptr};
             bool inputDeviceIsHardware{false};
+            bool inputDeviceIsSequencer{false};
             for (MidiRouterDevice *device : qAsConst(devices)) {
                 device->processBegin(nframes);
             }
@@ -307,6 +312,7 @@ public:
                         event = deviceEvent;
                         eventDevice = device;
                         inputDeviceIsHardware = device->deviceType(MidiRouterDevice::HardwareDeviceType);
+                        inputDeviceIsSequencer = device->deviceType(MidiRouterDevice::SequencerType);
                     }
                 }
                 // If we no longer have any incoming events to process, scamper
@@ -356,7 +362,11 @@ public:
                             // qDebug() << Q_FUNC_INFO << "Hardware input message received for channel" << eventChannel << "of size" << event->size;
                             hardwareInListener.addMessage(false, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
                         } else {
-                            internalPassthroughListener.addMessage(true, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
+                            if (inputDeviceIsSequencer) {
+                                internalPassthroughListener.addMessage(true, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
+                            } else {
+                                internalControllerPassthroughListener.addMessage(true, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
+                            }
                         }
                         if (inputDeviceIsHardware == false && eventChannel == masterChannel) {
                             // qDebug() << Q_FUNC_INFO << "Event comes from internal device " << eventDevice << "and is on the master channel, send to all enabled outputs:" << allEnabledOutputs;
@@ -741,30 +751,54 @@ MidiRouter::MidiRouter(QObject *parent)
                 d->connectPorts("ZLRouter:TransportManager-out", "TransportManager:midi_in");
                 // Set up SyncTimer as a router device
                 for (int track = 0; track < ZynthboxTrackCount; ++track) {
+                    // First the sequencer device
                     MidiRouterDevice *syncTimerDevice = new MidiRouterDevice(d->jackClient, this);
-                    syncTimerDevice->setZynthianId(QLatin1String("SyncTimer-Track%1").arg(QString::number(track)));
-                    syncTimerDevice->setHumanReadableName(QLatin1String("SyncTimer Track%1").arg(QString::number(track)));
+                    syncTimerDevice->setZynthianId(QLatin1String("SyncTimer-Track%1-Sequencer").arg(QString::number(track)));
+                    syncTimerDevice->setHumanReadableName(QLatin1String("SyncTimer Track%1-Sequencer").arg(QString::number(track)));
                     syncTimerDevice->setDeviceType(MidiRouterDevice::ControllerType);
-                    syncTimerDevice->setInputPortName(QLatin1String("SyncTimer-Track%1").arg(QString::number(track)).toUtf8());
+                    syncTimerDevice->setDeviceType(MidiRouterDevice::SequencerType);
+                    syncTimerDevice->setInputPortName(QLatin1String("SyncTimer-Track%1-Sequencer").arg(QString::number(track)).toUtf8());
                     syncTimerDevice->setInputEnabled(true);
                     syncTimerDevice->setMidiChannelTargetTrack(-1, track);
                     syncTimerDevice->setZynthianMasterChannel(d->masterChannel);
                     d->internalDevices << syncTimerDevice;
-                    d->connectPorts(QLatin1String("SyncTimer:Track%1").arg(QString::number(track)).toUtf8(), QLatin1String("ZLRouter:SyncTimer-Track%1").arg(QString::number(track)).toUtf8());
+                    d->connectPorts(QLatin1String("SyncTimer:Track%1-Sequencer").arg(QString::number(track)).toUtf8(), QLatin1String("ZLRouter:SyncTimer-Track%1-Sequencer").arg(QString::number(track)).toUtf8());
+                    // Then the controller device
+                    syncTimerDevice = new MidiRouterDevice(d->jackClient, this);
+                    syncTimerDevice->setZynthianId(QLatin1String("SyncTimer-Track%1-Controller").arg(QString::number(track)));
+                    syncTimerDevice->setHumanReadableName(QLatin1String("SyncTimer Track%1-Controller").arg(QString::number(track)));
+                    syncTimerDevice->setDeviceType(MidiRouterDevice::ControllerType);
+                    syncTimerDevice->setInputPortName(QLatin1String("SyncTimer-Track%1-Controller").arg(QString::number(track)).toUtf8());
+                    syncTimerDevice->setInputEnabled(true);
+                    syncTimerDevice->setMidiChannelTargetTrack(-1, track);
+                    syncTimerDevice->setZynthianMasterChannel(d->masterChannel);
+                    d->internalDevices << syncTimerDevice;
+                    d->connectPorts(QLatin1String("SyncTimer:Track%1-Controller").arg(QString::number(track)).toUtf8(), QLatin1String("ZLRouter:SyncTimer-Track%1-Controller").arg(QString::number(track)).toUtf8());
                 }
                 // SyncTimer also has a master track for controlling things that are not directly tied to
                 // a track (such as, for example, cc values for specific zynthian-controlled
                 // synths, or things which are actually global, like the bpm)
                 MidiRouterDevice *masterDevice = new MidiRouterDevice(d->jackClient, this);
-                masterDevice->setZynthianId("SyncTimer-MasterTrack");
-                masterDevice->setHumanReadableName("SyncTimer Master Track");
+                masterDevice->setZynthianId("SyncTimer-MasterTrack-Sequencer");
+                masterDevice->setHumanReadableName("SyncTimer Master Track Sequencer");
                 masterDevice->setDeviceType(MidiRouterDevice::MasterTrackType);
-                masterDevice->setInputPortName("SyncTimer-MasterTrack");
+                masterDevice->setDeviceType(MidiRouterDevice::SequencerType);
+                masterDevice->setInputPortName("SyncTimer-MasterTrack-Sequencer");
                 masterDevice->setInputEnabled(true);
                 masterDevice->setZynthianMasterChannel(d->masterChannel);
                 masterDevice->setFilterZynthianOutputByChannel(true);
                 d->internalDevices << masterDevice;
-                d->connectPorts("SyncTimer:MasterTrack", "ZLRouter:SyncTimer-MasterTrack");
+                d->connectPorts("SyncTimer:MasterTrack-Sequencer", "ZLRouter:SyncTimer-MasterTrack-Sequencer");
+                masterDevice = new MidiRouterDevice(d->jackClient, this);
+                masterDevice->setZynthianId("SyncTimer-MasterTrack-Controller");
+                masterDevice->setHumanReadableName("SyncTimer Master Track Controller");
+                masterDevice->setDeviceType(MidiRouterDevice::MasterTrackType);
+                masterDevice->setInputPortName("SyncTimer-MasterTrack-Controller");
+                masterDevice->setInputEnabled(true);
+                masterDevice->setZynthianMasterChannel(d->masterChannel);
+                masterDevice->setFilterZynthianOutputByChannel(true);
+                d->internalDevices << masterDevice;
+                d->connectPorts("SyncTimer:MasterTrack-Controller", "ZLRouter:SyncTimer-MasterTrack-Controller");
                 // Set the devices to just be the internal devices, and then connect any hardware
                 d->devices = d->internalDevices;
                 // Now hook up the hardware inputs
@@ -792,7 +826,7 @@ void MidiRouter::run() {
         if (d->done) {
             break;
         }
-        for (int i = 0; i < 4; ++i) {
+        for (int i = 0; i < 5; ++i) {
             MidiListenerPort *listenerPort = d->listenerPorts[i];
             MidiListenerPort::NoteMessage *message = listenerPort->readHead;
             while (!message->submitted) {
