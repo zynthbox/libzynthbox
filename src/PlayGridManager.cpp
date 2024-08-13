@@ -322,6 +322,7 @@ public:
                 }
                 break;
             case MidiRouter::InternalPassthroughPort:
+            case MidiRouter::InternalControllerPassthroughPort:
                 if (size == 3) {
                     if (0x79 < byte1 && byte1 < 0xA0) {
                         const bool setOn{0x8F < byte1 && byte3 > 0};
