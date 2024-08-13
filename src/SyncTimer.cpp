@@ -48,6 +48,10 @@ using namespace std;
 using namespace juce;
 
 struct alignas(64) StepData {
+    enum BufferType {
+        SequencerBuffer = 0, // Referring to trackBuffer (our logical sequencer)
+        ControllerBuffer = 1, // Referring to trackBufferController (our logical controller)
+    };
     StepData() { }
     ~StepData() {
         qDeleteAll(timerCommands);
@@ -65,13 +69,15 @@ struct alignas(64) StepData {
             timerCommands.clear();
             clipCommands.clear();
             for (int track = 0; track < ZynthboxTrackCount + 1; ++track) {
-                trackBuffer[track].clear();
+                trackBufferSequencer[track].clear();
+                trackBufferController[track].clear();
             }
             // midiBuffer.clear();
         }
     }
-    void insertMidiBuffer(const juce::MidiBuffer &buffer, int sketchpadTrack);
-    juce::MidiBuffer trackBuffer[ZynthboxTrackCount + 1];
+    void insertMidiBuffer(const juce::MidiBuffer &buffer, int sketchpadTrack, StepData::BufferType bufferType);
+    juce::MidiBuffer trackBufferSequencer[ZynthboxTrackCount + 1]; // The logical "sequencer" buffer for the given track - for events that are scheduled as part of a sequence (will be ignored for recording purposes)
+    juce::MidiBuffer trackBufferController[ZynthboxTrackCount + 1]; // The logical "controller" for the given track - for events to be sent out as soon as possible
     QList<ClipCommand*> clipCommands;
     QList<TimerCommand*> timerCommands;
 
@@ -332,9 +338,11 @@ public:
     {
         for (int track = 0; track < ZynthboxTrackCount; ++track) {
             jackPort[track] = nullptr;
+            jackPortController[track] = nullptr;
             tracks[track].index = track;
         }
         jackPort[ZynthboxTrackCount] = nullptr;
+        jackPortController[ZynthboxTrackCount] = nullptr;
         tracks[ZynthboxTrackCount].index = -1;
 
         transportManager = TransportManager::instance(q);
@@ -494,6 +502,7 @@ public:
 
     jack_client_t* jackClient{nullptr};
     jack_port_t* jackPort[ZynthboxTrackCount + 1];
+    jack_port_t* jackPortController[ZynthboxTrackCount + 1];
     quint64 jackPlayhead{0};
     quint64 jackCumulativePlayhead{0};
     // Used to calculate the quantized block rate BPM for the jack transport position's beats_per_minute field (jackBeatsPerMinute)
@@ -524,10 +533,13 @@ public:
     juce::MidiBuffer missingBitsBuffer[ZynthboxTrackCount + 1];
     int process(jack_nframes_t nframes) {
         // const std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
-        void *buffer[ZynthboxTrackCount + 1];
+        void *bufferSequencer[ZynthboxTrackCount + 1];
+        void *bufferController[ZynthboxTrackCount + 1];
         for (int track = 0; track < ZynthboxTrackCount + 1; ++track) {
-            buffer[track] = jack_port_get_buffer(jackPort[track], nframes);
-            jack_midi_clear_buffer(buffer[track]);
+            bufferSequencer[track] = jack_port_get_buffer(jackPort[track], nframes);
+            jack_midi_clear_buffer(bufferSequencer[track]);
+            bufferController[track] = jack_port_get_buffer(jackPortController[track], nframes);
+            jack_midi_clear_buffer(bufferController[track]);
         }
 #ifdef DEBUG_SYNCTIMER_JACK
         quint64 stepCount = 0;
@@ -584,7 +596,7 @@ public:
             // This is going to be an extremely rare case, and if it happens there's likely something more substantial wrong, but best safe.
             if (missingBitsBuffer[track].isEmpty() == false) {
                 for (const juce::MidiMessageMetadata &juceMessage : qAsConst(missingBitsBuffer[track])) {
-                    jack_midi_event_write(buffer[track], relativePosition,
+                    jack_midi_event_write(bufferSequencer[track], relativePosition,
                         const_cast<jack_midi_data_t*>(juceMessage.data), // this might seems odd, but it's really only because juce's internal store is const here, and the data types are otherwise the same
                         size_t(juceMessage.numBytes) // this changes signedness, but from a lesser space (int) to a larger one (unsigned long)
                     );
@@ -624,12 +636,12 @@ public:
                 // First, let's get the midi messages sent out
                 for (int track = 0; track < ZynthboxTrackCount + 1; ++track) {
                     if (writeBeatTick) {
-                        jack_midi_event_write(buffer[track], relativePosition, &jackMidiBeatMessage, 1);
+                        jack_midi_event_write(bufferSequencer[track], relativePosition, &jackMidiBeatMessage, 1);
                     }
-                    for (const juce::MidiMessageMetadata &juceMessage : qAsConst(stepData->trackBuffer[track])) {
+                    auto handleJuceMessage = [this, firstAvailableFrame, nframes, &errorCode, track, relativePosition](const juce::MidiMessageMetadata &juceMessage, void** buffer) -> bool {
                         if (firstAvailableFrame >= nframes) {
                             qWarning() << Q_FUNC_INFO << "First available frame is in the future - that's a problem";
-                            break;
+                            return false;
                         }
                         errorCode = jack_midi_event_write(buffer[track], relativePosition,
                             const_cast<jack_midi_data_t*>(juceMessage.data), // this might seems odd, but it's really only because juce's internal store is const here, and the data types are otherwise the same
@@ -647,6 +659,17 @@ public:
                             ++eventCount;
                             commandValues << juceMessage.data[0]; noteValues << juceMessage.data[1]; velocities << juceMessage.data[2];
 #endif
+                        }
+                        return true;
+                    };
+                    for (const juce::MidiMessageMetadata &juceMessage : qAsConst(stepData->trackBufferSequencer[track])) {
+                        if (handleJuceMessage(juceMessage, bufferSequencer) == false) {
+                            break;
+                        }
+                    }
+                    for (const juce::MidiMessageMetadata &juceMessage : qAsConst(stepData->trackBufferController[track])) {
+                        if (handleJuceMessage(juceMessage, bufferController) == false) {
+                            break;
                         }
                     }
                 }
@@ -758,7 +781,7 @@ public:
                                 } else {
                                     size = 1;
                                 }
-                                errorCode = jack_midi_event_write(buffer[trackIndex], relativePosition, message, size);
+                                errorCode = jack_midi_event_write(bufferSequencer[trackIndex], relativePosition, message, size);
                                 if (errorCode == ENOBUFS) {
                                     qWarning() << Q_FUNC_INFO << "Ran out of space while writing events - scheduling the event there's not enough space for to be fired first next round";
                                     // Schedule the rest of the buffer for immediate dispatch on next go-around
@@ -938,8 +961,15 @@ public:
     }
 };
 
-void StepData::insertMidiBuffer(const juce::MidiBuffer &buffer, int sketchpadTrack) {
-    trackBuffer[sketchpadTrack].addEvents(buffer, 0, -1, trackBuffer[sketchpadTrack].getLastEventTime());
+void StepData::insertMidiBuffer(const juce::MidiBuffer &buffer, int sketchpadTrack, StepData::BufferType bufferType) {
+    switch (bufferType) {
+        case SequencerBuffer:
+            trackBufferSequencer[sketchpadTrack].addEvents(buffer, 0, -1, trackBufferSequencer[sketchpadTrack].getLastEventTime());
+            break;
+        case ControllerBuffer:
+            trackBufferController[sketchpadTrack].addEvents(buffer, 0, -1, trackBufferController[sketchpadTrack].getLastEventTime());
+            break;
+    }
     quint64 timestamp{d->jackCumulativePlayhead};
     if (d->stepReadHead != this) {
         if (d->stepReadHead->index < index) {
@@ -1002,9 +1032,11 @@ SyncTimer::SyncTimer(QObject *parent)
     if (d->jackClient) {
         // Register the MIDI output ports.
         for (int track = 0; track < ZynthboxTrackCount; ++track) {
-            d->jackPort[track] = jack_port_register(d->jackClient, QString("Track%1").arg(track).toUtf8(), JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+            d->jackPort[track] = jack_port_register(d->jackClient, QString("Track%1-Sequencer").arg(track).toUtf8(), JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+            d->jackPortController[track] = jack_port_register(d->jackClient, QString("Track%1-Controller").arg(track).toUtf8(), JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
         }
-        d->jackPort[ZynthboxTrackCount] = jack_port_register(d->jackClient, "MasterTrack", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+        d->jackPort[ZynthboxTrackCount] = jack_port_register(d->jackClient, "MasterTrack-Sequencer", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+        d->jackPortController[ZynthboxTrackCount] = jack_port_register(d->jackClient, "MasterTrack-Controller", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
         if (d->jackPort[ZynthboxTrackCount]) {
             // Set the process callback.
             if (jack_set_process_callback(d->jackClient, client_process, static_cast<void*>(d)) == 0) {
@@ -1163,7 +1195,7 @@ void SyncTimer::stop() {
             stepData->played = true;
             // First, collect all the queued midi messages
             for (int track = 0; track < ZynthboxTrackCount + 1; ++track) {
-                for (const juce::MidiMessageMetadata& message : stepData->trackBuffer[track]) {
+                for (const juce::MidiMessageMetadata& message : stepData->trackBufferSequencer[track]) {
                     juce::MidiMessage midiMessage = message.getMessage();
                     if (midiMessage.isNoteOn()) {
                         // Just in case this is a note on message, still schedule it, but be vewy vewy quiet, we're hunting silence-wabbits
@@ -1480,7 +1512,7 @@ int SyncTimer::nextAvailableChannel(const int& sketchpadTrack, quint64 delay)
 void SyncTimer::scheduleNote(unsigned char midiNote, unsigned char midiChannel, bool setOn, unsigned char velocity, quint64 duration, quint64 delay, int sketchpadTrack)
 {
     StepData *stepData{d->delayedStep(delay)};
-    juce::MidiBuffer &addToThis = stepData->trackBuffer[d->sketchpadTrack(sketchpadTrack)];
+    juce::MidiBuffer &addToThis = stepData->trackBufferSequencer[d->sketchpadTrack(sketchpadTrack)];
     unsigned char note[3];
     if (setOn) {
         note[0] = 0x90 + midiChannel;
@@ -1506,16 +1538,16 @@ void SyncTimer::scheduleMidiBuffer(const juce::MidiBuffer& buffer, quint64 delay
 {
 //     qDebug() << Q_FUNC_INFO << "Adding buffer with" << buffer.getNumEvents() << "notes, with delay" << delay << "giving us ring step" << d->delayedStep(delay) << "at ring playhead" << d->stepReadHead << "with cumulative beat" << d->cumulativeBeat;
     StepData *stepData{d->delayedStep(delay)};
-    stepData->insertMidiBuffer(buffer, d->sketchpadTrack(sketchpadTrack));
+    stepData->insertMidiBuffer(buffer, d->sketchpadTrack(sketchpadTrack), StepData::SequencerBuffer);
 }
 
 void SyncTimer::sendNoteImmediately(unsigned char midiNote, unsigned char midiChannel, bool setOn, unsigned char velocity, int sketchpadTrack)
 {
     StepData *stepData{d->delayedStep(0, true, true)};
     if (setOn) {
-        stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage::noteOn(midiChannel + 1, midiNote, juce::uint8(velocity))), d->sketchpadTrack(sketchpadTrack));
+        stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage::noteOn(midiChannel + 1, midiNote, juce::uint8(velocity))), d->sketchpadTrack(sketchpadTrack), StepData::ControllerBuffer);
     } else {
-        stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage::noteOff(midiChannel + 1, midiNote)), d->sketchpadTrack(sketchpadTrack));
+        stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage::noteOff(midiChannel + 1, midiNote)), d->sketchpadTrack(sketchpadTrack), StepData::ControllerBuffer);
     }
 }
 
@@ -1561,11 +1593,11 @@ void SyncTimer::sendMidiMessageImmediately(int size, int byte0, int byte1, int b
 {
     StepData *stepData{d->delayedStep(0, true, true)};
     if (size ==1) {
-        stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage(byte0)), d->sketchpadTrack(sketchpadTrack));
+        stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage(byte0)), d->sketchpadTrack(sketchpadTrack), StepData::ControllerBuffer);
     } else if (size == 2) {
-        stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage(byte0, byte1)), d->sketchpadTrack(sketchpadTrack));
+        stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage(byte0, byte1)), d->sketchpadTrack(sketchpadTrack), StepData::ControllerBuffer);
     } else if (size == 3) {
-        stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage(byte0, byte1, byte2)), d->sketchpadTrack(sketchpadTrack));
+        stepData->insertMidiBuffer(juce::MidiBuffer(juce::MidiMessage(byte0, byte1, byte2)), d->sketchpadTrack(sketchpadTrack), StepData::ControllerBuffer);
     } else {
         qWarning() << Q_FUNC_INFO << "Midi event is outside of bounds" << size;
     }
@@ -1584,7 +1616,7 @@ void SyncTimer::sendCCMessageImmediately(int midiChannel, int control, int value
 void SyncTimer::sendMidiBufferImmediately(const juce::MidiBuffer& buffer, int sketchpadTrack)
 {
     StepData *stepData{d->delayedStep(0, true, true)};
-    stepData->insertMidiBuffer(buffer, d->sketchpadTrack(sketchpadTrack));
+    stepData->insertMidiBuffer(buffer, d->sketchpadTrack(sketchpadTrack), StepData::ControllerBuffer);
 }
 
 bool SyncTimer::timerRunning() {
