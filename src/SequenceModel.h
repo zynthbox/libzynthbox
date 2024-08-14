@@ -211,18 +211,32 @@ public:
     Q_SIGNAL void shouldMakeSoundsChanged();
 
     /**
+     * \brief Imports the data from the given file into this Sequence, replacing all existing data
+     * Convenience function equivalent to calling load(fileName, true)
+     * @param fileName The filename to load data from (pass the metadata.sequence.json location)
+     */
+    Q_INVOKABLE void importFrom(const QString &fileName);
+    /**
      * \brief Load the data for this Sequence (and all Patterns contained within it) from the location indicated by filePath if none is given
      * @note Not setting filePath prior to loading will cause a default to be generated
      * @note Passing a filename to this function will reset the filePath property to that name
-     * @param fileName An optional filename to be used to perform the operation in place of the automatically chosen one (pass the metadata.seq.json location)
+     * @param fileName An optional filename to be used to perform the operation in place of the automatically chosen one (pass the metadata.sequence.json location)
+     * @param importOnly If set to true, this will make the function only import the information from the stored location, and not reset the file path
      */
-    Q_INVOKABLE void load(const QString &fileName = QString());
+    Q_INVOKABLE void load(const QString &fileName = QString(), bool importOnly = false);
+    /**
+     * \brief Exprot the data from this Sequence into the given location
+     * Convenience function equivalent to calling save(fileName, true)
+     * @param fileName The filename to save the sequence data into (pass the metadata.sequence.json location)
+     * @return True if successful, false if not
+     */
+    Q_INVOKABLE bool exportTo(const QString &fileName);
     /**
      * \brief Save the data for this Sequence (and all Patterns contained within it) to the location indicated by filePath if none is given
      * @note Not setting filePath prior to saving will cause a default to be generated
      * @note Passing a filename to this function will reset the filePath property to that name
      * @note Any file in the location WILL be overwritten if it already exists
-     * @param fileName An optional filename to be used to perform the operation in place of the automatically chosen one (pass the metadata.seq.json location)
+     * @param fileName An optional filename to be used to perform the operation in place of the automatically chosen one (pass the metadata.sequence.json location)
      * @param exportOnly If set to true, this will make this function only export the information, and not actually touch the internal state of the sequence
      * @return True if successful, false if not
      */

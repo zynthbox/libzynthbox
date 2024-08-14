@@ -188,8 +188,11 @@ public:
         if (filePath.isEmpty()) {
             if (song) {
                 QString sketchpadFolder = song->property("sketchpadFolder").toString();
+                if (sketchpadFolder.endsWith(QLatin1String{"/"})) {
+                    sketchpadFolder.chop(1);
+                }
                 const QString sequenceNameForFiles = QString(q->objectName().toLower()).replace(" ", "-");
-                q->setFilePath(QString("%1/sequences/%2/metadata.sequence.json").arg(sketchpadFolder).arg(sequenceNameForFiles));
+                q->setFilePath(QString("%1/sequences/autosave/%2/metadata.sequence.json").arg(sketchpadFolder).arg(sequenceNameForFiles));
             }
         }
     }
@@ -493,7 +496,12 @@ void SequenceModel::setShouldMakeSounds(bool shouldMakeSounds)
     }
 }
 
-void SequenceModel::load(const QString &fileName)
+void SequenceModel::importFrom(const QString& fileName)
+{
+    load(fileName, true);
+}
+
+void SequenceModel::load(const QString &fileName, bool importOnly)
 {
     QElapsedTimer elapsedTimer;
     elapsedTimer.start();
@@ -502,8 +510,12 @@ void SequenceModel::load(const QString &fileName)
     Q_EMIT isLoadingChanged();
     beginResetModel();
     QString data;
-    d->ensureFilePath(fileName);
-    QFile file(d->filePath);
+
+    if (importOnly == false) {
+        d->ensureFilePath(fileName);
+    }
+    const QString pathToLoadFrom{importOnly ? fileName : d->filePath};
+    QFile file(pathToLoadFrom);
 
     // Clear our the existing model...
     QList<PatternModel*> oldModels = d->patternModels;
@@ -523,7 +535,7 @@ void SequenceModel::load(const QString &fileName)
     QJsonDocument jsonDoc = QJsonDocument::fromJson(data.toUtf8());
     if (jsonDoc.isObject()) {
         // First, load the patterns from disk
-        QDir dir(QString("%1/patterns").arg(d->filePath.left(d->filePath.lastIndexOf("/"))));
+        QDir dir(QString("%1/patterns").arg(pathToLoadFrom.left(pathToLoadFrom.lastIndexOf("/"))));
         QFileInfoList entries = dir.entryInfoList({"*.pattern.json"}, QDir::Files, QDir::NoSort);
         QCollator collator;
         collator.setNumericMode(true);
@@ -614,6 +626,11 @@ void SequenceModel::load(const QString &fileName)
     if (loadedPatternCount > 0 || objectName() == QLatin1String("global")) {
         qDebug() << this << "Loaded" << loadedPatternCount << "patterns and filled in" << PATTERN_COUNT - loadedPatternCount << "in" << elapsedTimer.elapsed() << "milliseconds";
     }
+}
+
+bool SequenceModel::exportTo(const QString& fileName)
+{
+    return save(fileName, true);
 }
 
 bool SequenceModel::save(const QString &fileName, bool exportOnly)
@@ -718,8 +735,11 @@ void SequenceModel::setSong(QObject* song)
         d->song = song;
         if (d->song) {
             QString sketchpadFolder = d->song->property("sketchpadFolder").toString();
+            if (sketchpadFolder.endsWith(QLatin1String{"/"})) {
+                sketchpadFolder.chop(1);
+            }
             const QString sequenceNameForFiles = QString(objectName().toLower()).replace(" ", "-");
-            setFilePath(QString("%1/sequences/%2/metadata.sequence.json").arg(sketchpadFolder).arg(sequenceNameForFiles));
+            setFilePath(QString("%1/sequences/autosave/%2/metadata.sequence.json").arg(sketchpadFolder).arg(sequenceNameForFiles));
         }
         load();
         Q_EMIT songChanged();
