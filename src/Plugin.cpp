@@ -417,6 +417,24 @@ int Plugin::nextClipId()
     return ++lastCreatedClipId;
 }
 
+QString Plugin::currentTimestamp() const
+{
+    return QDateTime::currentDateTime().toString(m_timeStampFormat);
+}
+
+QString Plugin::timeStampFormat() const
+{
+    return m_timeStampFormat;
+}
+
+void Plugin::setTimeStampFormat(const QString& timeStampFormat)
+{
+    if (m_timeStampFormat != timeStampFormat) {
+        m_timeStampFormat = timeStampFormat;
+        Q_EMIT timeStampFormatChanged();
+    }
+}
+
 JackPassthrough *Plugin::globalPlaybackClient() const
 {
     return m_globalPlaybackClient;

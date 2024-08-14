@@ -39,6 +39,10 @@
 class Plugin : public QObject {
     Q_OBJECT
     /**
+     * \brief The format used for timestamps returned by the currentTimestamp() function
+     */
+    Q_PROPERTY(QString timeStampFormat READ timeStampFormat WRITE setTimeStampFormat NOTIFY timeStampFormatChanged)
+    /**
      * \brief A JackPassthrough clients used as a global playback client
      */
     Q_PROPERTY(JackPassthrough* globalPlaybackClient READ globalPlaybackClient CONSTANT)
@@ -88,6 +92,14 @@ public:
     Q_INVOKABLE void removeCreatedClipFromMap(ClipAudioSource *clip);
     Q_INVOKABLE ClipAudioSource* getClipById(int id);
     Q_INVOKABLE int nextClipId();
+    /**
+     * \brief Get a text-format timestamp in the format defined by the timeStampFormat property
+     * @return A formatted string for the current datetime
+     */
+    Q_INVOKABLE QString currentTimestamp() const;
+    QString timeStampFormat() const;
+    void setTimeStampFormat(const QString &timeStampFormat);
+    Q_SIGNAL void timeStampFormatChanged();
     JackPassthrough* globalPlaybackClient() const;
     QList<JackPassthrough*> synthPassthroughClients() const;
     QList<JackPassthrough*> trackPassthroughClients() const;
@@ -105,6 +117,7 @@ private:
     JuceEventLoop juceEventLoop;
     QHash<int, ClipAudioSource *> createdClipsMap;
     int lastCreatedClipId{-1};
+    QString m_timeStampFormat{"yyyyMMdd-HHmm"};
     JackPassthrough* m_globalPlaybackClient;
     QList<JackPassthrough*> m_synthPassthroughClients;
     QList<JackPassthrough*> m_trackPassthroughClients;
