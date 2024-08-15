@@ -164,6 +164,9 @@ void PatternRunnable::run()
         bank = splitId[1].toInt();
     }
     if (pattern) {
+        if (pattern->performanceActive()) {
+            pattern = qobject_cast<PatternModel*>(pattern->performanceClone());
+        }
         int height = 128;
         int width = pattern->width() * pattern->bankLength();
         img = QImage(width, height, QImage::Format_RGB32);
