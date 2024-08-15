@@ -1132,9 +1132,9 @@ void PatternModel::setMetadata(int row, int column, QVariant metadata)
     NotesModel::setMetadata(row, column, metadata);
 }
 
-void PatternModel::nudge(int firstStep, int lastStep, int amount)
+void PatternModel::nudge(int firstStep, int lastStep, int amount, const QVariantList &noteFilter)
 {
-    qDebug() << Q_FUNC_INFO << firstStep << lastStep << amount;
+    qDebug() << Q_FUNC_INFO << firstStep << lastStep << amount << noteFilter;
 }
 
 void PatternModel::resetPattern(bool clearNotes)

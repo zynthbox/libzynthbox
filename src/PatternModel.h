@@ -427,8 +427,9 @@ public:
      * @param firstStep The first step of the range of steps to nudge
      * @param lastStep the last step of the range of steps to nudge
      * @param amount The number of steps to nudge the steps (can be either positive or negative)
+     * @param noteFilter If defined, this should be a list of midi note values (anything outside [0;127] will be ignored), and only those notes will be nudged
      */
-    Q_INVOKABLE void nudge(int firstStep, int lastStep, int amount);
+    Q_INVOKABLE void nudge(int firstStep, int lastStep, int amount, const QVariantList &noteFilter = {});
 
     /**
      * \brief Resets all the model's content-related properties to their defaults
