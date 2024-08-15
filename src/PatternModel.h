@@ -288,6 +288,22 @@ class PatternModel : public NotesModel
     Q_PROPERTY(QString liveRecordingSource READ liveRecordingSource WRITE setLiveRecordingSource NOTIFY liveRecordingSourceChanged)
 
     /**
+     * \brief A reference to the model that should be used for changing the contents, depending on whether or not performance mode is active
+     * If performanceActive is true, this will be the performanceClone
+     * If performanceActive is false, this will be the main model
+     * Essentially a convenience trick to avoid having to check which model should be operated on in the sequencer UI
+     */
+    Q_PROPERTY(QObject* workingModel READ workingModel NOTIFY performanceActiveChanged)
+    /**
+     * \brief A reference to the model's performance clone. If this is a performance clone, the value will be null
+     */
+    Q_PROPERTY(QObject* performanceClone READ performanceClone NOTIFY performanceCloneChanged)
+    /**
+     * \brief Whether or not the performance clone is active
+     */
+    Q_PROPERTY(bool performanceActive READ performanceActive NOTIFY performanceActiveChanged)
+
+    /**
      * \brief A reference to the sketchpad Channel object this Pattern is associated with
      */
     Q_PROPERTY(QObject* zlChannel READ zlChannel WRITE setZlChannel NOTIFY zlChannelChanged)
@@ -405,6 +421,14 @@ public:
      * @param metadata The piece of metadata you wish to set
      */
     Q_INVOKABLE void setMetadata(int row, int column, QVariant metadata) override;
+
+    /**
+     * \brief Move the steps between firstStep and lastStep by the given amount, shifting overflow to the opposite end of the range
+     * @param firstStep The first step of the range of steps to nudge
+     * @param lastStep the last step of the range of steps to nudge
+     * @param amount The number of steps to nudge the steps (can be either positive or negative)
+     */
+    Q_INVOKABLE void nudge(int firstStep, int lastStep, int amount);
 
     /**
      * \brief Resets all the model's content-related properties to their defaults
@@ -620,6 +644,30 @@ public:
     QString liveRecordingSource() const;
     Q_SIGNAL void liveRecordingSourceChanged();
 
+    /**
+     * \brief Begin using the performance clone
+     * This will clone the current state of the pattern onto the performance clone, and mark the performance as active
+     * @note If called on a performance clone, this will have no effect
+     * @note If called while a performance is active, it will discard the current clone state and reapply the pattern's current state
+     */
+    Q_INVOKABLE void startPerformance();
+    /**
+     * \brief Apply the current state of the performance clone onto the pattern
+     * @note Technically you can do this any time before the next call to startPerformance, but should optimally be done immediately before or after stopPerformance
+     * @note If called on a performance clone, this will have no effect
+     */
+    Q_INVOKABLE void applyPerformance();
+    /**
+     * \brief Stop using the performance clone
+     * @note If called on a performance clone, this will have no effect
+     */
+    Q_INVOKABLE void stopPerformance();
+    QObject *workingModel();
+    QObject *performanceClone() const;
+    Q_SIGNAL void performanceCloneChanged();
+    bool performanceActive() const;
+    Q_SIGNAL void performanceActiveChanged();
+
     QObject *zlChannel() const;
     void setZlChannel(QObject *zlChannel);
     Q_SIGNAL void zlChannelChanged();
@@ -664,6 +712,7 @@ public:
     Q_SLOT void handleMidiMessage(const MidiRouter::ListenerPort &port, const quint64 &timestamp, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const int& sketchpadTrack, const QString& hardwareDeviceId);
     void midiMessageToClipCommands(ClipCommandRing* listToPopulate, const int& samplerIndex, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3) const;
 private:
+    explicit PatternModel(PatternModel* parent);
     friend class ZLPatternSynchronisationManager;
     class Private;
     Private *d;

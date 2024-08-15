@@ -495,6 +495,9 @@ public:
     bool updateMostRecentStartTimestamp{true};
     qint64 mostRecentStartTimestamp{0};
 
+    PatternModel *performanceClone{nullptr};
+    bool performanceActive{false};
+
     void noteLengthDetails(int noteLength, qint64 &nextPosition, bool &relevantToUs, qint64 &noteDuration);
     int patternTickToSyncTimerTick{0};
 
@@ -524,10 +527,14 @@ public:
     // model contains. So, remember your pattern hygiene and clean your buffers!
     QHash<int, StepData> stepData;
     StepData &getOrCreateStepData(int position) {
-        if (!stepData.contains(position)) {
-            stepData[position] = StepData();
+        if (performanceActive && performanceClone) {
+            return performanceClone->d->getOrCreateStepData(position);
+        } else {
+            if (!stepData.contains(position)) {
+                stepData[position] = StepData();
+            }
+            return stepData[position];
         }
-        return stepData[position];
     }
 
     // Handy variable in case we want to adjust how far ahead we're looking sometime
@@ -545,15 +552,19 @@ public:
      * @param row The row of the position to invalidate
      * @param column The column of the position to invalidate
      */
-   void invalidatePosition(int row = -1, int column = -1) {
-        if (row == -1 || column == -1) {
-            stepData.clear();
+    void invalidatePosition(int row = -1, int column = -1) {
+        if (performanceActive && performanceClone) {
+            performanceClone->d->invalidatePosition(row, column);
         } else {
-            const int basePosition = (row * width) + column;
-            for (int subsequentNoteIndex = 0; subsequentNoteIndex < lookaheadAmount; ++subsequentNoteIndex) {
-                // We clear backwards, just because might as well (by subtracting the subsequentNoteIndex from our base position)
-                int ourPosition = (basePosition - subsequentNoteIndex) % patternLength;
-                stepData.remove(ourPosition);
+            if (row == -1 || column == -1) {
+                stepData.clear();
+            } else {
+                const int basePosition = (row * width) + column;
+                for (int subsequentNoteIndex = 0; subsequentNoteIndex < lookaheadAmount; ++subsequentNoteIndex) {
+                    // We clear backwards, just because might as well (by subtracting the subsequentNoteIndex from our base position)
+                    int ourPosition = (basePosition - subsequentNoteIndex) % patternLength;
+                    stepData.remove(ourPosition);
+                }
             }
         }
     }
@@ -565,19 +576,23 @@ public:
      * @param column The column of the position to invalidate
      */
     void invalidateNotes(int row = -1, int column = -1) {
-        if (row == -1 || column == -1) {
-            QHash<int, StepData>::iterator stepDataIterator;
-            for (stepDataIterator = stepData.begin(); stepDataIterator != stepData.end(); ++stepDataIterator) {
-                stepDataIterator.value().positionBuffers.clear();
-                stepDataIterator.value().isValid = false;
-            }
+        if (performanceActive && performanceClone) {
+            performanceClone->d->invalidateNotes(row, column);
         } else {
-            const int basePosition = (row * width) + column;
-            for (int subsequentNoteIndex = 0; subsequentNoteIndex < lookaheadAmount; ++subsequentNoteIndex) {
-                // We clear backwards, just because might as well (by subtracting the subsequentNoteIndex from our base position)
-                int ourPosition = (basePosition - subsequentNoteIndex) % patternLength;
-                stepData[ourPosition].positionBuffers.clear();
-                stepData[ourPosition].isValid = false;
+            if (row == -1 || column == -1) {
+                QHash<int, StepData>::iterator stepDataIterator;
+                for (stepDataIterator = stepData.begin(); stepDataIterator != stepData.end(); ++stepDataIterator) {
+                    stepDataIterator.value().positionBuffers.clear();
+                    stepDataIterator.value().isValid = false;
+                }
+            } else {
+                const int basePosition = (row * width) + column;
+                for (int subsequentNoteIndex = 0; subsequentNoteIndex < lookaheadAmount; ++subsequentNoteIndex) {
+                    // We clear backwards, just because might as well (by subtracting the subsequentNoteIndex from our base position)
+                    int ourPosition = (basePosition - subsequentNoteIndex) % patternLength;
+                    stepData[ourPosition].positionBuffers.clear();
+                    stepData[ourPosition].isValid = false;
+                }
             }
         }
     }
@@ -588,20 +603,24 @@ public:
      * @param row The row of the position to invalidate
      * @param column The column of the position to invalidate
      */
-   void invalidateProbabilities(int row = -1, int column = -1) {
-        if (row == -1 || column == -1) {
-            QHash<int, StepData>::iterator stepDataIterator;
-            for (stepDataIterator = stepData.begin(); stepDataIterator != stepData.end(); ++stepDataIterator) {
-                stepDataIterator.value().probabilitySequences.clear();
-            }
+    void invalidateProbabilities(int row = -1, int column = -1) {
+        if (performanceActive && performanceClone) {
+            performanceClone->d->invalidateProbabilities(row, column);
         } else {
-            const int basePosition = (row * width) + column;
-            for (int subsequentNoteIndex = 0; subsequentNoteIndex < lookaheadAmount; ++subsequentNoteIndex) {
-                // We clear backwards, just because might as well (by subtracting the subsequentNoteIndex from our base position)
-                int ourPosition = (basePosition - subsequentNoteIndex) % patternLength;
-                stepData[ourPosition].probabilitySequences.clear();
+            if (row == -1 || column == -1) {
+                QHash<int, StepData>::iterator stepDataIterator;
+                for (stepDataIterator = stepData.begin(); stepDataIterator != stepData.end(); ++stepDataIterator) {
+                    stepDataIterator.value().probabilitySequences.clear();
+                }
+            } else {
+                const int basePosition = (row * width) + column;
+                for (int subsequentNoteIndex = 0; subsequentNoteIndex < lookaheadAmount; ++subsequentNoteIndex) {
+                    // We clear backwards, just because might as well (by subtracting the subsequentNoteIndex from our base position)
+                    int ourPosition = (basePosition - subsequentNoteIndex) % patternLength;
+                    stepData[ourPosition].probabilitySequences.clear();
+                }
             }
-        }
+            }
     }
 
     SyncTimer* syncTimer{nullptr};
@@ -862,6 +881,28 @@ PatternModel::PatternModel(SequenceModel* parent)
             }
         }
     }, Qt::QueuedConnection);
+    // Finally, create our performance clone (last, because it uses some things we've constructed)
+    d->performanceClone = new PatternModel(this);
+}
+
+PatternModel::PatternModel(PatternModel* parent)
+    : NotesModel(parent->playGridManager())
+    , d(new Private(this))
+{
+    // Register the performance model changes in the parent (basically "just" for thumbnail purposes and ui updates
+    connect(this, &PatternModel::noteDestinationChanged, parent, &NotesModel::registerChange);
+    connect(this, &PatternModel::layerDataChanged, parent, &NotesModel::registerChange);
+    connect(this, &PatternModel::stepLengthChanged, parent, &NotesModel::registerChange);
+    connect(this, &PatternModel::swingChanged, parent, &NotesModel::registerChange);
+    connect(this, &PatternModel::patternLengthChanged, parent, &NotesModel::registerChange);
+    connect(this, &PatternModel::activeBarChanged, parent, &NotesModel::registerChange);
+    connect(this, &PatternModel::bankOffsetChanged, parent, &NotesModel::registerChange);
+    connect(this, &PatternModel::bankLengthChanged, parent, &NotesModel::registerChange);
+    connect(this, &PatternModel::enabledChanged, parent, &NotesModel::registerChange);
+    connect(this, &PatternModel::pitchChanged, parent, &NotesModel::registerChange);
+    connect(this, &PatternModel::octaveChanged, parent, &NotesModel::registerChange);
+    connect(this, &PatternModel::scaleChanged, parent, &NotesModel::registerChange);
+    d->sequence = parent->d->sequence;
 }
 
 PatternModel::~PatternModel()
@@ -872,6 +913,7 @@ PatternModel::~PatternModel()
 void PatternModel::cloneOther(PatternModel *otherPattern)
 {
     if (otherPattern) {
+        startLongOperation();
         clear();
         setWidth(otherPattern->width());
         setHeight(otherPattern->height());
@@ -881,15 +923,19 @@ void PatternModel::cloneOther(PatternModel *otherPattern)
         setActiveBar(otherPattern->activeBar());
         setBankOffset(otherPattern->bankOffset());
         setBankLength(otherPattern->bankLength());
-        setEnabled(otherPattern->enabled());
+        setEnabled(otherPattern->enabled()); // FIXME This is... not proper, is it?
         setScale(otherPattern->scale());
         setOctave(otherPattern->octave());
         setPitch(otherPattern->pitch());
+        setDefaultNoteDuration(otherPattern->defaultNoteDuration());
+        setGridModelStartNote(otherPattern->gridModelStartNote());
+        setGridModelEndNote(otherPattern->gridModelEndNote());
 
         // Now clone all the notes
         for (int i = 0; i < rowCount(); ++i) {
             setRowData(i, otherPattern->getRow(i), otherPattern->getRowMetadata(i));
         }
+        endLongOperation();
     }
 }
 
@@ -1084,6 +1130,11 @@ void PatternModel::setMetadata(int row, int column, QVariant metadata)
 {
     d->invalidatePosition(row, column);
     NotesModel::setMetadata(row, column, metadata);
+}
+
+void PatternModel::nudge(int firstStep, int lastStep, int amount)
+{
+    qDebug() << Q_FUNC_INFO << firstStep << lastStep << amount;
 }
 
 void PatternModel::resetPattern(bool clearNotes)
@@ -1877,6 +1928,48 @@ QString PatternModel::liveRecordingSource() const
     return d->liveRecordingSource;
 }
 
+void PatternModel::startPerformance()
+{
+    qDebug() << Q_FUNC_INFO;
+    if (d->performanceClone) {
+        d->performanceClone->cloneOther(this);
+        d->performanceActive = true;
+        Q_EMIT performanceActiveChanged();
+    }
+}
+
+void PatternModel::applyPerformance()
+{
+    qDebug() << Q_FUNC_INFO;
+    if (d->performanceClone) {
+        cloneOther(d->performanceClone);
+    }
+}
+
+void PatternModel::stopPerformance()
+{
+    qDebug() << Q_FUNC_INFO;
+    if (d->performanceClone && d->performanceActive) {
+        d->performanceActive = false;
+        Q_EMIT performanceActiveChanged();
+    }
+}
+
+QObject * PatternModel::workingModel()
+{
+    return d->performanceActive && d->performanceClone ? d->performanceClone : this;
+}
+
+QObject * PatternModel::performanceClone() const
+{
+    return d->performanceClone;
+}
+
+bool PatternModel::performanceActive() const
+{
+    return d->performanceActive;
+}
+
 QObject *PatternModel::zlChannel() const
 {
     return d->zlSyncManager->zlChannel;
@@ -1936,7 +2029,7 @@ bool PatternModel::isPlaying() const
     return d->isPlaying;
 }
 
-void addNoteToBuffer(juce::MidiBuffer &buffer, const Note *theNote, unsigned char velocity, bool setOn, int availableChannel) {
+static inline void addNoteToBuffer(juce::MidiBuffer &buffer, const Note *theNote, const unsigned char &velocity, const bool &setOn, const int &availableChannel) {
     unsigned char note[3];
     if (setOn) {
         note[0] = 0x90 + availableChannel;
@@ -2090,13 +2183,13 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                         const int ourPosition = (nextPosition + subsequentStepIndex) % d->patternLength;
                         StepData &subsequentStep = d->getOrCreateStepData(ourPosition);
                         // Swing is applied to every even step as counted by humans (so every uneven step as counted by our indices)
-                        subsequentStep.updateSwing(noteDuration, ourPosition % 2 == 0 ? 50 : d->swing);
+                        subsequentStep.updateSwing(noteDuration, ourPosition % 2 == 0 ? 50 : (d->performanceActive && d->performanceClone ? d->performanceClone->d->swing : d->swing));
                         const int row = (ourPosition / d->width) % d->availableBars;
                         const int column = ourPosition - (row * d->width);
-                        const Note *note = qobject_cast<const Note*>(getNote(row + d->bankOffset, column));
+                        const Note *note = (d->performanceActive && d->performanceClone) ? qobject_cast<const Note*>(d->performanceClone->getNote(row + d->bankOffset, column)) : qobject_cast<const Note*>(getNote(row + d->bankOffset, column));
                         if (note) {
                             const QVariantList &subnotes = note->subnotes();
-                            const QVariantList &meta = getMetadata(row + d->bankOffset, column).toList();
+                            const QVariantList &meta = (d->performanceActive && d->performanceClone) ? d->performanceClone->getMetadata(row + d->bankOffset, column).toList() : getMetadata(row + d->bankOffset, column).toList();
                             // The first step (that is, the "current" step) we want to treat to all the things
                             if (subsequentStepIndex == 0) {
                                 // qDebug() << Q_FUNC_INFO << "Step: Position" << ourPosition;
