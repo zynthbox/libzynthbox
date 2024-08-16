@@ -902,6 +902,7 @@ PatternModel::PatternModel(PatternModel* parent)
     connect(this, &PatternModel::pitchChanged, parent, &NotesModel::registerChange);
     connect(this, &PatternModel::octaveChanged, parent, &NotesModel::registerChange);
     connect(this, &PatternModel::scaleChanged, parent, &NotesModel::registerChange);
+    connect(this, &NotesModel::lastModifiedChanged, parent, &NotesModel::registerChange);
     d->sequence = parent->d->sequence;
 }
 
@@ -1134,7 +1135,94 @@ void PatternModel::setMetadata(int row, int column, QVariant metadata)
 
 void PatternModel::nudge(int firstStep, int lastStep, int amount, const QVariantList &noteFilter)
 {
-    qDebug() << Q_FUNC_INFO << firstStep << lastStep << amount << noteFilter;
+    // qDebug() << Q_FUNC_INFO << firstStep << lastStep << amount << noteFilter;
+    if (abs(amount) > 0 && firstStep > -1 && lastStep > -1 && firstStep < d->patternLength && lastStep < d->patternLength) {
+        startLongOperation();
+        // In case there's no entries in the filter, just add all the notes (which allows us to just always apply the filter)
+        QList<int> noteFilterActual;
+        if (noteFilter.isEmpty()) {
+            for (int midiNote = 0; midiNote < 128; ++midiNote) {
+                noteFilterActual << midiNote;
+            }
+        } else {
+            for (const QVariant &variantNote : noteFilter) {
+                Note *note = variantNote.value<Note*>();
+                if (note) {
+                    noteFilterActual << note->midiNote();
+                } else if (variantNote.type() == QVariant::Int) {
+                    noteFilterActual << variantNote.value<int>();
+                }
+            }
+        }
+        // These could kind of be in any order, but let's just make sure that for our own algorithmic sanity, they're linguistically sound
+        if (firstStep > lastStep) {
+            const int tempLast{lastStep};
+            lastStep = firstStep;
+            firstStep = tempLast;
+        }
+        // Find the offset amount by fitting it inside the range (that is, normalise the amount)
+        const int range{lastStep - firstStep};
+        while (abs(amount) > range) {
+            amount += (amount > 0) ? -range : range;
+        }
+        // Remove all the notes in noteFilter from all the entries in the step range, and store them in lists
+        QList<QList<Note*>> originalNotes;
+        QList<QList<QVariantHash>> originalMetadata;
+        for (int rangeStep = firstStep; rangeStep < lastStep + 1; ++rangeStep) {
+            const int row{rangeStep / d->width};
+            const int column{rangeStep - (row * d->width)};
+            Note* stepNote = qobject_cast<Note*>(getNote(row, column));
+            QVariantList stepMetadata = getMetadata(row, column).toList();
+            QList<Note*> filteredStepNotes;
+            QList<QVariantHash> filteredStepMetadata;
+            // Run through all the existing subnotes, and pull out the ones that match a note value we've been asked to handle
+            if (stepNote) {
+                for (int subNoteIndex = stepNote->subnotes().count() - 1; subNoteIndex > -1 ; --subNoteIndex) {
+                    Note *subNote = stepNote->subnotes().at(subNoteIndex).value<Note*>();
+                    if (noteFilterActual.contains(subNote->midiNote())) {
+                        filteredStepNotes << subNote;
+                        QVariantHash subnoteMetadata;
+                        filteredStepMetadata << stepMetadata[subNoteIndex].toHash();
+                        removeSubnote(row, column, subNoteIndex);
+                    }
+                }
+            }
+            originalNotes << filteredStepNotes;
+            originalMetadata << filteredStepMetadata;
+        }
+        // qDebug() << Q_FUNC_INFO << "Original notes:" << originalNotes;
+        // Depending on the direction of movement, move an amount of step data from the front to the end, or vice versa
+        if (amount > 0) {
+            for (int remainingMoves = amount; remainingMoves > 0; --remainingMoves) {
+                // qDebug() << "Swapping last step to the front, remaining moves:" << remainingMoves - 1;
+                originalNotes.prepend(originalNotes.takeLast());
+                originalMetadata.prepend(originalMetadata.takeLast());
+            }
+        } else {
+            for (int remainingMoves = abs(amount); remainingMoves > 0; --remainingMoves) {
+                // qDebug() << "Swapping first step to the rear, remaining moves:" << remainingMoves - 1;
+                originalNotes.append(originalNotes.takeFirst());
+                originalMetadata.append(originalMetadata.takeFirst());
+            }
+        }
+        // qDebug() << Q_FUNC_INFO << "Shifted  notes:" << originalNotes;
+        // Re-add the now rotated notes and metadata into their new homes
+        for (int rangeStep = firstStep; rangeStep < lastStep + 1; ++rangeStep) {
+            const int row{rangeStep / d->width};
+            const int column{rangeStep - (row * d->width)};
+            const QList<Note*> &stepNotes = originalNotes[rangeStep - firstStep];
+            const QList<QVariantHash> &stepMetadata = originalMetadata[rangeStep - firstStep];
+            for (int stepNoteIndex = 0; stepNoteIndex < stepNotes.count(); ++stepNoteIndex) {
+                const int subNoteIndex = insertSubnoteSorted(row, column, stepNotes[stepNoteIndex]);
+                const QVariantHash &temporarySubnoteMetadata = stepMetadata[stepNoteIndex];
+                for (QVariantHash::const_iterator tempMetadataIterator = temporarySubnoteMetadata.constBegin(); tempMetadataIterator != temporarySubnoteMetadata.constEnd(); ++tempMetadataIterator) {
+                    setSubnoteMetadata(row, column, subNoteIndex, tempMetadataIterator.key(), tempMetadataIterator.value());
+                }
+            }
+        }
+        endLongOperation();
+        registerChange();
+    }
 }
 
 void PatternModel::resetPattern(bool clearNotes)
