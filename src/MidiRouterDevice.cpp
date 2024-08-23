@@ -3,6 +3,8 @@
 #include "DeviceMessageTranslations.h"
 #include "MidiRouter.h"
 #include "MidiRouterDeviceModel.h"
+#include "MidiRouterFilter.h"
+#include "MidiRouterFilterEntryRewriter.h"
 #include "SyncTimer.h"
 
 #include <QString>
@@ -11,6 +13,7 @@
 
 #include <jack/jack.h>
 #include <jack/midiport.h>
+#include "MidiRouterFilterEntry.h"
 
 #define DebugRouterDevice false
 
@@ -19,6 +22,9 @@ public:
     MidiRouterDevicePrivate (MidiRouterDevice *q)
         : q(q)
     {
+        static int consequtiveId{-1};
+        ++consequtiveId;
+        id = consequtiveId;
         DeviceMessageTranslations::load();
         for (int channel = 0; channel < 16; ++channel) {
             acceptsChannel[channel] = true;
@@ -29,11 +35,18 @@ public:
                 noteState[channel][note] = 0;
                 noteActivationTrack[channel][note] = -1;
                 acceptsNote[note] = true;
+                // Not technically notes, but like... same range
+                ccValues[channel][note] = 0;
             }
         }
+        inputEventFilter = new MidiRouterFilter(q);
+        outputEventFilter = new MidiRouterFilter(q);
     }
     MidiRouterDevice *q{nullptr};
+    int id{-1};
     MidiRouter *router{nullptr};
+    MidiRouterFilter *inputEventFilter{nullptr};
+    MidiRouterFilter *outputEventFilter{nullptr};
     // Use this on any outgoing events, to ensure the event matches the device's master channel setup
     // Remember to call the function below after processing the event
     inline const void zynthboxToDevice(jack_midi_event_t *event) const;
@@ -48,6 +61,7 @@ public:
     int noteState[16][128];
     int noteActivationTrack[16][128];
     int midiChannelTargetTrack[16];
+    int ccValues[16][128];
     jack_client_t *jackClient{nullptr};
     QString hardwareId;
     QString zynthianId;
@@ -111,6 +125,11 @@ MidiRouterDevice::~MidiRouterDevice()
     DeviceMessageTranslations::unload();
 }
 
+const int &MidiRouterDevice::id() const
+{
+    return d->id;
+}
+
 void MidiRouterDevice::processBegin(const jack_nframes_t &nframes)
 {
     // Set up the output buffer
@@ -121,6 +140,18 @@ void MidiRouterDevice::processBegin(const jack_nframes_t &nframes)
         d->outputBuffer = nullptr;
     }
     d->mostRecentOutputTime = 0;
+    // Fire off any events that might be in the output ring for immediate dispatch
+    while (midiOutputRing.readHead->processed == false) {
+        const juce::MidiBuffer &buffer = midiOutputRing.readHead->buffer;
+        for (const juce::MidiMessageMetadata &juceMessage : buffer) {
+            // These want to be written raw onto the output buffer (they will have already gone through filters etc)
+            jack_midi_event_write(d->outputBuffer, 0,
+                const_cast<jack_midi_data_t*>(juceMessage.data), // this might seems odd, but it's really only because juce's internal store is const here, and the data types are otherwise the same
+                size_t(juceMessage.numBytes) // this changes signedness, but from a lesser space (int) to a larger one (unsigned long)
+            );
+        }
+        midiOutputRing.markAsRead();
+    }
     // Set up the input buffer and fetch the first event (if there are any)
     d->nextInputEventIndex = 0;
     currentInputEvent.size = 0;
@@ -134,26 +165,44 @@ void MidiRouterDevice::processBegin(const jack_nframes_t &nframes)
     }
 }
 
-void MidiRouterDevice::writeEventToOutput(jack_midi_event_t& event, int outputChannel)
+void MidiRouterDevice::writeEventToOutput(jack_midi_event_t& event, const MidiRouterFilterEntry *eventFilter, int outputChannel)
+{
+    if (eventFilter) {
+        eventFilter->writeEventToDevice(this);
+    } else {
+        const MidiRouterFilterEntry *filterEntry = d->outputEventFilter->match(event);
+        if (filterEntry) {
+            filterEntry->writeEventToDevice(this);
+        } else {
+            d->zynthboxToDevice(&event);
+            const int eventChannel{event.buffer[0] & 0xf};
+            if (event.size == 3 && 0xAF < event.buffer[0] && event.buffer[0] < 0xC0 && event.buffer[1] == 0x78) {
+                for (int note = 0; note < 128; ++note) {
+                    d->noteState[eventChannel][note] = 0;
+                }
+            }
+            if (outputChannel > -1) {
+                if (d->acceptsChannel[outputChannel] == false) {
+                    outputChannel = d->lastAcceptedChannel;
+                }
+                event.buffer[0] = event.buffer[0] - eventChannel + outputChannel;
+            } else if (d->acceptsChannel[eventChannel] == false) {
+                outputChannel = d->lastAcceptedChannel;
+                event.buffer[0] = event.buffer[0] - eventChannel + outputChannel;
+            }
+            writeEventToOutputActual(event);
+            if (outputChannel > -1) {
+                event.buffer[0] = event.buffer[0] + eventChannel - outputChannel;
+            }
+            d->deviceToZynthbox(&event);
+        }
+    }
+}
+
+void MidiRouterDevice::writeEventToOutputActual(jack_midi_event_t& event)
 {
     const bool isNoteMessage = event.buffer[0] > 0x7F && event.buffer[0] < 0xA0;
     if (isNoteMessage == false || d->acceptsNote[event.buffer[1]]) {
-        d->zynthboxToDevice(&event);
-        const int eventChannel{event.buffer[0] & 0xf};
-        if (event.size == 3 && 0xAF < event.buffer[0] && event.buffer[0] < 0xC0 && event.buffer[1] == 0x78) {
-            for (int note = 0; note < 128; ++note) {
-                d->noteState[eventChannel][note] = 0;
-            }
-        }
-        if (outputChannel > -1) {
-            if (d->acceptsChannel[outputChannel] == false) {
-                outputChannel = d->lastAcceptedChannel;
-            }
-            event.buffer[0] = event.buffer[0] - eventChannel + outputChannel;
-        } else if (d->acceptsChannel[eventChannel] == false) {
-            outputChannel = d->lastAcceptedChannel;
-            event.buffer[0] = event.buffer[0] - eventChannel + outputChannel;
-        }
         const jack_midi_data_t untransposedNote{event.buffer[1]};
         event.buffer[1] = std::clamp(int(event.buffer[1]) + d->transposeAmount, 0, 127);
         int errorCode = jack_midi_event_write(d->outputBuffer, event.time, event.buffer, event.size);
@@ -179,10 +228,6 @@ void MidiRouterDevice::writeEventToOutput(jack_midi_event_t& event, int outputCh
         if (d->mostRecentOutputTime < event.time) {
             d->mostRecentOutputTime = event.time;
         }
-        if (outputChannel > -1) {
-            event.buffer[0] = event.buffer[0] + eventChannel - outputChannel;
-        }
-        d->deviceToZynthbox(&event);
     }
 }
 
@@ -568,4 +613,56 @@ void MidiRouterDevice::setMidiChannelTargetTrack(const int& midiChannel, const i
 int MidiRouterDevice::targetTrackForMidiChannel(const int& midiChannel) const
 {
     return d->midiChannelTargetTrack[std::clamp(midiChannel, 0, 15)];
+}
+
+void MidiRouterDevice::cuiaEventFeedback(const CUIAHelper::Event &cuiaEvent, const int& /*originId*/, const ZynthboxBasics::Track& track, const ZynthboxBasics::Part& part, const int& value)
+{
+    const MidiRouterFilterEntry* matchedEntry = d->outputEventFilter->matchCommand(cuiaEvent, track, part, value);
+    if (matchedEntry) {
+        int trackIndex = track;
+        if (track == ZynthboxBasics::AnyTrack || track == ZynthboxBasics::CurrentTrack) {
+            trackIndex = MidiRouter::instance()->currentSketchpadTrack();
+        }
+        int partIndex = part;
+        if (part == ZynthboxBasics::AnyPart || part == ZynthboxBasics::CurrentPart) {
+            partIndex = 0;
+            // TODO We need to be able to fetch the "current" part of any track - for now we'll reset this to 0, but that'll need sorting out
+        }
+        juce::MidiBuffer midiBuffer;
+        int bytes[3];
+        for (const MidiRouterFilterEntryRewriter *rule : matchedEntry->rewriteRules()) {
+            for (int byteIndex = 0; byteIndex < int(rule->byteSize()); ++byteIndex) {
+                if (rule->m_bytes[byteIndex] == MidiRouterFilterEntryRewriter::OriginalByte1) {
+                    bytes[byteIndex] = trackIndex;
+                } else if (rule->m_bytes[byteIndex] == MidiRouterFilterEntryRewriter::OriginalByte2) {
+                    bytes[byteIndex] = partIndex;
+                } else if (rule->m_bytes[byteIndex] == MidiRouterFilterEntryRewriter::OriginalByte3) {
+                    bytes[byteIndex] = value;
+                } else {
+                    bytes[byteIndex] = rule->m_bytes[byteIndex];
+                }
+                if (rule->m_bytesAddChannel[0]) {
+                    bytes[byteIndex] += trackIndex;
+                }
+            }
+            if (rule->byteSize() == MidiRouterFilterEntryRewriter::EventSize1) {
+                midiBuffer.addEvent(juce::MidiMessage(bytes[0], bytes[1], bytes[2]), 0);
+            } else if (rule->byteSize() == MidiRouterFilterEntryRewriter::EventSize2) {
+                midiBuffer.addEvent(juce::MidiMessage(bytes[0], bytes[1]), 0);
+            } else if (rule->byteSize() == MidiRouterFilterEntryRewriter::EventSize3 || rule->byteSize() == MidiRouterFilterEntryRewriter::EventSizeSame) {
+                midiBuffer.addEvent(juce::MidiMessage(bytes[0]), 0);
+            }
+        }
+        midiOutputRing.write(midiBuffer);
+    }
+}
+
+MidiRouterFilter * MidiRouterDevice::inputEventFilter() const
+{
+    return d->inputEventFilter;
+}
+
+MidiRouterFilter * MidiRouterDevice::outputEventFilter() const
+{
+    return d->outputEventFilter;
 }

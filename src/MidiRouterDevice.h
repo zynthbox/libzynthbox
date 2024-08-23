@@ -1,12 +1,16 @@
 #pragma once
 
 #include "MidiRouter.h"
+#include "CUIAHelper.h"
+#include "MidiRing.h"
 
 #include <jack/midiport.h>
 #include <QFlags>
 
 class QString;
 class MidiRouterDevicePrivate;
+class MidiRouterFilter;
+class MidiRouterFilterEntry;
 /**
  * \brief A representation of a device as they are known by MidiRouter (hardware or software device)
  *
@@ -14,6 +18,20 @@ class MidiRouterDevicePrivate;
  */
 class MidiRouterDevice : public QObject {
     Q_OBJECT
+    /**
+     * \brief An ID assigned to the object at creation time
+     * @note This is not usable across runs of the application
+     * @note Dis-/re-connecting a device will give it a new ID (as a new device instance is created)
+     */
+    Q_PROPERTY(int id READ id CONSTANT)
+    /**
+     * \brief The filter which gets applied to input events for this device
+     */
+    Q_PROPERTY(MidiRouterFilter* inputEventFilter READ inputEventFilter CONSTANT)
+    /**
+     * \brief The filter which gets applied to output events for this device
+     */
+    Q_PROPERTY(MidiRouterFilter* outputEventFilter READ outputEventFilter CONSTANT)
 public:
     enum DeviceDirection {
         InDevice = 0x1,
@@ -31,6 +49,7 @@ public:
     Q_DECLARE_FLAGS(DeviceTypes, DeviceType)
     explicit MidiRouterDevice(jack_client_t *jackClient, MidiRouter *parent = nullptr);
     ~MidiRouterDevice() override;
+    const int &id() const;
 
     /**
      * \brief Call this function at the start of MidiRouter's process function, to ensure the device's internal state is ready
@@ -41,9 +60,10 @@ public:
      * \brief Write a midi event to the device's output buffer
      * The event will be readjusted to fit snugly into the event list (by pushing it ahead in time if needed)
      * @param event The event to be written
+     * @param eventFilter If this is a valid filter (that is, not nullptr), the event will be passed through that before being written
      * @param overrideChannel If greater than -1, the event will be written to the output using that channel (the event will be returned intact)
      */
-    void writeEventToOutput(jack_midi_event_t &event, int overrideChannel = -1);
+    void writeEventToOutput(jack_midi_event_t &event, const MidiRouterFilterEntry *eventFilter = nullptr, int overrideChannel = -1);
     /**
      * \brief The current input event - size will be 0 if the end was reached
      * Once processed, call nextInputEvent() to progress to the next one
@@ -303,6 +323,30 @@ public:
      * @return True if midi beat clock events should be sent, false if not
      */
     const bool &sendBeatClock() const;
+
+    /**
+     * \brief A midi ring for writing events to which want to be written out at the start of the next process run
+     */
+    MidiRing midiOutputRing;
+
+    /**
+     * \brief Called from MidiRouter whenever a cuia event is fired by some device
+     * @param cuiaEvent The cuia event which was fired
+     * @param originId The ID of the MidiRouter device which requested the event be fired (this will be -1 for things which were not done by an external device)
+     * @param track The sketchpad track this applies to (where relevant)
+     * @param part The sketchpad part this applies to (where relevant)
+     * @param value The value associated with this command (where relevant) - this will be an integer between 0 and 127 inclusive (a midi byte value)
+     */
+    void cuiaEventFeedback(const CUIAHelper::Event &cuiaEvent, const int& originId, const ZynthboxBasics::Track &track, const ZynthboxBasics::Part &part, const int &value);
+    MidiRouterFilter *inputEventFilter() const;
+    MidiRouterFilter *outputEventFilter() const;
+    CUIARing cuiaRing;
+protected:
+    friend class MidiRouterFilter;
+    /**
+     * The write function that does the actual work of writing the event (used by MidiRouterFilter to do the write action)
+     */
+    void writeEventToOutputActual(jack_midi_event_t &event);
 private:
     MidiRouterDevicePrivate *d{nullptr};
 };
