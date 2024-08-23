@@ -9,11 +9,15 @@
 #include <AudioLevels.h>
 #include <ClipAudioSource.h>
 #include <ClipAudioSourceSubvoiceSettings.h>
+#include <CUIAHelper.h>
 #include <JackPassthrough.h>
 #include <JackPassthroughCompressor.h>
 #include <JackPassthroughFilter.h>
 #include <KeyScales.h>
 #include <MidiRouter.h>
+#include <MidiRouterFilter.h>
+#include <MidiRouterFilterEntry.h>
+#include <MidiRouterFilterEntryRewriter.h>
 #include <MidiRouterDevice.h>
 #include <MidiRouterDeviceModel.h>
 #include <MidiRecorder.h>
@@ -25,5 +29,6 @@
 #include <ProcessWrapper.h>
 #include <SequenceModel.h>
 #include <SyncTimer.h>
+#include <ZynthboxBasics.h>
 
 #endif//PYSIDE_BINDINGS_H

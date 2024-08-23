@@ -11,6 +11,9 @@ target_sources(libzynthbox
         ClipAudioSourcePositionsModelEntry.cpp
         MidiRouter.cpp
         MidiRouterDevice.cpp
+        MidiRouterFilter.cpp
+        MidiRouterFilterEntry.cpp
+        MidiRouterFilterEntryRewriter.cpp
         SamplerSynth.cpp
         SamplerSynthSound.cpp
         SamplerSynthVoice.cpp
@@ -45,6 +48,8 @@ target_sources(libzynthbox
         Chords.cpp
         ProcessWrapper.cpp
         AdjectiveNoun.cpp
+        CUIAHelper.cpp
+        ZynthboxBasics.cpp
 )
 target_compile_definitions(libzynthbox
     PUBLIC

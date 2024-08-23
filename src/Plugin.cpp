@@ -52,6 +52,9 @@
 #include "SegmentHandler.h"
 #include "MidiRouter.h"
 #include "MidiRouterDeviceModel.h"
+#include "MidiRouterFilter.h"
+#include "MidiRouterFilterEntry.h"
+#include "MidiRouterFilterEntryRewriter.h"
 #include "SyncTimer.h"
 #include "ZLEngineBehaviour.h"
 #include "PlayfieldManager.h"
@@ -317,6 +320,11 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
     qmlRegisterUncreatableType<MidiRouterDeviceModel>(uri, 1, 0, "MidiRouterDeviceModel", "Use model on MidiRouter to get the devices model");
     qmlRegisterUncreatableType<SettingsContainer>(uri, 1, 0, "SettingsContainer", "This is for internal use only");
     qmlRegisterUncreatableType<JackPassthroughFilter>(uri, 1, 0, "JackPassthroughFilter", "Find a list of these in the passthrough clients' equaliserSettings property");
+    qmlRegisterUncreatableType<ZynthboxBasics>(uri, 1, 0, "ZynthboxBasics", "Used to expose enum values and constants");
+    qmlRegisterUncreatableType<MidiRouterDevice>(uri, 1, 0, "MidiRouterDevice", "Accessible through MidiRouterDeviceModel");
+    qmlRegisterUncreatableType<MidiRouterFilter>(uri, 1, 0, "MidiRouterFilter", "Accessible through MidiRouterDevice (in turn accessible through MidiRouterDeviceModel)");
+    qmlRegisterUncreatableType<MidiRouterFilterEntry>(uri, 1, 0, "MidiRouterFilterEntry", "Accessible through MidiRouterFilter");
+    qmlRegisterUncreatableType<MidiRouterFilterEntryRewriter>(uri, 1, 0, "MidiRouterFilterEntryRewriter", "Accessible through MidiRouterFilterEntry");
     qmlRegisterType<PlayGrid>(uri, 1, 0, "PlayGrid");
     qmlRegisterType<ProcessWrapper>(uri, 1, 0, "ProcessWrapper");
     qmlRegisterSingletonType<PlayGridManager>(uri, 1, 0, "PlayGridManager", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {

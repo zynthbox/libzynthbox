@@ -12,6 +12,9 @@
         <enum-type name="TimeStretchStyle" />
     </object-type>
     <object-type name="ClipAudioSourceSubvoiceSettings"></object-type>
+    <object-type name="CUIAHelper">
+        <enum-type name="Event" />
+    </object-type>
     <object-type name="JackPassthrough"></object-type>
     <object-type name="JackPassthroughCompressor"></object-type>
     <object-type name="JackPassthroughFilter">
@@ -41,6 +44,14 @@
             }
             #endif // Q_OS_UNIX
         </inject-code>
+    </object-type>
+    <object-type name="MidiRouterFilter"></object-type>
+    <object-type name="MidiRouterFilterEntry"></object-type>
+    <object-type name="MidiRouterFilterEntryRewriter">
+        <enum-type name="RuleType" />
+        <enum-type name="EventSize" />
+        <enum-type name="EventByte" />
+        <enum-type name="ValueSpecifier" />
     </object-type>
     <object-type name="PlayGridManager"></object-type>
     <object-type name="PlayfieldManager">
@@ -74,5 +85,9 @@
         <enum-type name="Scale" />
         <enum-type name="Pitch" />
         <enum-type name="Octave" />
+    </object-type>
+    <object-type name="ZynthboxBasics">
+        <enum-type name="Track" />
+        <enum-type name="Part" />
     </object-type>
 </typesystem>

@@ -5,11 +5,15 @@ set(generated_sources
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/audiolevels_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/clipaudiosource_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/clipaudiosourcesubvoicesettings_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/cuiahelper_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/jackpassthrough_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/jackpassthroughcompressor_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/jackpassthroughfilter_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/keyscales_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirouter_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirouterfilter_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirouterfilterentry_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirouterfilterentryrewriter_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirouterdevice_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirouterdevicemodel_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/midirecorder_wrapper.cpp
@@ -21,6 +25,7 @@ set(generated_sources
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/processwrapper_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/sequencemodel_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/synctimer_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/zynthboxbasics_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/zynthbox_module_wrapper.cpp
 )
 
