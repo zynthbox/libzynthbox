@@ -249,6 +249,22 @@ PlayfieldManager::PlayfieldManager(QObject* parent)
     , d(new PlayfieldManagerPrivate(this))
 {
     d->zlSyncManager = new ZLPlayfieldManagerSynchronisationManager(d, this);
+    connect(this, &PlayfieldManager::playfieldStateChanged, this, [](const int &/*sketchpadSong*/, const int &sketchpadTrack, const int &clip, const int &position, const int &state){
+        static const QLatin1String setPartActiveState{"SET_PART_ACTIVE_STATE"};
+        if (position == CurrentPosition) {
+            if (state == StoppedState) {
+                MidiRouter::instance()->cuiaEventFeedback(setPartActiveState, -1, ZynthboxBasics::Track(sketchpadTrack), ZynthboxBasics::Part(clip), 0);
+            } else {
+                MidiRouter::instance()->cuiaEventFeedback(setPartActiveState, -1, ZynthboxBasics::Track(sketchpadTrack), ZynthboxBasics::Part(clip), 1);
+            }
+        } else {
+            if (state == StoppedState) {
+                MidiRouter::instance()->cuiaEventFeedback(setPartActiveState, -1, ZynthboxBasics::Track(sketchpadTrack), ZynthboxBasics::Part(clip), 2);
+            } else {
+                MidiRouter::instance()->cuiaEventFeedback(setPartActiveState, -1, ZynthboxBasics::Track(sketchpadTrack), ZynthboxBasics::Part(clip), 3);
+            }
+        }
+    });
 }
 
 PlayfieldManager::~PlayfieldManager()
