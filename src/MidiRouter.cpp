@@ -367,6 +367,9 @@ public:
                                 eventDevice->setNoteActive(sketchpadTrack, eventChannel, midiNote, false);
                             }
                         }
+                        if (sketchpadTrack == -1) {
+                            sketchpadTrack = currentSketchpadTrack;
+                        }
                         if (inputDeviceIsHardware) {
                             // qDebug() << Q_FUNC_INFO << "Hardware input message received for channel" << eventChannel << "of size" << event->size;
                             hardwareInListener.addMessage(false, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
