@@ -51,7 +51,7 @@ void QPainterContext::addTransform(const AffineTransform&)
     return;
 }
 
-float QPainterContext::getPhysicalPixelScaleFactor()
+float QPainterContext::getPhysicalPixelScaleFactor() const
 {
     return 1.0; //TODO
 }
@@ -265,7 +265,7 @@ const Font &QPainterContext::getFont()
     return m_font;
 }
 
-void QPainterContext::drawGlyph(int /*glyphNumber*/, const AffineTransform&)
-{
-
-}
+// void QPainterContext::drawGlyph(int /*glyphNumber*/, const AffineTransform&)
+// {
+//
+// }

@@ -37,7 +37,7 @@ public:
     bool isVectorDevice() const override;
     void setOrigin (Point<int>) override;
     void addTransform (const AffineTransform&) override;
-    float getPhysicalPixelScaleFactor() override;
+    float getPhysicalPixelScaleFactor() const override;
 
     bool clipToRectangle (const Rectangle<int>&) override;
     bool clipToRectangleList (const RectangleList<int>&) override;
@@ -70,7 +70,7 @@ public:
 
     void setFont (const Font&) override;
     const Font& getFont() override;
-    void drawGlyph (int glyphNumber, const AffineTransform&) override;
+    // void drawGlyph (int glyphNumber, const AffineTransform&) override;
 
 private:
     QBrush m_brush;
