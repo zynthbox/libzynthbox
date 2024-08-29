@@ -40,7 +40,9 @@ public:
             }
         }
         inputEventFilter = new MidiRouterFilter(q);
+        inputEventFilter->setDirection(MidiRouterFilter::InputDirection);
         outputEventFilter = new MidiRouterFilter(q);
+        outputEventFilter->setDirection(MidiRouterFilter::OutputDirection);
     }
     MidiRouterDevice *q{nullptr};
     int id{-1};
@@ -84,6 +86,10 @@ public:
     // Zynthbox' master channel
     int globalMaster{-1};
     bool filterZynthianByChannel{false};
+    int lowerMasterChannel{0};
+    int upperMasterChannel{15};
+    int noteSplitPoint{127};
+    int lastLowerZoneMemberChannel{7};
 
     jack_port_t *inputPort{nullptr};
     void *inputBuffer{nullptr};
@@ -509,6 +515,7 @@ void MidiRouterDevice::setSendToChannels(const QList<int>& channels, const bool&
             d->sendToChannel[channel] = sendTo;
         }
     }
+    Q_EMIT channelsToSendToChanged();
 }
 
 const bool & MidiRouterDevice::sendToChannel(const int& channel) const
@@ -516,9 +523,21 @@ const bool & MidiRouterDevice::sendToChannel(const int& channel) const
     return d->sendToChannel[channel];
 }
 
+QVariantList MidiRouterDevice::channelsToSendTo() const
+{
+    QVariantList list;
+    for (const bool &value : d->sendToChannel) {
+        list.append(value);
+    }
+    return list;
+}
+
 void MidiRouterDevice::setSendTimecode(const bool& sendTimecode)
 {
-    d->sendTimecode = sendTimecode;
+    if (d->sendTimecode != sendTimecode) {
+        d->sendTimecode = sendTimecode;
+        Q_EMIT sendTimecodeChanged();
+    }
 }
 
 const bool & MidiRouterDevice::sendTimecode() const
@@ -528,12 +547,67 @@ const bool & MidiRouterDevice::sendTimecode() const
 
 void MidiRouterDevice::setSendBeatClock(const bool& sendBeatClock)
 {
-    d->sendBeatClock = sendBeatClock;
+    if (d->sendBeatClock != sendBeatClock) {
+        d->sendBeatClock = sendBeatClock;
+        Q_EMIT sendBeatClockChanged();
+    }
 }
 
 const bool & MidiRouterDevice::sendBeatClock() const
 {
     return d->sendBeatClock;
+}
+
+int MidiRouterDevice::lowerMasterChannel() const
+{
+    return d->lowerMasterChannel;
+}
+
+void MidiRouterDevice::setLowerMasterChannel(const int& lowerMasterChannel)
+{
+    if (d->lowerMasterChannel != lowerMasterChannel) {
+        d->lowerMasterChannel = lowerMasterChannel;
+        Q_EMIT lowerMasterChannelChanged();
+    }
+}
+
+int MidiRouterDevice::upperMasterChannel() const
+{
+    return d->upperMasterChannel;
+}
+
+void MidiRouterDevice::setUpperMasterChannel(const int& upperMasterChannel)
+{
+    if (d->upperMasterChannel != upperMasterChannel) {
+        d->upperMasterChannel = upperMasterChannel;
+        Q_EMIT upperMasterChannelChanged();
+    }
+}
+
+int MidiRouterDevice::noteSplitPoint() const
+{
+    return d->noteSplitPoint;
+}
+
+void MidiRouterDevice::setNoteSplitPoint(const int& noteSplitPoint)
+{
+    if (d->noteSplitPoint != noteSplitPoint) {
+        d->noteSplitPoint = noteSplitPoint;
+        Q_EMIT noteSplitPointChanged();
+    }
+}
+
+int MidiRouterDevice::lastLowerZoneMemberChannel() const
+{
+    return d->lastLowerZoneMemberChannel;
+}
+
+void MidiRouterDevice::setLastLowerZoneMemberChannel(const int& lastLowerZoneMemberChannel)
+{
+    if (d->lastLowerZoneMemberChannel != lastLowerZoneMemberChannel) {
+        d->lastLowerZoneMemberChannel = lastLowerZoneMemberChannel;
+        Q_EMIT lastLowerZoneMemberChannelChanged();
+    }
 }
 
 const void MidiRouterDevicePrivate::zynthboxToDevice(jack_midi_event_t* event) const
@@ -608,11 +682,21 @@ void MidiRouterDevice::setMidiChannelTargetTrack(const int& midiChannel, const i
     } else {
         d->midiChannelTargetTrack[std::clamp(midiChannel, 0, 15)] = sketchpadTrack;
     }
+    Q_EMIT midiChannelTargetTracksChanged();
 }
 
 int MidiRouterDevice::targetTrackForMidiChannel(const int& midiChannel) const
 {
     return d->midiChannelTargetTrack[std::clamp(midiChannel, 0, 15)];
+}
+
+QVariantList MidiRouterDevice::midiChannelTargetTracks() const
+{
+    QVariantList list;
+    for (int channel = 0; channel < 16; ++channel) {
+        list << d->midiChannelTargetTrack[channel];
+    }
+    return list;
 }
 
 void MidiRouterDevice::cuiaEventFeedback(const CUIAHelper::Event &cuiaEvent, const int& /*originId*/, const ZynthboxBasics::Track& track, const ZynthboxBasics::Part& part, const int& value)

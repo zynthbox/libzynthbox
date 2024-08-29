@@ -25,6 +25,60 @@ class MidiRouterDevice : public QObject {
      */
     Q_PROPERTY(int id READ id CONSTANT)
     /**
+     * \brief The device's human-readable name
+     */
+    Q_PROPERTY(QString humanReadableName READ humanReadableName NOTIFY humanReadableNameChanged)
+
+    /**
+     * \brief The sketchpad tracks targeted by the equivalent midi channels to the indices in the list
+     */
+    Q_PROPERTY(QVariantList midiChannelTargetTracks READ midiChannelTargetTracks NOTIFY midiChannelTargetTracksChanged)
+    /**
+     * \brief Whether or not this device wants the midi timecode events sent to it
+     */
+    Q_PROPERTY(bool sendTimecode READ sendTimecode WRITE setSendTimecode NOTIFY sendTimecodeChanged)
+    /**
+     * \brief Whether or not this device wants the midi beat clock events sent to it
+     */
+    Q_PROPERTY(bool sendBeatClock READ sendBeatClock WRITE setSendBeatClock NOTIFY sendBeatClockChanged)
+
+    /**
+     * \brief A list of booleans describing whether to send events to that channel on this device
+     * @see setSendToChannels
+     * @see sendToChannel
+     */
+    Q_PROPERTY(QVariantList channelsToSendTo READ channelsToSendTo NOTIFY channelsToSendToChanged)
+
+    // BEGIN Basic MIDI (and MPE/MIDI Polyphonic Expression) settings
+    /**
+     * \brief The device master channel for the lower zone
+     * @note Once a split is set up, this should be set to 0 for correct mpe-ness
+     * @default 15
+     */
+    Q_PROPERTY(int lowerMasterChannel READ lowerMasterChannel WRITE setLowerMasterChannel NOTIFY lowerMasterChannelChanged)
+    /**
+     * \brief The device master channel for the upper zone
+     * @default 15
+     */
+    Q_PROPERTY(int upperMasterChannel READ upperMasterChannel WRITE setUpperMasterChannel NOTIFY upperMasterChannelChanged)
+    /**
+     * \brief The last midi note value in the lower zone
+     * @note When setting this to anything other than 127, you should set lowerMasterChannel to 0 to ensure correct mpe-ness
+     * @default 127 (meaning an all lower split)
+     * @minimum 0 (meaning all upper split)
+     * @maximum 127 (meaning all lower split)
+     */
+    Q_PROPERTY(int noteSplitPoint READ noteSplitPoint WRITE setNoteSplitPoint NOTIFY noteSplitPointChanged)
+    /**
+     * \brief The highest channel used for notes on the lower zone (in other words, the upper limit for the lower zone's member channels)
+     * @default 7 (meaning an even split, based on lower zone master channel 0, channels 1 through 7 for notes, and an upper zone master channel 15, with notes on channels 8 through 14)
+     * @minimum 0 (though logically 1 - you should never pick either of the zones' master channel)
+     * @maximum 15 (though logically 14 - you should never pick either of the zones' master channel)
+     */
+    Q_PROPERTY(int lastLowerZoneMemberChannel READ lastLowerZoneMemberChannel WRITE setLastLowerZoneMemberChannel NOTIFY lastLowerZoneMemberChannelChanged)
+    // END Basic MIDI (and MPE/MIDI Polyphonic Expression) settings
+
+    /**
      * \brief The filter which gets applied to input events for this device
      */
     Q_PROPERTY(MidiRouterFilter* inputEventFilter READ inputEventFilter CONSTANT)
@@ -271,37 +325,41 @@ public:
     /**
      * \brief Set the target track for the given midi channel (instructs MidiRouter to always deliver messages received on that channel)
      * Use this to lock the device's messages to always be sent to a given track, instead of the current one
-     * @param midiChannel -1 will set the track target for all channel
+     * @param midiChannel -1 will set the track target for all channels
      * @param sketchpadTrack -1 will make MidiRouter deliver the messages to the current track, any other value will be clamped to the sketchpad track range
      */
-    void setMidiChannelTargetTrack(const int &midiChannel, const int &sketchpadTrack);
+    Q_INVOKABLE void setMidiChannelTargetTrack(const int &midiChannel, const int &sketchpadTrack);
     /**
      * \brief The target track for a given midi channel
      * @param midiChannel The midi channel to get the target track for
      * @return The sketchpad track set for the given midi channel
      */
-    int targetTrackForMidiChannel(const int &midiChannel) const;
+    Q_INVOKABLE int targetTrackForMidiChannel(const int &midiChannel) const;
+    QVariantList midiChannelTargetTracks() const;
+    Q_SIGNAL void midiChannelTargetTracksChanged();
 
     /**
      * \brief Mark whether or not we should retrieve events from a given list of channels
      * @param channels A list of midi channel indices (0 through 16, all other numbers will be ignored)
      * @param receive If true, events will be collected from this channel
      */
-    void setReceiveChannels(const QList<int> &channels, const bool &receive);
+    Q_INVOKABLE void setReceiveChannels(const QList<int> &channels, const bool &receive);
     /**
      * \brief Whether or not MidiRouter should accept events from this channel
      */
-    const bool &receiveChannel(const int &channel) const;
+    Q_INVOKABLE const bool &receiveChannel(const int &channel) const;
     /**
      * \brief Mark whether or not we should send events to a given list of channels
      * @param channels A list of midi channel indices (0 through 16, all other numbers will be ignored)
      * @param sendTo If true, events will be sent to this channel
      */
-    void setSendToChannels(const QList<int> &channels, const bool &sendTo);
+    Q_INVOKABLE void setSendToChannels(const QList<int> &channels, const bool &sendTo);
     /**
      * \brief Whether or not MidiRouter should send events to this channel
      */
-    const bool &sendToChannel(const int &channel) const;
+    Q_INVOKABLE const bool &sendToChannel(const int &channel) const;
+    QVariantList channelsToSendTo() const;
+    Q_SIGNAL void channelsToSendToChanged();
 
     /**
      * \brief Mark whether this device wants to have midi timecode events sent to it
@@ -313,6 +371,7 @@ public:
      * @return True if midi timecode events should be sent, false if not
      */
     const bool &sendTimecode() const;
+    Q_SIGNAL void sendTimecodeChanged();
     /**
      * \brief Mark whether this device wants to have midi beat clock events sent to it
      * @param sendBeatClock True if midi beat clock events should be sent, false if not
@@ -323,6 +382,20 @@ public:
      * @return True if midi beat clock events should be sent, false if not
      */
     const bool &sendBeatClock() const;
+    Q_SIGNAL void sendBeatClockChanged();
+
+    int lowerMasterChannel() const;
+    void setLowerMasterChannel(const int &lowerMasterChannel);
+    Q_SIGNAL void lowerMasterChannelChanged();
+    int upperMasterChannel() const;
+    void setUpperMasterChannel(const int &upperMasterChannel);
+    Q_SIGNAL void upperMasterChannelChanged();
+    int noteSplitPoint() const;
+    void setNoteSplitPoint(const int &noteSplitPoint);
+    Q_SIGNAL void noteSplitPointChanged();
+    int lastLowerZoneMemberChannel() const;
+    void setLastLowerZoneMemberChannel(const int &lastLowerZoneMemberChannel);
+    Q_SIGNAL void lastLowerZoneMemberChannelChanged();
 
     /**
      * \brief A midi ring for writing events to which want to be written out at the start of the next process run
