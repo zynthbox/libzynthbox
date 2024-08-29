@@ -3,11 +3,29 @@
 #include "MidiRouterFilterEntryRewriter.h"
 
 #include <QDebug>
+#include <QTimer>
 
 MidiRouterFilterEntry::MidiRouterFilterEntry(MidiRouterDevice* routerDevice, MidiRouterFilter* parent)
     : QObject(parent)
     , m_routerDevice(routerDevice)
 {
+    // During loading, this is likely to get hit quite a lot, so let's ensure we throttle it, make it a bit lighter
+    QTimer *descriptionThrottle = new QTimer(this);
+    descriptionThrottle->setInterval(0);
+    descriptionThrottle->setSingleShot(true);
+    descriptionThrottle->callOnTimeout(this, &MidiRouterFilterEntry::descripionChanged);
+    connect(this, &MidiRouterFilterEntry::requiredBytesChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
+    connect(this, &MidiRouterFilterEntry::byte1MinimumChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
+    connect(this, &MidiRouterFilterEntry::byte1MaximumChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
+    connect(this, &MidiRouterFilterEntry::byte2MinimumChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
+    connect(this, &MidiRouterFilterEntry::byte2MaximumChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
+    connect(this, &MidiRouterFilterEntry::byte3MinimumChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
+    connect(this, &MidiRouterFilterEntry::byte3MaximumChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
+    connect(this, &MidiRouterFilterEntry::cuiaEventChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
+    connect(this, &MidiRouterFilterEntry::originTrackChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
+    connect(this, &MidiRouterFilterEntry::originPartChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
+    connect(this, &MidiRouterFilterEntry::valueMinimumChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
+    connect(this, &MidiRouterFilterEntry::valueMaximumChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
 }
 
 MidiRouterFilterEntry::~MidiRouterFilterEntry()
@@ -202,6 +220,7 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
             case MidiRouterFilterEntryRewriter::UIRule:
                 // This is done at match time (otherwise we'll end up potentially writing a whole bunch of extra events we don't want)
                 switch (rule->m_cuiaEvent) {
+                    // These are all the "stardard" events that don't take any parameters
                     case CUIAHelper::PowerOffEvent:
                     case CUIAHelper::RebootEvent:
                     case CUIAHelper::RestartUiEvent:
@@ -314,12 +333,7 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::DecreaseEvent:
                         m_routerDevice->cuiaRing.write(rule->m_cuiaEvent, m_routerDevice->id());
                         break;
-                    case CUIAHelper::SwitchPressedEvent:
-                        // Tell the UI that a specific switch has been pressed. The given value indicates a specific switch ID
-                        break;
-                    case CUIAHelper::SwitchReleasedEvent:
-                        // Tell the UI that a specific switch has been released. The given value indicates a specific switch ID
-                        break;
+                    // Only need the basics for these, so no need to calculate the value (not very costly, but no need to do it if we don't need to)
                     case CUIAHelper::ActivateTrackEvent:
                         // Set the given track active
                     case CUIAHelper::ToggleTrackMuted:
@@ -330,14 +344,19 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                         // Toggle the given part's active state
                         m_routerDevice->cuiaRing.write(rule->m_cuiaEvent, m_routerDevice->id(), rule->m_cuiaTrack, rule->m_cuiaPart);
                         break;
+                    // These all need a value, so do the calculation work for them
+                    case CUIAHelper::SwitchPressedEvent:
+                        // Tell the UI that a specific switch has been pressed. The given value indicates a specific switch ID
+                    case CUIAHelper::SwitchReleasedEvent:
+                        // Tell the UI that a specific switch has been released. The given value indicates a specific switch ID
+                    case CUIAHelper::SetPartActiveStateEvent:
+                        // Sets the part to either active or inactive (value of 0 is active, 1 is inactive, 2 is that it will be inactive on the next beat, 3 is that it will be active on the next bar)
                     case CUIAHelper::SetTrackPanEvent:
                         // Set the given track's pan to the given value
                     case CUIAHelper::SetTrackSend1AmountEvent:
                         // Set the given track's send 1 amount to the given value
-                        break;
                     case CUIAHelper::SetTrackSend2AmountEvent:
                         // Set the given track's send 2 amount to the given value
-                        break;
                     case CUIAHelper::SetPartGain:
                         // Set the gain of the given part to the given value
                     case CUIAHelper::SetFxAmount:
@@ -550,6 +569,19 @@ void MidiRouterFilterEntry::setRequiredBytes(const int& requiredBytes)
     if (m_requiredBytes != requiredBytes) {
         m_requiredBytes = requiredBytes;
         Q_EMIT requiredBytesChanged();
+    }
+}
+
+bool MidiRouterFilterEntry::requireRange() const
+{
+    return m_requireRange;
+}
+
+void MidiRouterFilterEntry::setRequireRange(const bool& requireRange)
+{
+    if (m_requireRange != requireRange) {
+        m_requireRange = requireRange;
+        Q_EMIT requireRangeChanged();
     }
 }
 
@@ -767,4 +799,54 @@ void MidiRouterFilterEntry::swapRewriteRules(MidiRouterFilterEntryRewriter* swap
         m_rewriteRules = tempList;
         Q_EMIT rewriteRulesChanged();
     }
+}
+
+QString MidiRouterFilterEntry::description() const
+{
+    QString description;
+    const MidiRouterFilter::Direction direction{qobject_cast<MidiRouterFilter*>(parent())->direction()};
+    if (direction == MidiRouterFilter::InputDirection) {
+        QString firstEvent;
+        switch (m_requiredBytes) {
+            case 1:
+                firstEvent = QString::fromUtf8(juce::MidiMessage(m_byte1Minimum).getDescription().toRawUTF8());
+                break;
+            case 2:
+                firstEvent = QString::fromUtf8(juce::MidiMessage(m_byte1Minimum, m_byte2Minimum).getDescription().toRawUTF8());
+                break;
+            case 3:
+                firstEvent = QString::fromUtf8(juce::MidiMessage(m_byte1Minimum, m_byte2Minimum, m_byte3Minimum).getDescription().toRawUTF8());
+                break;
+            default:
+                firstEvent = QLatin1String{"What in the world, a message with %1 bytes?!"}.arg(m_requiredBytes);
+                break;
+        }
+        if (m_requireRange) {
+            QString secondEvent;
+            switch (m_requiredBytes) {
+                case 1:
+                    secondEvent = QString::fromUtf8(juce::MidiMessage(m_byte1Maximum).getDescription().toRawUTF8());
+                    break;
+                case 2:
+                    secondEvent = QString::fromUtf8(juce::MidiMessage(m_byte1Maximum, m_byte2Maximum).getDescription().toRawUTF8());
+                    break;
+                case 3:
+                    secondEvent = QString::fromUtf8(juce::MidiMessage(m_byte1Maximum, m_byte2Maximum, m_byte3Maximum).getDescription().toRawUTF8());
+                    break;
+                default:
+                    secondEvent = QLatin1String{"What in the world, a message with %1 bytes?!"}.arg(m_requiredBytes);
+                    break;
+            }
+            description = QString{"From %1 to %2"}.arg(firstEvent).arg(secondEvent);
+        } else {
+            description = firstEvent;
+        }
+    } else {
+        if (m_valueMinimum == m_valueMaximum) {
+            description = CUIAHelper::instance()->describe(m_cuiaEvent, m_originTrack, m_originPart, m_valueMinimum);
+        } else {
+            description = CUIAHelper::instance()->describe(m_cuiaEvent, m_originTrack, m_originPart, m_valueMinimum, m_valueMaximum);
+        }
+    }
+    return description;
 }

@@ -31,6 +31,11 @@ class MidiRouterFilterEntry : public QObject
      */
     Q_PROPERTY(int requiredBytes READ requiredBytes WRITE setRequiredBytes NOTIFY requiredBytesChanged)
     /**
+     * \brief Whether this filter requires a range of bytes or not (if not, only byte minimums will matter)
+     * @default false
+     */
+    Q_PROPERTY(bool requireRange READ requireRange WRITE setRequireRange NOTIFY requireRangeChanged)
+    /**
      * \brief The minimum value of byte1 for a match to occur (valid on input filters)
      * Setting this to a value higher than the maximum will set the maximum to the same value
      * @minimum 0
@@ -117,6 +122,11 @@ class MidiRouterFilterEntry : public QObject
      * @see swapRewriteRules(MidiRouterFilterEntryRewriter*, MidiRouterFilterEntryRewriter*)
      */
     Q_PROPERTY(QList<MidiRouterFilterEntryRewriter*> rewriteRules READ rewriteRules NOTIFY rewriteRulesChanged)
+
+    /**
+     * \brief A human-readable description of the filter entry
+     */
+    Q_PROPERTY(QString description READ description NOTIFY descripionChanged)
 public:
     explicit MidiRouterFilterEntry(MidiRouterDevice* routerDevice, MidiRouterFilter *parent = nullptr);
     ~MidiRouterFilterEntry() override;
@@ -151,6 +161,9 @@ public:
     int requiredBytes() const;
     void setRequiredBytes(const int &requiredBytes);
     Q_SIGNAL void requiredBytesChanged();
+    bool requireRange() const;
+    void setRequireRange(const bool &requireRange);
+    Q_SIGNAL void requireRangeChanged();
     int byte1Minimum() const;
     void setByte1Minimum(const int &byte1Minimum);
     Q_SIGNAL void byte1MinimumChanged();
@@ -193,31 +206,35 @@ public:
      * @param index The position at which to insert the new rule (if index is out of bounds it will be appended)
      * @return The newly created rule
      */
-    MidiRouterFilterEntryRewriter * addRewriteRule(const int &index = -1);
+    Q_INVOKABLE MidiRouterFilterEntryRewriter * addRewriteRule(const int &index = -1);
     /**
      * \brief Remove the given rule from this list (if the index is not valid, the function will simply return)
      * @param index The position of rule you wish to remove from the list (
      */
-    void deleteRewriteRule(const int &index);
+    Q_INVOKABLE void deleteRewriteRule(const int &index);
     /**
      * \brief Returns the index of the given rule
      * @param rule The rule that you want to get the index of
      * @return The index of the rule in the list, or -1 if the rule is not in the list
      */
-    int indexOf(MidiRouterFilterEntryRewriter *rule) const;
+    Q_INVOKABLE int indexOf(MidiRouterFilterEntryRewriter *rule) const;
     /**
      * \brief Swap the location of the two given rules in the list
      * If either of the two rules is not found in the list, the function will do nothing
      * @param swapThis The rule you want to swap locations with the second
      * @param withThis The rule you want to swap locations with the first
      */
-    void swapRewriteRules(MidiRouterFilterEntryRewriter *swapThis, MidiRouterFilterEntryRewriter *withThis);
+    Q_INVOKABLE void swapRewriteRules(MidiRouterFilterEntryRewriter *swapThis, MidiRouterFilterEntryRewriter *withThis);
+
+    QString description() const;
+    Q_SIGNAL void descripionChanged();
 private:
     ZynthboxBasics::Track m_targetTrack{ZynthboxBasics::CurrentTrack};
     ZynthboxBasics::Part m_targetPart{ZynthboxBasics::CurrentPart};
     ZynthboxBasics::Track m_originTrack{ZynthboxBasics::AnyTrack};
     ZynthboxBasics::Part m_originPart{ZynthboxBasics::AnyPart};
     int m_requiredBytes{1};
+    bool m_requireRange{false};
     int m_byte1Minimum{0};
     int m_byte1Maximum{0};
     int m_byte2Minimum{0};
