@@ -110,7 +110,7 @@ void JackPassthroughAnalyser::setupAnalyser(int audioFifoSize, float sampleRateT
     d->sampleRate = sampleRateToUse;
     d->audioFifo = juce::AudioBuffer<float>(1, audioFifoSize);
     d->abstractFifo.setTotalSize(audioFifoSize);
-    startThread(5);
+    startThread(Priority::normal);
 }
 
 void JackPassthroughAnalyser::run()
