@@ -251,10 +251,10 @@ public:
         {CUIAHelper::SetTrackPanEvent, QLatin1String{"SET_TRACK_PAN"}}, ///@< Set the given track's pan to the given value
         {CUIAHelper::SetTrackSend1AmountEvent, QLatin1String{"SET_TRACK_SEND1_AMOUNT"}}, ///@< Set the given track's send 1 amount to the given value
         {CUIAHelper::SetTrackSend2AmountEvent, QLatin1String{"SET_TRACK_SEND2_AMOUNT"}}, ///@< Set the given track's send 2 amount to the given value
-        {CUIAHelper::SetPartActiveStateEvent, QLatin1String{"SET_PART_ACTIVE_STATE"}}, ///@< Sets the part to either active or inactive (value of 0 is active, 1 is inactive, 2 is that it will be inactive on the next beat, 3 is that it will be active on the next bar)
         {CUIAHelper::TogglePartEvent, QLatin1String{"TOGGLE_PART"}}, ///@< Toggle the given part's active state
-        {CUIAHelper::SetPartGain, QLatin1String{"SET_PART_GAIN"}},
-        {CUIAHelper::SetFxAmount, QLatin1String{"SET_FX_AMOUNT"}},
+        {CUIAHelper::SetPartActiveStateEvent, QLatin1String{"SET_PART_ACTIVE_STATE"}}, ///@< Sets the part to either active or inactive (value of 0 is active, 1 is inactive, 2 is that it will be inactive on the next beat, 3 is that it will be active on the next bar)
+        {CUIAHelper::SetPartGain, QLatin1String{"SET_PART_GAIN"}}, ///@< Set the gain of the given part to the given value
+        {CUIAHelper::SetFxAmount, QLatin1String{"SET_FX_AMOUNT"}}, ///@< Set the wet/dry mix for the given fx to the given value
     };
 };
 
@@ -283,4 +283,189 @@ QString CUIAHelper::cuiaCommand(const Event& cuiaEvent) const
 CUIAHelper::Event CUIAHelper::cuiaEvent(const QString& cuiaCommand) const
 {
     return d->commands.key(cuiaCommand, NoCuiaEvent);
+}
+
+// Get a floating point value between -1.0 and 1.0 for a given CC value (that is, 0 through 127), with 63 being 0.0 (meaning both 126 and 127 are 1.0)
+static inline float centeredRelativeCCValue(const int &ccValue) {
+    return float(std::clamp(ccValue, 0, 126) - 63) / 63.0f;
+}
+
+// Get a floating point value between 0.0 and 1.0 for a give CC value (that is, 0 through 127)
+static inline float relativeCCValue(const int &ccValue) {
+    return float(std::clamp(ccValue, 0, 127)) / 127.0f;
+}
+
+QString CUIAHelper::describe(const Event& cuiaEvent, const ZynthboxBasics::Track& track, const ZynthboxBasics::Part& part, const int& value, const int &upperValue) const
+{
+    if (cuiaEvent == CUIAHelper::SwitchPressedEvent) {
+        return QString{"Switch %1 Pressed"}.arg(value); // This wants to be named - a getter for switch names by index probably
+    } else if (cuiaEvent == CUIAHelper::SwitchReleasedEvent) {
+        return QString{"Switch %1 Released"}.arg(value); // This wants to be named - a getter for switch names by index probably
+    } else if (cuiaEvent == CUIAHelper::ActivateTrackEvent) {
+        return QString{"Activate %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track));
+    } else if (cuiaEvent == CUIAHelper::ToggleTrackMuted) {
+        return QString{"Toggle %1 Muted"}.arg(ZynthboxBasics::instance()->trackLabelText(track));
+    } else if (cuiaEvent == CUIAHelper::SetTrackVolumeEvent) {
+        if (upperValue == -1) {
+            return QString{"Set %1 volume to %2%"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(int(100 * relativeCCValue(value)));
+        } else {
+            return QString{"Set %1 volume to between %2% and %3%"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(int(100 * relativeCCValue(value))).arg(int(100 * relativeCCValue(upperValue)));
+        }
+    } else if (cuiaEvent == CUIAHelper::SetTrackPanEvent) {
+        if (upperValue == -1) {
+            return QString{"Set %1 pan to %2%"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(int(100 * centeredRelativeCCValue(value)));
+        } else {
+            return QString{"Set %1 pan to between %2% and %3%"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(int(100 * centeredRelativeCCValue(value))).arg(int(100 * centeredRelativeCCValue(upperValue)));
+        }
+    } else if (cuiaEvent == CUIAHelper::SetTrackSend1AmountEvent) {
+        if (upperValue == -1) {
+            return QString{"Set %1 Send FX 1 amount to %2%"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(int(100 * relativeCCValue(value)));
+        } else {
+            return QString{"Set %1 Send FX 1 amount to between %2% and %3%"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(int(100 * relativeCCValue(value))).arg(int(100 * relativeCCValue(upperValue)));
+        }
+    } else if (cuiaEvent == CUIAHelper::SetTrackSend2AmountEvent) {
+        return QString{"Set %1 Send FX 2 amount to %2%"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(int(100 * relativeCCValue(value)));
+    } else if (cuiaEvent == CUIAHelper::TogglePartEvent) {
+        return QString{"Toggle %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->partLabelText(part));
+    } else if (cuiaEvent == CUIAHelper::ActivateTrackEvent) {
+        switch(value) {
+            default:
+            case 0:
+                return QString{"Activate %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->partLabelText(part));
+                break;
+            case 1:
+                return QString{"Deactivate %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->partLabelText(part));
+                break;
+            case 2:
+                return QString{"Activate %2 on %1 Next Bar"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->partLabelText(part));
+                break;
+            case 3:
+                return QString{"Deactivate %2 on %1 Next Bar"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->partLabelText(part));
+                break;
+        }
+    } else if (cuiaEvent == CUIAHelper::SetPartGain) {
+        if (upperValue == -1) {
+            return QString{"Set Gain to %3% for %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->partLabelText(part)).arg(int(100 * relativeCCValue(value)));
+        } else {
+            return QString{"Set Gain to between %3% and %4% for %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->partLabelText(part)).arg(int(100 * relativeCCValue(value))).arg(int(100 * relativeCCValue(upperValue)));
+        }
+    } else if (cuiaEvent == CUIAHelper::SetFxAmount) {
+        if (upperValue == -1) {
+            return QString{"Set FX wet/dry mix to %3% for slot %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(int(part) + 1).arg(int(100 * centeredRelativeCCValue(value)));
+        } else {
+            return QString{"Set FX wet/dry mix to between %3% and %4% for slot %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(int(part) + 1).arg(int(100 * centeredRelativeCCValue(value))).arg(int(100 * centeredRelativeCCValue(upperValue)));
+        }
+    } else {
+        return cuiaTitle(cuiaEvent);
+    }
+}
+
+QString CUIAHelper::switchName(const int& switchIndex) const
+{
+    QString name{"Unknown Switch"};
+    switch(switchIndex) {
+        case 0:
+            name = QLatin1String{"Unnamed Switch Index 0"};
+            break;
+        case 1:
+            name = QLatin1String{"Unnamed Switch Index 1"};
+            break;
+        case 2:
+            name = QLatin1String{"Unnamed Switch Index 2"};
+            break;
+        case 3:
+            name = QLatin1String{"Unnamed Switch Index 3"};
+            break;
+        case 4:
+            name = QLatin1String{"Unnamed Switch Index 4"};
+            break;
+        case 5:
+            name = QLatin1String{"Track 1 button"};
+            break;
+        case 6:
+            name = QLatin1String{"Track 2 button"};
+            break;
+        case 7:
+            name = QLatin1String{"Track 3 button"};
+            break;
+        case 8:
+            name = QLatin1String{"Track 4 button"};
+            break;
+        case 9:
+            name = QLatin1String{"Track 5 button"};
+            break;
+        case 10:
+            name = QLatin1String{"Track * button"};
+            break;
+        case 11:
+            name = QLatin1String{"Mode button"};
+            break;
+        case 12:
+            name = QLatin1String{"Sketchpad/F1 button"};
+            break;
+        case 13:
+            name = QLatin1String{"Playground/F2 button "};
+            break;
+        case 14:
+            name = QLatin1String{"Song Editor/F3 button"};
+            break;
+        case 15:
+            name = QLatin1String{"Presets/F4 button"};
+            break;
+        case 16:
+            name = QLatin1String{"Sound Editor/F5 button"};
+            break;
+        case 17:
+            name = QLatin1String{"Alt button"};
+            break;
+        case 18:
+            name = QLatin1String{"Record button"};
+            break;
+        case 19:
+            name = QLatin1String{"Play button"};
+            break;
+        case 20:
+            name = QLatin1String{"Metronome button"};
+            break;
+        case 21:
+            name = QLatin1String{"Stop button"};
+            break;
+        case 22:
+            name = QLatin1String{"Back/No button"};
+            break;
+        case 23:
+            name = QLatin1String{"Up arrow button"};
+            break;
+        case 24:
+            name = QLatin1String{"Select/Yes button"};
+            break;
+        case 25:
+            name = QLatin1String{"Left arrow button"};
+            break;
+        case 26:
+            name = QLatin1String{"Down arrow button"};
+            break;
+        case 27:
+            name = QLatin1String{"Right arrow button"};
+            break;
+        case 28:
+            name = QLatin1String{"Global button"};
+            break;
+        case 29:
+            name = QLatin1String{"Big Knob button"};
+            break;
+        case 30:
+            name = QLatin1String{"Knob 1"};
+            break;
+        case 31:
+            name = QLatin1String{"Knob 0"};
+            break;
+        case 32:
+            name = QLatin1String{"Knob 2"};
+            break;
+        case 33:
+            name = QLatin1String{"Big Knob"};
+            break;
+    }
+    return name;
 }

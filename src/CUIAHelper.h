@@ -147,9 +147,9 @@ public:
         SetTrackSend1AmountEvent, ///@< Set the given track's send 1 amount to the given value
         SetTrackSend2AmountEvent, ///@< Set the given track's send 2 amount to the given value
         TogglePartEvent, ///@< Toggle the given part's active state
-        SetPartActiveStateEvent, ///@< Sets the part to either active or inactive (value of 0 is active, 1 is inactive, 2 is that it will be active on the next bar)
+        SetPartActiveStateEvent, ///@< Sets the part to either active or inactive (value of 0 is active, 1 is inactive, 2 is that it will be inactive on the next beat, 3 is that it will be active on the next bar)
         SetPartGain, ///@< Set the gain of the given part to the given value
-        SetFxAmount, ///@< Set the wet/dry mix for the given fx
+        SetFxAmount, ///@< Set the wet/dry mix for the given fx to the given value
     };
     Q_ENUM(Event)
 
@@ -171,6 +171,21 @@ public:
      * @return The CUIA event for the given command string (will return NoCuiaEvent for a string with no match)
      */
     Event cuiaEvent(const QString &cuiaCommand) const;
+
+    /**
+     * \brief Get a human-readable description of the given CUIA event and associated flags
+     * @param cuiaEvent A CUIA event to get a description of
+     * @param track The track the event is associated with (will be ignored if the event doesn't use this parameter)
+     * @param part The part the event is associated with (will be ignored if the event doesn't use this parameter)
+     * @param value The value the event is associated with (will be ignored if the event doesn't use this parameter)
+     * @param upperValue Treat value as a lower limit, and describe the values in a range
+     */
+    QString describe(const Event &cuiaEvent, const ZynthboxBasics::Track &track, const ZynthboxBasics::Part &part, const int &value, const int &upperValue = -1) const;
+
+    /**
+     * \brief Get the human-readable name of the given switch
+     */
+    QString switchName(const int &switchIndex) const;
 private:
     CUIAHelperPrivate *d{nullptr};
 };
