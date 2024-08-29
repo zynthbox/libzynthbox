@@ -37,6 +37,8 @@ public:
     };
     Q_ENUM(Track)
 
+    Q_INVOKABLE QString trackLabelText(const Track &track) const;
+
     enum Part {
         AnyPart = -2,
         CurrentPart = -1,
@@ -47,4 +49,6 @@ public:
         Part5 = 4,
     };
     Q_ENUM(Part)
+
+    Q_INVOKABLE QString partLabelText(const Part &part) const;
 };
