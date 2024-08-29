@@ -22,8 +22,8 @@ public:
     explicit SamplerSynth(QObject *parent = nullptr);
     ~SamplerSynth() override;
 
-    void initialize(tracktion_engine::Engine *engine);
-    tracktion_engine::Engine *engine() const;
+    void initialize(tracktion::Engine *engine);
+    tracktion::Engine *engine() const;
 
     /**
      * \brief Returns the sample rate of the jack process

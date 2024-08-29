@@ -26,7 +26,7 @@ public:
     jack_default_audio_sample_t *leftBuffer{nullptr};
     jack_default_audio_sample_t *rightBuffer{nullptr};
 
-    tracktion_engine::TracktionThumbnail *thumbnail();
+    tracktion::TracktionThumbnail *thumbnail();
 private:
     SamplerSynthSoundPrivate *d{nullptr};
 };

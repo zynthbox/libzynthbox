@@ -25,10 +25,10 @@ void callFunctionOnMessageThread(Function&& func, bool shouldWait = false, int w
   }
 }
 
-void removeAllClips(te::AudioTrack& track);
+void removeAllClips(tracktion::AudioTrack& track);
 
-te::AudioTrack* getOrInsertAudioTrackAt(te::Edit& edit, int index);
+tracktion::AudioTrack* getOrInsertAudioTrackAt(tracktion::Edit& edit, int index);
 
-te::WaveAudioClip::Ptr loadAudioFileAsClip(te::Edit& edit, const File& file);
+tracktion::WaveAudioClip::Ptr loadAudioFileAsClip(tracktion::Edit& edit, const File& file);
 
 }  // namespace Helper

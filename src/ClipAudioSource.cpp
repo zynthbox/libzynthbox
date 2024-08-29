@@ -91,12 +91,12 @@ public:
     }
   }
   ClipAudioSource *q;
-  const te::Engine &getEngine() const { return *engine; };
+  const tracktion::Engine &getEngine() const { return *engine; };
 
-  te::Engine *engine{nullptr};
+  tracktion::Engine *engine{nullptr};
   SyncTimer *syncTimer;
   juce::File givenFile;
-  tracktion_engine::AudioFile *audioFile{nullptr};
+  tracktion::AudioFile *audioFile{nullptr};
   juce::String chosenPath;
   juce::String fileName;
   QString filePath;
@@ -268,7 +268,7 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
   d->givenFile = juce::File(filepath);
   d->fileName = d->givenFile.getFileName();
   d->filePath = QString::fromUtf8(filepath);
-  d->audioFile = new tracktion_engine::AudioFile(*d->engine, d->givenFile);
+  d->audioFile = new tracktion::AudioFile(*d->engine, d->givenFile);
   d->sampleRate = d->audioFile->getSampleRate();
   d->adsr.setSampleRate(d->sampleRate);
   d->adsr.setParameters({0.0f, 0.0f, 1.0f, 0.0f});
@@ -557,7 +557,7 @@ float ClipAudioSource::guessBPM(int slice) const
   const int blockSize{65536};
   const bool useRightChan{numChannels > 1};
   AudioFormatReader *reader{d->audioFile->getFormat()->createReaderFor(d->givenFile.createInputStream().release(), true)};
-  tracktion_engine::soundtouch::BPMDetect bpmDetector(numChannels, d->audioFile->getSampleRate());
+  tracktion::soundtouch::BPMDetect bpmDetector(numChannels, d->audioFile->getSampleRate());
   juce::AudioBuffer<float> fileBuffer(jmin(2, numChannels), lastSample - startSample);
   while (numLeft > 0)
   {
@@ -566,7 +566,7 @@ float ClipAudioSource::guessBPM(int slice) const
     // Get the data and stuff it into a buffer
     reader->read(&fileBuffer, 0, numThisTime, startSample, true, useRightChan);
     // Create an interleaved selection of samples as we want them
-    tracktion_engine::AudioScratchBuffer scratch(1, numThisTime * numChannels);
+    tracktion::AudioScratchBuffer scratch(1, numThisTime * numChannels);
     float* interleaved = scratch.buffer.getWritePointer(0);
     juce::AudioDataConverters::interleaveSamples(fileBuffer.getArrayOfReadPointers(), interleaved, numThisTime, numChannels);
     // Pass them along to the bpm detector for processing
@@ -752,8 +752,8 @@ const char *ClipAudioSource::getFilePath() const {
   return d->filePath.toUtf8();
 }
 
-tracktion_engine::AudioFile ClipAudioSource::getPlaybackFile() const {
-  return tracktion_engine::AudioFile(*d->audioFile);
+tracktion::AudioFile ClipAudioSource::getPlaybackFile() const {
+  return tracktion::AudioFile(*d->audioFile);
 }
 
 void ClipAudioSource::Private::timerCallback() {

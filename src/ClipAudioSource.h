@@ -557,7 +557,7 @@ public:
 
   double sampleRate() const;
 
-  tracktion_engine::AudioFile getPlaybackFile() const;
+  tracktion::AudioFile getPlaybackFile() const;
   Q_SIGNAL void playbackFileChanged();
 
   int id() const;

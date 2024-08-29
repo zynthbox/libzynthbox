@@ -60,7 +60,7 @@ DiskWriter * AudioLevelsChannel::diskRecorder()
     return m_diskRecorder;
 }
 
-tracktion_engine::TracktionThumbnail * AudioLevelsChannel::thumbnail()
+tracktion::TracktionThumbnail * AudioLevelsChannel::thumbnail()
 {
     return &m_thumbnail;
 }

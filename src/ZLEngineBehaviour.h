@@ -2,6 +2,6 @@
 
 #include "JUCEHeaders.h"
 
-class ZLEngineBehavior : public te::EngineBehaviour {
+class ZLEngineBehavior : public tracktion::EngineBehaviour {
   bool autoInitialiseDeviceManager() override { return false; }
 };

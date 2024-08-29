@@ -67,7 +67,7 @@ public:
 
     ClipAudioSource *clip{nullptr};
     juce::FileInputSource *thumbnailSource{nullptr};
-    tracktion_engine::TracktionThumbnail thumbnail;
+    tracktion::TracktionThumbnail thumbnail;
 
     bool loadingSoundDataPostponed{false};
     void loadSoundData() {
@@ -80,7 +80,7 @@ public:
             }
             AudioFormatReader *format{nullptr};
             juce::File file = clip->getPlaybackFile().getFile();
-            tracktion_engine::AudioFileInfo fileInfo = clip->getPlaybackFile().getInfo();
+            tracktion::AudioFileInfo fileInfo = clip->getPlaybackFile().getInfo();
             MemoryMappedAudioFormatReader *memoryFormat = fileInfo.format->createMemoryMappedReader(file);
             if (memoryFormat && memoryFormat->mapEntireFile()) {
                 format = memoryFormat;
@@ -246,7 +246,7 @@ const double & SamplerSynthSound::sampleRateRatio() const
     return d->sampleRateRatio;
 }
 
-tracktion_engine::TracktionThumbnail * SamplerSynthSound::thumbnail()
+tracktion::TracktionThumbnail * SamplerSynthSound::thumbnail()
 {
     return &d->thumbnail;
 }
@@ -258,7 +258,7 @@ public:
     SamplerSynthSoundPrivate *parent{nullptr};
     ClipAudioSource *clip{nullptr};
     const juce::AudioBuffer<float> *inputData{nullptr};
-    tracktion_engine::soundtouch::SoundTouch soundTouch;
+    tracktion::soundtouch::SoundTouch soundTouch;
 
     bool abort{false};
     QMutex abortMutex;

@@ -1,26 +1,26 @@
 #include "Helper.h"
 
-tracktion_engine::AudioTrack *Helper::getOrInsertAudioTrackAt(
-    tracktion_engine::Edit &edit, int index) {
+tracktion::AudioTrack *Helper::getOrInsertAudioTrackAt(
+    tracktion::Edit &edit, int index) {
   edit.ensureNumberOfAudioTracks(index + 1);
-  return te::getAudioTracks(edit)[index];
+  return tracktion::getAudioTracks(edit)[index];
 }
 
-void Helper::removeAllClips(tracktion_engine::AudioTrack &track) {
+void Helper::removeAllClips(tracktion::AudioTrack &track) {
   auto clips = track.getClips();
 
   for (int i = clips.size(); --i >= 0;)
     clips.getUnchecked(i)->removeFromParentTrack();
 }
 
-tracktion_engine::WaveAudioClip::Ptr Helper::loadAudioFileAsClip(
-    tracktion_engine::Edit &edit, const File &file) {
+tracktion::WaveAudioClip::Ptr Helper::loadAudioFileAsClip(
+    tracktion::Edit &edit, const File &file) {
   // Find the first track and delete all clips from it
   if (auto track = getOrInsertAudioTrackAt(edit, 0)) {
     removeAllClips(*track);
 
     // Add a new clip to this track
-    te::AudioFile audioFile(edit.engine, file);
+    tracktion::AudioFile audioFile(edit.engine, file);
 
     if (audioFile.isValid())
       if (auto newClip =
