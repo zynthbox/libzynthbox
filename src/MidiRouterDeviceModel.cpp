@@ -100,6 +100,8 @@ QHash<int, QByteArray> MidiRouterDeviceModel::roleNames() const
         {HardwareIdRole, "hardwareIdRoles"},
         {IsHardwareDeviceRole, "isHardwareDevice"},
         {HasInputRole, "hasInput"},
+        {HasOutputRole, "hasOutput"},
+        {DeviceObjectRole, "deviceObject"},
     };
     return roles;
 }
@@ -131,6 +133,12 @@ QVariant MidiRouterDeviceModel::data(const QModelIndex& index, int role) const
                 break;
             case HasInputRole:
                 result.setValue<bool>(device->inputPortName().length() > 0);
+                break;
+            case HasOutputRole:
+                result.setValue<bool>(device->outputPortName().length() > 0);
+                break;
+            case DeviceObjectRole:
+                result.setValue<QObject*>(device);
                 break;
             default:
                 break;

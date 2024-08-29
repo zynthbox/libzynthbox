@@ -46,6 +46,8 @@ public:
         HardwareIdRole,
         IsHardwareDeviceRole,
         HasInputRole,
+        HasOutputRole,
+        DeviceObjectRole,
     };
     Q_ENUM(Roles)
     QHash<int, QByteArray> roleNames() const override;
