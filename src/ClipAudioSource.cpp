@@ -567,7 +567,7 @@ float ClipAudioSource::guessBPM(int slice) const
     // Create an interleaved selection of samples as we want them
     tracktion::AudioScratchBuffer scratch(1, numThisTime * numChannels);
     float* interleaved = scratch.buffer.getWritePointer(0);
-    juce::AudioDataConverters::interleaveSamples(fileBuffer.getArrayOfReadPointers(), interleaved, numThisTime, numChannels);
+    juce::AudioDataConverters::interleaveSamples((const float **)fileBuffer.getArrayOfReadPointers(), interleaved, numThisTime, numChannels);
     // Pass them along to the bpm detector for processing
     bpmDetector.inputSamples(interleaved, numThisTime);
     // Next run...
