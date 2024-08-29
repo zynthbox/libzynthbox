@@ -7,6 +7,7 @@
 
     <object-type name="AudioLevels"></object-type>
     <object-type name="ClipAudioSource">
+        <enum-type name="LoopStyle" />
         <enum-type name="PlaybackStyle" />
         <enum-type name="SamplePickingStyle" />
         <enum-type name="TimeStretchStyle" />
@@ -45,7 +46,9 @@
             #endif // Q_OS_UNIX
         </inject-code>
     </object-type>
-    <object-type name="MidiRouterFilter"></object-type>
+    <object-type name="MidiRouterFilter">
+        <enum-type name="Direction" />
+    </object-type>
     <object-type name="MidiRouterFilterEntry"></object-type>
     <object-type name="MidiRouterFilterEntryRewriter">
         <enum-type name="RuleType" />
