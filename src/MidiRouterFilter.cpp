@@ -87,3 +87,16 @@ void MidiRouterFilter::swap(MidiRouterFilterEntry* swapThis, MidiRouterFilterEnt
         Q_EMIT entriesChanged();
     }
 }
+
+MidiRouterFilter::Direction MidiRouterFilter::direction() const
+{
+    return m_direction;
+}
+
+void MidiRouterFilter::setDirection(const Direction& direction)
+{
+    if (m_direction != direction) {
+        m_direction = direction;
+        Q_EMIT directionChanged();
+    }
+}

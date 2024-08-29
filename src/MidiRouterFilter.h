@@ -18,6 +18,11 @@ class MidiRouterFilter : public QObject
      * @see indexOf(MidiRouterFilterEntry*)
      */
     Q_PROPERTY(QList<MidiRouterFilterEntry*> entries READ entries NOTIFY entriesChanged)
+    /**
+     * \brief Which direction the filter handles entries (that is, is this an input filter or an output filter)
+     * @default InputDirection
+     */
+    Q_PROPERTY(Direction direction READ direction WRITE setDirection NOTIFY directionChanged)
 public:
     explicit MidiRouterFilter(MidiRouterDevice *parent = nullptr);
     ~MidiRouterFilter() override;
@@ -47,26 +52,37 @@ public:
      * @param index The index at which to insert the new entry (any out of bounds index will append it)
      * @return The newly created entry
      */
-    MidiRouterFilterEntry * createEntry(const int &index = -1);
+    Q_INVOKABLE MidiRouterFilterEntry * createEntry(const int &index = -1);
     /**
      * \brief Removes the entry at the given index
      * @param index The index of the entry that you want removed
      */
-    void deleteEntry(const int &index);
+    Q_INVOKABLE void deleteEntry(const int &index);
     /**
      * \brief Returns the index of the given entry
      * @param entry The entry you wish to get the index of
      * @return The index of the given entry in this filter (or -1 if not found)
      */
-    int indexOf(MidiRouterFilterEntry *entry) const;
+    Q_INVOKABLE int indexOf(MidiRouterFilterEntry *entry) const;
     /**
      * \brief Swaps the position of the two given entries
      * @note If either of the two entries is not found, the function will do nothing
      * @param swapThis The first entry that you want to swap with the other
      * @param withThis The second entry that you want to swap with the first
      */
-    void swap(MidiRouterFilterEntry *swapThis, MidiRouterFilterEntry *withThis);
+    Q_INVOKABLE void swap(MidiRouterFilterEntry *swapThis, MidiRouterFilterEntry *withThis);
+
+    enum Direction {
+        InputDirection,
+        OutputDirection,
+    };
+    Q_ENUM(Direction)
+    Direction direction() const;
+    void setDirection(const Direction &direction);
+    Q_SIGNAL void directionChanged();
+
 private:
     QList<MidiRouterFilterEntry*> m_entries;
+    Direction m_direction{InputDirection};
 };
 Q_DECLARE_METATYPE(QList<MidiRouterFilterEntry*>)
