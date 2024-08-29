@@ -2,6 +2,7 @@
 
 #include "ClipAudioSource.h"
 #include "JUCEHeaders.h"
+#include "tracktion_Thumbnail.h"
 
 class SamplerSynthSoundPrivate;
 class SamplerSynthSound {
@@ -26,7 +27,7 @@ public:
     jack_default_audio_sample_t *leftBuffer{nullptr};
     jack_default_audio_sample_t *rightBuffer{nullptr};
 
-    tracktion::SmartThumbnail *thumbnail();
+    tracktion::TracktionThumbnail *thumbnail();
 private:
     SamplerSynthSoundPrivate *d{nullptr};
 };

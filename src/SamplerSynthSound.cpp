@@ -2,6 +2,7 @@
 #include "SamplerSynthSound.h"
 #include "AudioLevels.h"
 #include "SamplerSynth.h"
+#include "tracktion_Thumbnail.h"
 #include "JUCEHeaders.h"
 
 #include <QCoreApplication>
@@ -67,7 +68,7 @@ public:
 
     ClipAudioSource *clip{nullptr};
     juce::FileInputSource *thumbnailSource{nullptr};
-    tracktion::SmartThumbnail thumbnail;
+    tracktion::TracktionThumbnail thumbnail;
 
     bool loadingSoundDataPostponed{false};
     void loadSoundData() {
@@ -246,7 +247,7 @@ const double & SamplerSynthSound::sampleRateRatio() const
     return d->sampleRateRatio;
 }
 
-tracktion::SmartThumbnail * SamplerSynthSound::thumbnail()
+tracktion::TracktionThumbnail * SamplerSynthSound::thumbnail()
 {
     return &d->thumbnail;
 }

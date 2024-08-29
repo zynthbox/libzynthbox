@@ -13,6 +13,7 @@
 
 #include "JUCEHeaders.h"
 #include "QPainterContext.h"
+#include "tracktion_Thumbnail.h"
 #include <QQuickPaintedItem>
 
 class AudioLevelsChannel;
@@ -73,8 +74,8 @@ private:
     QPainterContext m_painterContext;
     juce::Graphics m_juceGraphics;
     QColor m_color;
-    tracktion::SmartThumbnail m_thumbnail;
-    tracktion::SmartThumbnail *m_externalThumbnail{nullptr};
+    tracktion::TracktionThumbnail m_thumbnail;
+    tracktion::TracktionThumbnail *m_externalThumbnail{nullptr};
     AudioLevelsChannel *m_externalThumbnailChannel{nullptr};
     qreal m_start = 0;
     qreal m_end = -1;

@@ -1,6 +1,7 @@
 #include "AudioLevelsChannel.h"
 #include "DiskWriter.h"
 #include "AudioLevels.h"
+#include "tracktion_Thumbnail.h"
 
 #include <cmath>
 #include <QDebug>
@@ -60,7 +61,7 @@ DiskWriter * AudioLevelsChannel::diskRecorder()
     return m_diskRecorder;
 }
 
-tracktion::SmartThumbnail * AudioLevelsChannel::thumbnail()
+tracktion::TracktionThumbnail * AudioLevelsChannel::thumbnail()
 {
     return &m_thumbnail;
 }

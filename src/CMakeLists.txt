@@ -52,6 +52,7 @@ target_sources(libzynthbox
         CUIAHelper.cpp
         ZynthboxBasics.cpp
         GainHandler.cpp
+        tracktion_Thumbnail.cpp
 )
 target_compile_definitions(libzynthbox
     PUBLIC
