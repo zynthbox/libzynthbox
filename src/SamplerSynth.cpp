@@ -542,7 +542,7 @@ public:
 
     QHash<ClipAudioSource*, SamplerSynthSound*> clipSounds;
     QList<ClipAudioSourcePositionsModel*> positionModels;
-    tracktion::Engine *engine{nullptr};
+    tracktion::engine::Engine *engine{nullptr};
 
     // An ordered list of Jack clients, one each for...
     // Global audio (midi "channel" -1, for e.g. the metronome and sample previews on lane 0, and effects targeted audio on lane 1
@@ -711,7 +711,7 @@ SamplerSynth::~SamplerSynth()
     delete d;
 }
 
-void SamplerSynth::initialize(tracktion::Engine *engine)
+void SamplerSynth::initialize(tracktion::engine::Engine *engine)
 {
     while (d->voicePool.writeHead->processed) {
         d->voicePool.write(new SamplerSynthVoice(this));
@@ -754,7 +754,7 @@ void SamplerSynth::initialize(tracktion::Engine *engine)
     }
 }
 
-tracktion::Engine *SamplerSynth::engine() const
+tracktion::engine::Engine *SamplerSynth::engine() const
 {
     return d->engine;
 }

@@ -70,7 +70,8 @@ public:
 
     void setFont (const Font&) override;
     const Font& getFont() override;
-    // void drawGlyph (int glyphNumber, const AffineTransform&) override;
+    void drawGlyphs (Span<const uint16_t>, Span<const Point<float>>, const AffineTransform&) override;
+    uint64_t getFrameId() const override;
 
 private:
     QBrush m_brush;

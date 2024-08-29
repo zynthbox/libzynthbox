@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "JUCEHeaders.h"
 #include <QObject>
 #include <QCoreApplication>
 
@@ -9,9 +10,9 @@ class ClipAudioSource;
 class SamplerSynthPrivate;
 class SamplerSynthSound;
 class SyncTimerPrivate;
-namespace tracktion_engine {
-    class Engine;
-}
+// namespace tracktion {
+//     class Engine;
+// }
 class SamplerSynth : public QObject
 {
     Q_OBJECT
@@ -22,8 +23,8 @@ public:
     explicit SamplerSynth(QObject *parent = nullptr);
     ~SamplerSynth() override;
 
-    void initialize(tracktion::Engine *engine);
-    tracktion::Engine *engine() const;
+    void initialize(tracktion::engine::Engine *engine);
+    tracktion::engine::Engine *engine() const;
 
     /**
      * \brief Returns the sample rate of the jack process

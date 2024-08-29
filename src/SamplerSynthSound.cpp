@@ -14,7 +14,7 @@
 #include <QTimer>
 #include <QThreadPool>
 
-namespace tracktion_engine {
+namespace tracktion {
 #include <tracktion_engine/3rd_party/soundtouch/include/SoundTouch.h>
 };
 
@@ -67,7 +67,7 @@ public:
 
     ClipAudioSource *clip{nullptr};
     juce::FileInputSource *thumbnailSource{nullptr};
-    tracktion::TracktionThumbnail thumbnail;
+    tracktion::SmartThumbnail thumbnail;
 
     bool loadingSoundDataPostponed{false};
     void loadSoundData() {
@@ -80,7 +80,7 @@ public:
             }
             AudioFormatReader *format{nullptr};
             juce::File file = clip->getPlaybackFile().getFile();
-            tracktion::AudioFileInfo fileInfo = clip->getPlaybackFile().getInfo();
+            tracktion::engine::AudioFileInfo fileInfo = clip->getPlaybackFile().getInfo();
             MemoryMappedAudioFormatReader *memoryFormat = fileInfo.format->createMemoryMappedReader(file);
             if (memoryFormat && memoryFormat->mapEntireFile()) {
                 format = memoryFormat;
@@ -246,7 +246,7 @@ const double & SamplerSynthSound::sampleRateRatio() const
     return d->sampleRateRatio;
 }
 
-tracktion::TracktionThumbnail * SamplerSynthSound::thumbnail()
+tracktion::SmartThumbnail * SamplerSynthSound::thumbnail()
 {
     return &d->thumbnail;
 }

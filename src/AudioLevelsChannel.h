@@ -16,7 +16,7 @@ public:
     ~AudioLevelsChannel();
     int process(jack_nframes_t nframes, jack_nframes_t current_frames, jack_nframes_t next_frames, jack_time_t current_usecs, jack_time_t next_usecs, float period_usecs);
     DiskWriter* diskRecorder();
-    tracktion::TracktionThumbnail *thumbnail();
+    tracktion::SmartThumbnail *thumbnail();
     void addChangeListener(ChangeListener* listener);
     void removeChangeListener(ChangeListener* listener);
     bool thumbnailHAnyListeners() const;
@@ -41,7 +41,7 @@ private:
     const float** recordingPassthroughBuffer{new const float* [2]};
     DiskWriter *m_diskRecorder{nullptr};
     inline void doRecordingHandling(jack_nframes_t nframes, jack_nframes_t current_frames, jack_nframes_t next_frames);
-    tracktion::TracktionThumbnail m_thumbnail;
+    tracktion::SmartThumbnail m_thumbnail;
     int m_thumbnailListenerCount{0};
     int64 m_nextSampleNum{0};
 };

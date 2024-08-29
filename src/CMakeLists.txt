@@ -19,7 +19,7 @@ target_sources(libzynthbox
         SamplerSynthVoice.cpp
         SyncTimer.cpp
         TransportManager.cpp
-        Helper.cpp
+        Helper.h
         QPainterContext.cpp
         WaveFormItem.cpp
         JackConnectionHandler.cpp

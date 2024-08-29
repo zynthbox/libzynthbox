@@ -20,7 +20,7 @@ tracktion::WaveAudioClip::Ptr Helper::loadAudioFileAsClip(
     removeAllClips(*track);
 
     // Add a new clip to this track
-    tracktion::AudioFile audioFile(edit.engine, file);
+    tracktion::engine::AudioFile audioFile(edit.engine, file);
 
     if (audioFile.isValid())
       if (auto newClip =

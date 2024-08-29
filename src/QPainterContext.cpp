@@ -265,7 +265,12 @@ const Font &QPainterContext::getFont()
     return m_font;
 }
 
-// void QPainterContext::drawGlyph(int /*glyphNumber*/, const AffineTransform&)
-// {
-//
-// }
+void QPainterContext::drawGlyphs(Span<const uint16_t>, Span<const Point<float> >, const AffineTransform &)
+{
+
+}
+
+uint64_t QPainterContext::getFrameId() const
+{
+
+}

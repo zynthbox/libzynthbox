@@ -18,7 +18,6 @@
 #include <unistd.h>
 
 #include "JUCEHeaders.h"
-#include "../tracktion_engine/examples/common/Utilities.h"
 #include "Helper.h"
 #include "ClipCommand.h"
 #include "JackPassthroughAnalyser.h"
@@ -29,7 +28,7 @@
 #include "SyncTimer.h"
 #include "Plugin.h"
 
-namespace tracktion_engine {
+namespace tracktion {
 #include <tracktion_engine/3rd_party/soundtouch/include/BPMDetect.h>
 };
 
@@ -91,12 +90,12 @@ public:
     }
   }
   ClipAudioSource *q;
-  const tracktion::Engine &getEngine() const { return *engine; };
+  const tracktion::engine::Engine &getEngine() const { return *engine; };
 
-  tracktion::Engine *engine{nullptr};
+  tracktion::engine::Engine *engine{nullptr};
   SyncTimer *syncTimer;
   juce::File givenFile;
-  tracktion::AudioFile *audioFile{nullptr};
+  tracktion::engine::AudioFile *audioFile{nullptr};
   juce::String chosenPath;
   juce::String fileName;
   QString filePath;
@@ -268,7 +267,7 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
   d->givenFile = juce::File(filepath);
   d->fileName = d->givenFile.getFileName();
   d->filePath = QString::fromUtf8(filepath);
-  d->audioFile = new tracktion::AudioFile(*d->engine, d->givenFile);
+  d->audioFile = new tracktion::engine::AudioFile(*d->engine, d->givenFile);
   d->sampleRate = d->audioFile->getSampleRate();
   d->adsr.setSampleRate(d->sampleRate);
   d->adsr.setParameters({0.0f, 0.0f, 1.0f, 0.0f});
@@ -752,8 +751,8 @@ const char *ClipAudioSource::getFilePath() const {
   return d->filePath.toUtf8();
 }
 
-tracktion::AudioFile ClipAudioSource::getPlaybackFile() const {
-  return tracktion::AudioFile(*d->audioFile);
+tracktion::engine::AudioFile ClipAudioSource::getPlaybackFile() const {
+  return tracktion::engine::AudioFile(*d->audioFile);
 }
 
 void ClipAudioSource::Private::timerCallback() {

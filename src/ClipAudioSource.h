@@ -10,12 +10,10 @@
 
 #pragma once
 
+#include "JUCEHeaders.h"
 #include <QObject>
-
 #include <iostream>
-
 #include <jack/jack.h>
-
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <juce_events/juce_events.h>
 
@@ -25,10 +23,10 @@ class ClipAudioSourcePositionsModel;
 class JackPassthroughAnalyser;
 class JackPassthroughFilter;
 class JackPassthroughCompressor;
-namespace tracktion_engine {
-    class AudioFile;
-    class Engine;
-}
+// namespace tracktion {
+//     class AudioFile;
+//     class Engine;
+// }
 using namespace std;
 
 //==============================================================================
@@ -557,7 +555,7 @@ public:
 
   double sampleRate() const;
 
-  tracktion::AudioFile getPlaybackFile() const;
+  tracktion::engine::AudioFile getPlaybackFile() const;
   Q_SIGNAL void playbackFileChanged();
 
   int id() const;

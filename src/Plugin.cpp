@@ -193,7 +193,7 @@ void Plugin::initialize()
     bool initialisationCompleted{false};
     auto juceInitialiser = [&]() {
         qDebug() << "Instantiating tracktion engine";
-        tracktionEngine = new tracktion::Engine("libzynthbox", nullptr, std::make_unique<ZLEngineBehavior>());
+        tracktionEngine = new tracktion::engine::Engine("libzynthbox", nullptr, std::make_unique<ZLEngineBehavior>());
         // qDebug() << "Setting device type to ALSA";
         // tracktionEngine->getDeviceManager().deviceManager.setCurrentAudioDeviceType("ALSA", true);
         // qDebug() << "Initialising device manager";
@@ -305,7 +305,7 @@ float Plugin::dBFromVolume(float vol)
     return tracktion::volumeFaderPositionToDB(vol);
 }
 
-tracktion::Engine *Plugin::getTracktionEngine()
+tracktion::engine::Engine *Plugin::getTracktionEngine()
 {
     return tracktionEngine;
 }

@@ -25,10 +25,4 @@ void callFunctionOnMessageThread(Function&& func, bool shouldWait = false, int w
   }
 }
 
-void removeAllClips(tracktion::AudioTrack& track);
-
-tracktion::AudioTrack* getOrInsertAudioTrackAt(tracktion::Edit& edit, int index);
-
-tracktion::WaveAudioClip::Ptr loadAudioFileAsClip(tracktion::Edit& edit, const File& file);
-
 }  // namespace Helper

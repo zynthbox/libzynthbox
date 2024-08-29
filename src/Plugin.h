@@ -86,7 +86,7 @@ public:
     // Called by zynthbox when the configuration in webconf has been changed (for example the midi setup, so our MidiRouter can pick up any changes)
     Q_INVOKABLE void reloadZynthianConfiguration();
     Q_INVOKABLE float dBFromVolume(float vol);
-    Q_INVOKABLE tracktion::Engine* getTracktionEngine();
+    Q_INVOKABLE tracktion::engine::Engine* getTracktionEngine();
     Q_INVOKABLE void registerTypes(QQmlEngine *engine, const char *uri);
     Q_INVOKABLE void addCreatedClipToMap(ClipAudioSource *clip);
     Q_INVOKABLE void removeCreatedClipFromMap(ClipAudioSource *clip);
@@ -113,7 +113,7 @@ public:
 private:
     explicit Plugin(QObject *parent = nullptr);
 
-    tracktion::Engine *tracktionEngine{nullptr};
+    tracktion::engine::Engine *tracktionEngine{nullptr};
     JuceEventLoop juceEventLoop;
     QHash<int, ClipAudioSource *> createdClipsMap;
     int lastCreatedClipId{-1};
