@@ -10,6 +10,7 @@
 
 #pragma once
 #include "JUCEHeaders.h"
+#include <tracktion_engine/playback/audionodes/tracktion_EditTimeRange.h>
 
 namespace tracktion
 {
@@ -55,10 +56,10 @@ public:
                                float& minValue, float& maxValue) const noexcept override;
 
     void drawChannel (juce::Graphics&, juce::Rectangle<int> area, bool useHighRes,
-                      EditTimeRange time, int channelNum, float verticalZoomFactor);
+                      tracktion::engine::legacy::EditTimeRange time, int channelNum, float verticalZoomFactor);
 
     void drawChannels (juce::Graphics&, juce::Rectangle<int> area, bool useHighRes,
-                       EditTimeRange time, float verticalZoomFactor);
+                       tracktion::engine::legacy::EditTimeRange time, float verticalZoomFactor);
 
 private:
     //==============================================================================

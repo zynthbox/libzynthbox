@@ -10,6 +10,7 @@
 
 #include "JUCEHeaders.h"
 #include "tracktion_Thumbnail.h"
+#include <tracktion_engine/playback/audionodes/tracktion_EditTimeRange.h>
 
 namespace tracktion
 {
@@ -343,7 +344,7 @@ public:
     }
 
     void drawChannel (juce::Graphics& g, juce::Rectangle<int> area, bool useHighRes,
-                      EditTimeRange time, int channelNum, float verticalZoomFactor,
+                      tracktion::engine::legacy::EditTimeRange time, int channelNum, float verticalZoomFactor,
                       double rate, int numChans, int sampsPerThumbSample,
                       LevelDataSource* levelData, const juce::OwnedArray<ThumbData>& chans)
     {
@@ -432,7 +433,7 @@ private:
     int numChannelsCached = 0, numSamplesCached = 0;
     bool cacheNeedsRefilling = true;
 
-    bool refillCache (int numSamples, EditTimeRange time,
+    bool refillCache (int numSamples, tracktion::engine::legacy::EditTimeRange time,
                       double rate, int numChans, int sampsPerThumbSample,
                       LevelDataSource* levelData, const juce::OwnedArray<ThumbData>& chans)
     {
@@ -840,16 +841,18 @@ void TracktionThumbnail::getApproximateMinMax (double startTime, double endTime,
 
 void TracktionThumbnail::drawChannel (juce::Graphics& g, const juce::Rectangle<int>& area, double start, double end, int channel, float zoom)
 {
-    drawChannel (g, area, true, { start, end }, channel, zoom);
+    tracktion::engine::legacy::EditTimeRange timeRange(start, end);
+    drawChannel (g, area, true, timeRange, channel, zoom);
 }
 
 void TracktionThumbnail::drawChannels (juce::Graphics& g, const juce::Rectangle<int>& area, double start, double end, float zoom)
 {
-    drawChannels (g, area, true, { start, end }, zoom);
+    tracktion::engine::legacy::EditTimeRange timeRange(start, end);
+    drawChannels (g, area, true, timeRange, zoom);
 }
 
 void TracktionThumbnail::drawChannel (juce::Graphics& g, juce::Rectangle<int> area, bool useHighRes,
-                                      EditTimeRange time, int channelNum, float verticalZoomFactor)
+                                      tracktion::engine::legacy::EditTimeRange time, int channelNum, float verticalZoomFactor)
 {
     const juce::ScopedLock sl2 (sourceLock);
     const juce::ScopedLock sl (lock);
@@ -859,7 +862,7 @@ void TracktionThumbnail::drawChannel (juce::Graphics& g, juce::Rectangle<int> ar
 }
 
 void TracktionThumbnail::drawChannels (juce::Graphics& g, juce::Rectangle<int> area, bool useHighRes,
-                                       EditTimeRange time, float verticalZoomFactor)
+                                       tracktion::engine::legacy::EditTimeRange time, float verticalZoomFactor)
 {
     for (int i = 0; i < numChannels; ++i)
     {

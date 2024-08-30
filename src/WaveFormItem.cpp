@@ -18,6 +18,7 @@
 #include <QPainter>
 #include <QDebug>
 #include <QTimer>
+#include <tracktion_engine/playback/audionodes/tracktion_EditTimeRange.h>
 
 WaveFormItem::WaveFormItem(QQuickItem *parent)
     : QQuickPaintedItem(parent),
@@ -186,15 +187,16 @@ void WaveFormItem::paint(QPainter *painter)
     juce::Rectangle<int> thumbnailBounds (0, 0, width(), height());
     if (m_externalThumbnail) {
         const double actualEnd{qMin(m_end == -1 ? m_externalThumbnail->getTotalLength() : m_end, m_externalThumbnail->getTotalLength())};
+        tracktion::engine::legacy::EditTimeRange timeRange(qMin(m_start, actualEnd), actualEnd);
         const int numChannels{m_externalThumbnail->getNumChannels()};
         if (numChannels == 1) {
-            m_externalThumbnail->drawChannel(m_juceGraphics, thumbnailBounds, true, {qMin(m_start, actualEnd), actualEnd}, 0, 1.0f);
+            m_externalThumbnail->drawChannel(m_juceGraphics, thumbnailBounds, true, timeRange, 0, 1.0f);
         } else {
             const double spacing{height() / (numChannels + 1)};
             for (int channel = 0; channel < numChannels; ++channel) {
                 thumbnailBounds.setTop(channel * spacing);
                 thumbnailBounds.setHeight(height() - spacing);
-                m_externalThumbnail->drawChannel(m_juceGraphics, thumbnailBounds, true, {qMin(m_start, actualEnd), actualEnd}, channel, 1.0f);
+                m_externalThumbnail->drawChannel(m_juceGraphics, thumbnailBounds, true, timeRange, channel, 1.0f);
             }
         }
         if (!m_externalThumbnail->isFullyLoaded()) {
@@ -203,15 +205,16 @@ void WaveFormItem::paint(QPainter *painter)
         }
     } else {
         const double actualEnd{qMin(m_end == -1 ? m_thumbnail.getTotalLength() : m_end, m_thumbnail.getTotalLength())};
+        tracktion::engine::legacy::EditTimeRange timeRange(qMin(m_start, actualEnd), actualEnd);
         const int numChannels{m_thumbnail.getNumChannels()};
         if (numChannels == 1) {
-            m_thumbnail.drawChannel(m_juceGraphics, thumbnailBounds, true, {qMin(m_start, actualEnd), actualEnd}, 0, 1.0f);
+            m_thumbnail.drawChannel(m_juceGraphics, thumbnailBounds, true, timeRange, 0, 1.0f);
         } else {
             const double spacing{height() / (numChannels + 1)};
             for (int channel = 0; channel < numChannels; ++channel) {
                 thumbnailBounds.setTop(channel * spacing);
                 thumbnailBounds.setHeight(height() - spacing);
-                m_thumbnail.drawChannel(m_juceGraphics, thumbnailBounds, true, {qMin(m_start, actualEnd), actualEnd}, channel, 1.0f);
+                m_thumbnail.drawChannel(m_juceGraphics, thumbnailBounds, true, timeRange, channel, 1.0f);
             }
         }
         if (!m_thumbnail.isFullyLoaded()) {
