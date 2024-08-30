@@ -41,7 +41,7 @@ add_custom_command(
                 # --enable-return-value-heuristic
                 --enable-pyside-extensions
                 --use-isnull-as-nb_nonzero
-                --language-level=c++17
+                --language-level=c++20
                 --output-directory=${CMAKE_CURRENT_BINARY_DIR}
                 --typesystem-paths=${PySide2_TYPESYSTEMS_PATH}
                 "-I$<TARGET_PROPERTY:libzynthbox,SOURCE_DIR>"
