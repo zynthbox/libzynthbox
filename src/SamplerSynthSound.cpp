@@ -16,8 +16,11 @@
 #include <QThreadPool>
 
 namespace tracktion {
+namespace engine {
 #include <tracktion_engine/3rd_party/soundtouch/include/SoundTouch.h>
-};
+}
+}
+
 
 class SamplerSynthSoundTimestretcher : public QObject, public QRunnable {
     Q_OBJECT
@@ -259,7 +262,7 @@ public:
     SamplerSynthSoundPrivate *parent{nullptr};
     ClipAudioSource *clip{nullptr};
     const juce::AudioBuffer<float> *inputData{nullptr};
-    tracktion::soundtouch::SoundTouch soundTouch;
+    tracktion::engine::soundtouch::SoundTouch soundTouch;
 
     bool abort{false};
     QMutex abortMutex;

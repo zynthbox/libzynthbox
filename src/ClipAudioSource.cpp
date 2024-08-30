@@ -29,8 +29,10 @@
 #include "Plugin.h"
 
 namespace tracktion {
+namespace engine {
 #include <tracktion_engine/3rd_party/soundtouch/include/BPMDetect.h>
-};
+}
+}
 
 #define DEBUG_CLIP false
 #define IF_DEBUG_CLIP if (DEBUG_CLIP)
@@ -556,7 +558,7 @@ float ClipAudioSource::guessBPM(int slice) const
   const int blockSize{65536};
   const bool useRightChan{numChannels > 1};
   AudioFormatReader *reader{d->audioFile->getFormat()->createReaderFor(d->givenFile.createInputStream().release(), true)};
-  tracktion::soundtouch::BPMDetect bpmDetector(numChannels, d->audioFile->getSampleRate());
+  tracktion::engine::soundtouch::BPMDetect bpmDetector(numChannels, d->audioFile->getSampleRate());
   juce::AudioBuffer<float> fileBuffer(jmin(2, numChannels), lastSample - startSample);
   while (numLeft > 0)
   {
@@ -567,7 +569,8 @@ float ClipAudioSource::guessBPM(int slice) const
     // Create an interleaved selection of samples as we want them
     tracktion::AudioScratchBuffer scratch(1, numThisTime * numChannels);
     float* interleaved = scratch.buffer.getWritePointer(0);
-    juce::AudioDataConverters::interleaveSamples((const float **)fileBuffer.getArrayOfReadPointers(), interleaved, numThisTime, numChannels);
+    // FIXME AudioDataConverters is deprecated, see https://forum.juce.com/t/audiodataconverters-deprecated/48054
+    juce::AudioDataConverters::interleaveSamples(const_cast<const float **>(fileBuffer.getArrayOfReadPointers()), interleaved, numThisTime, numChannels);
     // Pass them along to the bpm detector for processing
     bpmDetector.inputSamples(interleaved, numThisTime);
     // Next run...
