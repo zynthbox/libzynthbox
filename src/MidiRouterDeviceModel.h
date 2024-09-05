@@ -56,7 +56,7 @@ public:
 
     void addDevice(MidiRouterDevice* device);
     void removeDevice(MidiRouterDevice* device);
-    MidiRouterDevice *getDevice(const QString &hardwareId) const;
+    Q_INVOKABLE MidiRouterDevice *getDevice(const QString &hardwareId) const;
 
     QVariantList audioInSources() const;
     Q_INVOKABLE int audioInSourceIndex(const QString &value) const;
