@@ -285,6 +285,58 @@ CUIAHelper::Event CUIAHelper::cuiaEvent(const QString& cuiaCommand) const
     return d->commands.key(cuiaCommand, NoCuiaEvent);
 }
 
+bool CUIAHelper::cuiaEventWantsATrack(const Event& cuiaEvent) const
+{
+    static const QList<Event> eventsThatWantATrack{
+        ActivateTrackEvent,
+        ToggleTrackMuted,
+        ToggleTrackSoloed,
+        SetTrackVolumeEvent,
+        SetTrackPanEvent,
+        SetTrackSend1AmountEvent,
+        SetTrackSend2AmountEvent,
+        TogglePartEvent,
+        SetPartActiveStateEvent,
+        SetPartGain,
+        SetFxAmount,
+    };
+    if (eventsThatWantATrack.contains(cuiaEvent)) {
+        return true;
+    }
+    return false;
+}
+
+bool CUIAHelper::cuiaEventWantsAPart(const Event& cuiaEvent) const
+{
+    static const QList<Event> eventsThatWantAPart{
+        TogglePartEvent,
+        SetPartActiveStateEvent,
+        SetPartGain,
+        SetFxAmount,
+    };
+    if (eventsThatWantAPart.contains(cuiaEvent)) {
+        return true;
+    }
+    return false;
+}
+
+bool CUIAHelper::cuiaEventWantsAValue(const Event& cuiaEvent) const
+{
+    static const QList<Event> eventsThatWantAValue{
+        SetTrackVolumeEvent,
+        SetTrackPanEvent,
+        SetTrackSend1AmountEvent,
+        SetTrackSend2AmountEvent,
+        SetPartActiveStateEvent,
+        SetPartGain,
+        SetFxAmount,
+    };
+    if (eventsThatWantAValue.contains(cuiaEvent)) {
+        return true;
+    }
+    return false;
+}
+
 // Get a floating point value between -1.0 and 1.0 for a given CC value (that is, 0 through 127), with 63 being 0.0 (meaning both 126 and 127 are 1.0)
 static inline float centeredRelativeCCValue(const int &ccValue) {
     return float(std::clamp(ccValue, 0, 126) - 63) / 63.0f;

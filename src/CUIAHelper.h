@@ -158,19 +158,38 @@ public:
      * @param cuiaEvent A CUIA event to retrieve a human-readable name for
      * @return The human-readable name for the given event
      */
-    QString cuiaTitle(const Event &cuiaEvent) const;
+    Q_INVOKABLE QString cuiaTitle(const Event &cuiaEvent) const;
     /**
      * \brief Get the CUIA event string for the given CUIA event
      * @param cuiaEvent A CUIA event to retrieve a CUIA event string for
      * @return The CUIA event string for the given event
      */
-    QString cuiaCommand(const Event &cuiaEvent) const;
+    Q_INVOKABLE QString cuiaCommand(const Event &cuiaEvent) const;
     /**
      * \brief Get the CUIA event matching the given CUIA command string
      * @param cuiaCommand The command to convert to a CUIA event value
      * @return The CUIA event for the given command string (will return NoCuiaEvent for a string with no match)
      */
-    Event cuiaEvent(const QString &cuiaCommand) const;
+    Q_INVOKABLE Event cuiaEvent(const QString &cuiaCommand) const;
+
+    /**
+     * \brief Whether the given event uses the track parameter
+     * @param event The event you want to know details about
+     * @return True if the given event uses the track parameter, false otherwise
+     */
+    Q_INVOKABLE bool cuiaEventWantsATrack(const Event &cuiaEvent) const;
+    /**
+     * \brief Whether the given event uses the part parameter
+     * @param event The event you want to know details about
+     * @return True if the given event uses the part parameter, false otherwise
+     */
+    Q_INVOKABLE bool cuiaEventWantsAPart(const Event &cuiaEvent) const;
+    /**
+     * \brief Whether the given event uses the value parameter
+     * @param event The event you want to know details about
+     * @return True if the given event uses the value parameter, false otherwise
+     */
+    Q_INVOKABLE bool cuiaEventWantsAValue(const Event &cuiaEvent) const;
 
     /**
      * \brief Get a human-readable description of the given CUIA event and associated flags
@@ -180,12 +199,12 @@ public:
      * @param value The value the event is associated with (will be ignored if the event doesn't use this parameter)
      * @param upperValue Treat value as a lower limit, and describe the values in a range
      */
-    QString describe(const Event &cuiaEvent, const ZynthboxBasics::Track &track, const ZynthboxBasics::Part &part, const int &value, const int &upperValue = -1) const;
+    Q_INVOKABLE QString describe(const Event &cuiaEvent, const ZynthboxBasics::Track &track, const ZynthboxBasics::Part &part, const int &value, const int &upperValue = -1) const;
 
     /**
      * \brief Get the human-readable name of the given switch
      */
-    QString switchName(const int &switchIndex) const;
+    Q_INVOKABLE QString switchName(const int &switchIndex) const;
 private:
     CUIAHelperPrivate *d{nullptr};
 };
