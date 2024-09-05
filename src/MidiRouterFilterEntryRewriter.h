@@ -59,6 +59,11 @@ class MidiRouterFilterEntryRewriter : public QObject
     Q_PROPERTY(ZynthboxBasics::Track cuiaTrack READ cuiaTrack WRITE setCuiaTrack NOTIFY cuiaTrackChanged)
     Q_PROPERTY(ZynthboxBasics::Part cuiaPart READ cuiaPart WRITE setCuiaPart NOTIFY cuiaPartChanged)
     Q_PROPERTY(MidiRouterFilterEntryRewriter::ValueSpecifier cuiaValue READ cuiaValue WRITE setCuiaValue NOTIFY cuiaValueChanged)
+
+    /**
+     * \brief A human-readable description of the filter entry
+     */
+    Q_PROPERTY(QString description READ description NOTIFY descripionChanged)
 public:
     explicit MidiRouterFilterEntryRewriter(MidiRouterFilterEntry *parent = nullptr);
     ~MidiRouterFilterEntryRewriter() override;
@@ -210,6 +215,7 @@ public:
         ExplicitByte126 = 126,
         ExplicitByte127 = 127,
     };
+    Q_ENUM(EventByte)
 
     enum ValueSpecifier {
         ValueByte1 = -1,
@@ -385,6 +391,9 @@ public:
     ValueSpecifier cuiaValue() const;
     void setCuiaValue(const ValueSpecifier &cuiaValue);
     Q_SIGNAL void cuiaValueChanged();
+
+    QString description() const;
+    Q_SIGNAL void descripionChanged();
 private:
     friend class MidiRouterFilterEntry;
     friend class MidiRouterDevice;
