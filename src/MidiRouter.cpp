@@ -841,6 +841,7 @@ void MidiRouter::run() {
     int cuiaOriginId{0};
     ZynthboxBasics::Track cuiaTrack{ZynthboxBasics::CurrentTrack};
     ZynthboxBasics::Part cuiaPart{ZynthboxBasics::CurrentPart};
+    static const QString emptyString{};
     int cuiaValue{0};
     while (true) {
         if (d->done) {
@@ -858,7 +859,7 @@ void MidiRouter::run() {
                     const int &velocity = message->byte2;
                     Q_EMIT noteChanged(listenerPort->identifier, midiNote, midiChannel, velocity, setOn, message->timeStamp, message->byte0, message->byte1, message->byte2, message->sketchpadTrack, message->eventDevice->hardwareId());
                 }
-                Q_EMIT midiMessage(listenerPort->identifier, message->size, message->byte0, message->byte1, message->byte2, message->sketchpadTrack, message->fromInternal);
+                Q_EMIT midiMessage(listenerPort->identifier, message->size, message->byte0, message->byte1, message->byte2, message->sketchpadTrack, message->fromInternal, message->eventDevice ? message->eventDevice->hardwareId() : emptyString);
                 message->submitted = true;
                 listenerPort->readHead = listenerPort->readHead->next;
                 message = listenerPort->readHead;

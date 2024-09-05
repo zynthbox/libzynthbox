@@ -171,8 +171,9 @@ public:
      * @param byte3 The third byte (commonly valid, but always test size before using)
      * @param sketchpadTrack The sketchpad track the message arrived on
      * @param fromInternal Whether the message arrived from an internal source
+     * @param hardwareDeviceId The device ID of the hardware device the event arrived on (this will only be valid if the event in fact arrived from a hardware device)
      */
-    Q_SIGNAL void midiMessage(int port, int size, const unsigned char &byte1, const unsigned char &byte2, const unsigned char& byte3, const int &sketchpadTrack, bool fromInternal);
+    Q_SIGNAL void midiMessage(int port, int size, const unsigned char &byte1, const unsigned char &byte2, const unsigned char& byte3, const int &sketchpadTrack, bool fromInternal, const QString &hardwareDeviceId);
     /**
      * \brief Fired whenever a cuia command is requested by the MidiRouter (nominally done by way of setting up MidiRouterFilter rules)
      * @param cuiaCommand The command that should be called
