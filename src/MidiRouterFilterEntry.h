@@ -1,10 +1,10 @@
 #pragma once
 
 #include "MidiRouterDevice.h"
+#include "MidiRouterFilterEntryRewriter.h"
 
 #include "ZynthboxBasics.h"
 
-class MidiRouterFilterEntryRewriter;
 class MidiRouterFilter;
 /**
  * \brief A single entry in a MidiRouterFilter
@@ -27,7 +27,7 @@ class MidiRouterFilterEntry : public QObject
      * \brief The number of bytes that the event must contain for this entry to match
      * @minimum 1
      * @maximum 3
-     * @default 1
+     * @default 3
      */
     Q_PROPERTY(int requiredBytes READ requiredBytes WRITE setRequiredBytes NOTIFY requiredBytesChanged)
     /**
@@ -38,17 +38,17 @@ class MidiRouterFilterEntry : public QObject
     /**
      * \brief The minimum value of byte1 for a match to occur (valid on input filters)
      * Setting this to a value higher than the maximum will set the maximum to the same value
-     * @minimum 0
-     * @maximum 127
-     * @default 0
+     * @minimum 128
+     * @maximum 255
+     * @default 128 (Note-off for the first midi channel)
      */
     Q_PROPERTY(int byte1Minimum READ byte1Minimum WRITE setByte1Minimum NOTIFY byte1MinimumChanged)
     /**
      * \brief The maximum value of byte1 for a match to occur (valid on input filters)
      * Setting this value to a lower value than the minimum will set the minimum to the same value
-     * @minimum 0
-     * @maximum 127
-     * @default 0
+     * @minimum 128
+     * @maximum 255
+     * @default 128 (Note-off for the first midi channel)
      */
     Q_PROPERTY(int byte1Maximum READ byte1Maximum WRITE setByte1Maximum NOTIFY byte1MaximumChanged)
     /**
@@ -58,7 +58,7 @@ class MidiRouterFilterEntry : public QObject
      * @maximum 127
      * @default 0
      */
-    Q_PROPERTY(int byte2Minimum READ byte2Minimum WRITE setByte1Minimum NOTIFY byte2MinimumChanged)
+    Q_PROPERTY(int byte2Minimum READ byte2Minimum WRITE setByte2Minimum NOTIFY byte2MinimumChanged)
     /**
      * \brief The maximum value of byte2 for a match to occur (valid on input filters)
      * Setting this value to a lower value than the minimum will set the minimum to the same value
@@ -66,7 +66,7 @@ class MidiRouterFilterEntry : public QObject
      * @maximum 127
      * @default 0
      */
-    Q_PROPERTY(int byte2Maximum READ byte2Maximum WRITE setByte1Maximum NOTIFY byte2MaximumChanged)
+    Q_PROPERTY(int byte2Maximum READ byte2Maximum WRITE setByte2Maximum NOTIFY byte2MaximumChanged)
     /**
      * \brief The minimum value of byte3 for a match to occur (valid on input filters)
      * Setting this to a value higher than the maximum will set the maximum to the same value
@@ -74,7 +74,7 @@ class MidiRouterFilterEntry : public QObject
      * @maximum 127
      * @default 0
      */
-    Q_PROPERTY(int byte3Minimum READ byte3Minimum WRITE setByte1Minimum NOTIFY byte3MinimumChanged)
+    Q_PROPERTY(int byte3Minimum READ byte3Minimum WRITE setByte3Minimum NOTIFY byte3MinimumChanged)
     /**
      * \brief The maximum value of byte3 for a match to occur (valid on input filters)
      * Setting this value to a lower value than the minimum will set the minimum to the same value
@@ -82,7 +82,7 @@ class MidiRouterFilterEntry : public QObject
      * @maximum 127
      * @default 0
      */
-    Q_PROPERTY(int byte3Maximum READ byte3Maximum WRITE setByte1Maximum NOTIFY byte3MaximumChanged)
+    Q_PROPERTY(int byte3Maximum READ byte3Maximum WRITE setByte3Maximum NOTIFY byte3MaximumChanged)
     /**
      * \brief The cuia event this filter should react to (valid on output filters)
      */
@@ -233,10 +233,10 @@ private:
     ZynthboxBasics::Part m_targetPart{ZynthboxBasics::CurrentPart};
     ZynthboxBasics::Track m_originTrack{ZynthboxBasics::AnyTrack};
     ZynthboxBasics::Part m_originPart{ZynthboxBasics::AnyPart};
-    int m_requiredBytes{1};
+    int m_requiredBytes{3};
     bool m_requireRange{false};
-    int m_byte1Minimum{0};
-    int m_byte1Maximum{0};
+    int m_byte1Minimum{128};
+    int m_byte1Maximum{128};
     int m_byte2Minimum{0};
     int m_byte2Maximum{0};
     int m_byte3Minimum{0};

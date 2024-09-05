@@ -1,6 +1,5 @@
 #include "MidiRouterFilterEntry.h"
 #include "MidiRouterFilter.h"
-#include "MidiRouterFilterEntryRewriter.h"
 
 #include <QDebug>
 #include <QTimer>
@@ -209,7 +208,7 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                         case MidiRouterFilterEntryRewriter::ExplicitByte127:
                         default:
                             // The explicit bytes are all some explicit byte value, that we can convert directly like so:
-                            rule->m_bufferEvent->buffer[byteIndex] = jack_midi_data_t(rule->m_bytes[byteIndex]);
+                            rule->m_bufferEvent->buffer[byteIndex] = jack_midi_data_t(byteIndex == 0 ? rule->m_bytes[byteIndex] + 128 : rule->m_bytes[byteIndex]);
                             break;
                     }
                     if (rule->m_bytesAddChannel[byteIndex]) {
@@ -841,11 +840,24 @@ QString MidiRouterFilterEntry::description() const
         } else {
             description = firstEvent;
         }
+        // TODO This would benefit from k18n's plural understanding...
+        if (m_rewriteRules.count() == 0) {
+            description = QString("%1 with no rewrite rules").arg(description);
+        } else if (m_rewriteRules.count() == 1) {
+            description = QString("%1 with 1 rewrite rule").arg(description);
+        } else {
+            description = QString("%1 with %2 rewrite rules").arg(description).arg(m_rewriteRules.count());
+        }
     } else {
         if (m_valueMinimum == m_valueMaximum) {
             description = CUIAHelper::instance()->describe(m_cuiaEvent, m_originTrack, m_originPart, m_valueMinimum);
         } else {
             description = CUIAHelper::instance()->describe(m_cuiaEvent, m_originTrack, m_originPart, m_valueMinimum, m_valueMaximum);
+        }
+        if (m_rewriteRules.count() == 0) {
+            description = QString("%1 with no rewrite rules (no midi events will be sent to the device)").arg(description);
+        } else {
+            description = QString("%1 with %2 rewrite rules").arg(description).arg(m_rewriteRules.count());
         }
     }
     return description;
