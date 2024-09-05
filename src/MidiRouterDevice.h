@@ -25,6 +25,10 @@ class MidiRouterDevice : public QObject {
      */
     Q_PROPERTY(int id READ id CONSTANT)
     /**
+     * \brief The hardware ID describing this device uniquely
+     */
+    Q_PROPERTY(QString hardwareId READ hardwareId NOTIFY hardwareIdChanged)
+    /**
      * \brief The device's human-readable name
      */
     Q_PROPERTY(QString humanReadableName READ humanReadableName NOTIFY humanReadableNameChanged)
