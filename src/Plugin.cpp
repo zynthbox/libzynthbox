@@ -65,6 +65,7 @@
 #include "JackPassthroughVisualiserItem.h"
 #include "ZynthboxBasics.h"
 #include "AdjectiveNoun.h"
+#include "CUIAHelper.h"
 
 #include "Plugin.h"
 
@@ -406,6 +407,13 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
         ZynthboxBasics *zynthboxBasics = ZynthboxBasics::instance();
         QQmlEngine::setObjectOwnership(zynthboxBasics, QQmlEngine::CppOwnership);
         return zynthboxBasics;
+    });
+    qmlRegisterSingletonType<CUIAHelper>(uri, 1, 0, "CUIAHelper", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
+        Q_UNUSED(engine)
+        Q_UNUSED(scriptEngine)
+        CUIAHelper *cuiaHelper = CUIAHelper::instance();
+        QQmlEngine::setObjectOwnership(cuiaHelper, QQmlEngine::CppOwnership);
+        return cuiaHelper;
     });
     qmlRegisterType<WaveFormItem>(uri, 1, 0, "WaveFormItem");
     qmlRegisterType<JackPassthroughVisualiserItem>(uri, 1, 0, "JackPassthroughVisualiserItem");
