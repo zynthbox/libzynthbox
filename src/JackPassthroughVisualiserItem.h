@@ -34,4 +34,3 @@ private:
     JackPassthroughVisualiserItemPrivate *d{nullptr};
 };
 Q_DECLARE_METATYPE(JackPassthroughVisualiserItem*)
-

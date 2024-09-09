@@ -1,3 +1,5 @@
+#pragma once
+
 #include "JUCEHeaders.h"
 
 class JuceEventLoop : public Thread {
