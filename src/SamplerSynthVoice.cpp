@@ -306,7 +306,7 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         d->playbackData.pan = std::clamp(float(d->clip->pan()) + d->clipCommand->pan + (d->subvoiceSettings ? d->subvoiceSettings->pan() : 0.0f), -1.0f, 1.0f);
         d->playbackData.startPosition = double((d->clipCommand->setStartPosition ? d->clipCommand->startPosition * d->playbackData.sourceSampleRate : d->clip->getStartPositionSamples(d->clipCommand->slice))) / d->sound->stretchRate();
         d->playbackData.stopPosition = double((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition * d->playbackData.sourceSampleRate : d->clip->getStopPositionSamples(d->clipCommand->slice))) / d->sound->stretchRate();
-        d->playbackData.loopPosition = double((d->clip->getStartPositionSamples(d->clipCommand->slice) + d->clip->loopDeltaSamples()) * d->playbackData.sourceSampleRate) / d->sound->stretchRate();
+        d->playbackData.loopPosition = d->playbackData.startPosition + (double(d->clip->loopDeltaSamples()) / d->sound->stretchRate());
         if (d->playbackData.loopPosition >= d->playbackData.stopPosition) {
             d->playbackData.loopPosition = d->playbackData.startPosition;
         }
@@ -413,7 +413,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
         d->playbackData.pan = std::clamp(float(d->clip->pan()) + d->clipCommand->pan + (d->subvoiceSettings ? d->subvoiceSettings->pan() : 0.0f), -1.0f, 1.0f);
         d->playbackData.startPosition = double((d->clipCommand->setStartPosition ? d->clipCommand->startPosition * d->playbackData.sourceSampleRate : d->clip->getStartPositionSamples(d->clipCommand->slice))) / d->sound->stretchRate();
         d->playbackData.stopPosition = double((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition * d->playbackData.sourceSampleRate : d->clip->getStopPositionSamples(d->clipCommand->slice))) / d->sound->stretchRate();
-        d->playbackData.loopPosition = double((d->clip->getStartPositionSamples(d->clipCommand->slice) + d->clip->loopDeltaSamples()) * d->playbackData.sourceSampleRate) / d->sound->stretchRate();
+        d->playbackData.loopPosition = d->playbackData.startPosition + (double(d->clip->loopDeltaSamples()) / d->sound->stretchRate());
         if (d->playbackData.loopPosition >= d->playbackData.stopPosition) {
             d->playbackData.loopPosition = d->playbackData.startPosition;
         }
