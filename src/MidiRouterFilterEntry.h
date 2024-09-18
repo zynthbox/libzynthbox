@@ -31,7 +31,7 @@ class MidiRouterFilterEntry : public QObject
      */
     Q_PROPERTY(int requiredBytes READ requiredBytes WRITE setRequiredBytes NOTIFY requiredBytesChanged)
     /**
-     * \brief Whether this filter requires a range of bytes or not (if not, only byte minimums will matter)
+     * \brief Whether this filter requires a range of bytes or not (if not, only byte minimums will matter) (valid on input filters)
      * @default false
      */
     Q_PROPERTY(bool requireRange READ requireRange WRITE setRequireRange NOTIFY requireRangeChanged)
