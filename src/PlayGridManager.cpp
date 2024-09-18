@@ -834,7 +834,6 @@ QString PlayGridManager::modelToJson(const QObject* model) const
         modelObject["bankOffset"] = patternModel->bankOffset();
         modelObject["bankLength"] = patternModel->bankLength();
         modelObject["enabled"] = patternModel->enabled();
-        modelObject["layerData"] = patternModel->layerData();
         modelObject["scale"] = KeyScales::instance()->scaleShorthand(patternModel->scaleKey());
         modelObject["pitch"] = KeyScales::instance()->pitchShorthand(patternModel->pitchKey());
         modelObject["octave"] = KeyScales::instance()->octaveShorthand(patternModel->octaveKey());
@@ -904,11 +903,6 @@ void PlayGridManager::setModelFromJson(QObject* model, const QString& json)
                 pattern->setEnabled(patternObject.value("enabled").toBool());
             } else {
                 pattern->setEnabled(true);
-            }
-            if (patternObject.contains("layerData")) {
-                pattern->setLayerData(patternObject.value("layerData").toString());
-            } else {
-                pattern->setLayerData("");
             }
             if (patternObject.contains("noteDestination")) {
                 pattern->setNoteDestination(PatternModel::NoteDestination(patternObject.value("noteDestination").toInt()));

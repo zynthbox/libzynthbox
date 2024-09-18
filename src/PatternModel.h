@@ -91,12 +91,6 @@ class PatternModel : public NotesModel
      * @default -1 (which will be interpreted as "the same as sketchpadTrack")
      */
     Q_PROPERTY(int externalMidiChannel READ externalMidiChannel WRITE setExternalMidiChannel NOTIFY externalMidiChannelChanged)
-    /*
-     * \brief A JSON representation of the sound associated with this pattern
-     * @note Technically this does not get used by the pattern itself, but it is stored along with all the other data that
-     *       makes up the pattern, so that if it is shared, it can be consumed by the importer and applied to its new home.
-     */
-    Q_PROPERTY(QString layerData READ layerData WRITE setLayerData NOTIFY layerDataChanged)
     /**
      * \brief The duration which should be any newly added note (by default 0, meaning auto-quantized)
      *
@@ -527,10 +521,6 @@ public:
     void setExternalMidiChannel(int externalMidiChannel);
     int externalMidiChannel() const;
     Q_SIGNAL void externalMidiChannelChanged();
-
-    void setLayerData(const QString &layerData);
-    QString layerData() const;
-    Q_SIGNAL void layerDataChanged();
 
     void setDefaultNoteDuration(int defaultNoteDuration);
     int defaultNoteDuration() const;

@@ -351,7 +351,6 @@ void SequenceModel::insertPattern(PatternModel* pattern, int row)
     connect(pattern, &PatternModel::objectNameChanged, this, updatePattern);
     connect(pattern, &PatternModel::bankOffsetChanged, this, updatePattern);
     connect(pattern, &PatternModel::playingColumnChanged, this, updatePattern);
-    connect(pattern, &PatternModel::layerDataChanged, this, updatePattern);
     connect(pattern, &NotesModel::lastModifiedChanged, this, &SequenceModel::setDirty);
     int insertionRow = d->patternModels.count();
     if (row > -1) {
@@ -708,7 +707,6 @@ void SequenceModel::clear()
         PatternModel *pattern = d->patternModelIterator[i];
         if (pattern) {
             pattern->clear();
-            pattern->setLayerData("");
             pattern->setStepLength(24);
             pattern->setPatternLength(pattern->width());
             pattern->setActiveBar(0);

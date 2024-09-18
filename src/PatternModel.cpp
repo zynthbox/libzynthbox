@@ -82,10 +82,6 @@ public:
         : QObject(parent)
         , q(parent)
     {
-        layerDataPuller = new QTimer(this);
-        layerDataPuller->setInterval(100);
-        layerDataPuller->setSingleShot(true);
-        connect(layerDataPuller, &QTimer::timeout, this, &ZLPatternSynchronisationManager::retrieveLayerData, Qt::QueuedConnection);
         syncTimer = SyncTimer::instance();
     };
     PatternModel *q{nullptr};
@@ -93,7 +89,6 @@ public:
     QObject *zlChannel{nullptr};
     QObject *zlPart{nullptr};
     QObject *zlScene{nullptr};
-    QTimer *layerDataPuller{nullptr};
 
     bool channelMuted{false};
     ClipAudioSource::SamplePickingStyle samplePickingStyle{ClipAudioSource::SameOrFirstPickingStyle};
@@ -112,7 +107,6 @@ public:
                 connect(zlChannel, SIGNAL(selectedPartChanged()), this, SLOT(selectedPartChanged()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(chained_sounds_changed()), this, SLOT(chainedSoundsChanged()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(chainedSoundsAcceptedChannelsChanged()), this, SLOT(chainedSoundsChanged()), Qt::QueuedConnection);
-                connect(zlChannel, SIGNAL(chained_sounds_changed()), layerDataPuller, SLOT(start()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(recordingPopupActiveChanged()), this, SIGNAL(recordingPopupActiveChanged()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(mutedChanged()), this, SLOT(mutedChanged()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(samplePickingStyleChanged()), this, SLOT(updateSamples()), Qt::QueuedConnection);
@@ -120,7 +114,6 @@ public:
                 externalMidiChannelChanged();
                 updateSamples();
                 selectedPartChanged();
-                layerDataPuller->start();
                 chainedSoundsChanged();
             }
             mutedChanged();
@@ -285,13 +278,6 @@ public Q_SLOTS:
             channelMuted = zlChannel->property("muted").toBool();
         } else {
             channelMuted = false;
-        }
-    }
-    void retrieveLayerData() {
-        if (zlChannel) {
-            QString jsonSnapshot;
-            QMetaObject::invokeMethod(zlChannel, "getChannelSoundSnapshotJson", Qt::DirectConnection, Q_RETURN_ARG(QString, jsonSnapshot));
-            q->setLayerData(jsonSnapshot);
         }
     }
 
@@ -478,7 +464,6 @@ public:
     int width{16};
     PatternModel::NoteDestination noteDestination{PatternModel::SynthDestination};
     int externalMidiChannel{-1};
-    QString layerData;
     int defaultNoteDuration{0};
     float stepLength{24.0};
     int swing{0};
@@ -783,7 +768,6 @@ PatternModel::PatternModel(SequenceModel* parent)
     setHeight(16);
 
     connect(this, &PatternModel::noteDestinationChanged, this, &NotesModel::registerChange);
-    connect(this, &PatternModel::layerDataChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::stepLengthChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::swingChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::patternLengthChanged, this, &NotesModel::registerChange);
@@ -891,7 +875,6 @@ PatternModel::PatternModel(PatternModel* parent)
 {
     // Register the performance model changes in the parent (basically "just" for thumbnail purposes and ui updates
     connect(this, &PatternModel::noteDestinationChanged, parent, &NotesModel::registerChange);
-    connect(this, &PatternModel::layerDataChanged, parent, &NotesModel::registerChange);
     connect(this, &PatternModel::stepLengthChanged, parent, &NotesModel::registerChange);
     connect(this, &PatternModel::swingChanged, parent, &NotesModel::registerChange);
     connect(this, &PatternModel::patternLengthChanged, parent, &NotesModel::registerChange);
@@ -918,7 +901,6 @@ void PatternModel::cloneOther(PatternModel *otherPattern)
         clear();
         setWidth(otherPattern->width());
         setHeight(otherPattern->height());
-        setLayerData(otherPattern->layerData());
         setStepLength(otherPattern->stepLength());
         setPatternLength(otherPattern->patternLength());
         setActiveBar(otherPattern->activeBar());
@@ -1425,19 +1407,6 @@ void PatternModel::setExternalMidiChannel(int externalMidiChannel)
 int PatternModel::externalMidiChannel() const
 {
     return d->externalMidiChannel;
-}
-
-void PatternModel::setLayerData(const QString &layerData)
-{
-    if (d->layerData != layerData) {
-        d->layerData = layerData;
-        Q_EMIT layerDataChanged();
-    }
-}
-
-QString PatternModel::layerData() const
-{
-    return d->layerData;
 }
 
 void PatternModel::setDefaultNoteDuration(int defaultNoteDuration)
