@@ -141,7 +141,9 @@ public:
         SwitchReleasedEvent, ///@< Tell the UI that a specific switch has been released. The given value indicates a specific switch ID
         ActivateTrackEvent, ///@< Set the given track active
         ToggleTrackMuted, ///@< Toggle the muted state of the given track
+        SetTrackMuted, ///@< Set whether the given track is muted or not (value of 0 is not muted, any other value is muted)
         ToggleTrackSoloed, ///@< Toggle the soloed state of the given track
+        SetTrackSoloed, ///@< Set whether the given track is soloed or not (value of 0 is not soloed, any other value is soloed)
         SetTrackVolumeEvent, ///@< Set the given track's volume to the given value
         SetTrackPanEvent, ///@< Set the given track's pan to the given value
         SetTrackSend1AmountEvent, ///@< Set the given track's send 1 amount to the given value
@@ -149,6 +151,7 @@ public:
         TogglePartEvent, ///@< Toggle the given part's active state
         SetPartActiveStateEvent, ///@< Sets the part to either active or inactive (value of 0 is active, 1 is inactive, 2 is that it will be inactive on the next beat, 3 is that it will be active on the next bar)
         SetPartGain, ///@< Set the gain of the given part to the given value
+        SetPartPan, ///@< Set the pan of the given part to the given value
         SetFxAmount, ///@< Set the wet/dry mix for the given fx to the given value
     };
     Q_ENUM(Event)
