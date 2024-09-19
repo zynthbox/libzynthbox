@@ -350,6 +350,12 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                         // Tell the UI that a specific switch has been released. The given value indicates a specific switch ID
                     case CUIAHelper::SetPartActiveStateEvent:
                         // Sets the part to either active or inactive (value of 0 is active, 1 is inactive, 2 is that it will be inactive on the next beat, 3 is that it will be active on the next bar)
+                    case CUIAHelper::SetTrackMuted:
+                        // Set whether the given track is muted or not (value of 0 is not muted, any other value is muted)
+                    case CUIAHelper::SetTrackSoloed:
+                        // Set whether the given track is soloed or not (value of 0 is not soloed, any other value is soloed)
+                    case CUIAHelper::SetTrackVolumeEvent:
+                        // Set the given track's volume to the given value
                     case CUIAHelper::SetTrackPanEvent:
                         // Set the given track's pan to the given value
                     case CUIAHelper::SetTrackSend1AmountEvent:
@@ -358,10 +364,10 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                         // Set the given track's send 2 amount to the given value
                     case CUIAHelper::SetPartGain:
                         // Set the gain of the given part to the given value
+                    case CUIAHelper::SetPartPan:
+                        // Set the pan of the given part to the given value
                     case CUIAHelper::SetFxAmount:
                         // Set the wet/dry mix for the given fx
-                    case CUIAHelper::SetTrackVolumeEvent:
-                        // Set the given track's volume to the given value
                         switch (rule->m_cuiaValue) {
                             case MidiRouterFilterEntryRewriter::ValueEventChannel:
                                 m_routerDevice->cuiaRing.write(rule->m_cuiaEvent, m_routerDevice->id(), rule->m_cuiaTrack, rule->m_cuiaPart, eventChannel);
