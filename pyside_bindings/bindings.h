@@ -10,6 +10,7 @@
 #include <ClipAudioSource.h>
 #include <ClipAudioSourceSubvoiceSettings.h>
 #include <CUIAHelper.h>
+#include <GainHandler.h>
 #include <JackPassthrough.h>
 #include <JackPassthroughCompressor.h>
 #include <JackPassthroughFilter.h>

@@ -50,6 +50,7 @@ target_sources(libzynthbox
         AdjectiveNoun.cpp
         CUIAHelper.cpp
         ZynthboxBasics.cpp
+        GainHandler.cpp
 )
 target_compile_definitions(libzynthbox
     PUBLIC

@@ -16,6 +16,7 @@
     <object-type name="CUIAHelper">
         <enum-type name="Event" />
     </object-type>
+    <object-type name="GainHandler"></object-type>
     <object-type name="JackPassthrough"></object-type>
     <object-type name="JackPassthroughCompressor"></object-type>
     <object-type name="JackPassthroughFilter">

@@ -66,6 +66,7 @@
 #include "ZynthboxBasics.h"
 #include "AdjectiveNoun.h"
 #include "CUIAHelper.h"
+#include "GainHandler.h"
 
 #include "Plugin.h"
 
@@ -325,6 +326,7 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
     qmlRegisterUncreatableType<MidiRouterFilter>(uri, 1, 0, "MidiRouterFilter", "Accessible through MidiRouterDevice (in turn accessible through MidiRouterDeviceModel)");
     qmlRegisterUncreatableType<MidiRouterFilterEntry>(uri, 1, 0, "MidiRouterFilterEntry", "Accessible through MidiRouterFilter");
     qmlRegisterUncreatableType<MidiRouterFilterEntryRewriter>(uri, 1, 0, "MidiRouterFilterEntryRewriter", "Accessible through MidiRouterFilterEntry");
+    qmlRegisterType<GainHandler>(uri, 1, 0, "GainHandler");
     qmlRegisterType<PlayGrid>(uri, 1, 0, "PlayGrid");
     qmlRegisterType<ProcessWrapper>(uri, 1, 0, "ProcessWrapper");
     qmlRegisterSingletonType<PlayGridManager>(uri, 1, 0, "PlayGridManager", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
