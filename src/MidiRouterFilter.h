@@ -45,6 +45,16 @@ public:
      */
     const MidiRouterFilterEntry *  matchCommand(const CUIAHelper::Event &cuiaEvent, const ZynthboxBasics::Track& track, const ZynthboxBasics::Part& part, const int& value);
 
+    /**
+     * \brief Creates a serialized version of this filter and all its settings
+     */
+    QString serialize() const;
+    /**
+     * \brief Clears everything from the filter and replaces it with the contents described by the json
+     * @note If the json passed in is not valid, the filter will still be cleared
+     */
+    bool deserialize(const QString &json);
+
     QList<MidiRouterFilterEntry*> entries() const;
     Q_SIGNAL void entriesChanged();
     /**
