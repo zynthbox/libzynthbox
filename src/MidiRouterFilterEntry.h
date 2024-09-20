@@ -230,7 +230,6 @@ public:
     Q_SIGNAL void descripionChanged();
 private:
     ZynthboxBasics::Track m_targetTrack{ZynthboxBasics::CurrentTrack};
-    ZynthboxBasics::Part m_targetPart{ZynthboxBasics::CurrentPart};
     ZynthboxBasics::Track m_originTrack{ZynthboxBasics::AnyTrack};
     ZynthboxBasics::Part m_originPart{ZynthboxBasics::AnyPart};
     int m_requiredBytes{3};
