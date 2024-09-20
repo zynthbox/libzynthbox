@@ -782,9 +782,10 @@ void MidiRouterFilterEntry::deleteRewriteRule(const int &index)
     if (-1 < index && index < m_rewriteRules.count()) {
         // Operating on a temporary copy of the list and reassigning it back, as changing the list is not threadsafe, but replacing it entirely is (and more costly, but that doesn't matter to us here)
         auto tempList = m_rewriteRules;
-        tempList.removeAt(index);
+        MidiRouterFilterEntryRewriter *oldRule = tempList.takeAt(index);
         m_rewriteRules = tempList;
         Q_EMIT rewriteRulesChanged();
+        QTimer::singleShot(1000, this, [oldRule](){ oldRule->deleteLater(); });
     }
 }
 
