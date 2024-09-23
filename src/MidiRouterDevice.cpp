@@ -7,9 +7,11 @@
 #include "MidiRouterFilterEntryRewriter.h"
 #include "SyncTimer.h"
 
+#include <QSettings>
 #include <QString>
 #include <QList>
 #include <QDebug>
+#include <QTimer>
 
 #include <jack/jack.h>
 #include <jack/midiport.h>
@@ -65,7 +67,7 @@ public:
     int midiChannelTargetTrack[16];
     int ccValues[16][128];
     jack_client_t *jackClient{nullptr};
-    QString hardwareId;
+    QString hardwareId{"no-hardware-id"};
     QString zynthianId;
     QString humanReadableName;
     jack_midi_event_t *device_translations_cc{nullptr};
@@ -98,6 +100,99 @@ public:
     jack_port_t *outputPort{nullptr};
     void *outputBuffer{nullptr};
     jack_nframes_t mostRecentOutputTime{0};
+
+    void updateMasterChannel() {
+        for (int channelIndex = 0; channelIndex < 16; ++channelIndex) {
+            if (channelIndex > lastLowerZoneMemberChannel && noteSplitPoint < 127) {
+                masterChannel[channelIndex] = upperMasterChannel;
+            } else {
+                masterChannel[channelIndex] = lowerMasterChannel;
+            }
+        }
+    }
+
+    bool doingSettingsHandling{false};
+    void loadDeviceSettings() {
+        if (doingSettingsHandling == false) {
+            doingSettingsHandling = true;
+            qDebug() << Q_FUNC_INFO << q->zynthianId() << "Loading device settings";
+            QSettings settings;
+            settings.beginGroup("MIDIDeviceSettings");
+            settings.beginGroup(q->zynthianId());
+            // Fetch the basics for the device itself
+            QVariantList receiveFromChannelVariant = settings.value("receiveFromChannel", {}).toList();
+            if (receiveFromChannelVariant.count() == 16) {
+                for (int channelIndex = 0; channelIndex < 16; ++channelIndex) {
+                    receiveFromChannel[channelIndex] = std::clamp(receiveFromChannelVariant[channelIndex].toInt(), 0, 16);
+                }
+                Q_EMIT q->midiChannelTargetTracksChanged();
+            } else if (receiveFromChannelVariant.count() != 0) {
+                qWarning() << Q_FUNC_INFO << q->zynthianId() << "Fetched the receiveFromChannel values - we've ended up with an unacceptable number of entries, and the retrieved value was" << receiveFromChannelVariant;
+            }
+            QVariantList sendToChannelVariant = settings.value("sendToChannel", {}).toList();
+            if (sendToChannelVariant.count() == 16) {
+                for (int channelIndex = 0; channelIndex < 16; ++channelIndex) {
+                    sendToChannel[channelIndex] = std::clamp(sendToChannelVariant[channelIndex].toInt(), 0, 16);
+                }
+                Q_EMIT q->channelsToSendToChanged();
+            } else if (sendToChannelVariant.count() != 0) {
+                qWarning() << Q_FUNC_INFO << q->zynthianId() << "Fetched the sendToChannel values - we've ended up with an unacceptable number of entries, and the retrieved value was" << sendToChannelVariant;
+            }
+            q->setSendTimecode(settings.value("sendTimecode", true).toBool());
+            q->setSendBeatClock(settings.value("sendBeatClock", true).toBool());
+            // Fetch the MPE settings
+            settings.beginGroup("MPESettings");
+            q->setLowerMasterChannel(settings.value("lowerMasterChannel", 0).toInt());
+            q->setUpperMasterChannel(settings.value("upperMasterChannel", 15).toInt());
+            q->setNoteSplitPoint(settings.value("noteSplitPoint", 127).toInt());
+            q->setLastLowerZoneMemberChannel(settings.value("lastLowerZoneMemberChannel", 7).toInt());
+            settings.endGroup();
+            // Fetch the two event filters
+            const QString storedInputEventFilter{settings.value("inputEventFilter", "").toString()};
+            if (inputEventFilter->deserialize(storedInputEventFilter) == false) {
+                qWarning() << Q_FUNC_INFO << q->zynthianId() << "Failed to deserialize the input event filter settings from the stored value" << storedInputEventFilter;
+            }
+            const QString storedOutputEventFilter{settings.value("outputEventFilter", "").toString()};
+            if (outputEventFilter->deserialize(storedOutputEventFilter) == false) {
+                qWarning() << Q_FUNC_INFO << q->zynthianId() << "Failed to deserialise the output event filter settings from the stored value" << storedOutputEventFilter;
+            }
+            settings.endGroup();
+            settings.endGroup();
+            doingSettingsHandling = false;
+        }
+    }
+    void saveDeviceSettings() {
+        if (doingSettingsHandling == false) {
+            doingSettingsHandling = true;
+            qDebug() << Q_FUNC_INFO << q->zynthianId() << "Saving device settings";
+            QSettings settings;
+            settings.beginGroup("MIDIDeviceSettings");
+            settings.beginGroup(q->zynthianId());
+            // Store the basics for the device itself
+            QVariantList receiveFromChannelVariant, sendToChannelVariant;
+            for (int channelIndex = 0; channelIndex < 16; ++channelIndex) {
+                receiveFromChannelVariant << receiveFromChannel[channelIndex];
+                sendToChannelVariant << sendToChannel[channelIndex];
+            }
+            settings.setValue("receiveFromChannel", receiveFromChannelVariant);
+            settings.setValue("sendToChannel", sendToChannelVariant);
+            settings.setValue("sendTimecode", sendTimecode);
+            settings.setValue("sendBeatClock", sendBeatClock);
+            // Save the MPE settings in their own sub-group
+            settings.beginGroup("MPESettings");
+            settings.setValue("lowerMasterChannel", lowerMasterChannel);
+            settings.setValue("upperMasterChannel", upperMasterChannel);
+            settings.setValue("noteSplitPoint", noteSplitPoint);
+            settings.setValue("lastLowerZoneMemberChannel", lastLowerZoneMemberChannel);
+            settings.endGroup();
+            // Store each of the two event filters
+            settings.setValue("inputEventFilter", inputEventFilter->serialize());
+            settings.setValue("outputEventFilter", outputEventFilter->serialize());
+            settings.endGroup();
+            settings.endGroup();
+            doingSettingsHandling = false;
+        }
+    }
 };
 
 MidiRouterDevice::MidiRouterDevice(jack_client_t *jackClient, MidiRouter *parent)
@@ -108,7 +203,20 @@ MidiRouterDevice::MidiRouterDevice(jack_client_t *jackClient, MidiRouter *parent
     DeviceMessageTranslations::load();
     d->jackClient = jackClient;
     setMidiChannelTargetTrack(-1, -1);
-    qobject_cast<MidiRouterDeviceModel*>(parent->model())->addDevice(this);
+    // In short - we'll set either the hardware id and the zynthian id, or either, during creation of
+    // an object, and to avoid having to do any further hoop jumping, we just postpone loading this until
+    // the next run of the event loop, because it doesn't really matter if it's quite that immediate
+    QTimer::singleShot(1, this, [this, parent](){
+        d->loadDeviceSettings();
+        qobject_cast<MidiRouterDeviceModel*>(parent->model())->addDevice(this);
+    });
+    // Make sure that we save the settings when things change
+    QTimer *deviceSettingsSaverThrottle{new QTimer(this)};
+    deviceSettingsSaverThrottle->setSingleShot(true);
+    deviceSettingsSaverThrottle->setInterval(0);
+    connect(deviceSettingsSaverThrottle, &QTimer::timeout, this, [this](){ d->saveDeviceSettings(); });
+    connect(d->inputEventFilter, &MidiRouterFilter::entriesDataChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
+    connect(d->outputEventFilter, &MidiRouterFilter::entriesDataChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
 }
 
 MidiRouterDevice::~MidiRouterDevice()
@@ -566,8 +674,9 @@ int MidiRouterDevice::lowerMasterChannel() const
 void MidiRouterDevice::setLowerMasterChannel(const int& lowerMasterChannel)
 {
     if (d->lowerMasterChannel != lowerMasterChannel) {
-        d->lowerMasterChannel = lowerMasterChannel;
+        d->lowerMasterChannel = std::clamp(lowerMasterChannel, 0, 15);
         Q_EMIT lowerMasterChannelChanged();
+        d->updateMasterChannel();
     }
 }
 
@@ -579,8 +688,9 @@ int MidiRouterDevice::upperMasterChannel() const
 void MidiRouterDevice::setUpperMasterChannel(const int& upperMasterChannel)
 {
     if (d->upperMasterChannel != upperMasterChannel) {
-        d->upperMasterChannel = upperMasterChannel;
+        d->upperMasterChannel = std::clamp(upperMasterChannel, 0, 15);
         Q_EMIT upperMasterChannelChanged();
+        d->updateMasterChannel();
     }
 }
 
@@ -592,7 +702,7 @@ int MidiRouterDevice::noteSplitPoint() const
 void MidiRouterDevice::setNoteSplitPoint(const int& noteSplitPoint)
 {
     if (d->noteSplitPoint != noteSplitPoint) {
-        d->noteSplitPoint = noteSplitPoint;
+        d->noteSplitPoint = std::clamp(noteSplitPoint, 0, 127);
         Q_EMIT noteSplitPointChanged();
     }
 }
@@ -605,8 +715,9 @@ int MidiRouterDevice::lastLowerZoneMemberChannel() const
 void MidiRouterDevice::setLastLowerZoneMemberChannel(const int& lastLowerZoneMemberChannel)
 {
     if (d->lastLowerZoneMemberChannel != lastLowerZoneMemberChannel) {
-        d->lastLowerZoneMemberChannel = lastLowerZoneMemberChannel;
+        d->lastLowerZoneMemberChannel = std::clamp(lastLowerZoneMemberChannel, 0, 15);
         Q_EMIT lastLowerZoneMemberChannelChanged();
+        d->updateMasterChannel();
     }
 }
 
