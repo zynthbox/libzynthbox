@@ -129,7 +129,7 @@ QVariant MidiRouterDeviceModel::data(const QModelIndex& index, int role) const
                 result.setValue<QString>(device->hardwareId());
                 break;
             case IsHardwareDeviceRole:
-                result.setValue<bool>(device->hardwareId().length() > 0);
+                result.setValue<bool>(device->deviceType(MidiRouterDevice::HardwareDeviceType));
                 break;
             case HasInputRole:
                 result.setValue<bool>(device->inputPortName().length() > 0);
@@ -155,10 +155,9 @@ void MidiRouterDeviceModel::addDevice(MidiRouterDevice* device)
     connect(device, &MidiRouterDevice::humanReadableNameChanged, this, [this, device](){ d->deviceDataChanged(device, MidiRouterDeviceModel::HumanNameRole); });
     connect(device, &MidiRouterDevice::zynthianIdChanged, this, [this, device](){ d->deviceDataChanged(device, MidiRouterDeviceModel::ZynthianIdRole); });
     connect(device, &MidiRouterDevice::hardwareIdChanged, this, [this, device](){ d->deviceDataChanged(device, MidiRouterDeviceModel::HardwareIdRole); });
-    connect(device, &MidiRouterDevice::hardwareIdChanged, this, [this, device](){ d->deviceDataChanged(device, MidiRouterDeviceModel::IsHardwareDeviceRole); });
     connect(device, &MidiRouterDevice::inputPortNameChanged, this, [this, device](){ d->deviceDataChanged(device, MidiRouterDeviceModel::HasInputRole); });
     endInsertRows();
-    if (device->hardwareId().length() > 0) {
+    if (device->deviceType(MidiRouterDevice::HardwareDeviceType)) {
         d->midiInSources << QVariantMap{
             {"text", device->humanReadableName()},
             {"value", "external:" + device->hardwareId()},
