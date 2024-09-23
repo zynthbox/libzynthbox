@@ -765,6 +765,7 @@ QList<MidiRouterFilterEntryRewriter *> MidiRouterFilterEntry::rewriteRules() con
 MidiRouterFilterEntryRewriter * MidiRouterFilterEntry::addRewriteRule(const int& index)
 {
     MidiRouterFilterEntryRewriter *newRule = new MidiRouterFilterEntryRewriter(this);
+    connect(newRule, &MidiRouterFilterEntryRewriter::descripionChanged, this, &MidiRouterFilterEntry::descripionChanged);
     // Operating on a temporary copy of the list and reassigning it back, as changing the list is not threadsafe, but replacing it entirely is (and more costly, but that doesn't matter to us here)
     auto tempList = m_rewriteRules;
     if (-1 < index && index < tempList.length()) {

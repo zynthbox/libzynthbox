@@ -57,6 +57,12 @@ public:
 
     QList<MidiRouterFilterEntry*> entries() const;
     Q_SIGNAL void entriesChanged();
+
+    /**
+     * \brief Fired whenever the data in any of the entries changes (or the entries list itself does)
+     */
+    Q_SIGNAL void entriesDataChanged();
+
     /**
      * \brief Creates a new entry and returns it
      * @param index The index at which to insert the new entry (any out of bounds index will append it)

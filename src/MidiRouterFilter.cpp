@@ -11,6 +11,7 @@
 MidiRouterFilter::MidiRouterFilter(MidiRouterDevice* parent)
     : QObject(parent)
 {
+    connect(this, &MidiRouterFilter::entriesChanged, &MidiRouterFilter::entriesDataChanged);
 }
 
 MidiRouterFilter::~MidiRouterFilter()
@@ -90,75 +91,82 @@ bool MidiRouterFilter::deserialize(const QString& json)
     bool result{false};
     // Rather than clearing the old list, create new list, fill that, and swap it in
     QList<MidiRouterFilterEntry*> newEntries;
-    QJsonParseError error;
-    QJsonDocument document{QJsonDocument::fromJson(json.toUtf8(), &error)};
-    if (error.error == QJsonParseError::NoError) {
-        if (document.isArray()) {
-            QJsonArray filterEntries = document.array();
-            for (QJsonValueRef entryValueRef : filterEntries) {
-                if (entryValueRef.isObject()) {
-                    const QJsonObject entryObject = entryValueRef.toObject();
-                    MidiRouterFilterEntry *entry = new MidiRouterFilterEntry(qobject_cast<MidiRouterDevice*>(parent()), this);
-                    entry->setTargetTrack(entryObject.value("targetTrack").toVariant().value<ZynthboxBasics::Track>());
-                    entry->setOriginTrack(entryObject.value("originTrack").toVariant().value<ZynthboxBasics::Track>());
-                    entry->setOriginPart(entryObject.value("targetPart").toVariant().value<ZynthboxBasics::Part>());
-                    entry->setRequiredBytes(entryObject.value("requiredBytes").toVariant().value<int>());
-                    entry->setRequireRange(entryObject.value("requireRange").toVariant().value<bool>());
-                    entry->setByte1Minimum(entryObject.value("byte1Minimum").toVariant().value<int>());
-                    entry->setByte1Maximum(entryObject.value("byte1Maximum").toVariant().value<int>());
-                    entry->setByte2Minimum(entryObject.value("byte2Minimum").toVariant().value<int>());
-                    entry->setByte2Maximum(entryObject.value("byte2Maximum").toVariant().value<int>());
-                    entry->setByte3Minimum(entryObject.value("byte3Minimum").toVariant().value<int>());
-                    entry->setByte3Maximum(entryObject.value("byte3Maximum").toVariant().value<int>());
-                    entry->setCuiaEvent(entryObject.value("cuiaEvent").toVariant().value<CUIAHelper::Event>());
-                    entry->setValueMinimum(entryObject.value("valueMinimum").toVariant().value<int>());
-                    entry->setValueMaximum(entryObject.value("valueMaximum").toVariant().value<int>());
-                    QJsonValue rewriteRulesValue = entryObject.value("entries");
-                    if (rewriteRulesValue.isArray()) {
-                        QJsonArray rewriteRules = rewriteRulesValue.toArray();
-                        for (QJsonValueRef rewriteRuleRef : rewriteRules) {
-                            if (rewriteRuleRef.isObject()) {
-                                QJsonObject ruleObject = rewriteRuleRef.toObject();
-                                MidiRouterFilterEntryRewriter* rewriter = entry->addRewriteRule();
-                                rewriter->setType(ruleObject.value("type").toVariant().value<MidiRouterFilterEntryRewriter::RuleType>());
-                                rewriter->setByteSize(ruleObject.value("byteSize").toVariant().value<MidiRouterFilterEntryRewriter::EventSize>());
-                                QJsonArray bytesArray = ruleObject.value("bytes").toArray();
-                                if (bytesArray.count() == 3) {
-                                    rewriter->setByte1(bytesArray[0].toVariant().value<MidiRouterFilterEntryRewriter::EventByte>());
-                                    rewriter->setByte2(bytesArray[1].toVariant().value<MidiRouterFilterEntryRewriter::EventByte>());
-                                    rewriter->setByte3(bytesArray[2].toVariant().value<MidiRouterFilterEntryRewriter::EventByte>());
+    if (json.length() > 0) {
+        QJsonParseError error;
+        QJsonDocument document{QJsonDocument::fromJson(json.toUtf8(), &error)};
+        if (error.error == QJsonParseError::NoError) {
+            if (document.isArray()) {
+                QJsonArray filterEntries = document.array();
+                for (QJsonValueRef entryValueRef : filterEntries) {
+                    if (entryValueRef.isObject()) {
+                        const QJsonObject entryObject = entryValueRef.toObject();
+                        MidiRouterFilterEntry *entry = new MidiRouterFilterEntry(qobject_cast<MidiRouterDevice*>(parent()), this);
+                        connect(entry, &MidiRouterFilterEntry::descripionChanged, this, &MidiRouterFilter::entriesDataChanged);
+                        entry->setTargetTrack(entryObject.value("targetTrack").toVariant().value<ZynthboxBasics::Track>());
+                        entry->setOriginTrack(entryObject.value("originTrack").toVariant().value<ZynthboxBasics::Track>());
+                        entry->setOriginPart(entryObject.value("targetPart").toVariant().value<ZynthboxBasics::Part>());
+                        entry->setRequiredBytes(entryObject.value("requiredBytes").toVariant().value<int>());
+                        entry->setRequireRange(entryObject.value("requireRange").toVariant().value<bool>());
+                        entry->setByte1Minimum(entryObject.value("byte1Minimum").toVariant().value<int>());
+                        entry->setByte1Maximum(entryObject.value("byte1Maximum").toVariant().value<int>());
+                        entry->setByte2Minimum(entryObject.value("byte2Minimum").toVariant().value<int>());
+                        entry->setByte2Maximum(entryObject.value("byte2Maximum").toVariant().value<int>());
+                        entry->setByte3Minimum(entryObject.value("byte3Minimum").toVariant().value<int>());
+                        entry->setByte3Maximum(entryObject.value("byte3Maximum").toVariant().value<int>());
+                        entry->setCuiaEvent(entryObject.value("cuiaEvent").toVariant().value<CUIAHelper::Event>());
+                        entry->setValueMinimum(entryObject.value("valueMinimum").toVariant().value<int>());
+                        entry->setValueMaximum(entryObject.value("valueMaximum").toVariant().value<int>());
+                        QJsonValue rewriteRulesValue = entryObject.value("entries");
+                        if (rewriteRulesValue.isArray()) {
+                            QJsonArray rewriteRules = rewriteRulesValue.toArray();
+                            for (QJsonValueRef rewriteRuleRef : rewriteRules) {
+                                if (rewriteRuleRef.isObject()) {
+                                    QJsonObject ruleObject = rewriteRuleRef.toObject();
+                                    MidiRouterFilterEntryRewriter* rewriter = entry->addRewriteRule();
+                                    rewriter->setType(ruleObject.value("type").toVariant().value<MidiRouterFilterEntryRewriter::RuleType>());
+                                    rewriter->setByteSize(ruleObject.value("byteSize").toVariant().value<MidiRouterFilterEntryRewriter::EventSize>());
+                                    QJsonArray bytesArray = ruleObject.value("bytes").toArray();
+                                    if (bytesArray.count() == 3) {
+                                        rewriter->setByte1(bytesArray[0].toVariant().value<MidiRouterFilterEntryRewriter::EventByte>());
+                                        rewriter->setByte2(bytesArray[1].toVariant().value<MidiRouterFilterEntryRewriter::EventByte>());
+                                        rewriter->setByte3(bytesArray[2].toVariant().value<MidiRouterFilterEntryRewriter::EventByte>());
+                                    } else {
+                                        qWarning() << Q_FUNC_INFO << "The bytes array for a rewrite rule did not contain exactly three (3) elements. It contained" << bytesArray.count() << "elements. This will be ignored, but is a problem.";
+                                    }
+                                    QJsonArray bytesAddChannelArray = ruleObject.value("bytesAddChannel").toArray();
+                                    if (bytesAddChannelArray.count() == 3) {
+                                        rewriter->setByte1AddChannel(bytesAddChannelArray[0].toVariant().value<bool>());
+                                        rewriter->setByte2AddChannel(bytesAddChannelArray[1].toVariant().value<bool>());
+                                        rewriter->setByte3AddChannel(bytesAddChannelArray[2].toVariant().value<bool>());
+                                    } else {
+                                        qWarning() << Q_FUNC_INFO << "The bytesAddChannel array for a rewrite rule did not contain exactly three (3) elements. It contained" << bytesAddChannelArray.count() << "elements. This will be ignored, but is a problem.";
+                                    }
+                                    rewriter->setCuiaEvent(ruleObject.value("cuiaEvent").toVariant().value<CUIAHelper::Event>());
+                                    rewriter->setCuiaTrack(ruleObject.value("cuiaTrack").toVariant().value<ZynthboxBasics::Track>());
+                                    rewriter->setCuiaPart(ruleObject.value("cuiaPart").toVariant().value<ZynthboxBasics::Part>());
+                                    rewriter->setCuiaValue(ruleObject.value("cuiaValue").toVariant().value<MidiRouterFilterEntryRewriter::ValueSpecifier>());
                                 } else {
-                                    qWarning() << Q_FUNC_INFO << "The bytes array for a rewrite rule did not contain exactly three (3) elements. It contained" << bytesArray.count() << "elements. This will be ignored, but is a problem.";
+                                    qWarning() << Q_FUNC_INFO << "A rewrite rule was not an object. This will be ignored, but is a problem.";
                                 }
-                                QJsonArray bytesAddChannelArray = ruleObject.value("bytesAddChannel").toArray();
-                                if (bytesAddChannelArray.count() == 3) {
-                                    rewriter->setByte1AddChannel(bytesAddChannelArray[0].toVariant().value<bool>());
-                                    rewriter->setByte2AddChannel(bytesAddChannelArray[1].toVariant().value<bool>());
-                                    rewriter->setByte3AddChannel(bytesAddChannelArray[2].toVariant().value<bool>());
-                                } else {
-                                    qWarning() << Q_FUNC_INFO << "The bytesAddChannel array for a rewrite rule did not contain exactly three (3) elements. It contained" << bytesAddChannelArray.count() << "elements. This will be ignored, but is a problem.";
-                                }
-                                rewriter->setCuiaEvent(ruleObject.value("cuiaEvent").toVariant().value<CUIAHelper::Event>());
-                                rewriter->setCuiaTrack(ruleObject.value("cuiaTrack").toVariant().value<ZynthboxBasics::Track>());
-                                rewriter->setCuiaPart(ruleObject.value("cuiaPart").toVariant().value<ZynthboxBasics::Part>());
-                                rewriter->setCuiaValue(ruleObject.value("cuiaValue").toVariant().value<MidiRouterFilterEntryRewriter::ValueSpecifier>());
-                            } else {
-                                qWarning() << Q_FUNC_INFO << "A rewrite rule was not an object. This will be ignored, but is a problem.";
                             }
+                        } else {
+                            qWarning() << Q_FUNC_INFO << "A rewrite rule was not an array. This will be ignored, but is a problem.";
                         }
+                        newEntries.append(entry);
                     } else {
-                        qWarning() << Q_FUNC_INFO << "A rewrite rule was not an array. This will be ignored, but is a problem.";
+                        qWarning() << Q_FUNC_INFO << "A filter entry was not an object. This will be ignored, but is a problem.";
                     }
-                    newEntries.append(entry);
-                } else {
-                    qWarning() << Q_FUNC_INFO << "A filter entry was not an object. This will be ignored, but is a problem.";
                 }
+                result = true;
+            } else {
+                qWarning() << Q_FUNC_INFO << "The json passed to the function is not an array as expected. The data was:\n" << json;
             }
         } else {
-            qWarning() << Q_FUNC_INFO << "The json passed to the function is not an array as expected. The data was:\n" << json;
+            qWarning() << Q_FUNC_INFO << "Got an error while attempting to parse what we assume is a json string:" << error.errorString() << "The data was:\n" << json;
         }
     } else {
-        qWarning() << Q_FUNC_INFO << "Got an error while attempting to parse what we assume is a json string:" << error.errorString() << "The data was:\n" << json;
+        // If the thing is empty, then it's still fine and we'll say we deserialised fine
+        result = true;
     }
     QList<MidiRouterFilterEntry*> oldEntries = m_entries;
     m_entries = newEntries;
@@ -175,6 +183,7 @@ QList<MidiRouterFilterEntry *> MidiRouterFilter::entries() const
 MidiRouterFilterEntry * MidiRouterFilter::createEntry(const int& index)
 {
     MidiRouterFilterEntry *entry = new MidiRouterFilterEntry(qobject_cast<MidiRouterDevice*>(parent()), this);
+    connect(entry, &MidiRouterFilterEntry::descripionChanged, this, &MidiRouterFilter::entriesDataChanged);
     // Operating on a temporary copy of the list and reassigning it back, as changing the list is not threadsafe, but replacing it entirely is (and more costly, but that doesn't matter to us here)
     auto tempList = m_entries;
     if (-1 < index && index < tempList.count()) {
