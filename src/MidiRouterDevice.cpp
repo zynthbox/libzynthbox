@@ -7,10 +7,14 @@
 #include "MidiRouterFilterEntryRewriter.h"
 #include "SyncTimer.h"
 
+#include <QDebug>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QList>
 #include <QSettings>
 #include <QString>
-#include <QList>
-#include <QDebug>
 #include <QTimer>
 
 #include <jack/jack.h>
@@ -808,6 +812,167 @@ QVariantList MidiRouterDevice::midiChannelTargetTracks() const
         list << d->midiChannelTargetTrack[channel];
     }
     return list;
+}
+
+bool MidiRouterDevice::saveDeviceSettings(const QString& filePath)
+{
+    bool result{false};
+    QFile file{filePath};
+    if (filePath > 10) {
+        QJsonDocument document;
+        QJsonObject settingsObject;
+        QJsonArray receiveFromChannelArray, sendToChannelArray;
+        for (int channelIndex = 0; channelIndex < 16; ++channelIndex) {
+            receiveFromChannelArray.append(d->receiveFromChannel[channelIndex]);
+            sendToChannelArray.append(d->sendToChannel[channelIndex]);
+        }
+        settingsObject.insert("receiveFromChannel", receiveFromChannelArray);
+        settingsObject.insert("sendToChannel", sendToChannelArray);
+        settingsObject.insert("sendTimecode", d->sendTimecode);
+        settingsObject.insert("sendBeatClock", d->sendBeatClock);
+        QJsonObject mpeSettingsObject;
+        mpeSettingsObject.insert("lowerMasterChannel", d->lowerMasterChannel);
+        mpeSettingsObject.insert("upperMasterChannel", d->upperMasterChannel);
+        mpeSettingsObject.insert("noteSplitPoint", d->noteSplitPoint);
+        mpeSettingsObject.insert("lastLowerZoneMemberChannel", d->lastLowerZoneMemberChannel);
+        settingsObject.insert("MPEsettings", mpeSettingsObject);
+        settingsObject.insert("inputEventFilter", d->inputEventFilter->serialize());
+        settingsObject.insert("outputEventFilter", d->outputEventFilter->serialize());
+        document.setObject(settingsObject);
+        if (file.exists() == false || file.remove()) {
+            if (file.open(QIODevice::WriteOnly)) {
+                file.write(document.toJson(QJsonDocument::Indented));
+                file.close();
+                result = true;
+            } else {
+                qWarning() << Q_FUNC_INFO << "Could not open the file for writing" << filePath;
+            }
+        } else {
+            if (file.exists()) {
+                qWarning() << Q_FUNC_INFO << "The file already exists, and we could not delete it:" << filePath;
+            }
+        }
+    } else {
+        qWarning() << Q_FUNC_INFO << "The filename passed to the function failed to pass basic sanity checks (don't save in the root, and please don't try and pass in the root directory - it won't delete, as it's not just a file, and also just, why?)" << filePath;
+    }
+    return result;
+}
+
+bool MidiRouterDevice::loadDeviceSettings(const QString& filePath)
+{
+    bool result{false};
+    QFile file{filePath};
+    if (file.exists()) {
+        if (file.open(QIODevice::ReadOnly)) {
+            const QString fileContents{file.readAll()};
+            file.close();
+            if (fileContents.length() > 0) {
+                QJsonParseError error;
+                QJsonDocument document{QJsonDocument::fromJson(fileContents.toUtf8(), &error)};
+                if (error.error == QJsonParseError::NoError) {
+                    if (document.isObject()) {
+                        QJsonObject settingsObject = document.object();
+                        QJsonValue value = settingsObject.value("receiveFromChannel");
+                        if (value.isArray()) {
+                            QJsonArray receiveFromChannelArray = value.toArray();
+                            if (receiveFromChannelArray.count() == 16) {
+                                for (int channelIndex = 0; channelIndex < 16; ++channelIndex) {
+                                    d->receiveFromChannel[channelIndex] = std::clamp(receiveFromChannelArray[channelIndex].toInt(), 0, 16);
+                                }
+                                Q_EMIT midiChannelTargetTracksChanged();
+                            } else if (receiveFromChannelArray.count() != 0) {
+                                qWarning() << Q_FUNC_INFO << "Fetched the receiveFromChannel values - we've ended up with an unacceptable number of entries, and the retrieved value was" << receiveFromChannelArray;
+                            }
+                        }
+                        value = settingsObject.value("sendToChannel");
+                        if (value.isArray()) {
+                            QJsonArray sendToChannelArray = value.toArray();
+                            if (sendToChannelArray.count() == 16) {
+                                for (int channelIndex = 0; channelIndex < 16; ++channelIndex) {
+                                    d->sendToChannel[channelIndex] = std::clamp(sendToChannelArray[channelIndex].toInt(), 0, 16);
+                                }
+                                Q_EMIT channelsToSendToChanged();
+                            } else if (sendToChannelArray.count() != 0) {
+                                qWarning() << Q_FUNC_INFO << "Fetched the sendToChannel values - we've ended up with an unacceptable number of entries, and the retrieved value was" << sendToChannelArray;
+                            }
+                        }
+                        value = settingsObject.value("sendTimecode");
+                        if (value.isBool()) {
+                            setSendTimecode(value.toBool());
+                        } else {
+                            setSendTimecode(true);
+                        }
+                        value = settingsObject.value("sendBeatClock");
+                        if (value.isBool()) {
+                            setSendBeatClock(value.toBool());
+                        } else {
+                            setSendBeatClock(true);
+                        }
+                        // Fetch the MPE settings
+                        value = settingsObject.value("MPEsettings");
+                        if (value.isObject()) {
+                            QJsonObject mpeSettingsObject{value.toObject()};
+                            value = mpeSettingsObject.value("lowerMasterChannel");
+                            if (value.isDouble()) {
+                                setLowerMasterChannel(value.toDouble(0));
+                            } else {
+                                setLowerMasterChannel(0);
+                            }
+                            value = mpeSettingsObject.value("upperMasterChannel");
+                            if (value.isDouble()) {
+                                setUpperMasterChannel(value.toDouble());
+                            } else {
+                                setUpperMasterChannel(15);
+                            }
+                            value = mpeSettingsObject.value("noteSplitPoint");
+                            if (value.isDouble()) {
+                                setNoteSplitPoint(value.toDouble());
+                            } else {
+                                setNoteSplitPoint(127);
+                            }
+                            value = mpeSettingsObject.value("lastLowerZoneMemberChannel");
+                            if (value.isDouble()) {
+                                setLastLowerZoneMemberChannel(value.toDouble());
+                            } else {
+                                setLastLowerZoneMemberChannel(7);
+                            }
+                        }
+                        // Fetch the two event filters
+                        value = settingsObject.value("inputEventFilter");
+                        if (value.isString()) {
+                            const QString storedInputEventFilter{value.toString()};
+                            if (d->inputEventFilter->deserialize(storedInputEventFilter) == false) {
+                                qWarning() << Q_FUNC_INFO << "Failed to deserialize the input event filter settings from the stored value" << storedInputEventFilter;
+                            }
+                        } else {
+                            d->inputEventFilter->deserialize("");
+                        }
+                        value = settingsObject.value("outputEventFilter");
+                        if (value.isString()) {
+                            const QString storedOutputEventFilter{value.toString()};
+                            if (d->outputEventFilter->deserialize(storedOutputEventFilter) == false) {
+                                qWarning() << Q_FUNC_INFO << "Failed to deserialise the output event filter settings from the stored value" << storedOutputEventFilter;
+                            }
+                        } else {
+                            d->outputEventFilter->deserialize("");
+                        }
+                        result = true;
+                    } else {
+                        qWarning() << Q_FUNC_INFO << "The contents of the file were not a json document as expected. The data was:\n" << fileContents;
+                    }
+                } else {
+                    qWarning() << Q_FUNC_INFO << "There was an error while attempting to parse the saved json. The error description was" << error.errorString() << "and the data we attempted to parse was:\n" << fileContents;
+                }
+            } else {
+                qWarning() << Q_FUNC_INFO << "The saved settings file contained no data";
+            }
+        } else {
+            qWarning() << Q_FUNC_INFO << "Could not open file for reading. Error description given as:" << file.errorString();
+        }
+    } else {
+        qWarning() << Q_FUNC_INFO << "No such file:" << filePath;
+    }
+    return result;
 }
 
 void MidiRouterDevice::cuiaEventFeedback(const CUIAHelper::Event &cuiaEvent, const int& /*originId*/, const ZynthboxBasics::Track& track, const ZynthboxBasics::Part& part, const int& value)

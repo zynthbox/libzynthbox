@@ -402,6 +402,19 @@ public:
     Q_SIGNAL void lastLowerZoneMemberChannelChanged();
 
     /**
+     * \brief Saves the device settings to the given file
+     * @note If the file already exists, it will be overwritten (or we will fail)
+     * @return True when successful, false otherwise
+     */
+    Q_INVOKABLE bool saveDeviceSettings(const QString &filePath);
+    /**
+     * \brief Loads the settings from the given file
+     * @note If loading the file fails, the original settings will remain. If the settings are invalid, settings will be returned to their defaults
+     * @return True if successful, false otherwise
+     */
+    Q_INVOKABLE bool loadDeviceSettings(const QString &filePath);
+
+    /**
      * \brief A midi ring for writing events to which want to be written out at the start of the next process run
      */
     MidiRing midiOutputRing;
