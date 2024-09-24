@@ -79,8 +79,8 @@ QString MidiRouterFilter::serialize() const
             ruleObject.insert("cuiaValue", rewriter->cuiaValue());
             entryRules.append(ruleObject);
         }
+        entryObject.insert("entries", entryRules);
         filterEntries.append(entryObject);
-        entryObject.insert("entries", filterEntries);
     }
     document.setArray(filterEntries);
     return document.toJson();
@@ -150,7 +150,7 @@ bool MidiRouterFilter::deserialize(const QString& json)
                                 }
                             }
                         } else {
-                            qWarning() << Q_FUNC_INFO << "A rewrite rule was not an array. This will be ignored, but is a problem.";
+                            qWarning() << Q_FUNC_INFO << "The list of rewrite rules was not an array. This will be ignored, but is a problem.";
                         }
                         newEntries.append(entry);
                     } else {
