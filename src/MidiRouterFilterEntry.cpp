@@ -335,10 +335,12 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     // Only need the basics for these, so no need to calculate the value (not very costly, but no need to do it if we don't need to)
                     case CUIAHelper::ActivateTrackEvent:
                         // Set the given track active
-                    case CUIAHelper::ToggleTrackMuted:
+                    case CUIAHelper::ToggleTrackMutedEvent:
                         // Toggle the muted state of the given track
-                    case CUIAHelper::ToggleTrackSoloed:
+                    case CUIAHelper::ToggleTrackSoloedEvent:
                         // Toggle the soloed state of the given track
+                    case CUIAHelper::SetPartCurrentEvent:
+                        // Sets the given part as the currently visible one (if given a specific track, this will also change the track)
                     case CUIAHelper::TogglePartEvent:
                         // Toggle the given part's active state
                         m_routerDevice->cuiaRing.write(rule->m_cuiaEvent, m_routerDevice->id(), rule->m_cuiaTrack, rule->m_cuiaPart);
@@ -348,26 +350,32 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                         // Tell the UI that a specific switch has been pressed. The given value indicates a specific switch ID
                     case CUIAHelper::SwitchReleasedEvent:
                         // Tell the UI that a specific switch has been released. The given value indicates a specific switch ID
-                    case CUIAHelper::SetPartActiveStateEvent:
-                        // Sets the part to either active or inactive (value of 0 is active, 1 is inactive, 2 is that it will be inactive on the next beat, 3 is that it will be active on the next bar)
-                    case CUIAHelper::SetTrackMuted:
+                    case CUIAHelper::ActivateTrackRelativeEvent:
+                        // A convenience function that will activate a track based on the given value (the tracks are split evenly across the 128 value options)
+                    case CUIAHelper::SetTrackMutedEvent:
                         // Set whether the given track is muted or not (value of 0 is not muted, any other value is muted)
-                    case CUIAHelper::SetTrackSoloed:
+                    case CUIAHelper::SetTrackSoloedEvent:
                         // Set whether the given track is soloed or not (value of 0 is not soloed, any other value is soloed)
                     case CUIAHelper::SetTrackVolumeEvent:
                         // Set the given track's volume to the given value
+                    case CUIAHelper::SetPartCurrentRelativeEvent:
+                        // Sets the part represented by the relative value, split evenly across the 128 values, as the currently visible one (if given a specific track, this will also change the track)
+                    case CUIAHelper::SetPartActiveStateEvent:
+                        // Sets the part to either active or inactive (value of 0 is active, 1 is inactive, 2 is that it will be inactive on the next beat, 3 is that it will be active on the next bar)
                     case CUIAHelper::SetTrackPanEvent:
                         // Set the given track's pan to the given value
                     case CUIAHelper::SetTrackSend1AmountEvent:
                         // Set the given track's send 1 amount to the given value
                     case CUIAHelper::SetTrackSend2AmountEvent:
                         // Set the given track's send 2 amount to the given value
-                    case CUIAHelper::SetPartGain:
+                    case CUIAHelper::SetPartGainEvent:
                         // Set the gain of the given part to the given value
-                    case CUIAHelper::SetPartPan:
+                    case CUIAHelper::SetPartPanEvent:
                         // Set the pan of the given part to the given value
-                    case CUIAHelper::SetFxAmount:
+                    case CUIAHelper::SetFxAmountEvent:
                         // Set the wet/dry mix for the given fx
+                    case CUIAHelper::SetTrackPartActiveRelativeEvent:
+                        // Sets the currently active track and part according to the given value (the parts are spread evenly across the 128 possible values, sequentially by track order)
                         switch (rule->m_cuiaValue) {
                             case MidiRouterFilterEntryRewriter::ValueEventChannel:
                                 m_routerDevice->cuiaRing.write(rule->m_cuiaEvent, m_routerDevice->id(), rule->m_cuiaTrack, rule->m_cuiaPart, eventChannel);

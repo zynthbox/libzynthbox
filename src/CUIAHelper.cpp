@@ -118,19 +118,23 @@ public:
         {CUIAHelper::SwitchPressedEvent, QLatin1String{"Switch Pressed"}},
         {CUIAHelper::SwitchReleasedEvent, QLatin1String{"Switch Released"}},
         {CUIAHelper::ActivateTrackEvent, QLatin1String{"Activate Track"}}, ///@< Set the given track active
-        {CUIAHelper::ToggleTrackMuted, QLatin1String{"Toggle Track Muted"}}, ///@< Toggle the muted state of the given track
-        {CUIAHelper::SetTrackMuted, QLatin1String{"Set Track Muted State"}}, ///@< Set whether the given track is muted or not (value of 0 is not muted, any other value is muted)
-        {CUIAHelper::ToggleTrackSoloed, QLatin1String{"Toggle Track Soloed"}}, ///@< Toggle the soloed state of the given track
-        {CUIAHelper::SetTrackSoloed, QLatin1String{"Set Track Soloed State"}}, ///@< Set whether the given track is soloed or not (value of 0 is not soloed, any other value is soloed)
+        {CUIAHelper::ActivateTrackRelativeEvent, QLatin1String{"Activate Track By Relative Value"}}, ///@< A convenience function that will activate a track based on the given value (the tracks are split evenly across the 128 value options)
+        {CUIAHelper::ToggleTrackMutedEvent, QLatin1String{"Toggle Track Muted"}}, ///@< Toggle the muted state of the given track
+        {CUIAHelper::SetTrackMutedEvent, QLatin1String{"Set Track Muted State"}}, ///@< Set whether the given track is muted or not (value of 0 is not muted, any other value is muted)
+        {CUIAHelper::ToggleTrackSoloedEvent, QLatin1String{"Toggle Track Soloed"}}, ///@< Toggle the soloed state of the given track
+        {CUIAHelper::SetTrackSoloedEvent, QLatin1String{"Set Track Soloed State"}}, ///@< Set whether the given track is soloed or not (value of 0 is not soloed, any other value is soloed)
         {CUIAHelper::SetTrackVolumeEvent, QLatin1String{"Set Track Volume"}}, ///@< Set the given track's volume to the given value
         {CUIAHelper::SetTrackPanEvent, QLatin1String{"Set Track Pan"}}, ///@< Set the given track's pan to the given value
         {CUIAHelper::SetTrackSend1AmountEvent, QLatin1String{"Set Track Send 1 Amount"}}, ///@< Set the given track's send 1 amount to the given value
         {CUIAHelper::SetTrackSend2AmountEvent, QLatin1String{"Set Track Send 2 Amount"}}, ///@< Set the given track's send 2 amount to the given value
+        {CUIAHelper::SetPartCurrentEvent, QLatin1String{"Set Given Part as Current"}}, ///@< Sets the given part as the currently visible one (if given a specific track, this will also change the track)
+        {CUIAHelper::SetPartCurrentRelativeEvent, QLatin1String{"Set Relatively Indicated Part as Current"}}, ///@< Sets the part represented by the relative value, split evenly across the 128 values, as the currently visible one (if given a specific track, this will also change the track)
         {CUIAHelper::SetPartActiveStateEvent, QLatin1String{"Set Part Active State"}}, ///@< Sets the part to either active or inactive (value of 0 is active, 1 is inactive, 2 is that it will be active on the next bar)
         {CUIAHelper::TogglePartEvent, QLatin1String{"Toggle Part Active State"}}, ///@< Toggle the given part's active state
-        {CUIAHelper::SetPartGain, QLatin1String{"Set Part Gain"}}, ///@< Set the gain of the given part to the given value
-        {CUIAHelper::SetPartPan, QLatin1String{"Set Part Pan"}}, ///@< Set the pan of the given part to the given value
-        {CUIAHelper::SetFxAmount, QLatin1String{"Set FX Amount"}}, ///@< Set the wet/dry mix for the given fx to the given value
+        {CUIAHelper::SetPartGainEvent, QLatin1String{"Set Part Gain"}}, ///@< Set the gain of the given part to the given value
+        {CUIAHelper::SetPartPanEvent, QLatin1String{"Set Part Pan"}}, ///@< Set the pan of the given part to the given value
+        {CUIAHelper::SetFxAmountEvent, QLatin1String{"Set FX Amount"}}, ///@< Set the wet/dry mix for the given fx to the given value
+        {CUIAHelper::SetTrackPartActiveRelativeEvent, QLatin1String{"Set Relatively Indicated Track and Part as Current"}}, ///@< Sets the currently active track and part according to the given value (the parts are spread evenly across the 128 possible values, sequentially by track order)
     };
     const QHash<CUIAHelper::Event, QString> commands{
         {CUIAHelper::NoCuiaEvent, QLatin1String{"NONE"}},
@@ -248,19 +252,23 @@ public:
         {CUIAHelper::SwitchPressedEvent, QLatin1String{"SWITCH_PRESSED"}}, ///@< Tell the UI that a specific switch has been pressed. The given value indicates a specific switch ID
         {CUIAHelper::SwitchReleasedEvent, QLatin1String{"SWITCH_RELEASED"}}, ///@< Tell the UI that a specific switch has been released. The given value indicates a specific switch ID
         {CUIAHelper::ActivateTrackEvent, QLatin1String{"ACTIVATE_TRACK"}}, ///@< Set the given track active
-        {CUIAHelper::ToggleTrackMuted, QLatin1String{"TOGGLE_TRACK_MUTED"}}, ///@< Toggle the muted state of the given track
-        {CUIAHelper::SetTrackMuted, QLatin1String{"SET_TRACK_MUTED"}}, ///@< Set whether the given track is muted or not (value of 0 is not muted, any other value is muted)
-        {CUIAHelper::ToggleTrackSoloed, QLatin1String{"TOGGLE_TRACK_SOLOED"}}, ///@< Toggle the soloed state of the given track
-        {CUIAHelper::SetTrackSoloed, QLatin1String{"SET_TRACK_SOLOED"}}, ///@< Set whether the given track is soloed or not (value of 0 is not soloed, any other value is soloed)
+        {CUIAHelper::ActivateTrackRelativeEvent, QLatin1String{"ACTIVATE_TRACK_RELATIVE"}}, ///@< A convenience function that will activate a track based on the given value (the tracks are split evenly across the 128 value options)
+        {CUIAHelper::ToggleTrackMutedEvent, QLatin1String{"TOGGLE_TRACK_MUTED"}}, ///@< Toggle the muted state of the given track
+        {CUIAHelper::SetTrackMutedEvent, QLatin1String{"SET_TRACK_MUTED"}}, ///@< Set whether the given track is muted or not (value of 0 is not muted, any other value is muted)
+        {CUIAHelper::ToggleTrackSoloedEvent, QLatin1String{"TOGGLE_TRACK_SOLOED"}}, ///@< Toggle the soloed state of the given track
+        {CUIAHelper::SetTrackSoloedEvent, QLatin1String{"SET_TRACK_SOLOED"}}, ///@< Set whether the given track is soloed or not (value of 0 is not soloed, any other value is soloed)
         {CUIAHelper::SetTrackVolumeEvent, QLatin1String{"SET_TRACK_VOLUME"}}, ///@< Set the given track's volume to the given value
         {CUIAHelper::SetTrackPanEvent, QLatin1String{"SET_TRACK_PAN"}}, ///@< Set the given track's pan to the given value
         {CUIAHelper::SetTrackSend1AmountEvent, QLatin1String{"SET_TRACK_SEND1_AMOUNT"}}, ///@< Set the given track's send 1 amount to the given value
         {CUIAHelper::SetTrackSend2AmountEvent, QLatin1String{"SET_TRACK_SEND2_AMOUNT"}}, ///@< Set the given track's send 2 amount to the given value
+        {CUIAHelper::SetPartCurrentEvent, QLatin1String{"SET_PART_CURRENT"}}, ///@< Sets the given part as the currently visible one (if given a specific track, this will also change the track)
+        {CUIAHelper::SetPartCurrentRelativeEvent, QLatin1String{"SET_PART_CURRENT_RELATIVE"}}, ///@< Sets the part represented by the relative value, split evenly across the 128 values, as the currently visible one (if given a specific track, this will also change the track)
         {CUIAHelper::TogglePartEvent, QLatin1String{"TOGGLE_PART"}}, ///@< Toggle the given part's active state
         {CUIAHelper::SetPartActiveStateEvent, QLatin1String{"SET_PART_ACTIVE_STATE"}}, ///@< Sets the part to either active or inactive (value of 0 is active, 1 is inactive, 2 is that it will be inactive on the next beat, 3 is that it will be active on the next bar)
-        {CUIAHelper::SetPartGain, QLatin1String{"SET_PART_GAIN"}}, ///@< Set the gain of the given part to the given value
-        {CUIAHelper::SetPartPan, QLatin1String{"SET_PART_PAN"}}, ///@< Set the pan of the given part to the given value
-        {CUIAHelper::SetFxAmount, QLatin1String{"SET_FX_AMOUNT"}}, ///@< Set the wet/dry mix for the given fx to the given value
+        {CUIAHelper::SetPartGainEvent, QLatin1String{"SET_PART_GAIN"}}, ///@< Set the gain of the given part to the given value
+        {CUIAHelper::SetPartPanEvent, QLatin1String{"SET_PART_PAN"}}, ///@< Set the pan of the given part to the given value
+        {CUIAHelper::SetFxAmountEvent, QLatin1String{"SET_FX_AMOUNT"}}, ///@< Set the wet/dry mix for the given fx to the given value
+        {CUIAHelper::SetTrackPartActiveRelativeEvent, QLatin1String{"SET_TRACK_AND_PART_CURRRENT_RELATIVE"}}, ///@< Sets the currently active track and part according to the given value (the parts are spread evenly across the 128 possible values, sequentially by track order)
     };
 };
 
@@ -295,19 +303,20 @@ bool CUIAHelper::cuiaEventWantsATrack(const Event& cuiaEvent) const
 {
     static const QList<Event> eventsThatWantATrack{
         ActivateTrackEvent,
-        ToggleTrackMuted,
-        SetTrackMuted,
-        ToggleTrackSoloed,
-        SetTrackSoloed,
+        ToggleTrackMutedEvent,
+        SetTrackMutedEvent,
+        ToggleTrackSoloedEvent,
+        SetTrackSoloedEvent,
         SetTrackVolumeEvent,
         SetTrackPanEvent,
         SetTrackSend1AmountEvent,
         SetTrackSend2AmountEvent,
+        SetPartCurrentEvent,
         TogglePartEvent,
         SetPartActiveStateEvent,
-        SetPartGain,
-        SetPartPan,
-        SetFxAmount,
+        SetPartGainEvent,
+        SetPartPanEvent,
+        SetFxAmountEvent,
     };
     if (eventsThatWantATrack.contains(cuiaEvent)) {
         return true;
@@ -318,11 +327,12 @@ bool CUIAHelper::cuiaEventWantsATrack(const Event& cuiaEvent) const
 bool CUIAHelper::cuiaEventWantsAPart(const Event& cuiaEvent) const
 {
     static const QList<Event> eventsThatWantAPart{
+        SetPartCurrentEvent,
         TogglePartEvent,
         SetPartActiveStateEvent,
-        SetPartGain,
-        SetPartPan,
-        SetFxAmount,
+        SetPartGainEvent,
+        SetPartPanEvent,
+        SetFxAmountEvent,
     };
     if (eventsThatWantAPart.contains(cuiaEvent)) {
         return true;
@@ -333,16 +343,19 @@ bool CUIAHelper::cuiaEventWantsAPart(const Event& cuiaEvent) const
 bool CUIAHelper::cuiaEventWantsAValue(const Event& cuiaEvent) const
 {
     static const QList<Event> eventsThatWantAValue{
-        SetTrackMuted,
-        SetTrackSoloed,
+        ActivateTrackRelativeEvent,
+        SetTrackMutedEvent,
+        SetTrackSoloedEvent,
         SetTrackVolumeEvent,
         SetTrackPanEvent,
         SetTrackSend1AmountEvent,
         SetTrackSend2AmountEvent,
+        SetPartCurrentRelativeEvent,
         SetPartActiveStateEvent,
-        SetPartGain,
-        SetPartPan,
-        SetFxAmount,
+        SetPartGainEvent,
+        SetPartPanEvent,
+        SetFxAmountEvent,
+        SetTrackPartActiveRelativeEvent,
     };
     if (eventsThatWantAValue.contains(cuiaEvent)) {
         return true;
@@ -368,17 +381,26 @@ QString CUIAHelper::describe(const Event& cuiaEvent, const ZynthboxBasics::Track
         return QString{"Switch %1 Released"}.arg(value); // This wants to be named - a getter for switch names by index probably
     } else if (cuiaEvent == CUIAHelper::ActivateTrackEvent) {
         return QString{"Activate %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track));
-    } else if (cuiaEvent == CUIAHelper::ToggleTrackMuted) {
+    } else if (cuiaEvent == CUIAHelper::ActivateTrackRelativeEvent) {
+        static const float trackDivisor{128.0f / float(ZynthboxTrackCount)};
+        const ZynthboxBasics::Track firstTrack{ZynthboxBasics::Track(float(value) / trackDivisor)};
+        if (upperValue == -1) {
+            const ZynthboxBasics::Track secondTrack{ZynthboxBasics::Track(float(value) / trackDivisor)};
+            return QString{"Activate %1 through %2 (relatively)"}.arg(ZynthboxBasics::instance()->trackLabelText(firstTrack)).arg(ZynthboxBasics::instance()->trackLabelText(secondTrack));
+        } else {
+            return QString{"Activate %1"}.arg(ZynthboxBasics::instance()->trackLabelText(firstTrack)); // this is a silly thing to do, but we should make the description read reasonably anyway
+        }
+    } else if (cuiaEvent == CUIAHelper::ToggleTrackMutedEvent) {
         return QString{"Toggle %1 Muted"}.arg(ZynthboxBasics::instance()->trackLabelText(track));
-    } else if (cuiaEvent == CUIAHelper::SetTrackMuted) {
+    } else if (cuiaEvent == CUIAHelper::SetTrackMutedEvent) {
         if (value == 0) {
             return QString{"Unmute Track %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track));
         } else {
             return QString{"Mute Track %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track));
         }
-    } else if (cuiaEvent == CUIAHelper::ToggleTrackSoloed) {
+    } else if (cuiaEvent == CUIAHelper::ToggleTrackSoloedEvent) {
         return QString{"Toggle %1 Soloed"}.arg(ZynthboxBasics::instance()->trackLabelText(track));
-    } else if (cuiaEvent == CUIAHelper::SetTrackSoloed) {
+    } else if (cuiaEvent == CUIAHelper::SetTrackSoloedEvent) {
         if (value == 0) {
             return QString{"Unsolo Track %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track));
         } else {
@@ -422,23 +444,51 @@ QString CUIAHelper::describe(const Event& cuiaEvent, const ZynthboxBasics::Track
                 return QString{"Deactivate %2 on %1 Next Bar"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->partLabelText(part));
                 break;
         }
-    } else if (cuiaEvent == CUIAHelper::SetPartGain) {
+    } else if (cuiaEvent == CUIAHelper::SetPartCurrentEvent) {
+        return QString{"Select %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->partLabelText(part));
+    } else if (cuiaEvent == CUIAHelper::SetPartCurrentRelativeEvent) {
+        static const float partDivisor{128.0f / float(ZynthboxPartCount)};
+        const ZynthboxBasics::Part firstPart{ZynthboxBasics::Part(float(value) / partDivisor)};
+        if (upperValue == -1) {
+            const ZynthboxBasics::Part secondPart{ZynthboxBasics::Part(float(upperValue) / partDivisor)};
+            return QString{"Activate %1 on %2 through %4 on %3 (relatively)"}
+                .arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->partLabelText(firstPart))
+                .arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->partLabelText(secondPart));
+        } else {
+            return QString{"Activate %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->partLabelText(firstPart)); // this is a silly thing to do, but we should make the description read reasonably anyway
+        }
+    } else if (cuiaEvent == CUIAHelper::SetPartGainEvent) {
         if (upperValue == -1) {
             return QString{"Set Gain to %3% for %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->partLabelText(part)).arg(int(100 * relativeCCValue(value)));
         } else {
             return QString{"Set Gain to between %3% and %4% for %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->partLabelText(part)).arg(int(100 * relativeCCValue(value))).arg(int(100 * relativeCCValue(upperValue)));
         }
-    } else if (cuiaEvent == CUIAHelper::SetPartPan) {
+    } else if (cuiaEvent == CUIAHelper::SetPartPanEvent) {
         if (upperValue == -1) {
             return QString{"Set Pan to %3% for %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->partLabelText(part)).arg(int(100 * relativeCCValue(value)));
         } else {
             return QString{"Set Pan to between %3% and %4% for %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->partLabelText(part)).arg(int(100 * relativeCCValue(value))).arg(int(100 * relativeCCValue(upperValue)));
         }
-    } else if (cuiaEvent == CUIAHelper::SetFxAmount) {
+    } else if (cuiaEvent == CUIAHelper::SetFxAmountEvent) {
         if (upperValue == -1) {
             return QString{"Set FX wet/dry mix to %3% for slot %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(int(part) + 1).arg(int(100 * centeredRelativeCCValue(value)));
         } else {
             return QString{"Set FX wet/dry mix to between %3% and %4% for slot %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(int(part) + 1).arg(int(100 * centeredRelativeCCValue(value))).arg(int(100 * centeredRelativeCCValue(upperValue)));
+        }
+    } else if (cuiaEvent == CUIAHelper::SetTrackPartActiveRelativeEvent) {
+        static const float partDivisor{128.0f / float(ZynthboxTrackCount * ZynthboxPartCount)};
+        const int cumulativePart{int(float(value) / partDivisor)};
+        const ZynthboxBasics::Track firstTrack{ZynthboxBasics::Track(cumulativePart / ZynthboxPartCount)};
+        const ZynthboxBasics::Part firstPart{ZynthboxBasics::Part(cumulativePart - (firstTrack * ZynthboxPartCount))};
+        if (upperValue == -1) {
+            const int cumulativePart2{int(float(upperValue) / partDivisor)};
+            const ZynthboxBasics::Track secondTrack{ZynthboxBasics::Track(cumulativePart2 / ZynthboxPartCount)};
+            const ZynthboxBasics::Part secondPart{ZynthboxBasics::Part(cumulativePart2 - (firstTrack * ZynthboxPartCount))};
+            return QString{"Activate %1 on %2 through %4 on %3 (relatively)"}
+                .arg(ZynthboxBasics::instance()->trackLabelText(firstTrack)).arg(ZynthboxBasics::instance()->partLabelText(firstPart))
+                .arg(ZynthboxBasics::instance()->trackLabelText(secondTrack)).arg(ZynthboxBasics::instance()->partLabelText(secondPart));
+        } else {
+            return QString{"Activate %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(firstTrack)).arg(ZynthboxBasics::instance()->partLabelText(firstPart)); // this is a silly thing to do, but we should make the description read reasonably anyway
         }
     } else {
         return cuiaTitle(cuiaEvent);
