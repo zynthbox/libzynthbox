@@ -67,6 +67,7 @@
 #include "AdjectiveNoun.h"
 #include "CUIAHelper.h"
 #include "GainHandler.h"
+#include "JackConnectionHandler.h"
 
 #include "Plugin.h"
 
@@ -416,6 +417,13 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
         CUIAHelper *cuiaHelper = CUIAHelper::instance();
         QQmlEngine::setObjectOwnership(cuiaHelper, QQmlEngine::CppOwnership);
         return cuiaHelper;
+    });
+    qmlRegisterSingletonType<JackConnectionHandler>(uri, 1, 0, "JackConnectionHandler", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
+        Q_UNUSED(engine)
+        Q_UNUSED(scriptEngine)
+        JackConnectionHandler *jackConnectionHandler = JackConnectionHandler::instance();
+        QQmlEngine::setObjectOwnership(jackConnectionHandler, QQmlEngine::CppOwnership);
+        return jackConnectionHandler;
     });
     qmlRegisterType<WaveFormItem>(uri, 1, 0, "WaveFormItem");
     qmlRegisterType<JackPassthroughVisualiserItem>(uri, 1, 0, "JackPassthroughVisualiserItem");

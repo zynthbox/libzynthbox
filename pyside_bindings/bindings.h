@@ -11,6 +11,7 @@
 #include <ClipAudioSourceSubvoiceSettings.h>
 #include <CUIAHelper.h>
 #include <GainHandler.h>
+#include <JackConnectionHandler.h>
 #include <JackPassthrough.h>
 #include <JackPassthroughCompressor.h>
 #include <JackPassthroughFilter.h>
