@@ -119,7 +119,7 @@ public:
     void loadDeviceSettings() {
         if (doingSettingsHandling == false) {
             doingSettingsHandling = true;
-            qDebug() << Q_FUNC_INFO << q->zynthianId() << "Loading device settings";
+            // qDebug() << Q_FUNC_INFO << q->zynthianId() << "Loading device settings";
             QSettings settings;
             settings.beginGroup("MIDIDeviceSettings");
             settings.beginGroup(q->zynthianId());
@@ -168,7 +168,7 @@ public:
     void saveDeviceSettings() {
         if (doingSettingsHandling == false) {
             doingSettingsHandling = true;
-            qDebug() << Q_FUNC_INFO << q->zynthianId() << "Saving device settings";
+            // qDebug() << Q_FUNC_INFO << q->zynthianId() << "Saving device settings";
             QSettings settings;
             settings.beginGroup("MIDIDeviceSettings");
             settings.beginGroup(q->zynthianId());
