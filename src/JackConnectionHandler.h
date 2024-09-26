@@ -55,7 +55,7 @@ public:
      * @param first The fully qualified name of the first port
      * @param second The fully qualified name of the port to be connected to the first port
      */
-    Q_INVOKABLE void connect(const QString &first, const QString &second);
+    Q_INVOKABLE void connectPorts(const QString &first, const QString &second);
 
     /**
      * \brief Request that all ports connected to the given port are disconnected
@@ -69,7 +69,7 @@ public:
      * @param first The fully qualified name of the first port
      * @param second The fully qualified name of the port to be disconnected from the first port
      */
-    Q_INVOKABLE void disconnect(const QString &first, const QString &second);
+    Q_INVOKABLE void disconnectPorts(const QString &first, const QString &second);
 
     /**
      * \brief Commit all the connections and disconnections which have been requested since the last time this function was called

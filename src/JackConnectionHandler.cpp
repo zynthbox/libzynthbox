@@ -67,6 +67,7 @@ void JackConnectionHandler::setJackClient(jack_client_t* jackClient) const
 
 bool JackConnectionHandler::isConnected(const QString& first, const QString& second)
 {
+    // qDebug() << Q_FUNC_INFO << first << second;
     bool foundConnection{false};
     bool foundExistingEntry{false};
     for (JackConnectionHandlerConnection *connection : qAsConst(d->connections)) {
@@ -94,6 +95,7 @@ bool JackConnectionHandler::isConnected(const QString& first, const QString& sec
 
 QVariantList JackConnectionHandler::getAllConnections(const QString& portName)
 {
+    // qDebug() << Q_FUNC_INFO << portName;
     QStringList connectedPorts;
     jack_port_t *port = jack_port_by_name(d->client, portName.toUtf8());
     const char **connectedPortNames = jack_port_get_all_connections(d->client, port);
@@ -124,16 +126,22 @@ QVariantList JackConnectionHandler::getAllConnections(const QString& portName)
             }
         }
     }
-    return QVariantList{connectedPorts};
+    QVariantList result;
+    for (const QString &string : qAsConst(connectedPorts)) {
+        result.append(string);
+    }
+    return result;
 }
 
-void JackConnectionHandler::connect(const QString& first, const QString& second)
+void JackConnectionHandler::connectPorts(const QString& first, const QString& second)
 {
+    // qDebug() << Q_FUNC_INFO << first << second;
     d->createEntry(first, second, true);
 }
 
 void JackConnectionHandler::disconnectAll(const QString& portName)
 {
+    // qDebug() << Q_FUNC_INFO << portName;
     // First find all connections involving this port and change them to disconnections (because they won't have been committed yet)
     for (JackConnectionHandlerConnection *connection : qAsConst(d->connections)) {
         if (connection->first == portName || connection->second == portName) {
@@ -151,25 +159,25 @@ void JackConnectionHandler::disconnectAll(const QString& portName)
     }
 }
 
-void JackConnectionHandler::disconnect(const QString& first, const QString& second)
+void JackConnectionHandler::disconnectPorts(const QString& first, const QString& second)
 {
+    // qDebug() << Q_FUNC_INFO << first << second;
     d->createEntry(first, second, false);
 }
 
 void JackConnectionHandler::commit()
 {
+    // qDebug() << Q_FUNC_INFO;
     for (JackConnectionHandlerConnection *connection : qAsConst(d->connections)) {
-        if (connection->connect) {
-            if (connection->firstPort && connection->secondPort) {
+        if (connection->firstPort && connection->secondPort) {
+            if (connection->connect) {
                 int result = jack_connect(d->client, connection->first.toUtf8(), connection->second.toUtf8());
                 if (result == 0 || result == EEXIST) {
                     // all is well
                 } else {
                     qWarning() << Q_FUNC_INFO << "Attempted to connect" << connection->first << "to" << connection->second << "and got the error" << result;
                 }
-            }
-        } else {
-            if (connection->firstPort && connection->secondPort) {
+            } else {
                 int result = jack_disconnect(d->client, connection->first.toUtf8(), connection->second.toUtf8());
                 if (result == 0 || result == -1) {
                     // all is well (-1 is "no connection found", which we will accept as a successful result, as we are after the result, not the action)
@@ -177,6 +185,8 @@ void JackConnectionHandler::commit()
                     qWarning() << Q_FUNC_INFO << "Attempted to disconnect" << connection->first << "from" << connection->second << "and got the error" << result;
                 }
             }
+        } else {
+            qWarning() << Q_FUNC_INFO << "Attempted to perform a connection action on one or more ports which don't exist:" << connection->first << connection->firstPort << connection->second << connection->secondPort;
         }
     }
     qDeleteAll(d->connections);
@@ -185,6 +195,7 @@ void JackConnectionHandler::commit()
 
 void JackConnectionHandler::clear()
 {
+    qDebug() << Q_FUNC_INFO;
     qDeleteAll(d->connections);
     d->connections.clear();
 }
