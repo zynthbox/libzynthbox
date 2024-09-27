@@ -149,14 +149,14 @@ public:
         SetTrackPanEvent, ///@< Set the given track's pan to the given value
         SetTrackSend1AmountEvent, ///@< Set the given track's send 1 amount to the given value
         SetTrackSend2AmountEvent, ///@< Set the given track's send 2 amount to the given value
-        SetPartCurrentEvent, ///@< Sets the given part as the currently visible one (if given a specific track, this will also change the track)
-        SetPartCurrentRelativeEvent, ///@< Sets the part represented by the relative value, split evenly across the 128 values, as the currently visible one (if given a specific track, this will also change the track)
-        TogglePartEvent, ///@< Toggle the given part's active state
-        SetPartActiveStateEvent, ///@< Sets the part to either active or inactive (value of 0 is active, 1 is inactive, 2 is that it will be inactive on the next beat, 3 is that it will be active on the next bar)
-        SetPartGainEvent, ///@< Set the gain of the given part to the given value
-        SetPartPanEvent, ///@< Set the pan of the given part to the given value
-        SetFxAmountEvent, ///@< Set the wet/dry mix for the given fx to the given value
-        SetTrackPartActiveRelativeEvent, ///@< Sets the currently active track and part according to the given value (the parts are spread evenly across the 128 possible values, sequentially by track order)
+        SetClipCurrentEvent, ///@< Sets the given clip as the currently visible one (if given a specific track, this will also change the track)
+        SetClipCurrentRelativeEvent, ///@< Sets the clip represented by the relative value, split evenly across the 128 values, as the currently visible one (if given a specific track, this will also change the track)
+        ToggleClipEvent, ///@< Toggle the given clip's active state
+        SetClipActiveStateEvent, ///@< Sets the clip to either active or inactive (value of 0 is active, 1 is inactive, 2 is that it will be inactive on the next beat, 3 is that it will be active on the next bar)
+        SetSlotGainEvent, ///@< Set the gain of the given sound slot to the given value
+        SetSlotPanEvent, ///@< Set the pan of the given sound slot to the given value
+        SetFxAmountEvent, ///@< Set the wet/dry mix for the given fx slot to the given value
+        SetTrackClipActiveRelativeEvent, ///@< Sets the currently active track and clip according to the given value (the parts are spread evenly across the 128 possible values, sequentially by track order)
     };
     Q_ENUM(Event)
 
