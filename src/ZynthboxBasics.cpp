@@ -44,7 +44,7 @@ QString ZynthboxBasics::partLabelText(const Part& part) const
         case AnyPart:
             return QLatin1String{"Any Part"};
         case CurrentPart:
-            return QLatin1String{"Currently Part"};
+            return QLatin1String{"Current Part"};
         case Part1:
             return QLatin1String{"Part 1"};
         case Part2:
@@ -57,4 +57,67 @@ QString ZynthboxBasics::partLabelText(const Part& part) const
             return QLatin1String{"Part 5"};
     }
     return QLatin1String{"Unknown Part"};
+}
+
+QString ZynthboxBasics::clipLabelText(const Part& part) const
+{
+    switch(part) {
+        case AnyPart:
+            return QLatin1String{"Any Clip"};
+        case CurrentPart:
+            return QLatin1String{"Current Clip"};
+        case Part1:
+            return QLatin1String{"Clip 1"};
+        case Part2:
+            return QLatin1String{"Clip 2"};
+        case Part3:
+            return QLatin1String{"Clip 3"};
+        case Part4:
+            return QLatin1String{"Clip 4"};
+        case Part5:
+            return QLatin1String{"Clip 5"};
+    }
+    return QLatin1String{"Unknown Clip"};
+}
+
+QString ZynthboxBasics::slotLabelText(const Part& part) const
+{
+    switch(part) {
+        case AnyPart:
+            return QLatin1String{"Any Slot"};
+        case CurrentPart:
+            return QLatin1String{"Current Slot"};
+        case Part1:
+            return QLatin1String{"Slot 1"};
+        case Part2:
+            return QLatin1String{"Slot 2"};
+        case Part3:
+            return QLatin1String{"Slot 3"};
+        case Part4:
+            return QLatin1String{"Slot 4"};
+        case Part5:
+            return QLatin1String{"Slot 5"};
+    }
+    return QLatin1String{"Unknown Slot"};
+}
+
+QString ZynthboxBasics::fxLabelText(const Part& part) const
+{
+    switch(part) {
+        case AnyPart:
+            return QLatin1String{"Any FX Slot"};
+        case CurrentPart:
+            return QLatin1String{"Current FX Slot"};
+        case Part1:
+            return QLatin1String{"FX Slot 1"};
+        case Part2:
+            return QLatin1String{"FX Slot 2"};
+        case Part3:
+            return QLatin1String{"FX Slot 3"};
+        case Part4:
+            return QLatin1String{"FX Slot 4"};
+        case Part5:
+            return QLatin1String{"FX Slot 5"};
+    }
+    return QLatin1String{"Unknown FX Slot"};
 }

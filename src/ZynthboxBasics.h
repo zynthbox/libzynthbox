@@ -51,4 +51,7 @@ public:
     Q_ENUM(Part)
 
     Q_INVOKABLE QString partLabelText(const Part &part) const;
+    Q_INVOKABLE QString clipLabelText(const Part &part) const;
+    Q_INVOKABLE QString slotLabelText(const Part &part) const;
+    Q_INVOKABLE QString fxLabelText(const Part &part) const;
 };
