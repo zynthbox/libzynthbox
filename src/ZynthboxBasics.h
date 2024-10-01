@@ -4,7 +4,7 @@
 
 #define ZynthboxSongCount 1
 #define ZynthboxTrackCount 10
-#define ZynthboxPartCount 5
+#define ZynthboxSlotCount 5
 #define ZynthboxClipMaximumPositionCount 128
 
 class ZynthboxBasics : public QObject
@@ -39,19 +39,19 @@ public:
 
     Q_INVOKABLE QString trackLabelText(const Track &track) const;
 
-    enum Part {
-        AnyPart = -2,
-        CurrentPart = -1,
-        Part1 = 0,
-        Part2 = 1,
-        Part3 = 2,
-        Part4 = 3,
-        Part5 = 4,
+    enum Slot {
+        AnySlot = -2,
+        CurrentSlot = -1,
+        Slot1 = 0,
+        Slot2 = 1,
+        Slot3 = 2,
+        Slot4 = 3,
+        Slot5 = 4,
     };
-    Q_ENUM(Part)
+    Q_ENUM(Slot)
 
-    Q_INVOKABLE QString partLabelText(const Part &part) const;
-    Q_INVOKABLE QString clipLabelText(const Part &part) const;
-    Q_INVOKABLE QString slotLabelText(const Part &part) const;
-    Q_INVOKABLE QString fxLabelText(const Part &part) const;
+    Q_INVOKABLE QString slotLabelText(const Slot &slot) const;
+    Q_INVOKABLE QString clipLabelText(const Slot &slot) const;
+    Q_INVOKABLE QString soundSlotLabelText(const Slot &slot) const;
+    Q_INVOKABLE QString fxLabelText(const Slot &slot) const;
 };

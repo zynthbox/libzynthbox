@@ -497,9 +497,9 @@ int Plugin::sketchpadTrackCount() const
     return ZynthboxTrackCount;
 }
 
-int Plugin::sketchpadPartCount() const
+int Plugin::sketchpadSlotCount() const
 {
-    return ZynthboxPartCount;
+    return ZynthboxSlotCount;
 }
 
 int Plugin::clipMaximumPositionCount() const

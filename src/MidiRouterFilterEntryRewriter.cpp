@@ -23,7 +23,7 @@ MidiRouterFilterEntryRewriter::MidiRouterFilterEntryRewriter(MidiRouterFilterEnt
     connect(this, &MidiRouterFilterEntryRewriter::byte3AddChannelChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
     connect(this, &MidiRouterFilterEntryRewriter::cuiaEventChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
     connect(this, &MidiRouterFilterEntryRewriter::cuiaTrackChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
-    connect(this, &MidiRouterFilterEntryRewriter::cuiaPartChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
+    connect(this, &MidiRouterFilterEntryRewriter::cuiaSlotChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
     connect(this, &MidiRouterFilterEntryRewriter::cuiaValueChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
 }
 
@@ -163,16 +163,16 @@ void MidiRouterFilterEntryRewriter::setCuiaTrack(const ZynthboxBasics::Track& cu
     }
 }
 
-ZynthboxBasics::Part MidiRouterFilterEntryRewriter::cuiaPart() const
+ZynthboxBasics::Slot MidiRouterFilterEntryRewriter::cuiaSlot() const
 {
-    return m_cuiaPart;
+    return m_cuiaSlot;
 }
 
-void MidiRouterFilterEntryRewriter::setCuiaPart(const ZynthboxBasics::Part& cuiaPart)
+void MidiRouterFilterEntryRewriter::setCuiaSlot(const ZynthboxBasics::Slot& cuiaSlot)
 {
-    if (m_cuiaPart != cuiaPart) {
-        m_cuiaPart = cuiaPart;
-        Q_EMIT cuiaPartChanged();
+    if (m_cuiaSlot != cuiaSlot) {
+        m_cuiaSlot = cuiaSlot;
+        Q_EMIT cuiaSlotChanged();
     }
 }
 
@@ -261,7 +261,7 @@ QString MidiRouterFilterEntryRewriter::description() const
                 break;
         }
     } else if (m_type == MidiRouterFilterEntryRewriter::UIRule) {
-        description = CUIAHelper::instance()->describe(m_cuiaEvent, m_cuiaTrack, m_cuiaPart, m_cuiaValue);
+        description = CUIAHelper::instance()->describe(m_cuiaEvent, m_cuiaTrack, m_cuiaSlot, m_cuiaValue);
     }
     return description;
 }

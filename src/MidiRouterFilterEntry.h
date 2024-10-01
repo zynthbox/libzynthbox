@@ -93,10 +93,10 @@ class MidiRouterFilterEntry : public QObject
      */
     Q_PROPERTY(ZynthboxBasics::Track originTrack READ originTrack WRITE setOriginTrack NOTIFY originTrackChanged)
     /**
-     * \brief The origin part (valid on output filters)
-     * @default ZynthboxBasics::AnyPart
+     * \brief The origin slot (valid on output filters)
+     * @default ZynthboxBasics::AnySlot
      */
-    Q_PROPERTY(ZynthboxBasics::Part originPart READ originPart WRITE setOriginPart NOTIFY originPartChanged)
+    Q_PROPERTY(ZynthboxBasics::Slot originSlot READ originSlot WRITE setOriginSlot NOTIFY originSlotChanged)
     /**
      * \brief The minimum value of the event value (valid on output filters)
      * Setting this to a value higher than the maximum will set the maximum to the same value
@@ -149,10 +149,10 @@ public:
      * \brief Test whether the given values match this filter entry's settings
      * @param cuiaEvent The cuia event which was fired
      * @param track The sketchpad track this applies to (where relevant)
-     * @param part The sketchpad part this applies to (where relevant)
+     * @param slot The sketchpad slot this applies to (where relevant)
      * @param value The value associated with this command (where relevant) - this will be an integer between 0 and 127 inclusive (a midi byte value)
      */
-    bool matchCommand(const CUIAHelper::Event &cuiaEvent, const ZynthboxBasics::Track& track, const ZynthboxBasics::Part& part, const int& value) const;
+    bool matchCommand(const CUIAHelper::Event &cuiaEvent, const ZynthboxBasics::Track& track, const ZynthboxBasics::Slot& slot, const int& value) const;
 
     ZynthboxBasics::Track targetTrack() const;
     void setTargetTrack(const ZynthboxBasics::Track &targetTrack);
@@ -189,9 +189,9 @@ public:
     ZynthboxBasics::Track originTrack() const;
     void setOriginTrack(const ZynthboxBasics::Track &originTrack);
     Q_SIGNAL void originTrackChanged();
-    ZynthboxBasics::Part originPart() const;
-    void setOriginPart(const ZynthboxBasics::Part &originPart);
-    Q_SIGNAL void originPartChanged();
+    ZynthboxBasics::Slot originSlot() const;
+    void setOriginSlot(const ZynthboxBasics::Slot &originSlot);
+    Q_SIGNAL void originSlotChanged();
     int valueMinimum() const;
     void setValueMinimum(const int &valueMinimum);
     Q_SIGNAL void valueMinimumChanged();
@@ -231,7 +231,7 @@ public:
 private:
     ZynthboxBasics::Track m_targetTrack{ZynthboxBasics::CurrentTrack};
     ZynthboxBasics::Track m_originTrack{ZynthboxBasics::AnyTrack};
-    ZynthboxBasics::Part m_originPart{ZynthboxBasics::AnyPart};
+    ZynthboxBasics::Slot m_originSlot{ZynthboxBasics::AnySlot};
     int m_requiredBytes{3};
     bool m_requireRange{false};
     int m_byte1Minimum{128};

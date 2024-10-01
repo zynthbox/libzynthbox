@@ -94,8 +94,8 @@ public:
                         }
                         ensureTimerClipCommand(command);
                     }
-                    if (command->operation == TimerCommand::StartPartOperation || command->operation == TimerCommand::StopPartOperation) {
-                        // qDebug() << Q_FUNC_INFO << "Handling part start/stop operation immediately" << command;
+                    if (command->operation == TimerCommand::StartClipOperation || command->operation == TimerCommand::StopClipOperation) {
+                        // qDebug() << Q_FUNC_INFO << "Handling clip start/stop operation immediately" << command;
                         handleTimerCommand(command);
                     } else if (command->operation == TimerCommand::StopPlaybackOperation) {
                         // Disconnect the global sequences, as we want them to stop making noises immediately
@@ -119,13 +119,13 @@ public:
 
     inline void handleTimerCommand(TimerCommand* command) {
         // Yes, these are dangerous, but also we really, really want this to be fast
-        if (command->operation == TimerCommand::StartPartOperation) {
+        if (command->operation == TimerCommand::StartClipOperation) {
             if (playfieldManager == nullptr) { playfieldManager = PlayfieldManager::instance(); }
-//             qDebug() << Q_FUNC_INFO << "Timer command says to start part" << command->parameter << command->parameter2 << command->parameter3;
+//             qDebug() << Q_FUNC_INFO << "Timer command says to start clip" << command->parameter << command->parameter2 << command->parameter3;
             playfieldManager->setClipPlaystate(0, command->parameter, command->parameter3, PlayfieldManager::PlayingState, PlayfieldManager::CurrentPosition, qint64(command->bigParameter));
-        } else if(command->operation == TimerCommand::StopPartOperation) {
+        } else if(command->operation == TimerCommand::StopClipOperation) {
             if (playfieldManager == nullptr) { playfieldManager = PlayfieldManager::instance(); }
-//             qDebug() << Q_FUNC_INFO << "Timer command says to stop part" << command->parameter << command->parameter2 << command->parameter3;
+//             qDebug() << Q_FUNC_INFO << "Timer command says to stop clip" << command->parameter << command->parameter2 << command->parameter3;
             playfieldManager->setClipPlaystate(0, command->parameter, command->parameter3, PlayfieldManager::StoppedState, PlayfieldManager::CurrentPosition);
         } else if (command->operation == TimerCommand::StopPlaybackOperation) {
             q->stopPlayback();
@@ -167,7 +167,7 @@ public:
                             } else {
                                 if (direction == -1) {
                                     TimerCommand *clonedCommand = TimerCommand::cloneTimerCommand(command);
-                                    clonedCommand->operation = (clonedCommand->operation == TimerCommand::StartPartOperation) ? TimerCommand::StopPartOperation : TimerCommand::StartPartOperation;
+                                    clonedCommand->operation = (clonedCommand->operation == TimerCommand::StartClipOperation) ? TimerCommand::StopClipOperation : TimerCommand::StartClipOperation;
                                     handleTimerCommand(clonedCommand);
                                 } else {
                                     handleTimerCommand(command);
@@ -329,9 +329,9 @@ public Q_SLOTS:
                                 command->parameter2 = clip->property("cppObjId").toInt();
                                 command->parameter3 = 60;
                             } else {
-                                command->operation = TimerCommand::StartPartOperation;
+                                command->operation = TimerCommand::StartClipOperation;
                                 command->parameter2 = clip->property("column").toInt();
-                                command->parameter3 = clip->property("part").toInt();
+                                command->parameter3 = clip->property("clip").toInt();
                                 command->bigParameter = quint64(shouldResetPlaybackposition ? segmentPosition : 0);
                             }
                             commands << command;
@@ -353,9 +353,9 @@ public Q_SLOTS:
                                 command->parameter2 = clip->property("cppObjId").toInt();
                                 command->parameter3 = 60;
                             } else {
-                                command->operation = TimerCommand::StopPartOperation;
+                                command->operation = TimerCommand::StopClipOperation;
                                 command->parameter2 = clip->property("column").toInt();
-                                command->parameter3 = clip->property("part").toInt();
+                                command->parameter3 = clip->property("clip").toInt();
                             }
                             commands << command;
                         }
@@ -388,9 +388,9 @@ public Q_SLOTS:
                     command->parameter2 = clip->property("cppObjId").toInt();
                     command->parameter3 = 60;
                 } else {
-                    command->operation = TimerCommand::StopPartOperation;
+                    command->operation = TimerCommand::StopClipOperation;
                     command->parameter2 = clip->property("column").toInt();
-                    command->parameter3 = clip->property("part").toInt();
+                    command->parameter3 = clip->property("clip").toInt();
                 }
                 commands << command;
             }

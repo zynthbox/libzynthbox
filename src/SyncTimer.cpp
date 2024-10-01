@@ -793,8 +793,8 @@ public:
                                 }
                                 break;
                             }
-                        case TimerCommand::StartPartOperation:
-                        case TimerCommand::StopPartOperation:
+                        case TimerCommand::StartClipOperation:
+                        case TimerCommand::StopClipOperation:
                         case TimerCommand::InvalidOperation:
                         case TimerCommand::AutomationOperation:
                         case TimerCommand::PassthroughClientOperation:

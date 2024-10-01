@@ -842,7 +842,7 @@ MidiRouter::~MidiRouter()
 void MidiRouter::run() {
     int cuiaOriginId{0};
     ZynthboxBasics::Track cuiaTrack{ZynthboxBasics::CurrentTrack};
-    ZynthboxBasics::Part cuiaPart{ZynthboxBasics::CurrentPart};
+    ZynthboxBasics::Slot cuiaSlot{ZynthboxBasics::CurrentSlot};
     static const QString emptyString{};
     int cuiaValue{0};
     while (true) {
@@ -869,8 +869,8 @@ void MidiRouter::run() {
         }
         for (MidiRouterDevice* device : d->devices) {
             while (device->cuiaRing.readHead->processed == false) {
-                CUIAHelper::Event event = device->cuiaRing.read(&cuiaOriginId, &cuiaTrack, &cuiaPart, &cuiaValue);
-                Q_EMIT cuiaEvent(CUIAHelper::instance()->cuiaCommand(event), cuiaOriginId, cuiaTrack, cuiaPart, cuiaValue);
+                CUIAHelper::Event event = device->cuiaRing.read(&cuiaOriginId, &cuiaTrack, &cuiaSlot, &cuiaValue);
+                Q_EMIT cuiaEvent(CUIAHelper::instance()->cuiaCommand(event), cuiaOriginId, cuiaTrack, cuiaSlot, cuiaValue);
             }
         }
         Q_EMIT processingLoadChanged();
@@ -878,11 +878,11 @@ void MidiRouter::run() {
     }
 }
 
-void MidiRouter::cuiaEventFeedback(const QString& cuiaCommand, const int& originId, const ZynthboxBasics::Track& track, const ZynthboxBasics::Part& part, const int& value)
+void MidiRouter::cuiaEventFeedback(const QString& cuiaCommand, const int& originId, const ZynthboxBasics::Track& track, const ZynthboxBasics::Slot& slot, const int& value)
 {
     const CUIAHelper::Event cuiaEvent{CUIAHelper::instance()->cuiaEvent(cuiaCommand)};
     for (MidiRouterDevice * device : qAsConst(d->allEnabledOutputs)) {
-        device->cuiaEventFeedback(cuiaEvent, originId, track, part, value);
+        device->cuiaEventFeedback(cuiaEvent, originId, track, slot, value);
     }
 }
 

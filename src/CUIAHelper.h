@@ -156,7 +156,7 @@ public:
         SetSlotGainEvent, ///@< Set the gain of the given sound slot to the given value
         SetSlotPanEvent, ///@< Set the pan of the given sound slot to the given value
         SetFxAmountEvent, ///@< Set the wet/dry mix for the given fx slot to the given value
-        SetTrackClipActiveRelativeEvent, ///@< Sets the currently active track and clip according to the given value (the parts are spread evenly across the 128 possible values, sequentially by track order)
+        SetTrackClipActiveRelativeEvent, ///@< Sets the currently active track and clip according to the given value (the clips are spread evenly across the 128 possible values, sequentially by track order)
     };
     Q_ENUM(Event)
 
@@ -186,11 +186,29 @@ public:
      */
     Q_INVOKABLE bool cuiaEventWantsATrack(const Event &cuiaEvent) const;
     /**
-     * \brief Whether the given event uses the part parameter
+     * \brief Whether the given event uses the slot parameter
      * @param event The event you want to know details about
-     * @return True if the given event uses the part parameter, false otherwise
+     * @return True if the given event uses the slot parameter, false otherwise
      */
-    Q_INVOKABLE bool cuiaEventWantsAPart(const Event &cuiaEvent) const;
+    Q_INVOKABLE bool cuiaEventWantsASlot(const Event &cuiaEvent) const;
+    /**
+     * \brief Whether the given event uses the slot parameter, and that slot parameter identifies a clip
+     * @param event The event you want to know details about
+     * @return True if the given event uses the slot parameter to represent a clip, false otherwise
+     */
+    Q_INVOKABLE bool cuiaEventWantsAClip(const Event &cuiaEvent) const;
+    /**
+     * \brief Whether the given event uses the slot parameter, and that slot parameter identifies a sound source slot
+     * @param event The event you want to know details about
+     * @return True if the given event uses the slot parameter to represent a sound source slot, false otherwise
+     */
+    Q_INVOKABLE bool cuiaEventWantsASoundSlot(const Event &cuiaEvent) const;
+    /**
+     * \brief Whether the given event uses the slot parameter, and that slot parameter identifies an fx slot
+     * @param event The event you want to know details about
+     * @return True if the given event uses the slot parameter to represent an fx slot, false otherwise
+     */
+    Q_INVOKABLE bool cuiaEventWantsAnFxSlot(const Event &cuiaEvent) const;
     /**
      * \brief Whether the given event uses the value parameter
      * @param event The event you want to know details about
@@ -202,11 +220,11 @@ public:
      * \brief Get a human-readable description of the given CUIA event and associated flags
      * @param cuiaEvent A CUIA event to get a description of
      * @param track The track the event is associated with (will be ignored if the event doesn't use this parameter)
-     * @param part The part the event is associated with (will be ignored if the event doesn't use this parameter)
+     * @param slot The slot the event is associated with (will be ignored if the event doesn't use this parameter)
      * @param value The value the event is associated with (will be ignored if the event doesn't use this parameter)
      * @param upperValue Treat value as a lower limit, and describe the values in a range
      */
-    Q_INVOKABLE QString describe(const Event &cuiaEvent, const ZynthboxBasics::Track &track, const ZynthboxBasics::Part &part, const int &value, const int &upperValue = -1) const;
+    Q_INVOKABLE QString describe(const Event &cuiaEvent, const ZynthboxBasics::Track &track, const ZynthboxBasics::Slot &slot, const int &value, const int &upperValue = -1) const;
 
     /**
      * \brief Get the human-readable name of the given switch
@@ -226,7 +244,7 @@ public:
         CUIAHelper::Event event{CUIAHelper::NoCuiaEvent};
         int originId{-1};
         ZynthboxBasics::Track track{ZynthboxBasics::CurrentTrack};
-        ZynthboxBasics::Part part{ZynthboxBasics::CurrentPart};
+        ZynthboxBasics::Slot slot{ZynthboxBasics::CurrentSlot};
         int value{0};
         bool processed{true};
     };
@@ -242,7 +260,7 @@ public:
     ~CUIARing() {
     }
 
-    void write(const CUIAHelper::Event &event, const int &originId, const ZynthboxBasics::Track &track = ZynthboxBasics::CurrentTrack, const ZynthboxBasics::Part &part = ZynthboxBasics::CurrentPart, const double &value = 0) {
+    void write(const CUIAHelper::Event &event, const int &originId, const ZynthboxBasics::Track &track = ZynthboxBasics::CurrentTrack, const ZynthboxBasics::Slot &slot = ZynthboxBasics::CurrentSlot, const double &value = 0) {
         Entry *entry = writeHead;
         writeHead = writeHead->next;
         if (entry->processed == false) {
@@ -251,11 +269,11 @@ public:
         entry->event = event;
         entry->originId = originId;
         entry->track = track;
-        entry->part = part;
+        entry->slot = slot;
         entry->value = value;
         entry->processed = false;
     }
-    CUIAHelper::Event read(int *originId = nullptr, ZynthboxBasics::Track *track = nullptr, ZynthboxBasics::Part *part = nullptr, int *value = nullptr) {
+    CUIAHelper::Event read(int *originId = nullptr, ZynthboxBasics::Track *track = nullptr, ZynthboxBasics::Slot *slot = nullptr, int *value = nullptr) {
         Entry *entry = readHead;
         readHead = readHead->next;
         CUIAHelper::Event event = entry->event;
@@ -266,8 +284,8 @@ public:
         if (track) {
             *track = entry->track;
         }
-        if (part) {
-            *part = entry->part;
+        if (slot) {
+            *slot = entry->slot;
         }
         if (value) {
             *value = entry->value;

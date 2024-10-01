@@ -93,6 +93,6 @@
     </object-type>
     <object-type name="ZynthboxBasics">
         <enum-type name="Track" />
-        <enum-type name="Part" />
+        <enum-type name="Slot" />
     </object-type>
 </typesystem>

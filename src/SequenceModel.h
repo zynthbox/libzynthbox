@@ -141,16 +141,16 @@ public:
      */
     Q_INVOKABLE QObject *get(int patternIndex) const;
     /**
-     * \brief Get the pattern object for the given part in a logical channel
-     * The concept here is that each channel is a part of a channel, and a channel can have multiple
+     * \brief Get the pattern object for the given clip in a logical channel
+     * The concept here is that each channel is a clip of a channel, and a channel can have multiple
      * patterns associated with it. To be able to operate directly on the channel's patterns, you
-     * can use this function to fetch them given their positions by channel/part, instead of their
+     * can use this function to fetch them given their positions by channel/clip, instead of their
      * linear position in the Sequence.
      * @param channelIndex The index of the logical channel to fetch a pattern in
-     * @param partIndex The index of the part in the logical channel for which the pattern should be fetched
+     * @param clipId The index of the clip in the logical channel for which the pattern should be fetched
      * @return A pattern object (or null if none was found at the given position)
      */
-    Q_INVOKABLE QObject *getByPart(int channelIndex, int partIndex) const;
+    Q_INVOKABLE QObject *getByClipId(int channelIndex, int clipId) const;
     /**
      * \brief Insert a pattern into the sequence at the desired location (or at the end if undefined)
      * @param pattern The pattern to insert into the model
@@ -185,7 +185,7 @@ public:
     Q_SIGNAL void bpmChanged();
 
     void setActivePattern(int activePattern);
-    Q_INVOKABLE void setActiveChannel(int channelId, int partId);
+    Q_INVOKABLE void setActiveChannel(int channelId, int clipId);
     int activePattern() const;
     QObject *activePatternObject() const;
     Q_SIGNAL void activePatternChanged();

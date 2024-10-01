@@ -975,18 +975,18 @@ bool MidiRouterDevice::loadDeviceSettings(const QString& filePath)
     return result;
 }
 
-void MidiRouterDevice::cuiaEventFeedback(const CUIAHelper::Event &cuiaEvent, const int& /*originId*/, const ZynthboxBasics::Track& track, const ZynthboxBasics::Part& part, const int& value)
+void MidiRouterDevice::cuiaEventFeedback(const CUIAHelper::Event &cuiaEvent, const int& /*originId*/, const ZynthboxBasics::Track& track, const ZynthboxBasics::Slot& slot, const int& value)
 {
-    const MidiRouterFilterEntry* matchedEntry = d->outputEventFilter->matchCommand(cuiaEvent, track, part, value);
+    const MidiRouterFilterEntry* matchedEntry = d->outputEventFilter->matchCommand(cuiaEvent, track, slot, value);
     if (matchedEntry) {
         int trackIndex = track;
         if (track == ZynthboxBasics::AnyTrack || track == ZynthboxBasics::CurrentTrack) {
             trackIndex = MidiRouter::instance()->currentSketchpadTrack();
         }
-        int partIndex = part;
-        if (part == ZynthboxBasics::AnyPart || part == ZynthboxBasics::CurrentPart) {
-            partIndex = 0;
-            // TODO We need to be able to fetch the "current" part of any track - for now we'll reset this to 0, but that'll need sorting out
+        int slotIndex = slot;
+        if (slot == ZynthboxBasics::AnySlot || slot == ZynthboxBasics::CurrentSlot) {
+            slotIndex = 0;
+            // TODO We need to be able to fetch the "current" slot of any track - for now we'll reset this to 0, but that'll need sorting out
         }
         juce::MidiBuffer midiBuffer;
         int bytes[3];
@@ -995,7 +995,7 @@ void MidiRouterDevice::cuiaEventFeedback(const CUIAHelper::Event &cuiaEvent, con
                 if (rule->m_bytes[byteIndex] == MidiRouterFilterEntryRewriter::OriginalByte1) {
                     bytes[byteIndex] = trackIndex;
                 } else if (rule->m_bytes[byteIndex] == MidiRouterFilterEntryRewriter::OriginalByte2) {
-                    bytes[byteIndex] = partIndex;
+                    bytes[byteIndex] = slotIndex;
                 } else if (rule->m_bytes[byteIndex] == MidiRouterFilterEntryRewriter::OriginalByte3) {
                     bytes[byteIndex] = value;
                 } else {

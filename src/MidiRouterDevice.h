@@ -424,10 +424,10 @@ public:
      * @param cuiaEvent The cuia event which was fired
      * @param originId The ID of the MidiRouter device which requested the event be fired (this will be -1 for things which were not done by an external device)
      * @param track The sketchpad track this applies to (where relevant)
-     * @param part The sketchpad part this applies to (where relevant)
+     * @param slot The sketchpad slot this applies to (where relevant)
      * @param value The value associated with this command (where relevant) - this will be an integer between 0 and 127 inclusive (a midi byte value)
      */
-    void cuiaEventFeedback(const CUIAHelper::Event &cuiaEvent, const int& originId, const ZynthboxBasics::Track &track, const ZynthboxBasics::Part &part, const int &value);
+    void cuiaEventFeedback(const CUIAHelper::Event &cuiaEvent, const int& originId, const ZynthboxBasics::Track &track, const ZynthboxBasics::Slot &slot, const int &value);
     MidiRouterFilter *inputEventFilter() const;
     MidiRouterFilter *outputEventFilter() const;
     CUIARing cuiaRing;

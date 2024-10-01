@@ -32,10 +32,10 @@ const MidiRouterFilterEntry * MidiRouterFilter::match(const jack_midi_event_t& e
     return nullptr;
 }
 
-const MidiRouterFilterEntry * MidiRouterFilter::matchCommand(const CUIAHelper::Event& cuiaEvent, const ZynthboxBasics::Track& track, const ZynthboxBasics::Part& part, const int& value)
+const MidiRouterFilterEntry * MidiRouterFilter::matchCommand(const CUIAHelper::Event& cuiaEvent, const ZynthboxBasics::Track& track, const ZynthboxBasics::Slot& slot, const int& value)
 {
     for (const MidiRouterFilterEntry *entry : qAsConst(m_entries)) {
-        if (entry->matchCommand(cuiaEvent, track, part, value)) {
+        if (entry->matchCommand(cuiaEvent, track, slot, value)) {
             // ##################################
             // EARLY RETURN - to retain constness
             // ##################################
@@ -54,7 +54,7 @@ QString MidiRouterFilter::serialize() const
         QJsonObject entryObject;
         entryObject.insert("targetTrack", entry->targetTrack());
         entryObject.insert("originTrack", entry->originTrack());
-        entryObject.insert("originPart", entry->originPart());
+        entryObject.insert("originSlot", entry->originSlot());
         entryObject.insert("requiredBytes", entry->requiredBytes());
         entryObject.insert("requireRange", entry->requireRange());
         entryObject.insert("byte1Minimum", entry->byte1Minimum());
@@ -75,7 +75,7 @@ QString MidiRouterFilter::serialize() const
             ruleObject.insert("bytesAddChannel", QJsonArray{rewriter->byte1AddChannel(), rewriter->byte2AddChannel(), rewriter->byte3AddChannel()});
             ruleObject.insert("cuiaEvent", rewriter->cuiaEvent());
             ruleObject.insert("cuiaTrack", rewriter->cuiaTrack());
-            ruleObject.insert("cuiaPart", rewriter->cuiaTrack());
+            ruleObject.insert("cuiaSlot", rewriter->cuiaTrack());
             ruleObject.insert("cuiaValue", rewriter->cuiaValue());
             entryRules.append(ruleObject);
         }
@@ -104,7 +104,7 @@ bool MidiRouterFilter::deserialize(const QString& json)
                         connect(entry, &MidiRouterFilterEntry::descripionChanged, this, &MidiRouterFilter::entriesDataChanged);
                         entry->setTargetTrack(entryObject.value("targetTrack").toVariant().value<ZynthboxBasics::Track>());
                         entry->setOriginTrack(entryObject.value("originTrack").toVariant().value<ZynthboxBasics::Track>());
-                        entry->setOriginPart(entryObject.value("targetPart").toVariant().value<ZynthboxBasics::Part>());
+                        entry->setOriginSlot(entryObject.value("targetSlot").toVariant().value<ZynthboxBasics::Slot>());
                         entry->setRequiredBytes(entryObject.value("requiredBytes").toVariant().value<int>());
                         entry->setRequireRange(entryObject.value("requireRange").toVariant().value<bool>());
                         entry->setByte1Minimum(entryObject.value("byte1Minimum").toVariant().value<int>());
@@ -143,7 +143,7 @@ bool MidiRouterFilter::deserialize(const QString& json)
                                     }
                                     rewriter->setCuiaEvent(ruleObject.value("cuiaEvent").toVariant().value<CUIAHelper::Event>());
                                     rewriter->setCuiaTrack(ruleObject.value("cuiaTrack").toVariant().value<ZynthboxBasics::Track>());
-                                    rewriter->setCuiaPart(ruleObject.value("cuiaPart").toVariant().value<ZynthboxBasics::Part>());
+                                    rewriter->setCuiaSlot(ruleObject.value("cuiaSlot").toVariant().value<ZynthboxBasics::Slot>());
                                     rewriter->setCuiaValue(ruleObject.value("cuiaValue").toVariant().value<MidiRouterFilterEntryRewriter::ValueSpecifier>());
                                 } else {
                                     qWarning() << Q_FUNC_INFO << "A rewrite rule was not an object. This will be ignored, but is a problem.";

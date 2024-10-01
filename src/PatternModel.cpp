@@ -87,7 +87,7 @@ public:
     PatternModel *q{nullptr};
     SyncTimer *syncTimer{nullptr};
     QObject *zlChannel{nullptr};
-    QObject *zlPart{nullptr};
+    QObject *zlClip{nullptr};
     QObject *zlScene{nullptr};
 
     bool channelMuted{false};
@@ -104,7 +104,7 @@ public:
                 connect(zlChannel, SIGNAL(track_type_changed()), this, SLOT(updateSamples()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(externalMidiChannelChanged()), this, SLOT(externalMidiChannelChanged()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(samples_changed()), this, SLOT(updateSamples()), Qt::QueuedConnection);
-                connect(zlChannel, SIGNAL(selectedPartChanged()), this, SLOT(selectedPartChanged()), Qt::QueuedConnection);
+                connect(zlChannel, SIGNAL(selectedClipChanged()), this, SLOT(selectedClipChanged()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(chained_sounds_changed()), this, SLOT(chainedSoundsChanged()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(chainedSoundsAcceptedChannelsChanged()), this, SLOT(chainedSoundsChanged()), Qt::QueuedConnection);
                 connect(zlChannel, SIGNAL(recordingPopupActiveChanged()), this, SIGNAL(recordingPopupActiveChanged()), Qt::QueuedConnection);
@@ -113,7 +113,7 @@ public:
                 trackTypeChanged();
                 externalMidiChannelChanged();
                 updateSamples();
-                selectedPartChanged();
+                selectedClipChanged();
                 chainedSoundsChanged();
             }
             mutedChanged();
@@ -121,16 +121,16 @@ public:
         }
     }
 
-    void setZlPart(QObject *newZlPart)
+    void setZlClip(QObject *newZlClip)
     {
-        if (zlPart != newZlPart) {
-            if (zlPart) {
-                zlPart->disconnect(this);
+        if (zlClip != newZlClip) {
+            if (zlClip) {
+                zlClip->disconnect(this);
             }
-            zlPart = newZlPart;
-            Q_EMIT q->zlPartChanged();
-            if (zlPart) {
-                // connect(zlPart, SIGNAL(samples_changed()), this, SLOT(updateSamples()), Qt::QueuedConnection);
+            zlClip = newZlClip;
+            Q_EMIT q->zlClipChanged();
+            if (zlClip) {
+                // connect(zlClip, SIGNAL(samples_changed()), this, SLOT(updateSamples()), Qt::QueuedConnection);
                 // updateSamples();
             }
         }
@@ -146,7 +146,7 @@ public:
             if (zlScene) {
                 connect(zlScene, SIGNAL(enabled_changed(int, int)), this, SLOT(sceneEnabledChanged()), Qt::QueuedConnection);
                 // This seems superfluous...
-//                 connect(zlChannel, SIGNAL(enabled_changed()), this, SLOT(selectedPartChanged()), Qt::QueuedConnection);
+//                 connect(zlChannel, SIGNAL(enabled_changed()), this, SLOT(selectedClipChanged()), Qt::QueuedConnection);
                 sceneEnabledChanged();
             }
             Q_EMIT q->zlSceneChanged();
@@ -190,16 +190,16 @@ public Q_SLOTS:
     void externalMidiChannelChanged() {
         q->setExternalMidiChannel(zlChannel->property("externalMidiChannel").toInt());
     }
-    void selectedPartChanged() {
+    void selectedClipChanged() {
         SequenceModel *sequence = qobject_cast<SequenceModel*>(q->sequence());
         if (sequence && zlChannel) {
-            const int selectedPart{zlChannel->property("selectedPart").toInt()};
-            sequence->setActiveChannel(PlayGridManager::instance()->currentSketchpadTrack(), selectedPart);
+            const int selectedClip{zlChannel->property("selectedClip").toInt()};
+            sequence->setActiveChannel(PlayGridManager::instance()->currentSketchpadTrack(), selectedClip);
         }
     }
     void updateSamples() {
         QVariantList clipIds;
-        // qDebug() << Q_FUNC_INFO << q->sketchpadTrack() << q->partName();
+        // qDebug() << Q_FUNC_INFO << q->sketchpadTrack() << q->clipName();
         if (zlChannel) {
             const QString zlSamplePickingStyle = zlChannel->property("samplePickingStyle").toString();
             // static const QLatin1String sameOrFirstStyle{"same-or-first"};
@@ -225,13 +225,13 @@ public Q_SLOTS:
                     break;
                 case ClipAudioSource::SamePickingStyle:
                     // Only use the equivalent slot to our own position
-                    slotIndices = {q->partIndex()};
+                    slotIndices = {q->clipIndex()};
                     break;
                 case ClipAudioSource::SameOrFirstPickingStyle:
                 default:
                     // Try our own slot first, and then try the others in order
-                    slotIndices.removeAll(q->partIndex());
-                    slotIndices.insert(0, q->partIndex());
+                    slotIndices.removeAll(q->clipIndex());
+                    slotIndices.insert(0, q->clipIndex());
                     break;
             }
 
@@ -241,7 +241,7 @@ public Q_SLOTS:
                     const int cppObjId{sample->property("cppObjId").toInt()};
                     clipIds << cppObjId;
                     // qDebug() << Q_FUNC_INFO << "Sample in slot" << slotIndex << "has cppObjId" << cppObjId;
-                    if (samplePickingStyle == ClipAudioSource::SameOrFirstPickingStyle && cppObjId > -1 && slotIndex == q->partIndex()) {
+                    if (samplePickingStyle == ClipAudioSource::SameOrFirstPickingStyle && cppObjId > -1 && slotIndex == q->clipIndex()) {
                         // In SameOrFirst, if there is a sample in the matches-me slot, ignore any sample that isn't that one
                         // If there is no sample in that slot, we want to try all the others in order
                         break;
@@ -612,7 +612,7 @@ public:
     SequenceModel *sequence;
     int song{0}; // This is just... always zero at the moment, but maybe this would be the global sequence id or something like that?
     int sketchpadTrack{-1};
-    int partIndex{-1};
+    int clipIndex{-1};
 
     PlayGridManager *playGridManager{nullptr};
 
@@ -711,12 +711,12 @@ PatternModel::PatternModel(SequenceModel* parent)
     auto updateIsPlaying = [this](){
         bool isPlaying{false};
         if (d->segmentHandler->songMode()) {
-            isPlaying = d->playfieldManager->clipPlaystate(d->song, d->sketchpadTrack, d->partIndex) == PlayfieldManager::PlayingState;
+            isPlaying = d->playfieldManager->clipPlaystate(d->song, d->sketchpadTrack, d->clipIndex) == PlayfieldManager::PlayingState;
         } else if (d->sequence && d->sequence->isPlaying()) {
             if (d->sequence->soloPattern() > -1) {
                 isPlaying = (d->sequence->soloPatternObject() == this);
             } else {
-                isPlaying = d->playfieldManager->clipPlaystate(d->song, d->sketchpadTrack, d->partIndex) == PlayfieldManager::PlayingState;
+                isPlaying = d->playfieldManager->clipPlaystate(d->song, d->sketchpadTrack, d->clipIndex) == PlayfieldManager::PlayingState;
             }
         } else {
             isPlaying = false;
@@ -729,8 +729,8 @@ PatternModel::PatternModel(SequenceModel* parent)
             QMetaObject::invokeMethod(this, "isPlayingChanged", Qt::QueuedConnection);
         }
     };
-    connect(d->playfieldManager, &PlayfieldManager::directPlayfieldStateChanged, this, [this,updateIsPlaying](int song, int track, int part){
-        if (d->sequence && song == d->song && track == d->sketchpadTrack && part == d->partIndex) {
+    connect(d->playfieldManager, &PlayfieldManager::directPlayfieldStateChanged, this, [this,updateIsPlaying](int song, int track, int clip){
+        if (d->sequence && song == d->song && track == d->sketchpadTrack && clip == d->clipIndex) {
             updateIsPlaying();
         }
     }, Qt::DirectConnection);
@@ -1315,22 +1315,22 @@ void PatternModel::setSketchpadTrack(int sketchpadTrack)
     }
 }
 
-int PatternModel::partIndex() const
+int PatternModel::clipIndex() const
 {
-    return d->partIndex;
+    return d->clipIndex;
 }
 
-QString PatternModel::partName() const
+QString PatternModel::clipName() const
 {
-    static const QString partNames[5]{"a", "b", "c", "d", "e"};
-    return (d->partIndex > -1 && d->partIndex < 5) ? partNames[d->partIndex] : "";
+    static const QString clipNames[5]{"a", "b", "c", "d", "e"};
+    return (d->clipIndex > -1 && d->clipIndex < 5) ? clipNames[d->clipIndex] : "";
 }
 
-void PatternModel::setPartIndex(int partIndex)
+void PatternModel::setClipIndex(int clipIndex)
 {
-    if (d->partIndex != partIndex) {
-        d->partIndex = partIndex;
-        Q_EMIT partIndexChanged();
+    if (d->clipIndex != clipIndex) {
+        d->clipIndex = clipIndex;
+        Q_EMIT clipIndexChanged();
     }
 }
 
@@ -2037,14 +2037,14 @@ void PatternModel::setZlChannel(QObject *zlChannel)
     d->zlSyncManager->setZlChannel(zlChannel);
 }
 
-QObject *PatternModel::zlPart() const
+QObject *PatternModel::zlClip() const
 {
-    return d->zlSyncManager->zlPart;
+    return d->zlSyncManager->zlClip;
 }
 
-void PatternModel::setZlPart(QObject *zlPart)
+void PatternModel::setZlClip(QObject *zlClip)
 {
-    d->zlSyncManager->setZlPart(zlPart);
+    d->zlSyncManager->setZlClip(zlClip);
 }
 
 QObject *PatternModel::zlScene() const
@@ -2129,7 +2129,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
         bool relevantToUs{false};
         for (int progressionIncrement = 0; progressionIncrement <= progressionLength; ++progressionIncrement) {
             // As we might change the offset on some step, we'll need that in here
-            const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->sketchpadTrack, d->partIndex) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
+            const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->sketchpadTrack, d->clipIndex) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
             // check whether the sequencePosition + progressionIncrement matches our note length
             qint64 nextPosition = sequencePosition - playbackOffset + progressionIncrement;
             d->noteLengthDetails(d->stepLength, nextPosition, relevantToUs, noteDuration);
@@ -2167,7 +2167,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                 // Reset this clip's playfield offset by the distance from this clip to the clip we are asking to play
                                 // next (or, rather, move it forward to the end of the pattern, and then set it to the next step)
                                 nextStep = (d->patternLength - nextPosition + nextStep) * noteDuration;
-                                d->playfieldManager->setClipPlaystate(d->song, d->sketchpadTrack, d->partIndex, PlayfieldManager::PlayingState, PlayfieldManager::CurrentPosition, d->playfieldManager->clipOffset(d->song, d->sketchpadTrack, d->partIndex) + nextStep);
+                                d->playfieldManager->setClipPlaystate(d->song, d->sketchpadTrack, d->clipIndex, PlayfieldManager::PlayingState, PlayfieldManager::CurrentPosition, d->playfieldManager->clipOffset(d->song, d->sketchpadTrack, d->clipIndex) + nextStep);
                             }
                             const int velocity{metaHash.value(velocityString, 64).toInt()};
                             if (velocity == 0) {
@@ -2351,7 +2351,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
 void PatternModel::updateSequencePosition(qint64 sequencePosition)
 {
     if (isPlaying() || sequencePosition == 0) {
-        const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->sketchpadTrack, d->partIndex) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
+        const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->sketchpadTrack, d->clipIndex) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
         bool relevantToUs{false};
         qint64 nextPosition{sequencePosition - playbackOffset};
         qint64 noteDuration{0};

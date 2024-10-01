@@ -39,11 +39,11 @@ public:
      * \brief Test whether the given values match this filter entry's settings
      * @param cuiaEvent The cuia event which was fired
      * @param track The sketchpad track this applies to (where relevant)
-     * @param part The sketchpad part this applies to (where relevant)
+     * @param slot The sketchpad slot this applies to (where relevant)
      * @param value The value associated with this command (where relevant) - this will be an integer between 0 and 127 inclusive (a midi byte value)
      * @return The filter entry which matches the event (if null, there were no matches)
      */
-    const MidiRouterFilterEntry *  matchCommand(const CUIAHelper::Event &cuiaEvent, const ZynthboxBasics::Track& track, const ZynthboxBasics::Part& part, const int& value);
+    const MidiRouterFilterEntry *  matchCommand(const CUIAHelper::Event &cuiaEvent, const ZynthboxBasics::Track& track, const ZynthboxBasics::Slot& slot, const int& value);
 
     /**
      * \brief Creates a serialized version of this filter and all its settings

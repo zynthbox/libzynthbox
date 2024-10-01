@@ -50,14 +50,14 @@ class PatternModel : public NotesModel
      */
     Q_PROPERTY(int sketchpadTrack READ sketchpadTrack NOTIFY sketchpadTrackChanged)
     /**
-     * \brief The index of the part inside this pattern's associated channel associates this pattern with
+     * \brief The index of the clip inside this pattern's associated channel associates this pattern with
      */
-    Q_PROPERTY(int partIndex READ partIndex NOTIFY partIndexChanged)
+    Q_PROPERTY(int clipIndex READ clipIndex NOTIFY clipIndexChanged)
     /**
-     * \brief The name of this pattern's associated part (see partIndex)
-     * This will be a lower-case letter, or an empty string if there's no part set
+     * \brief The name of this pattern's associated clip (see clipIndex)
+     * This will be a lower-case letter, or an empty string if there's no clip set
      */
-    Q_PROPERTY(QString partName READ partName NOTIFY partIndexChanged)
+    Q_PROPERTY(QString clipName READ clipName NOTIFY clipIndexChanged)
     /**
      * \brief A URL that you can pass to an Image item to display an up-to-date thumbnail of the pattern's current bank
      */
@@ -302,9 +302,9 @@ class PatternModel : public NotesModel
      */
     Q_PROPERTY(QObject* zlChannel READ zlChannel WRITE setZlChannel NOTIFY zlChannelChanged)
     /**
-     * \brief A reference to the sketchpad Part object this Pattern is associated with
+     * \brief A reference to the sketchpad Clip object this Pattern is associated with
      */
-    Q_PROPERTY(QObject* zlPart READ zlPart WRITE setZlPart NOTIFY zlPartChanged)
+    Q_PROPERTY(QObject* zlClip READ zlClip WRITE setZlClip NOTIFY zlClipChanged)
     /**
      * \brief A reference to the sketchpad Scene object this Pattern is associated with
      */
@@ -487,18 +487,18 @@ public:
     void setSketchpadTrack(int sketchpadTrack);
     Q_SIGNAL void sketchpadTrackChanged();
     /**
-     * \brief The index of the part of the sketchpad track this pattern belongs to
-     * @return The index of the part of the sketchpad track this pattern belongs to (-1 if note assigned)
+     * \brief The index of the clip of the sketchpad track this pattern belongs to
+     * @return The index of the clip of the sketchpad track this pattern belongs to (-1 if note assigned)
      */
-    int partIndex() const;
-    QString partName() const;
+    int clipIndex() const;
+    QString clipName() const;
     /**
-     * \brief Set the index of the part of the sketchpad track this pattern belongs to
+     * \brief Set the index of the clip on the sketchpad track this pattern belongs to
      * @note This value is not checked and multiple patterns in the same channel can carry the same index (though usually won't)
-     * @param The index of the part of the sketchpad track this pattern belongs to
+     * @param The index of the clip on the sketchpad track this pattern belongs to
      */
-    void setPartIndex(int partIndex);
-    Q_SIGNAL void partIndexChanged();
+    void setClipIndex(int clipIndex);
+    Q_SIGNAL void clipIndexChanged();
 
     QString thumbnailUrl() const;
     Q_SIGNAL void thumbnailUrlChanged();
@@ -662,9 +662,9 @@ public:
     QObject *zlChannel() const;
     void setZlChannel(QObject *zlChannel);
     Q_SIGNAL void zlChannelChanged();
-    QObject *zlPart() const;
-    void setZlPart(QObject *zlPart);
-    Q_SIGNAL void zlPartChanged();
+    QObject *zlClip() const;
+    void setZlClip(QObject *zlClip);
+    Q_SIGNAL void zlClipChanged();
     QObject *zlScene() const;
     void setZlScene(QObject *zlScene);
     Q_SIGNAL void zlSceneChanged();

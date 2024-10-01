@@ -67,9 +67,9 @@ class Plugin : public QObject {
      */
     Q_PROPERTY(int sketchpadTrackCount READ sketchpadTrackCount CONSTANT)
     /**
-     * \brief The amount of Parts in a Zynthbox Track
+     * \brief The amount of slots on a Zynthbox Track (whether it's clips, sound slots, or fx slots)
      */
-    Q_PROPERTY(int sketchpadPartCount READ sketchpadPartCount CONSTANT)
+    Q_PROPERTY(int sketchpadSlotCount READ sketchpadSlotCount CONSTANT)
     /**
      * \brief The number of positions held by a ClipAudioSourcePositionsModel
      */
@@ -106,7 +106,7 @@ public:
     QList<QList<JackPassthrough*>> fxPassthroughClients() const;
     int sketchpadSongCount() const;
     int sketchpadTrackCount() const;
-    int sketchpadPartCount() const;
+    int sketchpadSlotCount() const;
     int clipMaximumPositionCount() const;
 
     QQmlEngine *qmlEngine() const;

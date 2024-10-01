@@ -22,7 +22,7 @@ MidiRouterFilterEntry::MidiRouterFilterEntry(MidiRouterDevice* routerDevice, Mid
     connect(this, &MidiRouterFilterEntry::byte3MaximumChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
     connect(this, &MidiRouterFilterEntry::cuiaEventChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
     connect(this, &MidiRouterFilterEntry::originTrackChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
-    connect(this, &MidiRouterFilterEntry::originPartChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
+    connect(this, &MidiRouterFilterEntry::originSlotChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
     connect(this, &MidiRouterFilterEntry::valueMinimumChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
     connect(this, &MidiRouterFilterEntry::valueMaximumChanged, descriptionThrottle, QOverload<>::of(&QTimer::start));
 }
@@ -340,10 +340,10 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::ToggleTrackSoloedEvent:
                         // Toggle the soloed state of the given track
                     case CUIAHelper::SetClipCurrentEvent:
-                        // Sets the given part as the currently visible one (if given a specific track, this will also change the track)
+                        // Sets the given clip as the currently visible one (if given a specific track, this will also change the track)
                     case CUIAHelper::ToggleClipEvent:
-                        // Toggle the given part's active state
-                        m_routerDevice->cuiaRing.write(rule->m_cuiaEvent, m_routerDevice->id(), rule->m_cuiaTrack, rule->m_cuiaPart);
+                        // Toggle the given clip's active state
+                        m_routerDevice->cuiaRing.write(rule->m_cuiaEvent, m_routerDevice->id(), rule->m_cuiaTrack, rule->m_cuiaSlot);
                         break;
                     // These all need a value, so do the calculation work for them
                     case CUIAHelper::SwitchPressedEvent:
@@ -359,9 +359,9 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::SetTrackVolumeEvent:
                         // Set the given track's volume to the given value
                     case CUIAHelper::SetClipCurrentRelativeEvent:
-                        // Sets the part represented by the relative value, split evenly across the 128 values, as the currently visible one (if given a specific track, this will also change the track)
+                        // Sets the clip represented by the relative value, split evenly across the 128 values, as the currently visible one (if given a specific track, this will also change the track)
                     case CUIAHelper::SetClipActiveStateEvent:
-                        // Sets the part to either active or inactive (value of 0 is active, 1 is inactive, 2 is that it will be inactive on the next beat, 3 is that it will be active on the next bar)
+                        // Sets the clip to either active or inactive (value of 0 is active, 1 is inactive, 2 is that it will be inactive on the next beat, 3 is that it will be active on the next bar)
                     case CUIAHelper::SetTrackPanEvent:
                         // Set the given track's pan to the given value
                     case CUIAHelper::SetTrackSend1AmountEvent:
@@ -369,25 +369,25 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::SetTrackSend2AmountEvent:
                         // Set the given track's send 2 amount to the given value
                     case CUIAHelper::SetSlotGainEvent:
-                        // Set the gain of the given part to the given value
+                        // Set the gain of the given sound slot to the given value
                     case CUIAHelper::SetSlotPanEvent:
-                        // Set the pan of the given part to the given value
+                        // Set the pan of the given sound slot to the given value
                     case CUIAHelper::SetFxAmountEvent:
                         // Set the wet/dry mix for the given fx
                     case CUIAHelper::SetTrackClipActiveRelativeEvent:
-                        // Sets the currently active track and part according to the given value (the parts are spread evenly across the 128 possible values, sequentially by track order)
+                        // Sets the currently active track and clip according to the given value (the clips are spread evenly across the 128 possible values, sequentially by track order)
                         switch (rule->m_cuiaValue) {
                             case MidiRouterFilterEntryRewriter::ValueEventChannel:
-                                m_routerDevice->cuiaRing.write(rule->m_cuiaEvent, m_routerDevice->id(), rule->m_cuiaTrack, rule->m_cuiaPart, eventChannel);
+                                m_routerDevice->cuiaRing.write(rule->m_cuiaEvent, m_routerDevice->id(), rule->m_cuiaTrack, rule->m_cuiaSlot, eventChannel);
                                 break;
                             case MidiRouterFilterEntryRewriter::ValueByte1:
-                                m_routerDevice->cuiaRing.write(rule->m_cuiaEvent, m_routerDevice->id(), rule->m_cuiaTrack, rule->m_cuiaPart, event.buffer[0]);
+                                m_routerDevice->cuiaRing.write(rule->m_cuiaEvent, m_routerDevice->id(), rule->m_cuiaTrack, rule->m_cuiaSlot, event.buffer[0]);
                                 break;
                             case MidiRouterFilterEntryRewriter::ValueByte2:
-                                m_routerDevice->cuiaRing.write(rule->m_cuiaEvent, m_routerDevice->id(), rule->m_cuiaTrack, rule->m_cuiaPart, event.buffer[1]);
+                                m_routerDevice->cuiaRing.write(rule->m_cuiaEvent, m_routerDevice->id(), rule->m_cuiaTrack, rule->m_cuiaSlot, event.buffer[1]);
                                 break;
                             case MidiRouterFilterEntryRewriter::ValueByte3:
-                                m_routerDevice->cuiaRing.write(rule->m_cuiaEvent, m_routerDevice->id(), rule->m_cuiaTrack, rule->m_cuiaPart, event.buffer[2]);
+                                m_routerDevice->cuiaRing.write(rule->m_cuiaEvent, m_routerDevice->id(), rule->m_cuiaTrack, rule->m_cuiaSlot, event.buffer[2]);
                                 break;
                             case MidiRouterFilterEntryRewriter::ExplicitValue0:
                             case MidiRouterFilterEntryRewriter::ExplicitValue1:
@@ -517,7 +517,7 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                             case MidiRouterFilterEntryRewriter::ExplicitValue125:
                             case MidiRouterFilterEntryRewriter::ExplicitValue126:
                             case MidiRouterFilterEntryRewriter::ExplicitValue127:
-                                m_routerDevice->cuiaRing.write(rule->m_cuiaEvent, m_routerDevice->id(), rule->m_cuiaTrack, rule->m_cuiaPart, int(rule->m_cuiaValue));
+                                m_routerDevice->cuiaRing.write(rule->m_cuiaEvent, m_routerDevice->id(), rule->m_cuiaTrack, rule->m_cuiaSlot, int(rule->m_cuiaValue));
                                 break;
                         }
                         break;
@@ -545,11 +545,11 @@ void MidiRouterFilterEntry::writeEventToDevice(MidiRouterDevice* device) const
     }
 }
 
-bool MidiRouterFilterEntry::matchCommand(const CUIAHelper::Event& cuiaEvent, const ZynthboxBasics::Track& track, const ZynthboxBasics::Part& part, const int& value) const
+bool MidiRouterFilterEntry::matchCommand(const CUIAHelper::Event& cuiaEvent, const ZynthboxBasics::Track& track, const ZynthboxBasics::Slot& slot, const int& value) const
 {
     if (m_cuiaEvent == cuiaEvent) {
         if (m_originTrack == ZynthboxBasics::AnyTrack || m_originTrack == track) {
-            if (m_originPart == ZynthboxBasics::AnyPart || m_originPart == part) {
+            if (m_originSlot == ZynthboxBasics::AnySlot || m_originSlot == slot) {
                 if (m_valueMinimum <= value && value <= m_valueMaximum) {
                     return true;
                 }
@@ -720,16 +720,16 @@ void MidiRouterFilterEntry::setOriginTrack(const ZynthboxBasics::Track& originTr
     }
 }
 
-ZynthboxBasics::Part MidiRouterFilterEntry::originPart() const
+ZynthboxBasics::Slot MidiRouterFilterEntry::originSlot() const
 {
-    return m_originPart;
+    return m_originSlot;
 }
 
-void MidiRouterFilterEntry::setOriginPart(const ZynthboxBasics::Part& originPart)
+void MidiRouterFilterEntry::setOriginSlot(const ZynthboxBasics::Slot& originSlot)
 {
-    if (m_originPart != originPart) {
-        m_originPart = originPart;
-        Q_EMIT originPartChanged();
+    if (m_originSlot != originSlot) {
+        m_originSlot = originSlot;
+        Q_EMIT originSlotChanged();
     }
 }
 
@@ -866,9 +866,9 @@ QString MidiRouterFilterEntry::description() const
         }
     } else {
         if (m_valueMinimum == m_valueMaximum) {
-            description = CUIAHelper::instance()->describe(m_cuiaEvent, m_originTrack, m_originPart, m_valueMinimum);
+            description = CUIAHelper::instance()->describe(m_cuiaEvent, m_originTrack, m_originSlot, m_valueMinimum);
         } else {
-            description = CUIAHelper::instance()->describe(m_cuiaEvent, m_originTrack, m_originPart, m_valueMinimum, m_valueMaximum);
+            description = CUIAHelper::instance()->describe(m_cuiaEvent, m_originTrack, m_originSlot, m_valueMinimum, m_valueMaximum);
         }
         if (m_rewriteRules.count() == 0) {
             description = QString("%1 with no rewrite rules (no midi events will be sent to the device)").arg(description);

@@ -134,7 +134,7 @@ public:
         {CUIAHelper::SetSlotGainEvent, QLatin1String{"Set Sound Slot Gain"}}, ///@< Set the gain of the given sound slot to the given value
         {CUIAHelper::SetSlotPanEvent, QLatin1String{"Set Sound Slot Pan"}}, ///@< Set the pan of the given sound slot to the given value
         {CUIAHelper::SetFxAmountEvent, QLatin1String{"Set FX Amount"}}, ///@< Set the wet/dry mix for the given fx slot to the given value
-        {CUIAHelper::SetTrackClipActiveRelativeEvent, QLatin1String{"Set Relatively Indicated Track and Clip as Current"}}, ///@< Sets the currently active track and clip according to the given value (the parts are spread evenly across the 128 possible values, sequentially by track order)
+        {CUIAHelper::SetTrackClipActiveRelativeEvent, QLatin1String{"Set Relatively Indicated Track and Clip as Current"}}, ///@< Sets the currently active track and clip according to the given value (the clips are spread evenly across the 128 possible values, sequentially by track order)
     };
     const QHash<CUIAHelper::Event, QString> commands{
         {CUIAHelper::NoCuiaEvent, QLatin1String{"NONE"}},
@@ -268,7 +268,7 @@ public:
         {CUIAHelper::SetSlotGainEvent, QLatin1String{"SET_SLOT_GAIN"}}, ///@< Set the gain of the given sound slot to the given value
         {CUIAHelper::SetSlotPanEvent, QLatin1String{"SET_SLOT_PAN"}}, ///@< Set the pan of the given sound slot to the given value
         {CUIAHelper::SetFxAmountEvent, QLatin1String{"SET_FX_AMOUNT"}}, ///@< Set the wet/dry mix for the given fx to the given value
-        {CUIAHelper::SetTrackClipActiveRelativeEvent, QLatin1String{"SET_TRACK_AND_CLIP_CURRRENT_RELATIVE"}}, ///@< Sets the currently active track and clip according to the given value (the parts are spread evenly across the 128 possible values, sequentially by track order)
+        {CUIAHelper::SetTrackClipActiveRelativeEvent, QLatin1String{"SET_TRACK_AND_CLIP_CURRRENT_RELATIVE"}}, ///@< Sets the currently active track and clip according to the given value (the clips are spread evenly across the 128 possible values, sequentially by track order)
     };
 };
 
@@ -324,9 +324,9 @@ bool CUIAHelper::cuiaEventWantsATrack(const Event& cuiaEvent) const
     return false;
 }
 
-bool CUIAHelper::cuiaEventWantsAPart(const Event& cuiaEvent) const
+bool CUIAHelper::cuiaEventWantsASlot(const Event& cuiaEvent) const
 {
-    static const QList<Event> eventsThatWantAPart{
+    static const QList<Event> eventsThatWantASlot{
         SetClipCurrentEvent,
         ToggleClipEvent,
         SetClipActiveStateEvent,
@@ -334,7 +334,43 @@ bool CUIAHelper::cuiaEventWantsAPart(const Event& cuiaEvent) const
         SetSlotPanEvent,
         SetFxAmountEvent,
     };
-    if (eventsThatWantAPart.contains(cuiaEvent)) {
+    if (eventsThatWantASlot.contains(cuiaEvent)) {
+        return true;
+    }
+    return false;
+}
+
+bool CUIAHelper::cuiaEventWantsAClip(const Event& cuiaEvent) const
+{
+    static const QList<Event> eventsThatWantAClip{
+        SetClipCurrentEvent,
+        ToggleClipEvent,
+        SetClipActiveStateEvent,
+    };
+    if (eventsThatWantAClip.contains(cuiaEvent)) {
+        return true;
+    }
+    return false;
+}
+
+bool CUIAHelper::cuiaEventWantsASoundSlot(const Event& cuiaEvent) const
+{
+    static const QList<Event> eventsThatWantASoundSlot{
+        SetSlotGainEvent,
+        SetSlotPanEvent,
+    };
+    if (eventsThatWantASoundSlot.contains(cuiaEvent)) {
+        return true;
+    }
+    return false;
+}
+
+bool CUIAHelper::cuiaEventWantsAnFxSlot(const Event& cuiaEvent) const
+{
+    static const QList<Event> eventsThatWantAnFxSlot{
+        SetFxAmountEvent,
+    };
+    if (eventsThatWantAnFxSlot.contains(cuiaEvent)) {
         return true;
     }
     return false;
@@ -373,7 +409,7 @@ static inline float relativeCCValue(const int &ccValue) {
     return float(std::clamp(ccValue, 0, 127)) / 127.0f;
 }
 
-QString CUIAHelper::describe(const Event& cuiaEvent, const ZynthboxBasics::Track& track, const ZynthboxBasics::Part& part, const int& value, const int &upperValue) const
+QString CUIAHelper::describe(const Event& cuiaEvent, const ZynthboxBasics::Track& track, const ZynthboxBasics::Slot& slot, const int& value, const int &upperValue) const
 {
     if (cuiaEvent == CUIAHelper::SwitchPressedEvent) {
         return QString{"Switch %1 Pressed"}.arg(switchName(value)); // This wants to be named - a getter for switch names by index probably
@@ -427,68 +463,68 @@ QString CUIAHelper::describe(const Event& cuiaEvent, const ZynthboxBasics::Track
     } else if (cuiaEvent == CUIAHelper::SetTrackSend2AmountEvent) {
         return QString{"Set %1 Send FX 2 amount to %2%"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(int(100 * relativeCCValue(value)));
     } else if (cuiaEvent == CUIAHelper::ToggleClipEvent) {
-        return QString{"Toggle %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->clipLabelText(part));
+        return QString{"Toggle %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->clipLabelText(slot));
     } else if (cuiaEvent == CUIAHelper::ActivateTrackEvent) {
         switch(value) {
             default:
             case 0:
-                return QString{"Activate %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->clipLabelText(part));
+                return QString{"Activate %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->clipLabelText(slot));
                 break;
             case 1:
-                return QString{"Deactivate %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->clipLabelText(part));
+                return QString{"Deactivate %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->clipLabelText(slot));
                 break;
             case 2:
-                return QString{"Activate %2 on %1 Next Bar"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->clipLabelText(part));
+                return QString{"Activate %2 on %1 Next Bar"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->clipLabelText(slot));
                 break;
             case 3:
-                return QString{"Deactivate %2 on %1 Next Bar"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->clipLabelText(part));
+                return QString{"Deactivate %2 on %1 Next Bar"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->clipLabelText(slot));
                 break;
         }
     } else if (cuiaEvent == CUIAHelper::SetClipCurrentEvent) {
-        return QString{"Select %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->clipLabelText(part));
+        return QString{"Select %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->clipLabelText(slot));
     } else if (cuiaEvent == CUIAHelper::SetClipCurrentRelativeEvent) {
-        static const float partDivisor{128.0f / float(ZynthboxPartCount)};
-        const ZynthboxBasics::Part firstPart{ZynthboxBasics::Part(float(value) / partDivisor)};
+        static const float slotDivisor{128.0f / float(ZynthboxSlotCount)};
+        const ZynthboxBasics::Slot firstSlot{ZynthboxBasics::Slot(float(value) / slotDivisor)};
         if (upperValue == -1) {
-            const ZynthboxBasics::Part secondPart{ZynthboxBasics::Part(float(upperValue) / partDivisor)};
+            const ZynthboxBasics::Slot secondSlot{ZynthboxBasics::Slot(float(upperValue) / slotDivisor)};
             return QString{"Activate %1 on %2 through %4 on %3 (relatively)"}
-                .arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->clipLabelText(firstPart))
-                .arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->clipLabelText(secondPart));
+                .arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->clipLabelText(firstSlot))
+                .arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->clipLabelText(secondSlot));
         } else {
-            return QString{"Activate %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->clipLabelText(firstPart)); // this is a silly thing to do, but we should make the description read reasonably anyway
+            return QString{"Activate %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->clipLabelText(firstSlot)); // this is a silly thing to do, but we should make the description read reasonably anyway
         }
     } else if (cuiaEvent == CUIAHelper::SetSlotGainEvent) {
         if (upperValue == -1) {
-            return QString{"Set Gain to %3% for %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->slotLabelText(part)).arg(int(100 * relativeCCValue(value)));
+            return QString{"Set Gain to %3% for %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->soundSlotLabelText(slot)).arg(int(100 * relativeCCValue(value)));
         } else {
-            return QString{"Set Gain to between %3% and %4% for %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->slotLabelText(part)).arg(int(100 * relativeCCValue(value))).arg(int(100 * relativeCCValue(upperValue)));
+            return QString{"Set Gain to between %3% and %4% for %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->soundSlotLabelText(slot)).arg(int(100 * relativeCCValue(value))).arg(int(100 * relativeCCValue(upperValue)));
         }
     } else if (cuiaEvent == CUIAHelper::SetSlotPanEvent) {
         if (upperValue == -1) {
-            return QString{"Set Pan to %3% for %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->slotLabelText(part)).arg(int(100 * relativeCCValue(value)));
+            return QString{"Set Pan to %3% for %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->soundSlotLabelText(slot)).arg(int(100 * relativeCCValue(value)));
         } else {
-            return QString{"Set Pan to between %3% and %4% for %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->slotLabelText(part)).arg(int(100 * relativeCCValue(value))).arg(int(100 * relativeCCValue(upperValue)));
+            return QString{"Set Pan to between %3% and %4% for %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->soundSlotLabelText(slot)).arg(int(100 * relativeCCValue(value))).arg(int(100 * relativeCCValue(upperValue)));
         }
     } else if (cuiaEvent == CUIAHelper::SetFxAmountEvent) {
         if (upperValue == -1) {
-            return QString{"Set wet/dry mix to %3% for %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->fxLabelText(part)).arg(int(100 * centeredRelativeCCValue(value)));
+            return QString{"Set wet/dry mix to %3% for %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->fxLabelText(slot)).arg(int(100 * centeredRelativeCCValue(value)));
         } else {
-            return QString{"Set wet/dry mix to between %3% and %4% for %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->fxLabelText(part)).arg(int(100 * centeredRelativeCCValue(value))).arg(int(100 * centeredRelativeCCValue(upperValue)));
+            return QString{"Set wet/dry mix to between %3% and %4% for %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(track)).arg(ZynthboxBasics::instance()->fxLabelText(slot)).arg(int(100 * centeredRelativeCCValue(value))).arg(int(100 * centeredRelativeCCValue(upperValue)));
         }
     } else if (cuiaEvent == CUIAHelper::SetTrackClipActiveRelativeEvent) {
-        static const float partDivisor{128.0f / float(ZynthboxTrackCount * ZynthboxPartCount)};
-        const int cumulativePart{int(float(value) / partDivisor)};
-        const ZynthboxBasics::Track firstTrack{ZynthboxBasics::Track(cumulativePart / ZynthboxPartCount)};
-        const ZynthboxBasics::Part firstPart{ZynthboxBasics::Part(cumulativePart - (firstTrack * ZynthboxPartCount))};
+        static const float slotDivisor{128.0f / float(ZynthboxTrackCount * ZynthboxSlotCount)};
+        const int cumulativeSlot{int(float(value) / slotDivisor)};
+        const ZynthboxBasics::Track firstTrack{ZynthboxBasics::Track(cumulativeSlot / ZynthboxSlotCount)};
+        const ZynthboxBasics::Slot firstSlot{ZynthboxBasics::Slot(cumulativeSlot - (firstTrack * ZynthboxSlotCount))};
         if (upperValue == -1) {
-            const int cumulativePart2{int(float(upperValue) / partDivisor)};
-            const ZynthboxBasics::Track secondTrack{ZynthboxBasics::Track(cumulativePart2 / ZynthboxPartCount)};
-            const ZynthboxBasics::Part secondPart{ZynthboxBasics::Part(cumulativePart2 - (firstTrack * ZynthboxPartCount))};
+            const int cumulativeSlot2{int(float(upperValue) / slotDivisor)};
+            const ZynthboxBasics::Track secondTrack{ZynthboxBasics::Track(cumulativeSlot2 / ZynthboxSlotCount)};
+            const ZynthboxBasics::Slot secondSlot{ZynthboxBasics::Slot(cumulativeSlot2 - (firstTrack * ZynthboxSlotCount))};
             return QString{"Activate %1 on %2 through %4 on %3 (relatively)"}
-                .arg(ZynthboxBasics::instance()->trackLabelText(firstTrack)).arg(ZynthboxBasics::instance()->clipLabelText(firstPart))
-                .arg(ZynthboxBasics::instance()->trackLabelText(secondTrack)).arg(ZynthboxBasics::instance()->clipLabelText(secondPart));
+                .arg(ZynthboxBasics::instance()->trackLabelText(firstTrack)).arg(ZynthboxBasics::instance()->clipLabelText(firstSlot))
+                .arg(ZynthboxBasics::instance()->trackLabelText(secondTrack)).arg(ZynthboxBasics::instance()->clipLabelText(secondSlot));
         } else {
-            return QString{"Activate %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(firstTrack)).arg(ZynthboxBasics::instance()->clipLabelText(firstPart)); // this is a silly thing to do, but we should make the description read reasonably anyway
+            return QString{"Activate %2 on %1"}.arg(ZynthboxBasics::instance()->trackLabelText(firstTrack)).arg(ZynthboxBasics::instance()->clipLabelText(firstSlot)); // this is a silly thing to do, but we should make the description read reasonably anyway
         }
     } else {
         return cuiaTitle(cuiaEvent);

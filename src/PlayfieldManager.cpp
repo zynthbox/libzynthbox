@@ -45,11 +45,11 @@ struct ClipState {
 struct TrackState {
     TrackState() {}
     void reset(qint64 resetOffset = 0) {
-        for (int part = 0; part < ZynthboxPartCount; ++part) {
-            clips[part].reset(resetOffset);
+        for (int clipIndex = 0; clipIndex < ZynthboxSlotCount; ++clipIndex) {
+            clips[clipIndex].reset(resetOffset);
         }
     }
-    ClipState clips[ZynthboxPartCount];
+    ClipState clips[ZynthboxSlotCount];
 };
 
 struct SongState {
@@ -113,8 +113,8 @@ public:
     QTimer clipUpdateThrottle;
     QObject *zlSketchpad{nullptr};
     PatternModel::NoteDestination destinations[ZynthboxSongCount][ZynthboxTrackCount];
-    QObject *clips[ZynthboxSongCount][ZynthboxTrackCount][ZynthboxPartCount];
-    ClipAudioSource *sketches[ZynthboxSongCount][ZynthboxTrackCount][ZynthboxPartCount];
+    QObject *clips[ZynthboxSongCount][ZynthboxTrackCount][ZynthboxSlotCount];
+    ClipAudioSource *sketches[ZynthboxSongCount][ZynthboxTrackCount][ZynthboxSlotCount];
 
     void setZlSketchpad(QObject *newZlSketchpad) {
 //         qDebug() << "Setting new sketchpad" << newZlSketchpad;
@@ -156,9 +156,9 @@ public Q_SLOTS:
                     } else { // or in other words "if (trackType == synth)"
                         destinations[songIndex][trackIndex] = PatternModel::SynthDestination;
                     }
-                    for (int clipIndex = 0; clipIndex < ZynthboxPartCount; ++clipIndex) {
+                    for (int clipIndex = 0; clipIndex < ZynthboxSlotCount; ++clipIndex) {
                         QObject *clip{nullptr};
-                        QMetaObject::invokeMethod(zlSketchpad, "getClipByPart", Qt::DirectConnection, Q_RETURN_ARG(QObject*, clip), Q_ARG(int, trackIndex), Q_ARG(int, songIndex), Q_ARG(int, clipIndex));
+                        QMetaObject::invokeMethod(zlSketchpad, "getClipById", Qt::DirectConnection, Q_RETURN_ARG(QObject*, clip), Q_ARG(int, trackIndex), Q_ARG(int, songIndex), Q_ARG(int, clipIndex));
                         if (clips[songIndex][trackIndex][clipIndex]) {
                             clips[songIndex][trackIndex][clipIndex]->disconnect(&clipUpdateThrottle);
                         }
@@ -177,7 +177,7 @@ public Q_SLOTS:
             for (int songIndex = 0; songIndex < ZynthboxSongCount; ++songIndex) {
                 for (int trackIndex = 0; trackIndex < ZynthboxTrackCount; ++trackIndex) {
                     destinations[songIndex][trackIndex] = PatternModel::SynthDestination;
-                    for (int clipIndex = 0; clipIndex < ZynthboxPartCount; ++clipIndex) {
+                    for (int clipIndex = 0; clipIndex < ZynthboxSlotCount; ++clipIndex) {
                         clips[songIndex][trackIndex][clipIndex] = nullptr;
                         sketches[songIndex][trackIndex][clipIndex] = nullptr;
                     }
@@ -195,7 +195,7 @@ void PlayfieldManagerPrivate::handlePlaybackProgress()
         if (playhead == 0 || (playhead % barLength) == 0) {
             for (int songIndex = 0; songIndex < ZynthboxSongCount; ++songIndex) {
                 for (int trackIndex = 0; trackIndex < ZynthboxTrackCount; ++trackIndex) {
-                    for (int clipIndex = 0; clipIndex < ZynthboxPartCount; ++clipIndex) {
+                    for (int clipIndex = 0; clipIndex < ZynthboxSlotCount; ++clipIndex) {
                         handlePlayfieldStateChange(songIndex, trackIndex, clipIndex);
                     }
                 }
@@ -250,18 +250,18 @@ PlayfieldManager::PlayfieldManager(QObject* parent)
 {
     d->zlSyncManager = new ZLPlayfieldManagerSynchronisationManager(d, this);
     connect(this, &PlayfieldManager::playfieldStateChanged, this, [](const int &/*sketchpadSong*/, const int &sketchpadTrack, const int &clip, const int &position, const int &state){
-        static const QLatin1String setPartActiveState{"SET_PART_ACTIVE_STATE"};
+        static const QLatin1String setClipActiveState{"SET_CLIP_ACTIVE_STATE"};
         if (position == CurrentPosition) {
             if (state == StoppedState) {
-                MidiRouter::instance()->cuiaEventFeedback(setPartActiveState, -1, ZynthboxBasics::Track(sketchpadTrack), ZynthboxBasics::Part(clip), 0);
+                MidiRouter::instance()->cuiaEventFeedback(setClipActiveState, -1, ZynthboxBasics::Track(sketchpadTrack), ZynthboxBasics::Slot(clip), 0);
             } else {
-                MidiRouter::instance()->cuiaEventFeedback(setPartActiveState, -1, ZynthboxBasics::Track(sketchpadTrack), ZynthboxBasics::Part(clip), 1);
+                MidiRouter::instance()->cuiaEventFeedback(setClipActiveState, -1, ZynthboxBasics::Track(sketchpadTrack), ZynthboxBasics::Slot(clip), 1);
             }
         } else {
             if (state == StoppedState) {
-                MidiRouter::instance()->cuiaEventFeedback(setPartActiveState, -1, ZynthboxBasics::Track(sketchpadTrack), ZynthboxBasics::Part(clip), 2);
+                MidiRouter::instance()->cuiaEventFeedback(setClipActiveState, -1, ZynthboxBasics::Track(sketchpadTrack), ZynthboxBasics::Slot(clip), 2);
             } else {
-                MidiRouter::instance()->cuiaEventFeedback(setPartActiveState, -1, ZynthboxBasics::Track(sketchpadTrack), ZynthboxBasics::Part(clip), 3);
+                MidiRouter::instance()->cuiaEventFeedback(setClipActiveState, -1, ZynthboxBasics::Track(sketchpadTrack), ZynthboxBasics::Slot(clip), 3);
             }
         }
     });
@@ -288,7 +288,7 @@ QObject * PlayfieldManager::sketchpad() const
 void PlayfieldManager::setClipPlaystate(const int& sketchpadSong, const int& sketchpadTrack, const int& clip, const PlaybackState& newState, const PlayfieldStatePosition& position, const qint64 &offset)
 {
     // qDebug() << Q_FUNC_INFO << sketchpadSong << sketchpadTrack << clip << newState << position;
-    if (-1 < sketchpadSong && sketchpadSong < ZynthboxSongCount && -1 < sketchpadTrack && sketchpadTrack < ZynthboxTrackCount && -1 < clip && clip < ZynthboxPartCount) {
+    if (-1 < sketchpadSong && sketchpadSong < ZynthboxSongCount && -1 < sketchpadTrack && sketchpadTrack < ZynthboxTrackCount && -1 < clip && clip < ZynthboxSlotCount) {
         ClipState &nextBarClip = d->nextBarState.songs[sketchpadSong].tracks[sketchpadTrack].clips[clip];
         const bool playbackStateDiffers{nextBarClip.state != newState};
         const bool offsetNeedsAdjusting{offset > -1};
@@ -310,7 +310,7 @@ void PlayfieldManager::setClipPlaystate(const int& sketchpadSong, const int& ske
 
 const PlayfieldManager::PlaybackState PlayfieldManager::clipPlaystate(const int& sketchpadSong, const int& sketchpadTrack, const int& clip, const PlayfieldStatePosition& position) const
 {
-    if (-1 < sketchpadSong && sketchpadSong < ZynthboxSongCount && -1 < sketchpadTrack && sketchpadTrack < ZynthboxTrackCount && -1 < clip && clip < ZynthboxPartCount) {
+    if (-1 < sketchpadSong && sketchpadSong < ZynthboxSongCount && -1 < sketchpadTrack && sketchpadTrack < ZynthboxTrackCount && -1 < clip && clip < ZynthboxSlotCount) {
         switch (position) {
             case NextBarPosition:
                 return d->nextBarState.songs[sketchpadSong].tracks[sketchpadTrack].clips[clip].state;
@@ -326,7 +326,7 @@ const PlayfieldManager::PlaybackState PlayfieldManager::clipPlaystate(const int&
 
 const qint64 PlayfieldManager::clipOffset(const int& sketchpadSong, const int& sketchpadTrack, const int& clip) const
 {
-    if (-1 < sketchpadSong && sketchpadSong < ZynthboxSongCount && -1 < sketchpadTrack && sketchpadTrack < ZynthboxTrackCount && -1 < clip && clip < ZynthboxPartCount) {
+    if (-1 < sketchpadSong && sketchpadSong < ZynthboxSongCount && -1 < sketchpadTrack && sketchpadTrack < ZynthboxTrackCount && -1 < clip && clip < ZynthboxSlotCount) {
         return d->currentState.songs[sketchpadSong].tracks[sketchpadTrack].clips[clip].offset;
     }
     return 0;

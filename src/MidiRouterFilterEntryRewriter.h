@@ -14,7 +14,7 @@ class MidiRouterFilterEntry;
  * For output filters:
  * Only size and byte values are relevant, as output rules define which messages are sent based on a cuia event (so rule type is irrelevant here)
  * The AddChannel toggles will add the incoming cuia event's track index to that byte (converting the CurrentTrack value to the actual track index)
- * To use the value on an event byte, use OriginalByte3 (track and part are bytes 1 and 2 respectively, but those aren't likely to be the most useful)
+ * To use the value on an event byte, use OriginalByte3 (track and slot are bytes 1 and 2 respectively, but those aren't likely to be the most useful)
  * EventSizeSame and EventSize3 are considered synonymous for output filter rules
  */
 class MidiRouterFilterEntryRewriter : public QObject
@@ -57,7 +57,7 @@ class MidiRouterFilterEntryRewriter : public QObject
      */
     Q_PROPERTY(CUIAHelper::Event cuiaEvent READ cuiaEvent WRITE setCuiaEvent NOTIFY cuiaEventChanged)
     Q_PROPERTY(ZynthboxBasics::Track cuiaTrack READ cuiaTrack WRITE setCuiaTrack NOTIFY cuiaTrackChanged)
-    Q_PROPERTY(ZynthboxBasics::Part cuiaPart READ cuiaPart WRITE setCuiaPart NOTIFY cuiaPartChanged)
+    Q_PROPERTY(ZynthboxBasics::Slot cuiaSlot READ cuiaSlot WRITE setCuiaSlot NOTIFY cuiaSlotChanged)
     Q_PROPERTY(MidiRouterFilterEntryRewriter::ValueSpecifier cuiaValue READ cuiaValue WRITE setCuiaValue NOTIFY cuiaValueChanged)
 
     /**
@@ -385,9 +385,9 @@ public:
     ZynthboxBasics::Track cuiaTrack() const;
     void setCuiaTrack(const ZynthboxBasics::Track &cuiaTrack);
     Q_SIGNAL void cuiaTrackChanged();
-    ZynthboxBasics::Part cuiaPart() const;
-    void setCuiaPart(const ZynthboxBasics::Part &cuiaPart);
-    Q_SIGNAL void cuiaPartChanged();
+    ZynthboxBasics::Slot cuiaSlot() const;
+    void setCuiaSlot(const ZynthboxBasics::Slot &cuiaSlot);
+    Q_SIGNAL void cuiaSlotChanged();
     ValueSpecifier cuiaValue() const;
     void setCuiaValue(const ValueSpecifier &cuiaValue);
     Q_SIGNAL void cuiaValueChanged();
@@ -403,7 +403,7 @@ private:
     bool m_bytesAddChannel[3]{false, false, false};
     CUIAHelper::Event m_cuiaEvent{CUIAHelper::NoCuiaEvent};
     ZynthboxBasics::Track m_cuiaTrack{ZynthboxBasics::CurrentTrack};
-    ZynthboxBasics::Part m_cuiaPart{ZynthboxBasics::CurrentPart};
+    ZynthboxBasics::Slot m_cuiaSlot{ZynthboxBasics::CurrentSlot};
     ValueSpecifier m_cuiaValue{ValueByte3};
     jack_midi_event_t *m_bufferEvent{nullptr};
 };

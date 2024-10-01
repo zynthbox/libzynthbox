@@ -179,20 +179,20 @@ public:
      * @param cuiaCommand The command that should be called
      * @param originId The ID of the MidiRouter device which requested that this event be fired
      * @param track The sketchpad track this applies to (where relevant)
-     * @param part The sketchpad part this applies to (where relevant)
+     * @param slot The sketchpad slot this applies to (where relevant)
      * @param value The value associated with this command (where relevant) - will be an integer between 0 and 127 inclusive (a midi byte value)
      */
-    Q_SIGNAL void cuiaEvent(const QString &cuiaCommand, const int &originId, const ZynthboxBasics::Track &track, const ZynthboxBasics::Part &part, const int &value);
+    Q_SIGNAL void cuiaEvent(const QString &cuiaCommand, const int &originId, const ZynthboxBasics::Track &track, const ZynthboxBasics::Slot &slot, const int &value);
 #endif
     /**
      * \brief Called from the Ui whenever a cuia command has been consumed
      * @param cuiaCommand The command which was fired
      * @param originId The ID of the MidiRouter device which requested the event be fired (this will be -1 for things which were not done by an external device)
      * @param track The sketchpad track this applies to (where relevant)
-     * @param part The sketchpad part this applies to (where relevant)
+     * @param slot The sketchpad slot this applies to (where relevant)
      * @param value The value associated with this command (where relevant) - this will be an integer between 0 and 127 inclusive (a midi byte value)
      */
-    Q_SLOT void cuiaEventFeedback(const QString &cuiaCommand, const int &originId, const ZynthboxBasics::Track &track, const ZynthboxBasics::Part &part, const int &value);
+    Q_SLOT void cuiaEventFeedback(const QString &cuiaCommand, const int &originId, const ZynthboxBasics::Track &track, const ZynthboxBasics::Slot &slot, const int &value);
 private:
     MidiRouterPrivate *d{nullptr};
 };
