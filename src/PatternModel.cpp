@@ -2169,8 +2169,10 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                 nextStep = (d->patternLength - nextPosition + nextStep) * noteDuration;
                                 d->playfieldManager->setClipPlaystate(d->song, d->sketchpadTrack, d->clipIndex, PlayfieldManager::PlayingState, PlayfieldManager::CurrentPosition, d->playfieldManager->clipOffset(d->song, d->sketchpadTrack, d->clipIndex) + nextStep);
                             }
-                            const int velocity{metaHash.value(velocityString, 64).toInt()};
+                            int velocity{metaHash.value(velocityString, 64).toInt()};
                             if (velocity == 0) {
+                                velocity = 64;
+                            } else if (velocity == -1) {
                                 sendNotes = false;
                             }
                             if (sendNotes) {
