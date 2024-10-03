@@ -69,7 +69,9 @@
         <enum-type name="WaitForOutputResult" />
         <enum-type name="WaitForOutputStream" />
     </object-type>
-    <object-type name="SyncTimer"></object-type>
+    <object-type name="SyncTimer">
+        <enum-type name="DelayPosition" />
+    </object-type>
     <object-type name="MidiRouterDevice">
         <enum-type name="DeviceDirection" />
         <enum-type name="DeviceType" />

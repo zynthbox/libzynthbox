@@ -127,7 +127,7 @@ public:
 
   /**
    * \brief The current beat, where that makes useful sense
-   * @returns An integer from 0 through 128
+   * @returns An integer from 0 through (4 * the multiplier) - 1
    */
   int beat() const;
   /**
@@ -135,6 +135,21 @@ public:
    * @returns The number of times the timer has fired since it was most recently started
    */
   Q_INVOKABLE quint64 cumulativeBeat() const;
+
+  enum DelayPosition {
+    NextBeatPosition,
+    CurrentBeatEndPosition,
+    NextBarPosition,
+    CurrentBarEndPosition,
+  };
+  Q_ENUM(DelayPosition)
+  /**
+   * \brief The amount of time to delay for the given position, given the current playback state
+   * @note This is already adjusted for scheduling ahead amount, so you will not need to worry about that
+   * @param position The position you wish to know how long to delay for to get
+   * @return The amount of timer ticks required to schedule something to that position
+   */
+  Q_INVOKABLE int delayFor(const DelayPosition &position) const;
 
   /**
    * \brief The jack playhead for the most recent playback start event

@@ -1319,6 +1319,26 @@ quint64 SyncTimer::cumulativeBeat() const {
     return d->cumulativeBeat;
 }
 
+int SyncTimer::delayFor(const DelayPosition& position) const
+{
+    int delay{0};
+    if (position == NextBarPosition || position == CurrentBarEndPosition) {
+        delay = TicksPerBar - d->beat;
+        if (position == CurrentBarEndPosition) {
+            --delay;
+        }
+    } else if (position == NextBeatPosition || position == CurrentBeatEndPosition) {
+        delay = BeatSubdivisions - d->beat;
+        while (delay < 0) {
+            delay += BeatSubdivisions;
+        }
+        if (position == CurrentBeatEndPosition) {
+            --delay;
+        }
+    }
+    return delay;
+}
+
 const quint64 & SyncTimer::jackPlayheadAtStart() const
 {
     return d->jackPlayheadAtStart;
