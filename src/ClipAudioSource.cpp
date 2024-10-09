@@ -106,6 +106,11 @@ public:
   float lengthInSeconds = -1;
   int lengthInSamples = -1;
   float lengthInBeats = -1;
+  double loopCrossfadeAmount{0.0};
+  CrossfadingDirection loopStartCrossfadeDirection{CrossfadeOutie};
+  CrossfadingDirection stopCrossfadeDirection{CrossfadeInnie};
+  QList<int> loopFadeAdjustment;
+  QList<int> stopFadeAdjustment;
   ClipAudioSource::PlaybackStyle playbackStyle{ClipAudioSource::NonLoopingPlaybackStyle};
   bool looping{false};
   float loopDelta{0.0f};
@@ -246,6 +251,26 @@ public:
       q->setSpeedRatio(1.0);
     }
   }
+  void updateCrossfadeAmounts() {
+    QList<int> newLoopFadeAdjustment, newStopFadeAdjustment;
+    for (int sliceIndex = -1; sliceIndex < slices; ++sliceIndex) {
+      const double startPositionInSamples{double(q->getStartPositionSamples(sliceIndex) + q->loopDelta())};
+      const double stopPositionInSamples{double(q->getStopPositionSamples(sliceIndex))};
+      const int fadeDurationSamples{int((stopPositionInSamples - startPositionInSamples) * loopCrossfadeAmount)};
+      if (loopStartCrossfadeDirection == CrossfadeInnie) {
+        newLoopFadeAdjustment.append(fadeDurationSamples);
+      } else {
+        newLoopFadeAdjustment.append(-fadeDurationSamples);
+      }
+      if (stopCrossfadeDirection == CrossfadeInnie) {
+        newStopFadeAdjustment.append(-fadeDurationSamples);
+      } else {
+        newStopFadeAdjustment.append(fadeDurationSamples);
+      }
+    }
+    loopFadeAdjustment = newLoopFadeAdjustment;
+    stopFadeAdjustment = newStopFadeAdjustment;
+  }
 private:
   void timerCallback() override;
 };
@@ -290,11 +315,21 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
   });
   SamplerSynth::instance()->registerClip(this);
 
+  connect(this, &ClipAudioSource::loopCrossfadeAmountChanged, this, [this](){ d->updateCrossfadeAmounts(); });
+  connect(this, &ClipAudioSource::loopStartCrossfadeDirectionChanged, this, [this](){ d->updateCrossfadeAmounts(); });
+  connect(this, &ClipAudioSource::stopCrossfadeDirectionChanged, this, [this](){ d->updateCrossfadeAmounts(); });
+  connect(this, &ClipAudioSource::slicesChanged, this, [this](){ d->updateCrossfadeAmounts(); });
+  connect(this, &ClipAudioSource::startPositionChanged, this, [this](){ d->updateCrossfadeAmounts(); });
+  connect(this, &ClipAudioSource::loopDeltaChanged, this, [this](){ d->updateCrossfadeAmounts(); });
+  connect(this, &ClipAudioSource::loopDelta2Changed, this, [this](){ d->updateCrossfadeAmounts(); });
+  connect(this, &ClipAudioSource::lengthChanged, this, [this](){ d->updateCrossfadeAmounts(); });
+
   connect(this, &ClipAudioSource::slicePositionsChanged, this, [&](){
-    d->slicePositionsCache.clear();
+    QList<double> newSlicePositionsCache;
     for (const QVariant &position : d->slicePositions) {
-        d->slicePositionsCache << position.toDouble();
+        newSlicePositionsCache << position.toDouble();
     }
+    d->slicePositionsCache = newSlicePositionsCache;
   });
   setSlices(16);
 
@@ -729,6 +764,54 @@ float ClipAudioSource::getLengthSeconds() const
   return double(d->lengthInSamples) / d->sampleRate;
 }
 
+double ClipAudioSource::loopCrossfadeAmount() const
+{
+  return d->loopCrossfadeAmount;
+}
+
+void ClipAudioSource::setLoopCrossfadeAmount(const double& loopCrossfadeAmount)
+{
+  if (d->loopCrossfadeAmount != loopCrossfadeAmount) {
+    d->loopCrossfadeAmount = std::clamp(loopCrossfadeAmount, 0.0, 0.5);
+    Q_EMIT loopCrossfadeAmountChanged();
+  }
+}
+
+ClipAudioSource::CrossfadingDirection ClipAudioSource::loopStartCrossfadeDirection() const
+{
+  return d->loopStartCrossfadeDirection;
+}
+
+void ClipAudioSource::setLoopStartCrossfadeDirection(const CrossfadingDirection& loopStartCrossfadeDirection)
+{
+  if (d->loopStartCrossfadeDirection != loopStartCrossfadeDirection) {
+    d->loopStartCrossfadeDirection = loopStartCrossfadeDirection;
+    Q_EMIT loopStartCrossfadeDirectionChanged();
+  }
+}
+
+ClipAudioSource::CrossfadingDirection ClipAudioSource::stopCrossfadeDirection() const
+{
+  return d->stopCrossfadeDirection;
+}
+
+void ClipAudioSource::setStopCrossfadeCirection(const CrossfadingDirection& stopCrossfadeDirection)
+{
+  if (d->stopCrossfadeDirection != stopCrossfadeDirection) {
+    d->stopCrossfadeDirection = stopCrossfadeDirection;
+    Q_EMIT stopCrossfadeDirectionChanged();
+  }
+}
+
+int ClipAudioSource::loopFadeAdjustment(const int &slice) const
+{
+  return d->loopFadeAdjustment[slice + 1];
+}
+
+int ClipAudioSource::stopFadeAdjustment(const int &slice) const
+{
+  return d->stopFadeAdjustment[slice + 1];
+}
 
 float ClipAudioSource::getDuration() const {
   return d->audioFile->getLength();

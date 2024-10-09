@@ -117,6 +117,33 @@ class ClipAudioSource : public QObject {
      * @see lengthSamples
      */
     Q_PROPERTY(float lengthSeconds READ getLengthSeconds NOTIFY lengthChanged)
+
+    /**
+     * \brief The amount of the loop duration which is used for crossfading (between none, and half of the loop's duration)
+     * @default 0
+     * @minimum 0
+     * @maximum 0.5
+     */
+    Q_PROPERTY(double loopCrossfadeAmount READ loopCrossfadeAmount WRITE setLoopCrossfadeAmount NOTIFY loopCrossfadeAmountChanged)
+    /**
+     * \brief Whether the crossfade is done using data inside or outside the loop area
+     * When this is set to...
+     * - CrossfadeInnie, the fade will start from the loop start point, and end at the amount inside the loop represented by loopCrossfadeAmount
+     * - CrossfadeOutie, the fade will start backward from the loop start point by the amount represented by loopCrossfadeAmount, and stop at the loop start point
+     * @note If loopStartCrossfadeDirection and stopCrossfadeDirection are set to the same value, the crossfade will cause the loop's playback to change duration over time
+     * @default CrossfadeOutie
+     */
+    Q_PROPERTY(CrossfadingDirection loopStartCrossfadeDirection READ loopStartCrossfadeDirection WRITE setLoopStartCrossfadeDirection NOTIFY loopStartCrossfadeDirectionChanged)
+    /**
+     * \brief Whether the crossfade is done using data from inside or outside the loop area
+     * When this is set to...
+     * - CrossfadeInnie, the fade will start at the position inside the loop backward from the stop point represented by loopCrossfadeAmount, and end at the stop point
+     * - CrossfadeOutie, the fade will start at the stop position, and end loopCrossfadeAmount ahead of the stop position
+     * @note If loopStartCrossfadeDirection and stopCrossfadeDirection are set to the same value, the crossfade will cause the loop's playback to change duration over time
+     * @default CrossfadeInnie
+     */
+    Q_PROPERTY(CrossfadingDirection stopCrossfadeDirection READ stopCrossfadeDirection WRITE setStopCrossfadeCirection NOTIFY stopCrossfadeDirectionChanged)
+
     /**
      * \brief Whether or not this sample should be looped for playback (or single-shot so it auto-stops)
      * This can be overridden by the play function, where looping can be forced
@@ -494,6 +521,23 @@ public:
   float getLengthSeconds() const;
   Q_SIGNAL void lengthChanged();
 
+  void setLoopCrossfadeAmount(const double &loopCrossfadeAmount);
+  double loopCrossfadeAmount() const;
+  Q_SIGNAL void loopCrossfadeAmountChanged();
+  enum CrossfadingDirection {
+    CrossfadeInnie,
+    CrossfadeOutie,
+  };
+  Q_ENUM(CrossfadingDirection)
+  void setLoopStartCrossfadeDirection(const CrossfadingDirection &loopStartCrossfadeDirection);
+  CrossfadingDirection loopStartCrossfadeDirection() const;
+  Q_SIGNAL void loopStartCrossfadeDirectionChanged();
+  void setStopCrossfadeCirection(const CrossfadingDirection &stopCrossfadeDirection);
+  CrossfadingDirection stopCrossfadeDirection() const;
+  Q_SIGNAL void stopCrossfadeDirectionChanged();
+  int loopFadeAdjustment(const int &slice) const;
+  int stopFadeAdjustment(const int &slice) const;
+
   /**
    * \brief Attempt to guess the beats per minute of the given slice
    * @param slice The slice to detect the BPM inside of
@@ -767,3 +811,4 @@ private:
 };
 Q_DECLARE_METATYPE(ClipAudioSource::PlaybackStyle)
 Q_DECLARE_METATYPE(ClipAudioSource::TimeStretchStyle)
+Q_DECLARE_METATYPE(ClipAudioSource::CrossfadingDirection)
