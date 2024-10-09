@@ -64,9 +64,205 @@ public:
     QString name;
 };
 
+#define PlayheadCount 2
+struct PlayheadData {
+public:
+    PlayheadData() {}
+    double sourceSamplePosition{0};
+    // Start, loop, stop, and fade positions are fetched:
+    // - When a playhead is activated
+    // - At an interval no longer than the sample rate (unless the playhead is already fading, at which point simply let it continue)
+    int startPosition{0};
+    int loopPosition{0};
+    int stopPosition{0};
+    // The fade positions are fetched directly from ClipAudioSource, and are calculated there
+    // An "outie" fade for the loop start position begins with gain 0 at the position loopFadeAdjustment back from the loop start position, and reaches gain 1 at the position of the loop's start
+    // An "innie" fade for the loop start position begins with gain 0 at the position of the loop's start, and fades up to gain 1 at loopFadeAdjustment samples forward from the loop's start
+    int loopFadeAdjustment{0}; // Negative for an "outie" fade, positive for an "innie" fade, 0 for no fading
+    // An "innie" fade for the loop stop position begins with gain 1 stopFadeAdjustment samples back from the loop's stop position, and reaches gain 0 at the loop's stop position
+    // An "outie" fade for the loop stop position begins with gain 1 at the loop's stop position, and reaches gain 0 at stopFadeAdjustment samples forward of the loop's stop position
+    int stopFadeAdjustment{0}; // Negative for an "innie" fade, positive for an "outie" fade, 0 for no fading
+    // Pre-calculated sample positions to use for comparison and envelope calculations
+    double attackStartSample{0}, attackEndSample{0}, attackDuration{0}, decayStartSample{0}, decayEndSample{0}, decayDuration{0};
+    double playheadGain{1.0};
+    bool startedNextPlayhead{false};
+    bool active{false};
+    int samplesSinceLastUpdate{0};
+    int sampleRate{48000};
+    const ClipAudioSource *clip{nullptr};
+    const ClipCommand *clipCommand{nullptr};
+    const SamplerSynthSound *sound{nullptr};
+    PlayheadData *nextPlayhead{nullptr};
+    enum PlaybackStartPosition {
+        StartPositionBeginning,
+        StartPositionLoopPoint,
+        StartPositionStopPoint,
+    };
+    PlaybackStartPosition playbackStartPosition{StartPositionBeginning};
+    // Set startFromTheStart to true to begin at gain 1 instead start from the sample's start position (otherwise we start from the loop fade position and apply the attack logic)
+    void start(const ClipAudioSource *theClip, const ClipCommand *theClipCommand, const SamplerSynthSound *theSound, const int &theSampleRate, const PlaybackStartPosition thePlaybackStartPosition) {
+        startedNextPlayhead = false;
+        clip = theClip;
+        clipCommand = theClipCommand;
+        sound = theSound;
+        sampleRate = theSampleRate;
+        playbackStartPosition = thePlaybackStartPosition;
+        active = true;
+        updatePositions(true);
+        switch(playbackStartPosition) {
+            case StartPositionBeginning:
+                playheadGain = 1.0;
+                sourceSamplePosition = startPosition;
+                break;
+            case StartPositionLoopPoint:
+                playheadGain = 0.0;
+                sourceSamplePosition = attackStartSample;
+                break;
+            case StartPositionStopPoint:
+                playheadGain = 0.0;
+                sourceSamplePosition = decayEndSample;
+                break;
+        }
+    }
+    // Call this at the *end* of the process loop, once current state has been handled
+    // Doing it at the end ensures that, when we need to start new playheads, we will be in sync come next run
+    void progress(double byHowManySamples) {
+        sourceSamplePosition += byHowManySamples;
+        bool startNextPlayhead{false};
+        if (sourceSamplePosition < attackStartSample) {
+            // Before the attack start position
+            if (playbackStartPosition != StartPositionBeginning) {
+                playheadGain = 0;
+            }
+            if (byHowManySamples < 0) {
+                // If we are moving backward, stop this playhead
+                if (clipCommand->looping) {
+                    // If we're looping and got to here without having already started a playhead (that is, we're not crossfading), start the next playhead now
+                    startNextPlayhead = true;
+                }
+                playheadGain = 0;
+                stop();
+            }
+        } else if (sourceSamplePosition < attackEndSample) {
+            // Between the attack start (inclusive) and attack end (exclusive)
+            if (playbackStartPosition != StartPositionBeginning || byHowManySamples < 0) {
+                // We only want to apply the envelope if we are running the loop, or we are moving backwards
+                if (attackDuration > 0) {
+                    playheadGain = (attackEndSample - sourceSamplePosition) / attackDuration;
+                    // qDebug() << Q_FUNC_INFO << this << "attack" << playheadGain;
+                } else {
+                    playheadGain = 1.0;
+                }
+            } else {
+                playheadGain = 1.0;
+            }
+            if (byHowManySamples < 0 && clipCommand->looping) {
+                // If we're moving backwards and looping, start the playhead we're crossfading into now
+                startNextPlayhead = true;
+            }
+        } else if (sourceSamplePosition < decayStartSample) {
+            // Between the attack end (inclusive) and the decay start (exclusive)
+            playheadGain = 1;
+        } else if (sourceSamplePosition < decayEndSample) {
+            // Between the decay start (inclusive) and decay end (exclusive)
+            if (playbackStartPosition != StartPositionBeginning || byHowManySamples > 0) {
+                // We only want to apply the envelope if we are running the loop, or we are moving forward
+                if (decayDuration > 0) {
+                    playheadGain = 1.0 - ((decayEndSample - sourceSamplePosition) / decayDuration);
+                    // qDebug() << Q_FUNC_INFO << this << "decay" << playheadGain;
+                } else {
+                    playheadGain = 1.0;
+                }
+            } else {
+                playheadGain = 1.0;
+            }
+            if (byHowManySamples > 0 && clipCommand->looping) {
+                // If we are moving forward and looping, start the playhead we're crossfading into now
+                startNextPlayhead = true;
+            }
+        } else {
+            // On or after the decay end sample
+            if (playbackStartPosition != StartPositionBeginning) {
+                playheadGain = 0;
+            }
+            if (byHowManySamples > 0) {
+                // If we are moving forward, stop this playhead
+                if (clipCommand->looping) {
+                    // If we're looping and got to here without having already started a playhead (that is, we're not crossfading), start the next playhead now
+                    startNextPlayhead = true;
+                }
+                playheadGain = 0;
+                stop();
+            }
+        }
+        if (startNextPlayhead && startedNextPlayhead == false) {
+            if (byHowManySamples > 0) {
+                nextPlayhead->start(clip, clipCommand, sound, sampleRate, StartPositionLoopPoint);
+            } else {
+                nextPlayhead->start(clip, clipCommand, sound, sampleRate, StartPositionStopPoint);
+            }
+            // As we'll be progressing all the playheads immediately following starting them, let's ensure we're ready to be progressed
+            nextPlayhead->sourceSamplePosition -= byHowManySamples;
+            startedNextPlayhead = true;
+        }
+    }
+    // Call this *after* each process loop
+    void updateSamplesHandled(int numberOfSamples) {
+        samplesSinceLastUpdate += numberOfSamples;
+        if (samplesSinceLastUpdate >= sampleRate) {
+            // qDebug() << Q_FUNC_INFO << "Updating positions at" << samplesSinceLastUpdate << "samples, higher or equal to" << sampleRate;
+            updatePositions();
+        }
+    }
+    void stop() {
+        active = false;
+    }
+private:
+    void updatePositions(bool initialFetch = false) {
+        // If we're already performing a fade-out, don't update the positions for this playhead (we'll be gone shortly)
+        if (sourceSamplePosition < decayStartSample || initialFetch) {
+            startPosition = double((clipCommand->setStartPosition ? clipCommand->startPosition * clip->sampleRate() : clip->getStartPositionSamples(clipCommand->slice))) / sound->stretchRate();
+            stopPosition = double((clipCommand->setStopPosition ? clipCommand->stopPosition * clip->sampleRate() : clip->getStopPositionSamples(clipCommand->slice))) / sound->stretchRate();
+            loopPosition = startPosition + (double(clip->loopDeltaSamples()) / sound->stretchRate());
+            if (loopPosition >= stopPosition) {
+                loopPosition = startPosition;
+            }
+            if (clip->playbackStyle() == ClipAudioSource::WavetableStyle) {
+                loopFadeAdjustment = 0;
+            } else {
+                loopFadeAdjustment = double(clip->loopFadeAdjustment(clipCommand->slice)) / sound->stretchRate();
+            }
+            if (loopFadeAdjustment < 0) {
+                attackStartSample = loopPosition + loopFadeAdjustment;
+                attackEndSample = loopPosition;
+            } else {
+                attackStartSample = loopPosition;
+                attackEndSample = loopPosition + loopFadeAdjustment;
+            }
+            attackDuration = attackEndSample - attackStartSample;
+            stopFadeAdjustment = double(clip->stopFadeAdjustment(clipCommand->slice)) / sound->stretchRate();
+            if (stopFadeAdjustment < 0) {
+                decayStartSample = stopPosition + stopFadeAdjustment;
+                decayEndSample = stopPosition;
+            } else {
+                decayStartSample = stopPosition;
+                decayEndSample = stopPosition + stopFadeAdjustment;
+            }
+            decayDuration = decayEndSample - decayStartSample;
+            // qDebug() << Q_FUNC_INFO << loopFadeAdjustment << attackStartSample << attackEndSample << attackDuration << decayStartSample << decayEndSample << decayDuration;
+            samplesSinceLastUpdate = 0;
+        }
+    }
+};
+
 struct PlaybackData {
 public:
-    PlaybackData() {}
+    PlaybackData() {
+        for (int playheadIndex = 0; playheadIndex < PlayheadCount - 1; ++ playheadIndex) {
+            playheads[playheadIndex].nextPlayhead = &playheads[playheadIndex + 1];
+        }
+        playheads[PlayheadCount - 1].nextPlayhead = &playheads[0];
+    }
     juce::AudioBuffer<float>* data{nullptr};
     const float *inL{nullptr};
     const float *inR{nullptr};
@@ -84,6 +280,8 @@ public:
     double backwardTailingOffPosition{0};
     double tempo{1.0};
     double pitch{1.0};
+    PlayheadData playheads[PlayheadCount];
+    // The sourceSamplePosition for the logical playback is separate from the playheads, as they will fade in and out independently of that position
 };
 
 class SamplerSynthVoicePrivate {
@@ -212,6 +410,12 @@ void SamplerSynthVoice::setCurrentCommand(ClipCommand *clipCommand)
     } else {
         d->clipCommand = clipCommand;
     }
+    for (int playheadIndex = 0; playheadIndex < PlayheadCount; ++playheadIndex) {
+        PlayheadData &playhead = d->playbackData.playheads[playheadIndex];
+        if (playhead.active) {
+            playhead.clipCommand = clipCommand;
+        }
+    }
     isPlaying = d->clipCommand;
 }
 
@@ -325,6 +529,7 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         } else {
             availableAfter = timestamp + jack_nframes_t(d->playbackData.stopPosition - d->playbackData.startPosition);
         }
+        d->playbackData.playheads[0].start(d->clip, d->clipCommand, d->sound, d->samplerSynth->sampleRate(), PlayheadData::StartPositionBeginning);
     } else {
         jassertfalse; // this object can only play SamplerSynthSounds!
     }
@@ -350,6 +555,9 @@ void SamplerSynthVoice::stopNote(float velocity, bool allowTailOff, jack_nframes
         if (d->clipCommand) {
             d->syncTimer->deleteClipCommand(d->clipCommand);
             d->clipCommand = nullptr;
+        }
+        for (int playheadIndex = 0; playheadIndex < PlayheadCount; ++playheadIndex) {
+            d->playbackData.playheads[playheadIndex].stop();
         }
         isPlaying = false;
         isTailingOff = false;
@@ -519,62 +727,79 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
             const float envelopeValue = d->adsr.getNextSample();
             float l{0};
             float r{0};
-            const int sampleIndex{int(d->sourceSamplePosition)};
-            float modIntegral{0};
-            const float fraction = std::modf(d->sourceSamplePosition, &modIntegral);
             // If we're using timestretching for our clip's pitch shifting, then we also should not be applying the speed ratio here
             const double pitchRatio{d->pitchRatio * clipPitchChange * (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchOff ? d->clip->speedRatio() : 1.0f) * d->sound->sampleRateRatio()};
-            if ((fraction < 0.0001f && pitchRatio == 1.0f)) {
-                // If we're just doing un-pitch-shifted playback, don't bother interpolating,
-                // just grab the sample as given and adjust according to the requests, might
-                // as well save a bit of processing (it's a very common case, and used for
-                // e.g. the metronome ticks and sketches, and we do want that stuff to be as
-                // low impact as we can reasonably make it).
-                l = sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inL[sampleIndex] * d->lgain * envelopeValue * clipGain : 0;
-                r = d->playbackData.inR != nullptr && sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inR[sampleIndex] * d->rgain * envelopeValue * clipGain : l;
-            } else {
-                // Use Hermite interpolation to ensure out sound data is reasonably on the expected
-                // curve. We could use linear interpolation, but Hermite is cheap enough that it's
-                // worth it for the improvements in sound quality. Any more and we'll need to do some
-                // precalc work and do sample stretching per octave/note/whatnot ahead of time...
-                // Maybe that's something we could offer an option for, if people really really want it?
-                int previousSampleIndex{sampleIndex - 1};
-                int nextSampleIndex{sampleIndex + 1};
-                int nextNextSampleIndex{sampleIndex + 2};
-                if (d->playbackData.isLooping) {
-                    if (d->firstRoll) {
-                        previousSampleIndex = previousSampleIndex < d->playbackData.startPosition ? -1 : previousSampleIndex;
-                        d->firstRoll = false;
+            for (int playheadIndex = 0; playheadIndex < PlayheadCount; ++playheadIndex) {
+                PlayheadData &playhead = d->playbackData.playheads[playheadIndex];
+                if (playhead.active) {
+                    float playheadL{0};
+                    float playheadR{0};
+                    const int sampleIndex{int(playhead.sourceSamplePosition)};
+                    float modIntegral{0};
+                    const float fraction = std::modf(playhead.sourceSamplePosition, &modIntegral);
+                    if ((fraction < 0.0001f && pitchRatio == 1.0f)) {
+                        // If we're just doing un-pitch-shifted playback, don't bother interpolating,
+                        // just grab the sample as given and adjust according to the requests, might
+                        // as well save a bit of processing (it's a very common case, and used for
+                        // e.g. the metronome ticks and sketches, and we do want that stuff to be as
+                        // low impact as we can reasonably make it).
+                        playheadL = sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inL[sampleIndex] * d->lgain * envelopeValue * clipGain : 0;
+                        playheadR = d->playbackData.inR != nullptr && sampleIndex < d->playbackData.sampleDuration ? d->playbackData.inR[sampleIndex] * d->rgain * envelopeValue * clipGain : l;
                     } else {
-                        previousSampleIndex = previousSampleIndex < d->playbackData.startPosition ? d->playbackData.stopPosition - 1 : previousSampleIndex;
+                        // Use Hermite interpolation to ensure out sound data is reasonably on the expected
+                        // curve. We could use linear interpolation, but Hermite is cheap enough that it's
+                        // worth it for the improvements in sound quality. Any more and we'll need to do some
+                        // precalc work and do sample stretching per octave/note/whatnot ahead of time...
+                        // Maybe that's something we could offer an option for, if people really really want it?
+                        int previousSampleIndex{sampleIndex - 1};
+                        int nextSampleIndex{sampleIndex + 1};
+                        int nextNextSampleIndex{sampleIndex + 2};
+                        if (d->playbackData.isLooping) {
+                            if (d->firstRoll) {
+                                previousSampleIndex = previousSampleIndex < d->playbackData.startPosition ? -1 : previousSampleIndex;
+                                d->firstRoll = false;
+                            } else {
+                                previousSampleIndex = previousSampleIndex < d->playbackData.startPosition ? d->playbackData.stopPosition - 1 : previousSampleIndex;
+                            }
+                            if (nextSampleIndex > d->playbackData.stopPosition) {
+                                nextSampleIndex = d->playbackData.startPosition;
+                                nextNextSampleIndex = nextSampleIndex + 1;
+                            } else if (nextNextSampleIndex > d->playbackData.stopPosition) {
+                                nextSampleIndex = d->playbackData.startPosition;
+                            }
+                        } else {
+                            previousSampleIndex = previousSampleIndex < d->playbackData.startPosition ? -1 : previousSampleIndex;
+                            nextSampleIndex = nextSampleIndex > d->playbackData.stopPosition ? -1 : nextSampleIndex;
+                            nextNextSampleIndex = nextNextSampleIndex > d->playbackData.stopPosition ? -1 : nextNextSampleIndex;
+                        }
+                        // If the various other sample positions are outside the sample area, the sample value is 0 and we should be treating it like there's no sample data
+                        const float l0 = d->playbackData.sampleDuration < previousSampleIndex || previousSampleIndex == -1 ? 0 : d->playbackData.inL[(int)previousSampleIndex];
+                        const float l1 = d->playbackData.sampleDuration < sampleIndex ? 0 : d->playbackData.inL[(int)sampleIndex];
+                        const float l2 = d->playbackData.sampleDuration < nextSampleIndex || nextSampleIndex == -1 ? 0 : d->playbackData.inL[(int)nextSampleIndex];
+                        const float l3 = d->playbackData.sampleDuration < nextNextSampleIndex || nextNextSampleIndex == -1 ? 0 : d->playbackData.inL[(int)nextNextSampleIndex];
+                        playheadL = interpolateHermite4pt3oX(l0, l1, l2, l3, fraction) * d->lgain * envelopeValue * clipGain;
+                        if (d->playbackData.inR == nullptr) {
+                            playheadR = playheadL;
+                        } else {
+                            const float r0 = d->playbackData.sampleDuration < previousSampleIndex || previousSampleIndex == -1 ? 0 : d->playbackData.inR[(int)previousSampleIndex];
+                            const float r1 = d->playbackData.sampleDuration < sampleIndex ? 0 : d->playbackData.inR[(int)sampleIndex];
+                            const float r2 = d->playbackData.sampleDuration < nextSampleIndex || nextSampleIndex == -1 ? 0 : d->playbackData.inR[(int)nextSampleIndex];
+                            const float r3 = d->playbackData.sampleDuration < nextNextSampleIndex || nextNextSampleIndex == -1 ? 0 : d->playbackData.inR[(int)nextNextSampleIndex];
+                            playheadR = interpolateHermite4pt3oX(r0, r1, r2, r3, fraction) * d->rgain * envelopeValue * clipGain;
+                        }
                     }
-                    if (nextSampleIndex > d->playbackData.stopPosition) {
-                        nextSampleIndex = d->playbackData.startPosition;
-                        nextNextSampleIndex = nextSampleIndex + 1;
-                    } else if (nextNextSampleIndex > d->playbackData.stopPosition) {
-                        nextSampleIndex = d->playbackData.startPosition;
-                    }
-                } else {
-                    previousSampleIndex = previousSampleIndex < d->playbackData.startPosition ? -1 : previousSampleIndex;
-                    nextSampleIndex = nextSampleIndex > d->playbackData.stopPosition ? -1 : nextSampleIndex;
-                    nextNextSampleIndex = nextNextSampleIndex > d->playbackData.stopPosition ? -1 : nextNextSampleIndex;
-                }
-                // If the various other sample positions are outside the sample area, the sample value is 0 and we should be treating it like there's no sample data
-                const float l0 = d->playbackData.sampleDuration < previousSampleIndex || previousSampleIndex == -1 ? 0 : d->playbackData.inL[(int)previousSampleIndex];
-                const float l1 = d->playbackData.sampleDuration < sampleIndex ? 0 : d->playbackData.inL[(int)sampleIndex];
-                const float l2 = d->playbackData.sampleDuration < nextSampleIndex || nextSampleIndex == -1 ? 0 : d->playbackData.inL[(int)nextSampleIndex];
-                const float l3 = d->playbackData.sampleDuration < nextNextSampleIndex || nextNextSampleIndex == -1 ? 0 : d->playbackData.inL[(int)nextNextSampleIndex];
-                l = interpolateHermite4pt3oX(l0, l1, l2, l3, fraction) * d->lgain * envelopeValue * clipGain;
-                if (d->playbackData.inR == nullptr) {
-                    r = l;
-                } else {
-                    const float r0 = d->playbackData.sampleDuration < previousSampleIndex || previousSampleIndex == -1 ? 0 : d->playbackData.inR[(int)previousSampleIndex];
-                    const float r1 = d->playbackData.sampleDuration < sampleIndex ? 0 : d->playbackData.inR[(int)sampleIndex];
-                    const float r2 = d->playbackData.sampleDuration < nextSampleIndex || nextSampleIndex == -1 ? 0 : d->playbackData.inR[(int)nextSampleIndex];
-                    const float r3 = d->playbackData.sampleDuration < nextNextSampleIndex || nextNextSampleIndex == -1 ? 0 : d->playbackData.inR[(int)nextNextSampleIndex];
-                    r = interpolateHermite4pt3oX(r0, r1, r2, r3, fraction) * d->rgain * envelopeValue * clipGain;
+                    l += (playheadL * playhead.playheadGain);
+                    r += (playheadR * playhead.playheadGain);
                 }
             }
+            // Progress the playheads (so that when we try and check next sample, they will be at the proper position)
+            for (int playheadIndex = 0; playheadIndex < PlayheadCount; ++playheadIndex) {
+                PlayheadData &playhead = d->playbackData.playheads[playheadIndex];
+                if (playhead.active) {
+                    playhead.progress(pitchRatio);
+                }
+            }
+
             // The sound data might possibly disappear while we're attempting to play,
             // and if that happens, we really need to not try and use it. If it does
             // happen, zero out the inputs to avoid terrible noises and an angry jackd
@@ -676,6 +901,12 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                 }
                 stopNote(d->targetGain, false, currentFrame);
             }
+        }
+    }
+    for (int playheadIndex = 0; playheadIndex < PlayheadCount; ++playheadIndex) {
+        PlayheadData &playhead = d->playbackData.playheads[playheadIndex];
+        if (playhead.active) {
+            playhead.updateSamplesHandled(int(nframes));
         }
     }
 
