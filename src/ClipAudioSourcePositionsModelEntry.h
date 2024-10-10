@@ -17,9 +17,10 @@ public:
     ~ClipAudioSourcePositionsModelEntry() override = default;
 
     void clear();
-    void updateData(const int &id, const float &progress, const float &gainLeft, const float &gainRight, const float &pan);
+    void updateData(const int &id, const int &playheadId, const float &progress, const float &gainLeft, const float &gainRight, const float &pan);
 
     int id() const;
+    int playheadId() const;
     float progress() const;
     float gain() const;
     float gainLeft() const;
@@ -30,6 +31,7 @@ private:
     friend class ClipAudioSourcePositionsModel;
     qint64 m_id{-1};
     ClipCommand *m_clipCommand{nullptr};
+    int m_playheadId{0};
     float m_progress{0.0f};
     float m_gain{0.0f};
     float m_gainLeft{0.0f};

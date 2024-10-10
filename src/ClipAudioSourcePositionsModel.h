@@ -39,7 +39,7 @@ public:
 
     QVariantList positions() const;
 
-    Q_INVOKABLE void setPositionData(const jack_nframes_t &timestamp, ClipCommand *clipCommand, const float &gainLeft, const float &gainRight, const float &progress, const float &pan);
+    Q_INVOKABLE void setPositionData(const jack_nframes_t &timestamp, ClipCommand *clipCommand, const int &playheadIndex, const float &gainLeft, const float &gainRight, const float &progress, const float &pan);
     void setMostRecentPositionUpdate(jack_nframes_t timestamp);
 
     float peakGain();

@@ -730,7 +730,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
             // If we're using timestretching for our clip's pitch shifting, then we also should not be applying the speed ratio here
             const double pitchRatio{d->pitchRatio * clipPitchChange * (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchOff ? d->clip->speedRatio() : 1.0f) * d->sound->sampleRateRatio()};
             for (int playheadIndex = 0; playheadIndex < PlayheadCount; ++playheadIndex) {
-                PlayheadData &playhead = d->playbackData.playheads[playheadIndex];
+                const PlayheadData &playhead = d->playbackData.playheads[playheadIndex];
                 if (playhead.active) {
                     float playheadL{0};
                     float playheadR{0};
@@ -866,7 +866,12 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                         {
                             // Before we stop, send out one last update for this command
                             if (d->clip && d->clip->playbackPositionsModel()) {
-                                d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGainLeft, peakGainRight, d->sourceSamplePosition / d->playbackData.sampleDuration, d->playbackData.pan);
+                                for (int playheadIndex = 0; playheadIndex < PlayheadCount; ++playheadIndex) {
+                                    const PlayheadData &playhead = d->playbackData.playheads[playheadIndex];
+                                    if (playhead.active) {
+                                        d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, playheadIndex, peakGainLeft * playhead.playheadGain, peakGainRight * playhead.playheadGain, playhead.sourceSamplePosition / d->playbackData.sampleDuration, d->playbackData.pan);
+                                    }
+                                }
                             }
                             stopNote(d->targetGain, false, currentFrame);
                         } else if (isTailingOff == false && d->sourceSamplePosition >= d->playbackData.forwardTailingOffPosition) {
@@ -886,7 +891,12 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                         {
                             // Before we stop, send out one last update for this command
                             if (d->clip && d->clip->playbackPositionsModel()) {
-                                d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGainLeft, peakGainRight, d->sourceSamplePosition / d->playbackData.sampleDuration, d->playbackData.pan);
+                                for (int playheadIndex = 0; playheadIndex < PlayheadCount; ++playheadIndex) {
+                                    const PlayheadData &playhead = d->playbackData.playheads[playheadIndex];
+                                    if (playhead.active) {
+                                        d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, playheadIndex, peakGainLeft * playhead.playheadGain, peakGainRight * playhead.playheadGain, playhead.sourceSamplePosition / d->playbackData.sampleDuration, d->playbackData.pan);
+                                    }
+                                }
                             }
                             stopNote(d->targetGain, false, currentFrame);
                         } else if (isTailingOff == false && d->sourceSamplePosition <= d->playbackData.backwardTailingOffPosition) {
@@ -897,7 +907,12 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
             } else {
                 // Before we stop, send out one last update for this command
                 if (d->clip && d->clip->playbackPositionsModel()) {
-                    d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, peakGainLeft, peakGainRight, d->sourceSamplePosition / d->playbackData.sampleDuration, d->playbackData.pan);
+                    for (int playheadIndex = 0; playheadIndex < PlayheadCount; ++playheadIndex) {
+                        const PlayheadData &playhead = d->playbackData.playheads[playheadIndex];
+                        if (playhead.active) {
+                            d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, playheadIndex, peakGainLeft * playhead.playheadGain, peakGainRight * playhead.playheadGain, playhead.sourceSamplePosition / d->playbackData.sampleDuration, d->playbackData.pan);
+                        }
+                    }
                 }
                 stopNote(d->targetGain, false, currentFrame);
             }
@@ -915,6 +930,11 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
     // - Read ring in UI thread, update all data entries, and... we probably need a lot more potential positions (like maybe 32 voices times about ten? Call it 256 for no particular reason?)
     // Because it might have gone away after being stopped above, so let's try and not crash
     if (d->clip && d->clip->playbackPositionsModel()) {
-        d->clip->playbackPositionsModel()->setPositionData(current_frames + nframes, d->clipCommand, peakGainLeft, peakGainRight, d->sourceSamplePosition / d->playbackData.sampleDuration, d->playbackData.pan);
+        for (int playheadIndex = 0; playheadIndex < PlayheadCount; ++playheadIndex) {
+            const PlayheadData &playhead = d->playbackData.playheads[playheadIndex];
+            if (playhead.active) {
+                d->clip->playbackPositionsModel()->setPositionData(current_frames + nframes, d->clipCommand, playheadIndex, peakGainLeft * playhead.playheadGain, peakGainRight * playhead.playheadGain, playhead.sourceSamplePosition / d->playbackData.sampleDuration, d->playbackData.pan);
+            }
+        }
     }
 }

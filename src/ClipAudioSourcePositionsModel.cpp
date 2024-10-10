@@ -13,6 +13,7 @@ public:
         Entry *previous{nullptr};
         Entry *next{nullptr};
         ClipCommand *clipCommand{nullptr};
+        int playheadIndex{0};
         float progress{0.0f};
         float gainLeft{0.0f};
         float gainRight{0.0f};
@@ -31,13 +32,14 @@ public:
         readHead = writeHead = ringData;
     }
     ~DataRing() {}
-    void write(const jack_nframes_t &timestamp, ClipCommand *clipCommand, const float &progress, const float &gainLeft, const float &gainRight, const float &pan) {
+    void write(const jack_nframes_t &timestamp, ClipCommand *clipCommand, const int &playheadIndex, const float &progress, const float &gainLeft, const float &gainRight, const float &pan) {
         Entry *entry = writeHead;
         writeHead = writeHead->next;
         if (entry->processed == false) {
             qWarning() << Q_FUNC_INFO << "There is unprocessed data stored at the write location: id" << writeHead->clipCommand << "for time" << writeHead->timestamp << "This likely means the buffer size is too small, which will require attention at the api level.";
         }
         entry->clipCommand = clipCommand;
+        entry->playheadIndex = playheadIndex;
         entry->progress = progress;
         entry->gainLeft = gainLeft;
         entry->gainRight = gainRight;
@@ -49,11 +51,12 @@ public:
      * \brief Attempt to read the data out of the ring, until there are no more unprocessed entries
      * @return Whether or not the read was valid
      */
-    bool read(jack_nframes_t *timestamp, ClipCommand **clipCommand, float *progress, float *gainLeft, float *gainRight, float *pan) {
+    bool read(jack_nframes_t *timestamp, ClipCommand **clipCommand, int *playheadIndex, float *progress, float *gainLeft, float *gainRight, float *pan) {
         if (readHead->processed == false) {
             Entry *entry = readHead;
             readHead = readHead->next;
             *clipCommand = entry->clipCommand;
+            *playheadIndex = entry->playheadIndex;
             *progress = entry->progress;
             *gainLeft = entry->gainLeft;
             *gainRight = entry->gainRight;
@@ -172,9 +175,9 @@ QVariantList ClipAudioSourcePositionsModel::positions() const
     return d->objectedEntries;
 }
 
-void ClipAudioSourcePositionsModel::setPositionData(const jack_nframes_t &timestamp, ClipCommand *clipCommand, const float &gainLeft, const float &gainRight, const float &progress, const float &pan)
+void ClipAudioSourcePositionsModel::setPositionData(const jack_nframes_t &timestamp, ClipCommand *clipCommand, const int &playheadIndex, const float &gainLeft, const float &gainRight, const float &progress, const float &pan)
 {
-    d->positionUpdates.write(timestamp, clipCommand, progress, gainLeft, gainRight, pan);
+    d->positionUpdates.write(timestamp, clipCommand, playheadIndex, progress, gainLeft, gainRight, pan);
     d->mostRecentPositionUpdate = timestamp; // we can safely do this without checking, as this timestamp will always grow
     d->updatePeakGain = true;
 }
@@ -250,14 +253,15 @@ void ClipAudioSourcePositionsModel::updatePositions()
     int positionIndex{0};
     jack_nframes_t timestamp;
     ClipCommand *clipCommand;
+    int playheadIndex;
     float progress, gainLeft, gainRight, pan;
-    while (d->positionUpdates.read(&timestamp, &clipCommand, &progress, &gainLeft, &gainRight, &pan)) {
+    while (d->positionUpdates.read(&timestamp, &clipCommand, &playheadIndex, &progress, &gainLeft, &gainRight, &pan)) {
         for (positionIndex = 0; positionIndex < ZynthboxClipMaximumPositionCount; ++positionIndex) {
             ClipAudioSourcePositionsModelEntry *position = d->entries[positionIndex];
-            // If this is the same clip command, or it's an empty position (which will not happen unless we haven't added updates for this command yet), add the data to this position
-            if (position->m_clipCommand == clipCommand || position->m_clipCommand == nullptr) {
+            // If this is the same clip command and playhead, or it's an empty position (which will not happen unless we haven't added updates for this command/playhead yet), add the data to this position
+            if ((position->m_clipCommand == clipCommand && position->m_playheadId == playheadIndex) || (position->m_clipCommand == nullptr && position->m_playheadId == -1)) {
                 position->m_clipCommand = clipCommand;
-                position->updateData(reinterpret_cast<qint64>(clipCommand), progress, gainLeft, gainRight, pan);
+                position->updateData(reinterpret_cast<qint64>(clipCommand), playheadIndex, progress, gainLeft, gainRight, pan);
                 position->m_keepUntil = timestamp + d->updateGracePeriod;
                 anyPositionUpdates = true;
                 break;
