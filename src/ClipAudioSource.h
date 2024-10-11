@@ -142,7 +142,7 @@ class ClipAudioSource : public QObject {
      * @note If loopStartCrossfadeDirection and stopCrossfadeDirection are set to the same value, the crossfade will cause the loop's playback to change duration over time
      * @default CrossfadeInnie
      */
-    Q_PROPERTY(CrossfadingDirection stopCrossfadeDirection READ stopCrossfadeDirection WRITE setStopCrossfadeCirection NOTIFY stopCrossfadeDirectionChanged)
+    Q_PROPERTY(CrossfadingDirection stopCrossfadeDirection READ stopCrossfadeDirection WRITE setStopCrossfadeDirection NOTIFY stopCrossfadeDirectionChanged)
 
     /**
      * \brief Whether or not this sample should be looped for playback (or single-shot so it auto-stops)
@@ -532,7 +532,7 @@ public:
   void setLoopStartCrossfadeDirection(const CrossfadingDirection &loopStartCrossfadeDirection);
   CrossfadingDirection loopStartCrossfadeDirection() const;
   Q_SIGNAL void loopStartCrossfadeDirectionChanged();
-  void setStopCrossfadeCirection(const CrossfadingDirection &stopCrossfadeDirection);
+  void setStopCrossfadeDirection(const CrossfadingDirection &stopCrossfadeDirection);
   CrossfadingDirection stopCrossfadeDirection() const;
   Q_SIGNAL void stopCrossfadeDirectionChanged();
   int loopFadeAdjustment(const int &slice) const;

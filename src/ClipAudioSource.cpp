@@ -795,7 +795,7 @@ ClipAudioSource::CrossfadingDirection ClipAudioSource::stopCrossfadeDirection() 
   return d->stopCrossfadeDirection;
 }
 
-void ClipAudioSource::setStopCrossfadeCirection(const CrossfadingDirection& stopCrossfadeDirection)
+void ClipAudioSource::setStopCrossfadeDirection(const CrossfadingDirection& stopCrossfadeDirection)
 {
   if (d->stopCrossfadeDirection != stopCrossfadeDirection) {
     d->stopCrossfadeDirection = stopCrossfadeDirection;

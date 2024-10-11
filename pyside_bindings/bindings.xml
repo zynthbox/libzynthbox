@@ -11,6 +11,7 @@
         <enum-type name="PlaybackStyle" />
         <enum-type name="SamplePickingStyle" />
         <enum-type name="TimeStretchStyle" />
+        <enum-type name="CrossfadingDirection" />
     </object-type>
     <object-type name="ClipAudioSourceSubvoiceSettings"></object-type>
     <object-type name="CUIAHelper">
