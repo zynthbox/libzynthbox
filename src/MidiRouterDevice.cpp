@@ -821,13 +821,15 @@ bool MidiRouterDevice::saveDeviceSettings(const QString& filePath)
     if (filePath > 10) {
         QJsonDocument document;
         QJsonObject settingsObject;
-        QJsonArray receiveFromChannelArray, sendToChannelArray;
+        QJsonArray receiveFromChannelArray, sendToChannelArray, midiChannelTargetTrackArray;
         for (int channelIndex = 0; channelIndex < 16; ++channelIndex) {
             receiveFromChannelArray.append(d->receiveFromChannel[channelIndex]);
             sendToChannelArray.append(d->sendToChannel[channelIndex]);
+            midiChannelTargetTrackArray.append(d->midiChannelTargetTrack[channelIndex]);
         }
         settingsObject.insert("receiveFromChannel", receiveFromChannelArray);
         settingsObject.insert("sendToChannel", sendToChannelArray);
+        settingsObject.insert("midiChannelTargetTrack", midiChannelTargetTrackArray);
         settingsObject.insert("sendTimecode", d->sendTimecode);
         settingsObject.insert("sendBeatClock", d->sendBeatClock);
         QJsonObject mpeSettingsObject;
@@ -894,6 +896,18 @@ bool MidiRouterDevice::loadDeviceSettings(const QString& filePath)
                                 Q_EMIT channelsToSendToChanged();
                             } else if (sendToChannelArray.count() != 0) {
                                 qWarning() << Q_FUNC_INFO << "Fetched the sendToChannel values - we've ended up with an unacceptable number of entries, and the retrieved value was" << sendToChannelArray;
+                            }
+                        }
+                        value = settingsObject.value("midiChannelTargetTrack");
+                        if (value.isArray()) {
+                            QJsonArray midiChannelTargetTrackArray = value.toArray();
+                            if (midiChannelTargetTrackArray.count() == 16) {
+                                for (int channelIndex = 0; channelIndex < 16; ++channelIndex) {
+                                    d->midiChannelTargetTrack[channelIndex] = std::clamp(midiChannelTargetTrackArray[channelIndex].toInt(), -3, ZynthboxTrackCount);
+                                }
+                                Q_EMIT channelsToSendToChanged();
+                            } else if (midiChannelTargetTrackArray.count() != 0) {
+                                qWarning() << Q_FUNC_INFO << "Fetched the midiChannelTargetTrack values - we've ended up with an unacceptable number of entries, and the retrieved value was" << midiChannelTargetTrackArray;
                             }
                         }
                         value = settingsObject.value("sendTimecode");
