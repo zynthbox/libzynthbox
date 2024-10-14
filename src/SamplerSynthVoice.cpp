@@ -761,7 +761,9 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                         int previousSampleIndex{sampleIndex - 1};
                         int nextSampleIndex{sampleIndex + 1};
                         int nextNextSampleIndex{sampleIndex + 2};
-                        if (d->playbackData.isLooping) {
+                        if (d->playbackData.isLooping && d->clip->loopCrossfadeAmount() == 0) {
+                            // If we are looping, we'll need to wrap our data stream to match the loop
+                            // But, don't do this if we're crossfading (at which point the loop stream interpolation is done by the playheads, not here)
                             if (d->firstRoll) {
                                 previousSampleIndex = previousSampleIndex < d->playbackData.startPosition ? -1 : previousSampleIndex;
                                 d->firstRoll = false;
