@@ -22,6 +22,7 @@ public:
     ~ZynthboxBasics() override;
 
     enum Track {
+        NoTrack = -3,
         AnyTrack = -2,
         CurrentTrack = -1,
         Track1 = 0,
@@ -40,6 +41,7 @@ public:
     Q_INVOKABLE QString trackLabelText(const Track &track) const;
 
     enum Slot {
+        NoSlot = -3,
         AnySlot = -2,
         CurrentSlot = -1,
         Slot1 = 0,

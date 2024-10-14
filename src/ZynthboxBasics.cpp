@@ -10,6 +10,8 @@ ZynthboxBasics::~ZynthboxBasics()
 QString ZynthboxBasics::trackLabelText(const Track& track) const
 {
     switch(track) {
+        case NoTrack:
+            return QLatin1String{"No Track"};
         case AnyTrack:
             return QLatin1String{"Any Track"};
         case CurrentTrack:
@@ -41,6 +43,8 @@ QString ZynthboxBasics::trackLabelText(const Track& track) const
 QString ZynthboxBasics::slotLabelText(const Slot& slot) const
 {
     switch(slot) {
+        case NoSlot:
+            return QLatin1String{"No Slot"};
         case AnySlot:
             return QLatin1String{"Any Slot"};
         case CurrentSlot:
@@ -62,6 +66,8 @@ QString ZynthboxBasics::slotLabelText(const Slot& slot) const
 QString ZynthboxBasics::clipLabelText(const Slot& slot) const
 {
     switch(slot) {
+        case NoSlot:
+            return QLatin1String{"No Clip"};
         case AnySlot:
             return QLatin1String{"Any Clip"};
         case CurrentSlot:
@@ -83,6 +89,8 @@ QString ZynthboxBasics::clipLabelText(const Slot& slot) const
 QString ZynthboxBasics::soundSlotLabelText(const Slot& slot) const
 {
     switch(slot) {
+        case NoSlot:
+            return QLatin1String{"No Sound Slot"};
         case AnySlot:
             return QLatin1String{"Any Sound Slot"};
         case CurrentSlot:
@@ -104,6 +112,8 @@ QString ZynthboxBasics::soundSlotLabelText(const Slot& slot) const
 QString ZynthboxBasics::fxLabelText(const Slot& slot) const
 {
     switch(slot) {
+        case NoSlot:
+            return QLatin1String{"No FX Slot"};
         case AnySlot:
             return QLatin1String{"Any FX Slot"};
         case CurrentSlot:
