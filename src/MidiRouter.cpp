@@ -347,8 +347,11 @@ public:
                         } else {
                             sketchpadTrack = eventDevice->targetTrackForMidiChannel(eventChannel);
                         }
-                        if (sketchpadTrack == -1) {
+                        if (sketchpadTrack == -1 || sketchpadTrack == -2) {
                             sketchpadTrack = currentSketchpadTrack;
+                        } else if (sketchpadTrack == -3) {
+                            // If sketchpad track is set to -3, we want to not send this message anywhere
+                            continue;
                         }
                         // Make sure we're using the correct output
                         // This is done to ensure that if we have any note-on events happen on some
@@ -368,8 +371,11 @@ public:
                                 eventDevice->setNoteActive(sketchpadTrack, eventChannel, midiNote, false);
                             }
                         }
-                        if (sketchpadTrack == -1) {
+                        if (sketchpadTrack == -1 || sketchpadTrack == -2) {
                             sketchpadTrack = currentSketchpadTrack;
+                        } else if (sketchpadTrack == -3) {
+                            // If sketchpad track is set to -3, we want to not send this message anywhere
+                            continue;
                         }
                         if (inputDeviceIsHardware) {
                             // qDebug() << Q_FUNC_INFO << "Hardware input message received for channel" << eventChannel << "of size" << event->size;
