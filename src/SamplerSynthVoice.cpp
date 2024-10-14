@@ -129,6 +129,7 @@ public:
     void progress(double byHowManySamples) {
         sourceSamplePosition += byHowManySamples;
         bool startNextPlayhead{false};
+        double nextPlayheadOffset{0.0};
         if (sourceSamplePosition < attackStartSample) {
             // Before the attack start position
             if (playbackStartPosition != StartPositionBeginning) {
@@ -139,6 +140,8 @@ public:
                 if (clipCommand->looping) {
                     // If we're looping and got to here without having already started a playhead (that is, we're not crossfading), start the next playhead now
                     startNextPlayhead = true;
+                    // Offset the next playhead by the exact amount we are ahead of the current position (to ensure we are phase correct)
+                    nextPlayheadOffset = attackStartSample - sourceSamplePosition;
                 }
                 playheadGain = 0;
                 stop();
@@ -190,6 +193,8 @@ public:
                 if (clipCommand->looping) {
                     // If we're looping and got to here without having already started a playhead (that is, we're not crossfading), start the next playhead now
                     startNextPlayhead = true;
+                    // Offset the next playhead by the exact amount we are ahead of the current position (to ensure we are phase correct)
+                    nextPlayheadOffset = sourceSamplePosition - decayEndSample;
                 }
                 playheadGain = 0;
                 stop();
@@ -203,6 +208,8 @@ public:
             }
             // As we'll be progressing all the playheads immediately following starting them, let's ensure we're ready to be progressed
             nextPlayhead->sourceSamplePosition -= byHowManySamples;
+            // Also, to ensure our phase is correct, we offset by how far the current step is now ahead
+            nextPlayhead->sourceSamplePosition += nextPlayheadOffset;
             startedNextPlayhead = true;
         }
     }
