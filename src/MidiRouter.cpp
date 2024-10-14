@@ -349,9 +349,6 @@ public:
                         }
                         if (sketchpadTrack == -1 || sketchpadTrack == -2) {
                             sketchpadTrack = currentSketchpadTrack;
-                        } else if (sketchpadTrack == -3) {
-                            // If sketchpad track is set to -3, we want to not send this message anywhere
-                            continue;
                         }
                         // Make sure we're using the correct output
                         // This is done to ensure that if we have any note-on events happen on some
@@ -373,77 +370,78 @@ public:
                         }
                         if (sketchpadTrack == -1 || sketchpadTrack == -2) {
                             sketchpadTrack = currentSketchpadTrack;
-                        } else if (sketchpadTrack == -3) {
-                            // If sketchpad track is set to -3, we want to not send this message anywhere
-                            continue;
                         }
-                        if (inputDeviceIsHardware) {
-                            // qDebug() << Q_FUNC_INFO << "Hardware input message received for channel" << eventChannel << "of size" << event->size;
-                            hardwareInListener.addMessage(false, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
+                        if (sketchpadTrack == -3) {
+                            // We should not be handling sketchpad track -3, which is the "no track" destination
                         } else {
-                            if (inputDeviceIsSequencer) {
-                                internalPassthroughListener.addMessage(true, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
+                            if (inputDeviceIsHardware) {
+                                // qDebug() << Q_FUNC_INFO << "Hardware input message received for channel" << eventChannel << "of size" << event->size;
+                                hardwareInListener.addMessage(false, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
                             } else {
-                                internalControllerPassthroughListener.addMessage(true, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
+                                if (inputDeviceIsSequencer) {
+                                    internalPassthroughListener.addMessage(true, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
+                                } else {
+                                    internalControllerPassthroughListener.addMessage(true, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
+                                }
                             }
-                        }
-                        if (inputDeviceIsHardware == false && eventChannel == masterChannel) {
-                            // qDebug() << Q_FUNC_INFO << "Event comes from internal device " << eventDevice << "and is on the master channel, send to all enabled outputs:" << allEnabledOutputs;
-                            for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
-                                device->writeEventToOutput(*event, eventDeviceFilterEntry);
-                            }
-                        }
-                        if (eventDevice->filterZynthianOutputByChannel()) {
-                            passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
-                            zynthianOutputs[eventChannel]->writeEventToOutput(*event, eventDeviceFilterEntry);
-                            // Since we've already sent out all the master channel messages anyway, don't write them again
-                            if (isCCMessage && eventChannel != masterChannel) {
-                                // qDebug() << Q_FUNC_INFO << "SyncTimer master track event is CC and is NOT on the master channel, send to all enabled outputs:" << allEnabledOutputs;
+                            if (inputDeviceIsHardware == false && eventChannel == masterChannel) {
+                                // qDebug() << Q_FUNC_INFO << "Event comes from internal device " << eventDevice << "and is on the master channel, send to all enabled outputs:" << allEnabledOutputs;
                                 for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
-                                    // TODO We'll likely want to filter this on device type ControllerType at some point, but for now everything gets it
                                     device->writeEventToOutput(*event, eventDeviceFilterEntry);
                                 }
                             }
-                            passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
-                        } else {
-                            currentTrack = sketchpadTracks[sketchpadTrack];
-                            currentTrack->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
-                            switch (currentTrack->destination) {
-                                case MidiRouter::ZynthianDestination:
-                                    passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
-                                    for (const int &zynthianChannel : currentTrack->zynthianChannels) {
-                                        if (zynthianChannel == -1) {
-                                            continue;
-                                        }
-                                        zynthianOutputs[zynthianChannel]->writeEventToOutput(*event, eventDeviceFilterEntry);
+                            if (eventDevice->filterZynthianOutputByChannel()) {
+                                passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
+                                zynthianOutputs[eventChannel]->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                // Since we've already sent out all the master channel messages anyway, don't write them again
+                                if (isCCMessage && eventChannel != masterChannel) {
+                                    // qDebug() << Q_FUNC_INFO << "SyncTimer master track event is CC and is NOT on the master channel, send to all enabled outputs:" << allEnabledOutputs;
+                                    for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
+                                        // TODO We'll likely want to filter this on device type ControllerType at some point, but for now everything gets it
+                                        device->writeEventToOutput(*event, eventDeviceFilterEntry);
                                     }
-                                    currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                    passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                    break;
-                                case MidiRouter::SamplerDestination:
-                                    passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
-                                    currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                    passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                    break;
-                                case MidiRouter::ExternalDestination:
-                                {
-                                    int externalChannel = (currentTrack->externalChannel == -1) ? currentTrack->trackIndex : currentTrack->externalChannel;
-                                    passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
-                                    externalOutListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, externalChannel, sketchpadTrack, eventDevice);
-                                    if (!(inputDeviceIsHardware == false && eventChannel == masterChannel)) {
-                                        // Since we've already done this above for master-channel events, don't write them again
-                                        for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
-                                            device->writeEventToOutput(*event, eventDeviceFilterEntry, externalChannel);
-                                        }
-                                    }
-                                    currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                    passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                    break;
                                 }
-                                case MidiRouter::NoDestination:
-                                default:
-                                    // Do nothing here
-                                    break;
+                                passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
+                            } else {
+                                currentTrack = sketchpadTracks[sketchpadTrack];
+                                currentTrack->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                switch (currentTrack->destination) {
+                                    case MidiRouter::ZynthianDestination:
+                                        passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
+                                        for (const int &zynthianChannel : currentTrack->zynthianChannels) {
+                                            if (zynthianChannel == -1) {
+                                                continue;
+                                            }
+                                            zynthianOutputs[zynthianChannel]->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                        }
+                                        currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                        passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                        break;
+                                    case MidiRouter::SamplerDestination:
+                                        passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
+                                        currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                        passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                        break;
+                                    case MidiRouter::ExternalDestination:
+                                    {
+                                        int externalChannel = (currentTrack->externalChannel == -1) ? currentTrack->trackIndex : currentTrack->externalChannel;
+                                        passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
+                                        externalOutListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, externalChannel, sketchpadTrack, eventDevice);
+                                        if (!(inputDeviceIsHardware == false && eventChannel == masterChannel)) {
+                                            // Since we've already done this above for master-channel events, don't write them again
+                                            for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
+                                                device->writeEventToOutput(*event, eventDeviceFilterEntry, externalChannel);
+                                            }
+                                        }
+                                        currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                        passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                        break;
+                                    }
+                                    case MidiRouter::NoDestination:
+                                    default:
+                                        // Do nothing here
+                                        break;
+                                }
                             }
                         }
                     } else if (event->size == 1 || event->size == 2) {
