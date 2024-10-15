@@ -659,7 +659,7 @@ bool SequenceModel::save(const QString &fileName, bool exportOnly)
         for (int i = 0; i < PATTERN_COUNT; ++i) {
             PatternModel *pattern = d->patternModelIterator[i];
             if (pattern) {
-                if (pattern->hasNotes()) {
+                if (pattern->hasContent()) {
                     hasAnyPattern = true;
                 }
             }
@@ -679,7 +679,7 @@ bool SequenceModel::save(const QString &fileName, bool exportOnly)
                             }
                             QString fileName = QString("%1/part%2.pattern.json").arg(patternLocation.path()).arg(patternIdentifier);
                             QFile patternFile(fileName);
-                            if (pattern->hasNotes()) {
+                            if (pattern->hasContent()) {
                                 pattern->exportToFile(fileName);
                             } else if (patternFile.exists()) {
                                 qDebug() << Q_FUNC_INFO << "Pattern" << patternIdentifier << "in sequence" << objectName() << "has no notes, but the file exists, so delete it";
