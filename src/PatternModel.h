@@ -592,6 +592,13 @@ public:
     bool currentBankHasNotes() const;
     Q_SIGNAL void hasNotesChanged();
 
+    /**
+     * \brief Whether any bank in the model contains notes, or any persisted setting is different from its default)
+     * @note To catch updates on this, listen to NotesModel::lastModifiedChanged
+     * @return True if there are notes, or any persisted property is non-default
+     */
+    Q_INVOKABLE bool hasContent() const;
+
     void setEnabled(bool enabled);
     bool enabled() const;
     Q_SIGNAL void enabledChanged();

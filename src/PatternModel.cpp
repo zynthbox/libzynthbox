@@ -435,6 +435,20 @@ struct StepData {
     }
 };
 
+struct PatternModelDefaults {
+public:
+    constexpr static const int externalMidiChannel{-1};
+    constexpr static const int defaultNoteDuration{0};
+    constexpr static const float stepLength{24.0f};
+    constexpr static const int swing{50};
+    constexpr static const int patternLength{16};
+    constexpr static const KeyScales::Scale scale{KeyScales::ScaleChromatic};
+    constexpr static const KeyScales::Pitch pitch{KeyScales::PitchC};
+    constexpr static const KeyScales::Octave octave{KeyScales::Octave4};
+    constexpr static const int gridModelStartNote{48};
+    constexpr static const int gridModelEndNote{64};
+};
+
 class PatternModel::Private {
 public:
     Private(PatternModel *q) : q(q) {
@@ -463,12 +477,12 @@ public:
     QHash<QString, qint64> lastSavedTimes;
     int width{16};
     PatternModel::NoteDestination noteDestination{PatternModel::SynthDestination};
-    int externalMidiChannel{-1};
-    int defaultNoteDuration{0};
-    float stepLength{24.0};
-    int swing{0};
+    int externalMidiChannel{PatternModelDefaults::externalMidiChannel};
+    int defaultNoteDuration{PatternModelDefaults::defaultNoteDuration};
+    float stepLength{PatternModelDefaults::stepLength};
+    int swing{PatternModelDefaults::swing};
     int availableBars{1};
-    int patternLength{16};
+    int patternLength{PatternModelDefaults::patternLength};
     int activeBar{0};
     int bankOffset{0};
     int bankLength{8};
@@ -616,12 +630,12 @@ public:
 
     PlayGridManager *playGridManager{nullptr};
 
-    KeyScales::Scale scale{KeyScales::ScaleChromatic};
-    KeyScales::Pitch pitch{KeyScales::PitchC};
-    KeyScales::Octave octave{KeyScales::Octave4};
+    KeyScales::Scale scale{PatternModelDefaults::scale};
+    KeyScales::Pitch pitch{PatternModelDefaults::pitch};
+    KeyScales::Octave octave{PatternModelDefaults::octave};
 
-    int gridModelStartNote{48};
-    int gridModelEndNote{64};
+    int gridModelStartNote{PatternModelDefaults::gridModelStartNote};
+    int gridModelEndNote{PatternModelDefaults::gridModelEndNote};
     NotesModel *gridModel{nullptr};
     NotesModel *clipSliceNotes{nullptr};
     QList<ClipAudioSource*> clips;
@@ -1211,19 +1225,19 @@ void PatternModel::resetPattern(bool clearNotes)
 {
     startLongOperation();
     setNoteDestination(PatternModel::SynthDestination);
-    setExternalMidiChannel(-1);
-    setDefaultNoteDuration(0);
-    setStepLength(24);
-    setSwing(50);
-    setPatternLength(16);
+    setExternalMidiChannel(PatternModelDefaults::externalMidiChannel);
+    setDefaultNoteDuration(PatternModelDefaults::defaultNoteDuration);
+    setStepLength(PatternModelDefaults::stepLength);
+    setSwing(PatternModelDefaults::swing);
+    setPatternLength(PatternModelDefaults::patternLength);
     setBankOffset(0);
     setBankLength(8);
-    setGridModelStartNote(48);
-    setGridModelEndNote(64);
+    setGridModelStartNote(PatternModelDefaults::gridModelStartNote);
+    setGridModelEndNote(PatternModelDefaults::gridModelEndNote);
     setWidth(16);
-    setPitch(KeyScales::PitchC);
-    setOctave(KeyScales::Octave4);
-    setScale(KeyScales::ScaleChromatic);
+    setPitch(PatternModelDefaults::pitch);
+    setOctave(PatternModelDefaults::octave);
+    setScale(PatternModelDefaults::scale);
     if (clearNotes && hasNotes()) {
         setHeight(0);
     }
@@ -1622,6 +1636,45 @@ bool PatternModel::hasNotes() const
 bool PatternModel::currentBankHasNotes() const
 {
     return bankHasNotes(floor(d->bankOffset / d->bankLength));
+}
+
+bool PatternModel::hasContent() const
+{
+    bool hasContent{false};
+    if (d->externalMidiChannel != PatternModelDefaults::externalMidiChannel) {
+        hasContent = true;
+    }
+    if (!hasContent && d->defaultNoteDuration != PatternModelDefaults::defaultNoteDuration) {
+        hasContent = true;
+    }
+    if (!hasContent && d->stepLength != PatternModelDefaults::stepLength) {
+        hasContent = true;
+    }
+    if (!hasContent && d->swing != PatternModelDefaults::swing) {
+        hasContent = true;
+    }
+    if (!hasContent && d->patternLength != PatternModelDefaults::patternLength) {
+        hasContent = true;
+    }
+    if (!hasContent && d->scale != PatternModelDefaults::scale) {
+        hasContent = true;
+    }
+    if (!hasContent && d->pitch != PatternModelDefaults::pitch) {
+        hasContent = true;
+    }
+    if (!hasContent && d->octave != PatternModelDefaults::octave) {
+        hasContent = true;
+    }
+    if (!hasContent && d->gridModelStartNote != PatternModelDefaults::gridModelStartNote) {
+        hasContent = true;
+    }
+    if (!hasContent && d->gridModelEndNote != PatternModelDefaults::gridModelEndNote) {
+        hasContent = true;
+    }
+    if (!hasContent && hasNotes()) {
+        hasContent = true;
+    }
+    return hasContent;
 }
 
 void PatternModel::setEnabled(bool enabled)
