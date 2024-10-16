@@ -96,6 +96,10 @@ public:
     int upperMasterChannel{15};
     int noteSplitPoint{127};
     int lastLowerZoneMemberChannel{7};
+    int lowerZoneMasterPitchBendRange{2};
+    int upperZoneMasterPitchBendRange{2};
+    int lowerZoneMemberPitchBendRange{48};
+    int upperZoneMemberPitchBendRange{48};
 
     jack_port_t *inputPort{nullptr};
     void *inputBuffer{nullptr};
@@ -150,6 +154,10 @@ public:
             q->setUpperMasterChannel(settings.value("upperMasterChannel", 15).toInt());
             q->setNoteSplitPoint(settings.value("noteSplitPoint", 127).toInt());
             q->setLastLowerZoneMemberChannel(settings.value("lastLowerZoneMemberChannel", 7).toInt());
+            q->setLowerMasterPitchBendRange(settings.value("lowerMasterPitchBendRange", 2).toInt());
+            q->setLowerMemberPitchBendRange(settings.value("lowerMemberPitchBendRange", 48).toInt());
+            q->setUpperMemberPitchBendRange(settings.value("upperMemberPitchBendRange", 48).toInt());
+            q->setUpperMasterPitchBendRange(settings.value("upperMasterPitchBendRange", 2).toInt());
             settings.endGroup();
             // Fetch the two event filters
             const QString storedInputEventFilter{settings.value("inputEventFilter", "").toString()};
@@ -188,6 +196,10 @@ public:
             settings.setValue("upperMasterChannel", upperMasterChannel);
             settings.setValue("noteSplitPoint", noteSplitPoint);
             settings.setValue("lastLowerZoneMemberChannel", lastLowerZoneMemberChannel);
+            settings.setValue("lowerZoneMasterPitchBendRange", lowerZoneMasterPitchBendRange);
+            settings.setValue("lowerZoneMemberPitchBendRange", lowerZoneMemberPitchBendRange);
+            settings.setValue("upperZoneMemberPitchBendRange", upperZoneMemberPitchBendRange);
+            settings.setValue("upperZoneMasterPitchBendRange", upperZoneMasterPitchBendRange);
             settings.endGroup();
             // Store each of the two event filters
             settings.setValue("inputEventFilter", inputEventFilter->serialize());
@@ -722,6 +734,87 @@ void MidiRouterDevice::setLastLowerZoneMemberChannel(const int& lastLowerZoneMem
         d->lastLowerZoneMemberChannel = std::clamp(lastLowerZoneMemberChannel, 0, 15);
         Q_EMIT lastLowerZoneMemberChannelChanged();
         d->updateMasterChannel();
+    }
+}
+
+int MidiRouterDevice::lowerMasterPitchBendRange() const
+{
+    return d->lowerZoneMasterPitchBendRange;
+}
+
+void MidiRouterDevice::setLowerMasterPitchBendRange(const int& lowerMasterPitchBendRange)
+{
+    if (d->lowerZoneMasterPitchBendRange != lowerMasterPitchBendRange) {
+        d->lowerZoneMasterPitchBendRange = std::clamp(lowerMasterPitchBendRange, 1, 96);
+        Q_EMIT lowerMasterPitchBendRangeChanged();
+    }
+}
+
+int MidiRouterDevice::lowerMemberPitchBendRange() const
+{
+    return d->lowerZoneMemberPitchBendRange;
+}
+
+void MidiRouterDevice::setLowerMemberPitchBendRange(const int& lowerMemberPitchBendRange)
+{
+    if (d->lowerZoneMemberPitchBendRange != lowerMemberPitchBendRange) {
+        d->lowerZoneMemberPitchBendRange = std::clamp(lowerMemberPitchBendRange, 1, 96);
+        Q_EMIT lowerMemberPitchBendRangeChanged();
+    }
+}
+
+int MidiRouterDevice::upperMemberPitchBendRange() const
+{
+    return d->upperZoneMemberPitchBendRange;
+}
+
+void MidiRouterDevice::setUpperMemberPitchBendRange(const int& upperMemberPitchBendRange)
+{
+    if (d->upperZoneMemberPitchBendRange != upperMemberPitchBendRange) {
+        d->upperZoneMemberPitchBendRange = std::clamp(upperMemberPitchBendRange, 1, 96);
+        Q_EMIT upperMemberPitchBendRangeChanged();
+    }
+}
+
+int MidiRouterDevice::upperMasterPitchBendRange() const
+{
+    return d->upperZoneMasterPitchBendRange;
+}
+
+void MidiRouterDevice::setUpperMasterPitchBendRange(const int& upperMasterPitchBendRange)
+{
+    if (d->upperZoneMasterPitchBendRange != upperMasterPitchBendRange) {
+        d->upperZoneMasterPitchBendRange = std::clamp(upperMasterPitchBendRange, 1, 96);
+        Q_EMIT upperMasterPitchBendRangeChanged();
+    }
+}
+
+void MidiRouterDevice::sendMPESettingsToDevice()
+{
+    juce::MidiBuffer midiBuffer;
+    // Configure the lower zone (RPN message on channel 1 with the number of member channels for the lower zone)
+    midiBuffer.addEvents(juce::MidiRPNGenerator::generate(1, 6, d->lastLowerZoneMemberChannel), 0, 0, 0);
+    // Configure the upper zone (RPN message on channel 16 with the number of member channels for the upper zone)
+    midiBuffer.addEvents(juce::MidiRPNGenerator::generate(16, 6, 15 - d->lastLowerZoneMemberChannel), 0, 0, 0);
+    // Configure the pitch bend for each channel
+    for (int midiChannel = 0; midiChannel < 16; ++midiChannel) {
+        int pitchBendRange{0};
+        if (midiChannel == 0 && d->lastLowerZoneMemberChannel > 0) {
+            // The lower zone is defined, and this is the master channel for that zone: Send out the global pitch bend for the lower zone
+            pitchBendRange = d->lowerZoneMasterPitchBendRange;
+        } else if (midiChannel == 16 && d->lastLowerZoneMemberChannel < 14) {
+            // The upper zone is defined, and this is the master channel for that zone: Send out the global pitch bend for the upper zone
+            pitchBendRange = d->upperZoneMasterPitchBendRange;
+        } else {
+            if (midiChannel <= d->lastLowerZoneMemberChannel) {
+                // We are in the lower zone, send out pitch bend range for that zone
+                pitchBendRange = d->lowerZoneMemberPitchBendRange;
+            } else {
+                // We are in the upper zone, send out pitch bend range for that zone
+                pitchBendRange = d->upperZoneMemberPitchBendRange;
+            }
+        }
+        midiBuffer.addEvents(juce::MidiRPNGenerator::generate(midiChannel + 1, 0, pitchBendRange), 0, 0, 0);
     }
 }
 

@@ -80,6 +80,35 @@ class MidiRouterDevice : public QObject {
      * @maximum 15 (though logically 14 - you should never pick either of the zones' master channel)
      */
     Q_PROPERTY(int lastLowerZoneMemberChannel READ lastLowerZoneMemberChannel WRITE setLastLowerZoneMemberChannel NOTIFY lastLowerZoneMemberChannelChanged)
+
+    /**
+     * \brief The global pitch bend sensitivity for the lower zone (the number of semitones moved up *or* down at the extreme values)
+     * @default 2
+     * @minimum 1
+     * @maximum 96
+     */
+    Q_PROPERTY(int lowerMasterPitchBendRange READ lowerMasterPitchBendRange WRITE setLowerMasterPitchBendRange NOTIFY lowerMasterPitchBendRange)
+    /**
+     * \brief The member channel pitch bend sensitivity for the lower zone (the number of semitones moved up *or* down at the extreme values)
+     * @default 48
+     * @minimum 1
+     * @maximum 96
+     */
+    Q_PROPERTY(int lowerMemberPitchBendRange READ lowerMemberPitchBendRange WRITE setLowerMemberPitchBendRange NOTIFY lowerMemberPitchBendRange)
+    /**
+     * \brief The member channel pitch bend sensitivity for the upper zone (the number of semitones moved up *or* down at the extreme values)
+     * @default 48
+     * @minimum 1
+     * @maximum 96
+     */
+    Q_PROPERTY(int upperMemberPitchBendRange READ upperMemberPitchBendRange WRITE setUpperMemberPitchBendRange NOTIFY upperMemberPitchBendRange)
+    /**
+     * \brief The global pitch bend sensitivity for the upper zone (the number of semitones moved up *or* down at the extreme values)
+     * @default 2
+     * @minimum 1
+     * @maximum 96
+     */
+    Q_PROPERTY(int upperMasterPitchBendRange READ upperMasterPitchBendRange WRITE setUpperMasterPitchBendRange NOTIFY upperMasterPitchBendRange)
     // END Basic MIDI (and MPE/MIDI Polyphonic Expression) settings
 
     /**
@@ -400,6 +429,23 @@ public:
     int lastLowerZoneMemberChannel() const;
     void setLastLowerZoneMemberChannel(const int &lastLowerZoneMemberChannel);
     Q_SIGNAL void lastLowerZoneMemberChannelChanged();
+    int lowerMasterPitchBendRange() const;
+    void setLowerMasterPitchBendRange(const int &lowerMasterPitchBendRange);
+    Q_SIGNAL void lowerMasterPitchBendRangeChanged();
+    int lowerMemberPitchBendRange() const;
+    void setLowerMemberPitchBendRange(const int &lowerMemberPitchBendRange);
+    Q_SIGNAL void lowerMemberPitchBendRangeChanged();
+    int upperMemberPitchBendRange() const;
+    void setUpperMemberPitchBendRange(const int &upperMemberPitchBendRange);
+    Q_SIGNAL void upperMemberPitchBendRangeChanged();
+    int upperMasterPitchBendRange() const;
+    void setUpperMasterPitchBendRange(const int &upperMasterPitchBendRange);
+    Q_SIGNAL void upperMasterPitchBendRangeChanged();
+
+    /**
+     * \brief Send the settings (member channel setup etc) to the device
+     */
+    Q_INVOKABLE void sendMPESettingsToDevice();
 
     /**
      * \brief Saves the device settings to the given file
