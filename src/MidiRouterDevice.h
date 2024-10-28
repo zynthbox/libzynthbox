@@ -87,28 +87,28 @@ class MidiRouterDevice : public QObject {
      * @minimum 1
      * @maximum 96
      */
-    Q_PROPERTY(int lowerMasterPitchBendRange READ lowerMasterPitchBendRange WRITE setLowerMasterPitchBendRange NOTIFY lowerMasterPitchBendRange)
+    Q_PROPERTY(int lowerMasterPitchBendRange READ lowerMasterPitchBendRange WRITE setLowerMasterPitchBendRange NOTIFY lowerMasterPitchBendRangeChanged)
     /**
      * \brief The member channel pitch bend sensitivity for the lower zone (the number of semitones moved up *or* down at the extreme values)
      * @default 48
      * @minimum 1
      * @maximum 96
      */
-    Q_PROPERTY(int lowerMemberPitchBendRange READ lowerMemberPitchBendRange WRITE setLowerMemberPitchBendRange NOTIFY lowerMemberPitchBendRange)
+    Q_PROPERTY(int lowerMemberPitchBendRange READ lowerMemberPitchBendRange WRITE setLowerMemberPitchBendRange NOTIFY lowerMemberPitchBendRangeChanged)
     /**
      * \brief The member channel pitch bend sensitivity for the upper zone (the number of semitones moved up *or* down at the extreme values)
      * @default 48
      * @minimum 1
      * @maximum 96
      */
-    Q_PROPERTY(int upperMemberPitchBendRange READ upperMemberPitchBendRange WRITE setUpperMemberPitchBendRange NOTIFY upperMemberPitchBendRange)
+    Q_PROPERTY(int upperMemberPitchBendRange READ upperMemberPitchBendRange WRITE setUpperMemberPitchBendRange NOTIFY upperMemberPitchBendRangeChanged)
     /**
      * \brief The global pitch bend sensitivity for the upper zone (the number of semitones moved up *or* down at the extreme values)
      * @default 2
      * @minimum 1
      * @maximum 96
      */
-    Q_PROPERTY(int upperMasterPitchBendRange READ upperMasterPitchBendRange WRITE setUpperMasterPitchBendRange NOTIFY upperMasterPitchBendRange)
+    Q_PROPERTY(int upperMasterPitchBendRange READ upperMasterPitchBendRange WRITE setUpperMasterPitchBendRange NOTIFY upperMasterPitchBendRangeChanged)
     // END Basic MIDI (and MPE/MIDI Polyphonic Expression) settings
 
     /**
