@@ -195,7 +195,7 @@ void JackConnectionHandler::commit()
 
 void JackConnectionHandler::clear()
 {
-    qDebug() << Q_FUNC_INFO;
+    // qDebug() << Q_FUNC_INFO;
     qDeleteAll(d->connections);
     d->connections.clear();
 }
