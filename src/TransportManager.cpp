@@ -137,6 +137,7 @@ public:
         } else {
             // qDebug() << Q_FUNC_INFO << "Calculate bar/beat/tick from position->frame - but actually we just pass in the values synctimer already calculated" << state << nframes << position->frame;
             syncTimer->setPosition(position);
+            position->valid = JackPositionBBT;
         }
     }
 };
