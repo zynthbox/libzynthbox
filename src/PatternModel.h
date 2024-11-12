@@ -229,6 +229,11 @@ class PatternModel : public NotesModel
      */
     Q_PROPERTY(int octave READ octave WRITE setOctave NOTIFY octaveChanged)
     Q_PROPERTY(KeyScales::Octave octaveKey READ octaveKey NOTIFY octaveChanged)
+    /**
+     * \brief Whether notes handled by this pattern's clip should be locked (or rewritten) to its given key and scale
+     * @default PatternModel::KeyScaleLockOff
+     */
+    Q_PROPERTY(PatternModel::KeyScaleLockStyle lockToKeyAndScale READ lockToKeyAndScale WRITE setLockToKeyAndScale NOTIFY lockToKeyAndScaleChanged)
 
     /**
      * \brief The first note used to fill out the grid model
@@ -623,6 +628,15 @@ public:
     void setOctave(int octave);
     void setOctaveKey(const KeyScales::Octave &octave);
     Q_SIGNAL void octaveChanged();
+    enum KeyScaleLockStyle {
+        KeyScaleLockOff, ///@< All notes will be accepted as their original self
+        KeyScaleLockBlock, ///@< Any note which doesn't match the pattern's key and scale will be blocked
+        KeyScaleLockRewrite, ///@< Any note which doesn't match the pattern's key and scale will be rewritten to match
+    };
+    Q_ENUM(KeyScaleLockStyle)
+    KeyScaleLockStyle lockToKeyAndScale() const;
+    void setLockToKeyAndScale(const KeyScaleLockStyle &lockToKeyAndScale);
+    Q_SIGNAL void lockToKeyAndScaleChanged();
 
     int gridModelStartNote() const;
     void setGridModelStartNote(int gridModelStartNote);
@@ -717,5 +731,6 @@ private:
 };
 Q_DECLARE_METATYPE(PatternModel*)
 Q_DECLARE_METATYPE(PatternModel::NoteDestination)
+Q_DECLARE_METATYPE(PatternModel::KeyScaleLockStyle)
 
 #endif//PATTERNMODEL_H

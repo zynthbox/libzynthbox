@@ -837,6 +837,7 @@ QString PlayGridManager::modelToJson(const QObject* model) const
         modelObject["scale"] = KeyScales::instance()->scaleShorthand(patternModel->scaleKey());
         modelObject["pitch"] = KeyScales::instance()->pitchShorthand(patternModel->pitchKey());
         modelObject["octave"] = KeyScales::instance()->octaveShorthand(patternModel->octaveKey());
+        modelObject["lockToKeyAndScale"] = int(patternModel->lockToKeyAndScale());
         modelObject["gridModelStartNote"] = patternModel->gridModelStartNote();
         modelObject["gridModelEndNote"] = patternModel->gridModelEndNote();
         modelObject["hasNotes"] = patternModel->hasNotes();
@@ -943,6 +944,11 @@ void PlayGridManager::setModelFromJson(QObject* model, const QString& json)
                 pattern->setOctaveKey(KeyScales::instance()->octaveShorthandToKey(patternObject.value("octave").toString()));
             } else {
                 pattern->setOctaveKey(KeyScales::Octave4);
+            }
+            if (patternObject.contains("lockToKeyAndScale")) {
+                pattern->setLockToKeyAndScale(PatternModel::KeyScaleLockStyle(patternObject.value("lockToKeyAndScale").toInt()));
+            } else {
+                pattern->setLockToKeyAndScale(PatternModel::KeyScaleLockOff);
             }
             pattern->endLongOperation();
         }

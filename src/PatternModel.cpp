@@ -633,6 +633,7 @@ public:
     KeyScales::Scale scale{PatternModelDefaults::scale};
     KeyScales::Pitch pitch{PatternModelDefaults::pitch};
     KeyScales::Octave octave{PatternModelDefaults::octave};
+    PatternModel::KeyScaleLockStyle lockToKeyAndScale{PatternModel::KeyScaleLockOff};
 
     int gridModelStartNote{PatternModelDefaults::gridModelStartNote};
     int gridModelEndNote{PatternModelDefaults::gridModelEndNote};
@@ -792,6 +793,7 @@ PatternModel::PatternModel(SequenceModel* parent)
     connect(this, &PatternModel::pitchChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::octaveChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::scaleChanged, this, &NotesModel::registerChange);
+    connect(this, &PatternModel::lockToKeyAndScaleChanged, this, &NotesModel::registerChange);
 
     connect(this, &QObject::objectNameChanged, this, &PatternModel::nameChanged);
     connect(this, &QObject::objectNameChanged, this, &PatternModel::thumbnailUrlChanged);
@@ -1880,6 +1882,19 @@ void PatternModel::setOctaveKey(const KeyScales::Octave& octave)
     if (d->octave != octave) {
         d->octave = octave;
         Q_EMIT octaveChanged();
+    }
+}
+
+PatternModel::KeyScaleLockStyle PatternModel::lockToKeyAndScale() const
+{
+    return d->lockToKeyAndScale;
+}
+
+void PatternModel::setLockToKeyAndScale(const PatternModel::KeyScaleLockStyle& lockToKeyAndScale)
+{
+    if (d->lockToKeyAndScale != lockToKeyAndScale) {
+        d->lockToKeyAndScale = lockToKeyAndScale;
+        Q_EMIT lockToKeyAndScaleChanged();
     }
 }
 
