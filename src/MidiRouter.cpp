@@ -4,6 +4,8 @@
 #include "ZynthboxBasics.h"
 #include "JackConnectionHandler.h"
 #include "JackPassthrough.h"
+#include "PatternModel.h"
+#include "PlayGridManager.h"
 #include "MidiRecorder.h"
 #include "MidiRouterDevice.h"
 #include "MidiRouterFilter.h"
@@ -49,6 +51,30 @@ struct SketchpadTrackInfo {
     int trackIndex{-1};
     int externalChannel{-1};
     MidiRouter::RoutingDestination destination{MidiRouter::ZynthianDestination};
+    int currentlySelectedPatternIndex{-1};
+    PatternModel *currentlySelectedPattern{nullptr};
+    KeyScales::Octave octave{KeyScales::Octave4};
+    KeyScales::Pitch pitch{KeyScales::PitchC};
+    KeyScales::Scale scale{KeyScales::ScaleChromatic};
+    PatternModel::KeyScaleLockStyle lockStyle{PatternModel::KeyScaleLockOff};
+    KeyScales *keyScales{KeyScales::instance()};
+    inline bool applyKeyScale(jack_midi_event_t& event) {
+        // We only care about events...
+        // - if we're supposed to be *some* kind of handling
+        // - the scale is not chromatic (if it is, any given note will be on scale)
+        // - it is a note related message (so note on or off, or poly aftertouch)
+        if (lockStyle != PatternModel::KeyScaleLockOff && scale != KeyScales::ScaleChromatic && 0x79 < event.buffer[0] && event.buffer[0] < 0xB0) {
+            // If we've got a pattern model defined, then we know what to do (otherwise we'll not have much idea)
+            if (lockStyle == PatternModel::KeyScaleLockRewrite) {
+                // Set the note value of the event to what it is supposed to be
+                event.buffer[1] = keyScales->onScaleNote(event.buffer[1], scale, pitch, octave);
+            } else if (lockStyle == PatternModel::KeyScaleLockBlock && keyScales->midiNoteOnScale(event.buffer[1], scale, pitch, octave) == false) {
+                // We do not accept this event, as it is for a note which is not on scale
+                return false;
+            }
+        }
+        return true;
+    }
 };
 
 struct MidiListenerPort {
@@ -404,43 +430,46 @@ public:
                                 passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
                             } else {
                                 currentTrack = sketchpadTracks[sketchpadTrack];
-                                currentTrack->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                switch (currentTrack->destination) {
-                                    case MidiRouter::ZynthianDestination:
-                                        passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
-                                        for (const int &zynthianChannel : currentTrack->zynthianChannels) {
-                                            if (zynthianChannel == -1) {
-                                                continue;
+                                // Before we send things out, ensure that any note message is rewritten or blocked as required for the destination track's currently selected clip
+                                if (currentTrack->applyKeyScale(*event)) {
+                                    currentTrack->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                    switch (currentTrack->destination) {
+                                        case MidiRouter::ZynthianDestination:
+                                            passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
+                                            for (const int &zynthianChannel : currentTrack->zynthianChannels) {
+                                                if (zynthianChannel == -1) {
+                                                    continue;
+                                                }
+                                                zynthianOutputs[zynthianChannel]->writeEventToOutput(*event, eventDeviceFilterEntry);
                                             }
-                                            zynthianOutputs[zynthianChannel]->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                        }
-                                        currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                        passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                        break;
-                                    case MidiRouter::SamplerDestination:
-                                        passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
-                                        currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                        passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                        break;
-                                    case MidiRouter::ExternalDestination:
-                                    {
-                                        int externalChannel = (currentTrack->externalChannel == -1) ? currentTrack->trackIndex : currentTrack->externalChannel;
-                                        passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
-                                        externalOutListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, externalChannel, sketchpadTrack, eventDevice);
-                                        if (!(inputDeviceIsHardware == false && eventChannel == masterChannel)) {
-                                            // Since we've already done this above for master-channel events, don't write them again
-                                            for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
-                                                device->writeEventToOutput(*event, eventDeviceFilterEntry, externalChannel);
+                                            currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                            passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                            break;
+                                        case MidiRouter::SamplerDestination:
+                                            passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
+                                            currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                            passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                            break;
+                                        case MidiRouter::ExternalDestination:
+                                        {
+                                            int externalChannel = (currentTrack->externalChannel == -1) ? currentTrack->trackIndex : currentTrack->externalChannel;
+                                            passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
+                                            externalOutListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, externalChannel, sketchpadTrack, eventDevice);
+                                            if (!(inputDeviceIsHardware == false && eventChannel == masterChannel)) {
+                                                // Since we've already done this above for master-channel events, don't write them again
+                                                for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
+                                                    device->writeEventToOutput(*event, eventDeviceFilterEntry, externalChannel);
+                                                }
                                             }
+                                            currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                            passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                            break;
                                         }
-                                        currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                        passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                        break;
+                                        case MidiRouter::NoDestination:
+                                        default:
+                                            // Do nothing here
+                                            break;
                                     }
-                                    case MidiRouter::NoDestination:
-                                    default:
-                                        // Do nothing here
-                                        break;
                                 }
                             }
                         }
@@ -677,6 +706,57 @@ public:
             }
         }
     }
+
+    QTimer *allTrackKeyScaleInfoUpdater{nullptr};
+    void allTrackKeyScaleInfoUpdaterActual() {
+        SequenceModel *sequence = qobject_cast<SequenceModel*>(PlayGridManager::instance()->getSequenceModel("", false));
+        // a simple heuristic for ensuring we've got some patterns loaded (the event might happen too early)
+        if (sequence->activePatternObject()) {
+            // qDebug() << Q_FUNC_INFO << "There is an active pattern object, let's get this stuff updated, yo!";
+            for (int trackIndex = 0; trackIndex < ZynthboxTrackCount; ++trackIndex) {
+                SketchpadTrackInfo *trackInfo{sketchpadTracks[trackIndex]};
+                PatternModel *patternModel = qobject_cast<PatternModel*>(sequence->getByClipId(trackIndex, trackInfo->currentlySelectedPatternIndex));
+                if (trackInfo->currentlySelectedPattern != patternModel) {
+                    if (trackInfo->currentlySelectedPattern) {
+                        trackInfo->currentlySelectedPattern->disconnect(q);
+                    }
+                    trackInfo->currentlySelectedPattern = patternModel;
+                    QObject::connect(patternModel, &PatternModel::scaleChanged, q, [this](){ updateAllTrackKeyScaleInfo(); });
+                    QObject::connect(patternModel, &PatternModel::pitchChanged, q, [this](){ updateAllTrackKeyScaleInfo(); });
+                    QObject::connect(patternModel, &PatternModel::octaveChanged, q, [this](){ updateAllTrackKeyScaleInfo(); });
+                    QObject::connect(patternModel, &PatternModel::lockToKeyAndScaleChanged, q, [this](){ updateAllTrackKeyScaleInfo(); });
+                    // Clean up, essentially just in case...
+                    QObject::connect(patternModel, &QObject::destroyed, q, [trackInfo, patternModel](){
+                        if (trackInfo->currentlySelectedPattern == patternModel) {
+                            trackInfo->currentlySelectedPattern = nullptr;
+                            trackInfo->lockStyle = PatternModel::KeyScaleLockOff;
+                        }
+                    });
+                }
+                if (trackInfo->currentlySelectedPattern) {
+                    trackInfo->scale = trackInfo->currentlySelectedPattern->scaleKey();
+                    trackInfo->octave = trackInfo->currentlySelectedPattern->octaveKey();
+                    trackInfo->pitch = trackInfo->currentlySelectedPattern->pitchKey();
+                    trackInfo->lockStyle = trackInfo->currentlySelectedPattern->lockToKeyAndScale();
+                } else {
+                    trackInfo->lockStyle = PatternModel::KeyScaleLockOff;
+                }
+            }
+        } else {
+            // If indeed we have been asked to run things too early, let's postpone and try again in a little bit
+            // qDebug() << Q_FUNC_INFO << "Asking for a retry...";
+            allTrackKeyScaleInfoUpdater->start(1000);
+        }
+    }
+    void updateAllTrackKeyScaleInfo() {
+        if (allTrackKeyScaleInfoUpdater == nullptr) {
+            allTrackKeyScaleInfoUpdater = new QTimer(q);
+            allTrackKeyScaleInfoUpdater->setInterval(0);
+            allTrackKeyScaleInfoUpdater->setSingleShot(true);
+            QObject::connect(allTrackKeyScaleInfoUpdater, &QTimer::timeout, q, [this](){ allTrackKeyScaleInfoUpdaterActual(); });
+        }
+        allTrackKeyScaleInfoUpdater->start();
+    }
 };
 
 static int client_process(jack_nframes_t nframes, void* arg) {
@@ -885,6 +965,19 @@ void MidiRouter::run() {
 void MidiRouter::cuiaEventFeedback(const QString& cuiaCommand, const int& originId, const ZynthboxBasics::Track& track, const ZynthboxBasics::Slot& slot, const int& value)
 {
     const CUIAHelper::Event cuiaEvent{CUIAHelper::instance()->cuiaEvent(cuiaCommand)};
+    if (cuiaEvent == CUIAHelper::SetClipCurrentEvent) {
+        int trackIndex{trackIndex};
+        if (trackIndex < 0) {
+            trackIndex = d->currentSketchpadTrack;
+        }
+        const int slotIndex{slot};
+        // This really shouldn't happen, but in case it does...
+        if (slotIndex > -1) {
+            SketchpadTrackInfo *trackInfo{d->sketchpadTracks[trackIndex]};
+            trackInfo->currentlySelectedPatternIndex = slotIndex;
+            d->updateAllTrackKeyScaleInfo();
+        }
+    }
     for (MidiRouterDevice * device : qAsConst(d->allEnabledOutputs)) {
         device->cuiaEventFeedback(cuiaEvent, originId, track, slot, value);
     }
