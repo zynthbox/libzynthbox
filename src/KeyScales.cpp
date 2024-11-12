@@ -409,6 +409,10 @@ public:
                     }
                     currentlyAddingNote = currentlyAddingNote + scaleInterval[scaleIntervalPosition];
                 }
+                // Initialise all the note indices to -1 before assigning the correct indices where applicable
+                for (int noteIndex = 0; noteIndex < 128; ++noteIndex) {
+                    noteIndices[scaleName][rootNote][noteIndex] = -1;
+                }
                 // We then run through that list, and add them in turn (and any that might be missing) to the nearest note lookup
                 int anyNote{0};
                 int noteIndex{0};
@@ -436,7 +440,7 @@ public:
     // Pre-calculated table of all notes in a scale, for any given root note, in the known scales
     int allNotes[scaleCount][128][128]{{{0}}};
     // Pre-calculated table of the indices in allNotes of for any given note
-    int noteIndices[scaleCount][128][128]{{{-1}}};
+    int noteIndices[scaleCount][128][128]{{{0}}};
 };
 
 KeyScales::KeyScales(QObject* parent)
@@ -639,13 +643,6 @@ int KeyScales::transposeNote(const int& midiNote, const int& steps, const Scale&
 
 bool KeyScales::midiNoteOnScale(const int& midiNote, const Scale& scale, const Pitch& pitch, const Octave& octave) const
 {
-    bool returnVal{false};
-    for (int index = 0; index < 128; ++index) {
-        if (d->allNotes[scale][std::clamp(octave + pitchValuesHash[pitch], 0, 127)][index] == midiNote) {
-            returnVal = true;
-            break;
-        }
-    }
-    // qDebug() << Q_FUNC_INFO << midiNote << scale << pitch << octave << returnVal << d->allNotes[scale][std::clamp(octave + pitchValuesHash[pitch], 0, 127)];
-    return returnVal;
+    // qDebug() << Q_FUNC_INFO << midiNote << "on scale for" << scale << pitch << octave << "meaning this value should be above -1 if on scale" << d->noteIndices[scale][std::clamp(octave + pitchValuesHash[pitch], 0, 127)][midiNote];
+    return d->noteIndices[scale][std::clamp(octave + pitchValuesHash[pitch], 0, 127)][midiNote] > -1;
 }
