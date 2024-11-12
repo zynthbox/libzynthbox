@@ -158,7 +158,9 @@ class SequenceModel::Private {
 public:
     Private(SequenceModel *q)
         : q(q)
-    {}
+    {
+        updatePatternIterator();
+    }
     SequenceModel *q;
     ZLSequenceSynchronisationManager *zlSyncManager{nullptr};
     PlayGridManager *playGridManager{nullptr};
