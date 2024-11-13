@@ -231,6 +231,18 @@ MidiRouterDevice::MidiRouterDevice(jack_client_t *jackClient, MidiRouter *parent
     deviceSettingsSaverThrottle->setSingleShot(true);
     deviceSettingsSaverThrottle->setInterval(0);
     connect(deviceSettingsSaverThrottle, &QTimer::timeout, this, [this](){ d->saveDeviceSettings(); });
+    connect(this, &MidiRouterDevice::midiChannelTargetTracksChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
+    connect(this, &MidiRouterDevice::sendTimecodeChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
+    connect(this, &MidiRouterDevice::sendBeatClockChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
+    connect(this, &MidiRouterDevice::channelsToSendToChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
+    connect(this, &MidiRouterDevice::lowerMasterChannelChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
+    connect(this, &MidiRouterDevice::upperMasterChannelChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
+    connect(this, &MidiRouterDevice::noteSplitPointChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
+    connect(this, &MidiRouterDevice::lastLowerZoneMemberChannelChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
+    connect(this, &MidiRouterDevice::lowerMasterPitchBendRangeChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
+    connect(this, &MidiRouterDevice::lowerMemberPitchBendRangeChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
+    connect(this, &MidiRouterDevice::upperMemberPitchBendRangeChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
+    connect(this, &MidiRouterDevice::upperMasterPitchBendRangeChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
     connect(d->inputEventFilter, &MidiRouterFilter::entriesDataChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
     connect(d->outputEventFilter, &MidiRouterFilter::entriesDataChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
 }
