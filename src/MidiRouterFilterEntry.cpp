@@ -229,59 +229,41 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::AllNotesOffEvent:
                     case CUIAHelper::AllSoundsOffEvent:
                     case CUIAHelper::AllOffEvent:
-                    case CUIAHelper::StartAudioRecordEvent:
-                    case CUIAHelper::StopAudioRecordEvent:
-                    case CUIAHelper::ToggleAudioRecordEvent:
-                    case CUIAHelper::StartAudioPlayEvent:
-                    case CUIAHelper::StopAudioPlayEvent:
-                    case CUIAHelper::ToggleAudioPlayEvent:
-                    case CUIAHelper::StartMidiRecordEvent:
-                    case CUIAHelper::StopMidiRecordEvent:
-                    case CUIAHelper::ToggleMidiRecordEvent:
-                    case CUIAHelper::StartMidiPlayEvent:
-                    case CUIAHelper::StopMidiPlayEvent:
-                    case CUIAHelper::ToggleMidiPlayEvent:
-                    case CUIAHelper::ZlPlayEvent:
-                    case CUIAHelper::ZlStopEvent:
-                    case CUIAHelper::StartRecordEvent:
                     case CUIAHelper::StopRecordEvent:
-                    case CUIAHelper::SelectEvent:
+                    case CUIAHelper::SelectItemEvent:
                     case CUIAHelper::SelectUpEvent:
                     case CUIAHelper::SelectDownEvent:
-                    case CUIAHelper::SelectLeftEvent:
-                    case CUIAHelper::SelectRightEvent:
                     case CUIAHelper::NavigateLeftEvent:
                     case CUIAHelper::NavigateRightEvent:
-                    case CUIAHelper::BackUpEvent:
-                    case CUIAHelper::BackDownEvent:
                     case CUIAHelper::LayerUpEvent:
                     case CUIAHelper::LayerDownEvent:
                     case CUIAHelper::SnapshotUpEvent:
                     case CUIAHelper::SnapshotDownEvent:
                     case CUIAHelper::SceneUpEvent:
                     case CUIAHelper::SceneDownEvent:
-                    case CUIAHelper::KeyboardEvent:
+                    case CUIAHelper::ToggleKeyboardEvent:
+                    case CUIAHelper::ShowKeyboardEvent:
+                    case CUIAHelper::HideKeyboardEvent:
+                    case CUIAHelper::SwitchMenuDownEvent:
+                    case CUIAHelper::SwitchMenuReleasedEvent:
                     case CUIAHelper::SwitchLayerShortEvent:
                     case CUIAHelper::SwitchLayerBoldEvent:
-                    case CUIAHelper::SwitchLayerLongEvent:
                     case CUIAHelper::SwitchBackShortEvent:
                     case CUIAHelper::SwitchBackBoldEvent:
-                    case CUIAHelper::SwitchBackLongEvent:
                     case CUIAHelper::SwitchSnapshotShortEvent:
                     case CUIAHelper::SwitchSnapshotBoldEvent:
-                    case CUIAHelper::SwitchSnapshotLongEvent:
                     case CUIAHelper::SwitchSelectShortEvent:
                     case CUIAHelper::SwitchSelectBoldEvent:
-                    case CUIAHelper::SwitchSelectLongEvent:
-                    case CUIAHelper::ModeSwitchShortEvent:
-                    case CUIAHelper::ModeSwitchBoldEvent:
-                    case CUIAHelper::ModeSwitchLongEvent:
-                    case CUIAHelper::SwitchChannelsModShortEvent:
-                    case CUIAHelper::SwitchChannelsModBoldEvent:
-                    case CUIAHelper::SwitchChannelsModLongEvent:
+                    case CUIAHelper::SwitchModeDownEvent:
+                    case CUIAHelper::SwitchModeReleasedEvent:
+                    case CUIAHelper::SwitchTracksModEvent:
+                    case CUIAHelper::SwitchAltDownEvent:
+                    case CUIAHelper::SwitchAltReleasedEvent:
+                    case CUIAHelper::SwitchRecordEvent:
                     case CUIAHelper::SwitchMetronomeShortEvent:
                     case CUIAHelper::SwitchMetronomeBoldEvent:
-                    case CUIAHelper::SwitchMetronomeLongEvent:
+                    case CUIAHelper::SwitchPlayEvent:
+                    case CUIAHelper::SwitchStopEvent:
                     case CUIAHelper::ScreenAdminEvent:
                     case CUIAHelper::ScreenAudioSettingsEvent:
                     case CUIAHelper::ScreenBankEvent:
@@ -296,22 +278,16 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::ScreenSongManagerEvent:
                     case CUIAHelper::ModalSnapshotLoadEvent:
                     case CUIAHelper::ModalSnapshotSaveEvent:
-                    case CUIAHelper::ModalAudioRecorderEvent:
-                    case CUIAHelper::ModalMidiRecorderEvent:
-                    case CUIAHelper::ModalAlsaMixerEvent:
-                    case CUIAHelper::ModalStepseqEvent:
-                    case CUIAHelper::Channel1Event:
-                    case CUIAHelper::Channel2Event:
-                    case CUIAHelper::Channel3Event:
-                    case CUIAHelper::Channel4Event:
-                    case CUIAHelper::Channel5Event:
-                    case CUIAHelper::Channel6Event:
-                    case CUIAHelper::Channel7Event:
-                    case CUIAHelper::Channel8Event:
-                    case CUIAHelper::Channel9Event:
-                    case CUIAHelper::Channel10Event:
-                    case CUIAHelper::ChannelPreviousEvent:
-                    case CUIAHelper::ChannelNextEvent:
+                    case CUIAHelper::ScreenAlsaMixerEvent:
+                    case CUIAHelper::SwitchTrack1Event:
+                    case CUIAHelper::SwitchTrack2Event:
+                    case CUIAHelper::SwitchTrack3Event:
+                    case CUIAHelper::SwitchTrack4Event:
+                    case CUIAHelper::SwitchTrack5Event:
+                    case CUIAHelper::TrackPreviousEvent:
+                    case CUIAHelper::TrackNextEvent:
+                    case CUIAHelper::SwitchGlobalDownEvent:
+                    case CUIAHelper::SwitchGlobalReleasedEvent:
                     case CUIAHelper::Knob0UpEvent:
                     case CUIAHelper::Knob0DownEvent:
                     case CUIAHelper::Knob0TouchedEvent:
@@ -371,6 +347,10 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::SetSlotGainEvent:
                         // Set the gain of the given sound slot to the given value
                     case CUIAHelper::SetSlotPanEvent:
+                        // Set the pan of the given sound slot to the given value
+                    case CUIAHelper::SetSlotFilterCutoffEvent:
+                        // Set the pan of the given sound slot to the given value
+                    case CUIAHelper::SetSlotFilterResonanceEvent:
                         // Set the pan of the given sound slot to the given value
                     case CUIAHelper::SetFxAmountEvent:
                         // Set the wet/dry mix for the given fx
