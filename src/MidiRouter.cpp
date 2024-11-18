@@ -965,21 +965,23 @@ void MidiRouter::run() {
 void MidiRouter::cuiaEventFeedback(const QString& cuiaCommand, const int& originId, const ZynthboxBasics::Track& track, const ZynthboxBasics::Slot& slot, const int& value)
 {
     const CUIAHelper::Event cuiaEvent{CUIAHelper::instance()->cuiaEvent(cuiaCommand)};
-    if (cuiaEvent == CUIAHelper::SetClipCurrentEvent) {
-        int trackIndex{trackIndex};
-        if (trackIndex < 0) {
-            trackIndex = d->currentSketchpadTrack;
+    if (cuiaEvent != CUIAHelper::NoCuiaEvent) {
+        if (cuiaEvent == CUIAHelper::SetClipCurrentEvent) {
+            int trackIndex{track};
+            if (trackIndex < 0) {
+                trackIndex = d->currentSketchpadTrack;
+            }
+            const int slotIndex{slot};
+            // This really shouldn't happen, but in case it does...
+            if (slotIndex > -1) {
+                SketchpadTrackInfo *trackInfo{d->sketchpadTracks[trackIndex]};
+                trackInfo->currentlySelectedPatternIndex = slotIndex;
+                d->updateAllTrackKeyScaleInfo();
+            }
         }
-        const int slotIndex{slot};
-        // This really shouldn't happen, but in case it does...
-        if (slotIndex > -1) {
-            SketchpadTrackInfo *trackInfo{d->sketchpadTracks[trackIndex]};
-            trackInfo->currentlySelectedPatternIndex = slotIndex;
-            d->updateAllTrackKeyScaleInfo();
+        for (MidiRouterDevice * device : qAsConst(d->allEnabledOutputs)) {
+            device->cuiaEventFeedback(cuiaEvent, originId, track, slot, value);
         }
-    }
-    for (MidiRouterDevice * device : qAsConst(d->allEnabledOutputs)) {
-        device->cuiaEventFeedback(cuiaEvent, originId, track, slot, value);
     }
 }
 
