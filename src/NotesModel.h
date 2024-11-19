@@ -225,14 +225,14 @@ public:
     Q_INVOKABLE void removeRow(int row);
 
     /**
-     * \brief Changes all notes in the model to switch to the given midi channel
-     * This is a convenience function, useful for when nothing else changes (say the global midi
-     * channel changes and you still want to be able to use this model for handling notes on that
-     * channel, such as in the basic Notes playground module)
-     * @note If this is called with an invalid midi channel, it will be clamped to -1 and 16 (still invalid, but don't use this for information storage outside of "invalid")
-     * @param midiChannel The midi channel (0 through 15) that all notes and subnotes (etc) in the model should use
+     * \brief Changes all notes in the model to target the given sketchpad track
+     * This is a convenience function, useful for when nothing else changes (say the current sketchpad
+     * track changes and you still want to be able to use this model for handling notes on that
+     * track, such as in the basic Notes playground module)
+     * @note If this is called with an invalid sketchpad track, it will be clamped to between 0 and 9
+     * @param sketchpadTrack The sketchpad track (0 through 9) that all notes and subnotes (etc) in the model should use
      */
-    Q_INVOKABLE void changeMidiChannel(int midiChannel);
+    Q_INVOKABLE void changeSketchpadTrack(int sketchpadTrack);
     /**
      * \brief Get the PlayGridManager instance associated with this model
      * @return The PlayGridManager associated with this model (either the immediate parent, or the one from the parent model)

@@ -655,29 +655,29 @@ void NotesModel::removeRow(int row)
     }
 }
 
-Note *switchNoteMidiChannel(Note *note, int newMidiChannel) {
+Note *switchNoteSketchpadTrack(Note *note, int sketchpadTrack) {
     Note *newNote{nullptr};
     if (note) {
         if (note->subnotes().count() > 0) {
             QVariantList subnotes;
             for (const QVariant &variantNote : note->subnotes()) {
-                subnotes << QVariant::fromValue<QObject*>(switchNoteMidiChannel(variantNote.value<Note*>(), newMidiChannel));
+                subnotes << QVariant::fromValue<QObject*>(switchNoteSketchpadTrack(variantNote.value<Note*>(), sketchpadTrack));
             }
             newNote = qobject_cast<Note*>(PlayGridManager::instance()->getCompoundNote(subnotes));
         } else {
-            newNote = qobject_cast<Note*>(PlayGridManager::instance()->getNote(note->midiNote(), newMidiChannel));
+            newNote = qobject_cast<Note*>(PlayGridManager::instance()->getNote(note->midiNote(), sketchpadTrack));
         }
     }
     return newNote;
 }
 
-void NotesModel::changeMidiChannel(int midiChannel)
+void NotesModel::changeSketchpadTrack(int sketchpadTrack)
 {
-    qDebug() << this << "Changing midi to" << midiChannel;
+    // qDebug() << Q_FUNC_INFO << this << "Changing sketchpad track to" << sketchpadTrack;
     int longestRow{0};
     for (QList<Entry> &entries : d->entries) {
         for (int i = 0; i < entries.count(); ++i) {
-            entries[i].note = switchNoteMidiChannel(entries[i].note, qBound(-1, midiChannel, 16));
+            entries[i].note = switchNoteSketchpadTrack(entries[i].note, qBound(0, sketchpadTrack, ZynthboxTrackCount - 1));
         }
         longestRow = qMax(longestRow, entries.count());
     }
