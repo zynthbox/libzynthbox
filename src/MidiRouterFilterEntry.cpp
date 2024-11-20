@@ -256,7 +256,8 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::SwitchSelectBoldEvent:
                     case CUIAHelper::SwitchModeDownEvent:
                     case CUIAHelper::SwitchModeReleasedEvent:
-                    case CUIAHelper::SwitchTracksModEvent:
+                    case CUIAHelper::SwitchTracksModDownEvent:
+                    case CUIAHelper::SwitchTracksModReleasedEvent:
                     case CUIAHelper::SwitchAltDownEvent:
                     case CUIAHelper::SwitchAltReleasedEvent:
                     case CUIAHelper::SwitchRecordEvent:
@@ -271,7 +272,7 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::ScreenEditContextualEvent:
                     case CUIAHelper::ScreenLayerEvent:
                     case CUIAHelper::ScreenLayerFxEvent:
-                    case CUIAHelper::ScreenMainEvent:
+                    case CUIAHelper::ScreenMainMenuEvent:
                     case CUIAHelper::ScreenPlaygridEvent:
                     case CUIAHelper::ScreenPresetEvent:
                     case CUIAHelper::ScreenSketchpadEvent:

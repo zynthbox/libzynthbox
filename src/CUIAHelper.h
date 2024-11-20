@@ -36,7 +36,8 @@ public:
         SwitchTrack3Event,
         SwitchTrack4Event,
         SwitchTrack5Event,
-        SwitchTracksModEvent,
+        SwitchTracksModDownEvent,
+        SwitchTracksModReleasedEvent,
         SwitchModeDownEvent,
         SwitchModeReleasedEvent,
 
@@ -90,7 +91,7 @@ public:
         ScreenEditContextualEvent,
         ScreenLayerEvent,
         ScreenLayerFxEvent,
-        ScreenMainEvent,
+        ScreenMainMenuEvent,
         ScreenPlaygridEvent,
         ScreenPresetEvent,
         ScreenSketchpadEvent,
