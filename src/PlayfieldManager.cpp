@@ -132,7 +132,6 @@ public:
 public Q_SLOTS:
     void updateClips() {
         static const QLatin1String sampleTrig{"sample-trig"};
-        static const QLatin1String sampleSlice{"sample-slice"};
         static const QLatin1String sampleLoop{"sample-loop"};
         static const QLatin1String external{"external"};
         // static const QLatin1String synth{"synth"}; // the default
@@ -147,8 +146,6 @@ public Q_SLOTS:
                     const QString trackType = track->property("trackType").toString();
                     if (trackType == sampleTrig) {
                         destinations[songIndex][trackIndex] = PatternModel::SampleTriggerDestination;
-                    } else if (trackType == sampleSlice) {
-                        destinations[songIndex][trackIndex] = PatternModel::SampleSlicedDestination;
                     } else if (trackType == sampleLoop) {
                         destinations[songIndex][trackIndex] = PatternModel::SampleLoopedDestination;
                     } else if (trackType == external) {

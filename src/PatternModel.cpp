@@ -161,7 +161,6 @@ public Q_SLOTS:
     }
     void trackTypeChanged() {
         static const QLatin1String sampleTrig{"sample-trig"};
-        static const QLatin1String sampleSlice{"sample-slice"};
         static const QLatin1String sampleLoop{"sample-loop"};
         static const QLatin1String external{"external"};
 //         static const QLatin1String synth{"synth"}; // the default
@@ -171,9 +170,6 @@ public Q_SLOTS:
         timerCommand->parameter = q->sketchpadTrack();
         if (trackType == sampleTrig) {
             q->setNoteDestination(PatternModel::SampleTriggerDestination);
-            timerCommand->parameter2 = true;
-        } else if (trackType == sampleSlice) {
-            q->setNoteDestination(PatternModel::SampleSlicedDestination);
             timerCommand->parameter2 = true;
         } else if (trackType == sampleLoop) {
             q->setNoteDestination(PatternModel::SampleLoopedDestination);
@@ -688,15 +684,16 @@ public:
                             // Don't actually set volume, just store the volume for velocity purposes... yes this is kind of a hack
                             command->volume = float(byte3) / float(127);
                         }
-                        if (noteDestination == SampleSlicedDestination) {
-                            command->midiNote = 60; // TODO see scribble-notes on the topic of more powerful slice playback
-                            command->changeSlice = true;
-                            command->slice = clip->sliceForMidiNote(byte2);
-                        } else {
+                        // if (clip->playbackStyle() == ClipAudioSource::SlicedPlaybackMode) {
+                        // if (false) {
+                        //     command->midiNote = 60; // TODO see scribble-notes on the topic of more powerful slice playback
+                        //     command->changeSlice = true;
+                        //     command->slice = clip->sliceForMidiNote(byte2);
+                        // } else {
                             command->midiNote = byte2;
                             command->changeLooping = true;
                             command->looping = clip->looping();
-                        }
+                        // }
                         listToPopulate->write(command, 0);
                         // qDebug() << Q_FUNC_INFO << "Wrote command to list for" << clip;
                     }
@@ -812,7 +809,6 @@ PatternModel::PatternModel(SequenceModel* parent)
         int actualChannel = d->noteDestination == PatternModel::ExternalDestination && d->externalMidiChannel > -1 ? d->externalMidiChannel : d->sketchpadTrack;
         MidiRouter::RoutingDestination routerDestination{MidiRouter::ZynthianDestination};
         switch(d->noteDestination) {
-            case PatternModel::SampleSlicedDestination:
             case PatternModel::SampleTriggerDestination:
                 routerDestination = MidiRouter::SamplerDestination;
                 break;
@@ -2375,7 +2371,6 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                         // If this channel is supposed to loop its sample, we are not supposed to be making patterny sounds
                         break;
                     case PatternModel::SampleTriggerDestination:
-                    case PatternModel::SampleSlicedDestination:
                     {
                         const StepData &stepData = d->getOrCreateStepData(nextPosition + (d->bankOffset * d->width));
                         QHash<int, juce::MidiBuffer>::const_iterator position;
@@ -2500,7 +2495,7 @@ void PatternModel::midiMessageToClipCommands(ClipCommandRing *listToPopulate, co
 {
     if (samplerIndex == d->sketchpadTrack && (!d->sequence || (d->sequence->shouldMakeSounds() && (d->sequence->soloPatternObject() == this || d->enabled)))
         // But also, don't make sounds unless we're sample-triggering or slicing (otherwise the synths will handle it)
-        && (d->noteDestination == SampleTriggerDestination || d->noteDestination == SampleSlicedDestination)) {
+        && d->noteDestination == SampleTriggerDestination) {
             d->midiMessageToClipCommands(listToPopulate, byte1, byte2, byte3);
     }
 }
