@@ -962,6 +962,16 @@ void MidiRouter::run() {
     }
 }
 
+void MidiRouter::enqueueCuiaCommand(const QString& cuiaCommand)
+{
+    const CUIAHelper::Event cuiaEvent{CUIAHelper::instance()->cuiaEvent(cuiaCommand)};
+    if (cuiaEvent != CUIAHelper::NoCuiaEvent) {
+        // The first device is the TransportManager device, and we really
+        // just need... literally any device here, so that'll do.
+        d->internalDevices[0]->cuiaRing.write(cuiaEvent, -1);
+    }
+}
+
 void MidiRouter::cuiaEventFeedback(const QString& cuiaCommand, const int& originId, const ZynthboxBasics::Track& track, const ZynthboxBasics::Slot& slot, const int& value)
 {
     const CUIAHelper::Event cuiaEvent{CUIAHelper::instance()->cuiaEvent(cuiaCommand)};

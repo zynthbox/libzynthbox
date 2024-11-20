@@ -185,6 +185,16 @@ public:
     Q_SIGNAL void cuiaEvent(const QString &cuiaCommand, const int &originId, const ZynthboxBasics::Track &track, const ZynthboxBasics::Slot &slot, const int &value);
 #endif
     /**
+     * \brief Convenience function to enqueue a cuia command for processing
+     * This function is useful in cases where attempting to perform cuia
+     * commands from an unsafe thread.
+     * The given command will be returned by the cuiaEvent signal above,
+     * sent out by an arbitrary device
+     * @note If the given command is not known by CUIAHelper, it will be ignored
+     * @param cuiaCommand The cuia command which should be added to the queue
+     */
+    Q_SLOT void enqueueCuiaCommand(const QString &cuiaCommand);
+    /**
      * \brief Called from the Ui whenever a cuia command has been consumed
      * @param cuiaCommand The command which was fired
      * @param originId The ID of the MidiRouter device which requested the event be fired (this will be -1 for things which were not done by an external device)
