@@ -331,7 +331,7 @@ public Q_SLOTS:
                             } else {
                                 command->operation = TimerCommand::StartClipOperation;
                                 command->parameter2 = clip->property("column").toInt();
-                                command->parameter3 = clip->property("clip").toInt();
+                                command->parameter3 = clip->property("id").toInt();
                                 command->bigParameter = quint64(shouldResetPlaybackposition ? segmentPosition : 0);
                             }
                             commands << command;
@@ -355,7 +355,7 @@ public Q_SLOTS:
                             } else {
                                 command->operation = TimerCommand::StopClipOperation;
                                 command->parameter2 = clip->property("column").toInt();
-                                command->parameter3 = clip->property("clip").toInt();
+                                command->parameter3 = clip->property("id").toInt();
                             }
                             commands << command;
                         }
@@ -390,7 +390,7 @@ public Q_SLOTS:
                 } else {
                     command->operation = TimerCommand::StopClipOperation;
                     command->parameter2 = clip->property("column").toInt();
-                    command->parameter3 = clip->property("clip").toInt();
+                    command->parameter3 = clip->property("id").toInt();
                 }
                 commands << command;
             }
