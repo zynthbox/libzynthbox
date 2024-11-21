@@ -73,7 +73,8 @@ public:
     void loadSoundData() {
         clip->startProcessing("Loading...");
         thumbnail.clear();
-        if (QFileInfo(clip->getPlaybackFile().getFile().getFullPathName().toRawUTF8()).exists()) {
+        QFileInfo clipInfo{clip->getPlaybackFile().getFile().getFullPathName().toRawUTF8()};
+        if (clipInfo.exists()) {
             if (loadingSoundDataPostponed) {
                 qDebug() << Q_FUNC_INFO << "Loading sound data for" << clip->getFilePath();
                 loadingSoundDataPostponed = false;
@@ -81,34 +82,39 @@ public:
             AudioFormatReader *format{nullptr};
             juce::File file = clip->getPlaybackFile().getFile();
             tracktion_engine::AudioFileInfo fileInfo = clip->getPlaybackFile().getInfo();
-            MemoryMappedAudioFormatReader *memoryFormat = fileInfo.format->createMemoryMappedReader(file);
-            if (memoryFormat && memoryFormat->mapEntireFile()) {
-                format = memoryFormat;
-            }
-            if (!format) {
-                format = fileInfo.format->createReaderFor(file.createInputStream().release(), true);
-            }
-            if (format) {
-                sourceSampleRate = format->sampleRate;
-                if (sourceSampleRate > 0 && format->lengthInSamples > 0)
-                {
-                    sampleRateRatio = sourceSampleRate / SamplerSynth::instance()->sampleRate();
-                    length = (int) format->lengthInSamples;
-                    juce::AudioBuffer<float> *newBuffer = new juce::AudioBuffer<float>(jmin(2, int(format->numChannels)), length);
-                    format->read(newBuffer, 0, length, 0, true, true);
-                    data.reset(newBuffer);
-                    q->isValid = true;
+            if (fileInfo.format) {
+                MemoryMappedAudioFormatReader *memoryFormat = fileInfo.format->createMemoryMappedReader(file);
+                if (memoryFormat && memoryFormat->mapEntireFile()) {
+                    format = memoryFormat;
                 }
-                qDebug() << Q_FUNC_INFO << "Loaded data at sample rate" << sourceSampleRate << "from playback file" << clip->getPlaybackFile().getFile().getFullPathName().toRawUTF8();
-                delete format;
-                juce::FileInputSource *newSource{new juce::FileInputSource(file)};
-                thumbnail.setSource(newSource);
-                if (thumbnailSource) {
-                    delete thumbnailSource;
+                if (!format) {
+                    format = fileInfo.format->createReaderFor(file.createInputStream().release(), true);
                 }
-                thumbnailSource = newSource;
+                if (format) {
+                    sourceSampleRate = format->sampleRate;
+                    if (sourceSampleRate > 0 && format->lengthInSamples > 0)
+                    {
+                        sampleRateRatio = sourceSampleRate / SamplerSynth::instance()->sampleRate();
+                        length = (int) format->lengthInSamples;
+                        juce::AudioBuffer<float> *newBuffer = new juce::AudioBuffer<float>(jmin(2, int(format->numChannels)), length);
+                        format->read(newBuffer, 0, length, 0, true, true);
+                        data.reset(newBuffer);
+                        q->isValid = true;
+                    }
+                    qDebug() << Q_FUNC_INFO << "Loaded data at sample rate" << sourceSampleRate << "from playback file" << clip->getPlaybackFile().getFile().getFullPathName().toRawUTF8();
+                    delete format;
+                    juce::FileInputSource *newSource{new juce::FileInputSource(file)};
+                    thumbnail.setSource(newSource);
+                    if (thumbnailSource) {
+                        delete thumbnailSource;
+                    }
+                    thumbnailSource = newSource;
+                } else {
+                    qWarning() << Q_FUNC_INFO << "Failed to create a format reader for" << file.getFullPathName().toUTF8();
+                }
             } else {
-                qWarning() << Q_FUNC_INFO << "Failed to create a format reader for" << file.getFullPathName().toUTF8();
+                // TODO We'll need some way of forwarding error states to the UI, so people can try and help themselves out when they drop samples onto their sd card which are broken in some way or another...
+                qWarning() << Q_FUNC_INFO << "The file information format for" << file.getFullPathName().toUTF8() << "is null - the file exists, and is" << clipInfo.size() << "bytes";
             }
             clip->endProcessing();
         } else {
@@ -295,104 +301,106 @@ void SamplerSynthSoundTimestretcher::abort()
 
 void SamplerSynthSoundTimestretcher::run()
 {
-    // Our system's based around stereo playback, so... no reason to try and do more than that
-    const int numChannels{d->inputData->getNumChannels() == 1 ? 1 : 2};
-    const int numSamples{d->inputData->getNumSamples()};
+    if (d->inputData) {
+        // Our system's based around stereo playback, so... no reason to try and do more than that
+        const int numChannels{d->inputData->getNumChannels() == 1 ? 1 : 2};
+        const int numSamples{d->inputData->getNumSamples()};
 
-    d->soundTouch.setChannels(uint(numChannels));
-    d->soundTouch.setSampleRate(d->parent->sourceSampleRate);
-    if (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchStandard) {
-        d->soundTouch.setSetting(SETTING_USE_AA_FILTER, 1); // Default when SOUNDTOUCH_PREVENT_CLICK_AT_RATE_CROSSOVER is not defined
-        d->soundTouch.setSetting(SETTING_AA_FILTER_LENGTH, 64); // Default value set in the RateTransposer ctor
-        d->soundTouch.setSetting(SETTING_USE_QUICKSEEK, 0); // Default value set in TDStretch ctor
-        d->soundTouch.setSetting(SETTING_SEQUENCE_MS, 0); // Default value - defined as DEFAULT_SEQUENCE_MS USE_AUTO_SEQUENCE_LEN ( = 0)
-        d->soundTouch.setSetting(SETTING_SEEKWINDOW_MS, 0); // Default value - defined as DEFAULT_SEEKWINDOW_MS USE_AUTO_SEEKWINDOW_LEN ( = 0)
-    } else if (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchBetter) {
-        // The settings used by the tracktion timestretcher's SoundTouchBetter setting
-        d->soundTouch.setSetting(SETTING_USE_AA_FILTER, 1);
-        d->soundTouch.setSetting(SETTING_AA_FILTER_LENGTH, 64);
-        d->soundTouch.setSetting(SETTING_USE_QUICKSEEK, 0);
-        d->soundTouch.setSetting(SETTING_SEQUENCE_MS, 60);
-        d->soundTouch.setSetting(SETTING_SEEKWINDOW_MS, 25);
-    }
-    d->soundTouch.setTempo(d->clip->speedRatio());
-    d->soundTouch.setPitch(d->clip->pitchChangePrecalc());
+        d->soundTouch.setChannels(uint(numChannels));
+        d->soundTouch.setSampleRate(d->parent->sourceSampleRate);
+        if (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchStandard) {
+            d->soundTouch.setSetting(SETTING_USE_AA_FILTER, 1); // Default when SOUNDTOUCH_PREVENT_CLICK_AT_RATE_CROSSOVER is not defined
+            d->soundTouch.setSetting(SETTING_AA_FILTER_LENGTH, 64); // Default value set in the RateTransposer ctor
+            d->soundTouch.setSetting(SETTING_USE_QUICKSEEK, 0); // Default value set in TDStretch ctor
+            d->soundTouch.setSetting(SETTING_SEQUENCE_MS, 0); // Default value - defined as DEFAULT_SEQUENCE_MS USE_AUTO_SEQUENCE_LEN ( = 0)
+            d->soundTouch.setSetting(SETTING_SEEKWINDOW_MS, 0); // Default value - defined as DEFAULT_SEEKWINDOW_MS USE_AUTO_SEEKWINDOW_LEN ( = 0)
+        } else if (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchBetter) {
+            // The settings used by the tracktion timestretcher's SoundTouchBetter setting
+            d->soundTouch.setSetting(SETTING_USE_AA_FILTER, 1);
+            d->soundTouch.setSetting(SETTING_AA_FILTER_LENGTH, 64);
+            d->soundTouch.setSetting(SETTING_USE_QUICKSEEK, 0);
+            d->soundTouch.setSetting(SETTING_SEQUENCE_MS, 60);
+            d->soundTouch.setSetting(SETTING_SEEKWINDOW_MS, 25);
+        }
+        d->soundTouch.setTempo(d->clip->speedRatio());
+        d->soundTouch.setPitch(d->clip->pitchChangePrecalc());
 
-    // Resize the buffer to be able to fit the new samples (setting it just a little higher than we
-    // actually need, to make sure we have enough space for all the samples, as flushing SoundTouch
-    // will produce potentially some blank samples at the end to fill the output buffer up)
-    const int initialFeedSize = d->soundTouch.getSetting(SETTING_INITIAL_LATENCY);
-    data.setSize(numChannels, numSamples * d->soundTouch.getInputOutputSampleRatio() + initialFeedSize, true);
-    // qDebug() << Q_FUNC_INFO << "Set the size of our output buffer to" << data.getNumSamples() << "based on" << numSamples << "input samples, an output ratio of" << d->soundTouch.getInputOutputSampleRatio() << "and initial feed size of" << initialFeedSize;
+        // Resize the buffer to be able to fit the new samples (setting it just a little higher than we
+        // actually need, to make sure we have enough space for all the samples, as flushing SoundTouch
+        // will produce potentially some blank samples at the end to fill the output buffer up)
+        const int initialFeedSize = d->soundTouch.getSetting(SETTING_INITIAL_LATENCY);
+        data.setSize(numChannels, numSamples * d->soundTouch.getInputOutputSampleRatio() + initialFeedSize, true);
+        // qDebug() << Q_FUNC_INFO << "Set the size of our output buffer to" << data.getNumSamples() << "based on" << numSamples << "input samples, an output ratio of" << d->soundTouch.getInputOutputSampleRatio() << "and initial feed size of" << initialFeedSize;
 
-    const size_t blockSize{512};
-    const size_t stereoBlockSize{1024};
-    float readBuffer[stereoBlockSize];
-    int sampleWritePosition{0};
-    auto fetchReadySamples = [this, &readBuffer, &sampleWritePosition, numChannels](){
-        int retrievedSamplesCount{0};
-        do {
+        const size_t blockSize{512};
+        const size_t stereoBlockSize{1024};
+        float readBuffer[stereoBlockSize];
+        int sampleWritePosition{0};
+        auto fetchReadySamples = [this, &readBuffer, &sampleWritePosition, numChannels](){
+            int retrievedSamplesCount{0};
+            do {
+                if (d->isAborted()) {
+                    break;
+                }
+                retrievedSamplesCount = int(d->soundTouch.receiveSamples(readBuffer, blockSize));
+                // Write the interleaved data into the buffer
+                for (int channelIndex = 0; channelIndex < numChannels; ++channelIndex) {
+                    const float* channelSource = readBuffer + channelIndex;
+                    for (int sampleIndex = 0; sampleIndex < retrievedSamplesCount; ++sampleIndex) {
+                        if (sampleWritePosition + sampleIndex > data.getNumSamples()) {
+                            qWarning() << Q_FUNC_INFO << "The write position is now larger than the amount of space we've got for samples. We've got space for" << data.getNumSamples() << "and were asked to write into at least position" << sampleWritePosition + sampleIndex;
+                        }
+                        data.setSample(channelIndex, sampleWritePosition + sampleIndex, *channelSource);
+                        channelSource += numChannels;
+                    }
+                }
+                sampleWritePosition += retrievedSamplesCount;
+            } while (retrievedSamplesCount != 0);
+        };
+
+        int startSample{0};
+        qint64 numLeft{numSamples};
+        // Create a scratch buffer to contain the interleaved samples to send to SoundTouch
+        float interleaveBuffer[stereoBlockSize];
+        while (numLeft > 0) {
             if (d->isAborted()) {
                 break;
             }
-            retrievedSamplesCount = int(d->soundTouch.receiveSamples(readBuffer, blockSize));
-            // Write the interleaved data into the buffer
-            for (int channelIndex = 0; channelIndex < numChannels; ++channelIndex) {
-                const float* channelSource = readBuffer + channelIndex;
-                for (int sampleIndex = 0; sampleIndex < retrievedSamplesCount; ++sampleIndex) {
-                    if (sampleWritePosition + sampleIndex > data.getNumSamples()) {
-                        qWarning() << Q_FUNC_INFO << "The write position is now larger than the amount of space we've got for samples. We've got space for" << data.getNumSamples() << "and were asked to write into at least position" << sampleWritePosition + sampleIndex;
-                    }
-                    data.setSample(channelIndex, sampleWritePosition + sampleIndex, *channelSource);
-                    channelSource += numChannels;
-                }
-            }
-            sampleWritePosition += retrievedSamplesCount;
-        } while (retrievedSamplesCount != 0);
-    };
-
-    int startSample{0};
-    qint64 numLeft{numSamples};
-    // Create a scratch buffer to contain the interleaved samples to send to SoundTouch
-    float interleaveBuffer[stereoBlockSize];
-    while (numLeft > 0) {
-        if (d->isAborted()) {
-            break;
-        }
-        d->clip->setProcessingProgress(float(numSamples - numLeft) / float(numSamples));
-        // Either read our desired block size, or whatever is left, whichever is shorter
-        const int numThisTime{int(qMin(numLeft, qint64(blockSize)))};
-        // qDebug() << Q_FUNC_INFO << "Operating on" << numThisTime << "samples, with" << numLeft << "remaining";
-        // Now feed stuff into SoundTouch
-        if (numChannels == 1) {
-            // For a single channel, we can just pass that single channel's read pointer
-            d->soundTouch.putSamples(d->inputData->getReadPointer(0, startSample), uint(numThisTime));
-        } else {
-            // For stereo content, create an interleaved selection of samples as SoundTouch wants them
-            const float *inputArray[2]{d->inputData->getReadPointer(0, startSample), d->inputData->getReadPointer(1, startSample)};
-            juce::AudioDataConverters::interleaveSamples(inputArray, interleaveBuffer, numThisTime, numChannels);
+            d->clip->setProcessingProgress(float(numSamples - numLeft) / float(numSamples));
+            // Either read our desired block size, or whatever is left, whichever is shorter
+            const int numThisTime{int(qMin(numLeft, qint64(blockSize)))};
+            // qDebug() << Q_FUNC_INFO << "Operating on" << numThisTime << "samples, with" << numLeft << "remaining";
             // Now feed stuff into SoundTouch
-            d->soundTouch.putSamples(interleaveBuffer, uint(numThisTime));
-        }
-        // If there are any samples ready, pull them out
-        fetchReadySamples();
-        // Next run...
-        startSample += numThisTime;
-        numLeft -= numThisTime;
-    }
-    if (d->isAborted() == false) {
-        // Make sure that we're blushed out whatever's left in the algorithm (note there will likely be empty samples at the end)
-        d->soundTouch.flush();
-        if (d->isAborted() == false) {
-            // Retrieve whatever remaining samples might exist
+            if (numChannels == 1) {
+                // For a single channel, we can just pass that single channel's read pointer
+                d->soundTouch.putSamples(d->inputData->getReadPointer(0, startSample), uint(numThisTime));
+            } else {
+                // For stereo content, create an interleaved selection of samples as SoundTouch wants them
+                const float *inputArray[2]{d->inputData->getReadPointer(0, startSample), d->inputData->getReadPointer(1, startSample)};
+                juce::AudioDataConverters::interleaveSamples(inputArray, interleaveBuffer, numThisTime, numChannels);
+                // Now feed stuff into SoundTouch
+                d->soundTouch.putSamples(interleaveBuffer, uint(numThisTime));
+            }
+            // If there are any samples ready, pull them out
             fetchReadySamples();
+            // Next run...
+            startSample += numThisTime;
+            numLeft -= numThisTime;
+        }
+        if (d->isAborted() == false) {
+            // Make sure that we're blushed out whatever's left in the algorithm (note there will likely be empty samples at the end)
+            d->soundTouch.flush();
             if (d->isAborted() == false) {
-                // const int previousSize{data.getNumSamples()};
-                // Resize the buffer to be the exact size we're supposed to have been given
-                data.setSize(numChannels, numSamples * d->soundTouch.getInputOutputSampleRatio(), true);
-                sampleLength = data.getNumSamples();
-                stretchRate = d->clip->speedRatio();
-                // qDebug() << Q_FUNC_INFO << "Sample has been stretched and whatnot, and the rate by which that is a thing is" << stretchRate << "after reducing the buffer size by" << previousSize - sampleLength;
+                // Retrieve whatever remaining samples might exist
+                fetchReadySamples();
+                if (d->isAborted() == false) {
+                    // const int previousSize{data.getNumSamples()};
+                    // Resize the buffer to be the exact size we're supposed to have been given
+                    data.setSize(numChannels, numSamples * d->soundTouch.getInputOutputSampleRatio(), true);
+                    sampleLength = data.getNumSamples();
+                    stretchRate = d->clip->speedRatio();
+                    // qDebug() << Q_FUNC_INFO << "Sample has been stretched and whatnot, and the rate by which that is a thing is" << stretchRate << "after reducing the buffer size by" << previousSize - sampleLength;
+                }
             }
         }
     }
