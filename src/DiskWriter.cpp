@@ -28,8 +28,8 @@ void DiskWriter::startRecording(const QString& fileName, double sampleRate, int 
                 fileStream.release(); // (passes responsibility for deleting the stream to the writer object that is now using it)
                 // Now we'll create one of these helper objects which will act as a FIFO buffer, and will
                 // write the data to disk on our background thread.
-                // A buffer of size 2^18 should hopefully do us reasonably well (this will, when recording all ten tracks plus the song itself, use a total of 2'883'584 bytes of space)
-                m_threadedWriter.reset(new AudioFormatWriter::ThreadedWriter(writer, m_backgroundThread, 262144));
+                // A buffer of size 2^20 should hopefully do us reasonably well (this will, when recording all ten tracks plus the song itself, use a total of 11'534'336 bytes of space)
+                m_threadedWriter.reset(new AudioFormatWriter::ThreadedWriter(writer, m_backgroundThread, 1048576));
 
                 // Reset our thumbnail, so we don't carry over any old recording information and the like
                 m_audioLevelsChannel->m_thumbnail.reset(writer->getNumChannels(), writer->getSampleRate());
