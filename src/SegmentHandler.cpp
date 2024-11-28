@@ -305,6 +305,7 @@ public Q_SLOTS:
                 if (segment) {
                     // qDebug() << Q_FUNC_INFO <<  "Working on segment at index" << segmentIndex;
                     QList<TimerCommand*> commands;
+                    QList<const QObject*> includedChannels;
                     QVariantList clips = segment->property("clips").toList();
                     const QVariantList restartClipsData = segment->property("restartClips").toList();
                     QList<QObject*> restartClips;
@@ -314,29 +315,34 @@ public Q_SLOTS:
                     QList<QObject*> includedClips;
                     for (const QVariant &variantClip : clips) {
                         QObject *clip = variantClip.value<QObject*>();
-                        includedClips << clip;
-                        // Set the playback offset if: Either we explicitly get asked to restart the clip, Or the clip wasn't in the previous segment
-                        const bool shouldResetPlaybackposition{restartClips.contains(clip) || !clipsInPrevious.contains(clip)};
-                        if (shouldResetPlaybackposition || !clipsInPrevious.contains(clip)) {
-                            // qDebug() << Q_FUNC_INFO << "The clip" << clip << "was not in the previous segment, so we should start playing it";
-                            // If the clip was not there in the previous step, that means we should turn it on
-                            TimerCommand* command = new TimerCommand; // This does not need to use the pool, as we might make a LOT of these, and also don't do so during playback time.
-                            command->parameter = clip->property("row").toInt();
-                            const QObject *channelObject = zlChannels.at(command->parameter);
-                            const QString trackType = channelObject->property("trackType").toString();
-                            if (trackType == sampleLoopedType) {
-                                command->operation = TimerCommand::StartClipLoopOperation;
-                                command->parameter2 = clip->property("cppObjId").toInt();
-                                command->parameter3 = 60;
+                        const int trackId = clip->property("row").toInt();
+                        const QObject *channelObject = zlChannels.at(trackId);
+                        // Ensure we honour the multiclip setting on each track
+                        if (channelObject->property("allowMulticlip").toBool() == true && includedChannels.contains(channelObject) == false) {
+                            includedChannels << channelObject; // yes, we might have multiple entries, but it's still never going to be many, so this is fine (since we're functionally just storing some ints)
+                            includedClips << clip;
+                            // Set the playback offset if: Either we explicitly get asked to restart the clip, Or the clip wasn't in the previous segment
+                            const bool shouldResetPlaybackposition{restartClips.contains(clip) || !clipsInPrevious.contains(clip)};
+                            if (shouldResetPlaybackposition || !clipsInPrevious.contains(clip)) {
+                                // qDebug() << Q_FUNC_INFO << "The clip" << clip << "was not in the previous segment, so we should start playing it";
+                                // If the clip was not there in the previous step, that means we should turn it on
+                                TimerCommand* command = new TimerCommand; // This does not need to use the pool, as we might make a LOT of these, and also don't do so during playback time.
+                                command->parameter = trackId;
+                                const QString trackType = channelObject->property("trackType").toString();
+                                if (trackType == sampleLoopedType) {
+                                    command->operation = TimerCommand::StartClipLoopOperation;
+                                    command->parameter2 = clip->property("cppObjId").toInt();
+                                    command->parameter3 = 60;
+                                } else {
+                                    command->operation = TimerCommand::StartClipOperation;
+                                    command->parameter2 = clip->property("column").toInt();
+                                    command->parameter3 = clip->property("id").toInt();
+                                    command->bigParameter = quint64(shouldResetPlaybackposition ? segmentPosition : 0);
+                                }
+                                commands << command;
                             } else {
-                                command->operation = TimerCommand::StartClipOperation;
-                                command->parameter2 = clip->property("column").toInt();
-                                command->parameter3 = clip->property("id").toInt();
-                                command->bigParameter = quint64(shouldResetPlaybackposition ? segmentPosition : 0);
+                                // qDebug() << Q_FUNC_INFO << "Clip was already in the previous segment, leaving in";
                             }
-                            commands << command;
-                        } else {
-                            // qDebug() << Q_FUNC_INFO << "Clip was already in the previous segment, leaving in";
                         }
                     }
                     for (QObject *clip : clipsInPrevious) {
