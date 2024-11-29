@@ -318,7 +318,7 @@ public Q_SLOTS:
                         const int trackId = clip->property("row").toInt();
                         const QObject *channelObject = zlChannels.at(trackId);
                         // Ensure we honour the multiclip setting on each track
-                        if (channelObject->property("allowMulticlip").toBool() == true && includedChannels.contains(channelObject) == false) {
+                        if (channelObject->property("allowMulticlip").toBool() == true || includedChannels.contains(channelObject) == false) {
                             includedChannels << channelObject; // yes, we might have multiple entries, but it's still never going to be many, so this is fine (since we're functionally just storing some ints)
                             includedClips << clip;
                             // Set the playback offset if: Either we explicitly get asked to restart the clip, Or the clip wasn't in the previous segment
