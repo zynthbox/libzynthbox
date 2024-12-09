@@ -387,10 +387,10 @@ QString CUIAHelper::describe(const Event& cuiaEvent, const ZynthboxBasics::Track
         static const float trackDivisor{128.0f / float(ZynthboxTrackCount)};
         const ZynthboxBasics::Track firstTrack{ZynthboxBasics::Track(float(value) / trackDivisor)};
         if (upperValue == -1) {
-            const ZynthboxBasics::Track secondTrack{ZynthboxBasics::Track(float(value) / trackDivisor)};
-            return QString{"Activate %1 through %2 (relatively)"}.arg(ZynthboxBasics::instance()->trackLabelText(firstTrack)).arg(ZynthboxBasics::instance()->trackLabelText(secondTrack));
-        } else {
             return QString{"Activate %1"}.arg(ZynthboxBasics::instance()->trackLabelText(firstTrack)); // this is a silly thing to do, but we should make the description read reasonably anyway
+        } else {
+            const ZynthboxBasics::Track secondTrack{ZynthboxBasics::Track(float(upperValue) / trackDivisor)};
+            return QString{"Activate %1 through %2 (relatively)"}.arg(ZynthboxBasics::instance()->trackLabelText(firstTrack)).arg(ZynthboxBasics::instance()->trackLabelText(secondTrack));
         }
     } else if (cuiaEvent == CUIAHelper::ToggleTrackMutedEvent) {
         return QString{"Toggle %1 Muted"}.arg(ZynthboxBasics::instance()->trackLabelText(track));
