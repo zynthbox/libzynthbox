@@ -25,6 +25,9 @@ public:
         audioInSources << QVariantMap{ {"text", "Audio In - Left Channel"}, {"value", "external:left"} };
         audioInSources << QVariantMap{ {"text", "Audio In - Right Channel"}, {"value", "external:right"} };
         audioInSources << QVariantMap{ {"text", "Audio In - Both Channels"}, {"value", "external:both"} };
+        audioInSources << QVariantMap{ {"text", "USB Audio In - Left Channel"}, {"value", "usb-gadget:left"} };
+        audioInSources << QVariantMap{ {"text", "USB Audio In - Right Channel"}, {"value", "usb-gadget:right"} };
+        audioInSources << QVariantMap{ {"text", "USB Audio In - Both Channels"}, {"value", "usb-gadget:both"} };
         audioInSources << QVariantMap{ {"text", "Master Output - Left Channel"}, {"value", "internal-master:left"} };
         audioInSources << QVariantMap{ {"text", "Master Output - Right Channel"}, {"value", "internal-master:right"} };
         audioInSources << QVariantMap{ {"text", "Master Output - Both Channels"}, {"value", "internal-master:both"} };
