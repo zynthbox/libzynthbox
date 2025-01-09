@@ -765,21 +765,21 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                             // If we are looping, we'll need to wrap our data stream to match the loop
                             // But, don't do this if we're crossfading (at which point the loop stream interpolation is done by the playheads, not here)
                             if (d->firstRoll) {
-                                previousSampleIndex = previousSampleIndex < d->playbackData.startPosition ? -1 : previousSampleIndex;
+                                previousSampleIndex = previousSampleIndex < playhead.startPosition ? -1 : previousSampleIndex;
                                 d->firstRoll = false;
                             } else {
-                                previousSampleIndex = previousSampleIndex < d->playbackData.startPosition ? d->playbackData.stopPosition - 1 : previousSampleIndex;
+                                previousSampleIndex = previousSampleIndex < playhead.startPosition ? playhead.stopPosition - 1 : previousSampleIndex;
                             }
-                            if (nextSampleIndex > d->playbackData.stopPosition) {
-                                nextSampleIndex = d->playbackData.startPosition;
+                            if (nextSampleIndex > playhead.stopPosition) {
+                                nextSampleIndex = playhead.startPosition;
                                 nextNextSampleIndex = nextSampleIndex + 1;
-                            } else if (nextNextSampleIndex > d->playbackData.stopPosition) {
-                                nextSampleIndex = d->playbackData.startPosition;
+                            } else if (nextNextSampleIndex > playhead.stopPosition) {
+                                nextSampleIndex = playhead.startPosition;
                             }
                         } else {
-                            previousSampleIndex = previousSampleIndex < d->playbackData.startPosition ? -1 : previousSampleIndex;
-                            nextSampleIndex = nextSampleIndex > d->playbackData.stopPosition ? -1 : nextSampleIndex;
-                            nextNextSampleIndex = nextNextSampleIndex > d->playbackData.stopPosition ? -1 : nextNextSampleIndex;
+                            previousSampleIndex = previousSampleIndex < playhead.startPosition ? -1 : previousSampleIndex;
+                            nextSampleIndex = nextSampleIndex > playhead.stopPosition ? -1 : nextSampleIndex;
+                            nextNextSampleIndex = nextNextSampleIndex > playhead.stopPosition ? -1 : nextNextSampleIndex;
                         }
                         // If the various other sample positions are outside the sample area, the sample value is 0 and we should be treating it like there's no sample data
                         const float l0 = d->playbackData.sampleDuration < previousSampleIndex || previousSampleIndex == -1 ? 0 : d->playbackData.inL[(int)previousSampleIndex];
