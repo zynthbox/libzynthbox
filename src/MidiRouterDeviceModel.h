@@ -48,6 +48,7 @@ public:
         HasInputRole,
         HasOutputRole,
         DeviceObjectRole,
+        VisibleRole,
     };
     Q_ENUM(Roles)
     QHash<int, QByteArray> roleNames() const override;

@@ -105,6 +105,7 @@ QHash<int, QByteArray> MidiRouterDeviceModel::roleNames() const
         {HasInputRole, "hasInput"},
         {HasOutputRole, "hasOutput"},
         {DeviceObjectRole, "deviceObject"},
+        {VisibleRole, "visible"},
     };
     return roles;
 }
@@ -143,6 +144,8 @@ QVariant MidiRouterDeviceModel::data(const QModelIndex& index, int role) const
             case DeviceObjectRole:
                 result.setValue<QObject*>(device);
                 break;
+            case VisibleRole:
+                result.setValue<bool>(device->visible());
             default:
                 break;
         }
@@ -159,6 +162,7 @@ void MidiRouterDeviceModel::addDevice(MidiRouterDevice* device)
     connect(device, &MidiRouterDevice::zynthianIdChanged, this, [this, device](){ d->deviceDataChanged(device, MidiRouterDeviceModel::ZynthianIdRole); });
     connect(device, &MidiRouterDevice::hardwareIdChanged, this, [this, device](){ d->deviceDataChanged(device, MidiRouterDeviceModel::HardwareIdRole); });
     connect(device, &MidiRouterDevice::inputPortNameChanged, this, [this, device](){ d->deviceDataChanged(device, MidiRouterDeviceModel::HasInputRole); });
+    connect(device, &MidiRouterDevice::visibleChanged, this, [this, device](){ d->deviceDataChanged(device, MidiRouterDeviceModel::VisibleRole); });
     endInsertRows();
     if (device->deviceType(MidiRouterDevice::HardwareDeviceType)) {
         d->midiInSources << QVariantMap{
