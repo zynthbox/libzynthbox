@@ -257,7 +257,7 @@ class ClipAudioSource : public QObject {
      */
     Q_PROPERTY(int keyZoneEnd READ keyZoneEnd WRITE setKeyZoneEnd NOTIFY keyZoneEndChanged)
     /**
-     * \brief The midi note this clip plays at un-pitched when used by the sampler synth (only used for trig mode, not slice)
+     * \brief The midi note this clip plays at un-pitched when used by the sampler synth
      * @default 60
      */
     Q_PROPERTY(int rootNote READ rootNote WRITE setRootNote NOTIFY rootNoteChanged)
