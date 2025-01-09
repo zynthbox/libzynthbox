@@ -204,6 +204,9 @@ public:
         for (int i = 0; i < ZynthboxTrackCount; ++i) {
             sketchpadTracks[i] = nullptr;
         }
+        for (int i = 0; i < ZynthboxTrackCount + 1; ++i) {
+            usbMidiPorts[i] = nullptr;
+        }
         passthroughListener.identifier = MidiRouter::PassthroughPort;
         passthroughListener.waitTime = 1;
         listenerPorts[0] = &passthroughListener;
@@ -260,6 +263,7 @@ public:
     SketchpadTrackInfo *sketchpadTracks[ZynthboxTrackCount];
     SketchpadTrackInfo *passthroughOutputPort{nullptr};
     MidiRouterDevice *currentTrackMirror{nullptr};
+    MidiRouterDevice *usbMidiPorts[ZynthboxTrackCount + 1];
 
     MidiListenerPort passthroughListener;
     MidiListenerPort internalPassthroughListener;
@@ -443,11 +447,15 @@ public:
                                                 zynthianOutputs[zynthianChannel]->writeEventToOutput(*event, eventDeviceFilterEntry);
                                             }
                                             currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                            if (usbMidiPorts[0] && sketchpadTrack == currentSketchpadTrack && eventDevice != usbMidiPorts[0]) usbMidiPorts[0]->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                            if (usbMidiPorts[sketchpadTrack + 1] && eventDevice != usbMidiPorts[sketchpadTrack + 1]) usbMidiPorts[sketchpadTrack + 1]->writeEventToOutput(*event, eventDeviceFilterEntry);
                                             passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
                                             break;
                                         case MidiRouter::SamplerDestination:
                                             passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
                                             currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                            if (usbMidiPorts[0] && sketchpadTrack == currentSketchpadTrack && eventDevice != usbMidiPorts[0]) usbMidiPorts[0]->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                            if (usbMidiPorts[sketchpadTrack + 1] && eventDevice != usbMidiPorts[sketchpadTrack + 1]) usbMidiPorts[sketchpadTrack + 1]->writeEventToOutput(*event, eventDeviceFilterEntry);
                                             passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
                                             break;
                                         case MidiRouter::ExternalDestination:
@@ -462,6 +470,8 @@ public:
                                                 }
                                             }
                                             currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                            if (usbMidiPorts[0] && sketchpadTrack == currentSketchpadTrack && eventDevice != usbMidiPorts[0]) usbMidiPorts[0]->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                            if (usbMidiPorts[sketchpadTrack + 1] && eventDevice != usbMidiPorts[sketchpadTrack + 1]) usbMidiPorts[sketchpadTrack + 1]->writeEventToOutput(*event, eventDeviceFilterEntry);
                                             passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
                                             break;
                                         }
@@ -479,6 +489,8 @@ public:
                         const bool isBeatClock = (byte0 == 0xf2 || byte0 == 0xf8 || byte0 == 0xfa || byte0 == 0xfb || byte0 == 0xfc);
                         const bool isTimecode = (byte0 == 0xf9);
                         currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
+                        if (usbMidiPorts[0] && eventDevice != usbMidiPorts[0]) usbMidiPorts[0]->writeEventToOutput(*event, eventDeviceFilterEntry);
+                        if (usbMidiPorts[currentSketchpadTrack + 1] && eventDevice != usbMidiPorts[currentSketchpadTrack + 1]) usbMidiPorts[currentSketchpadTrack + 1]->writeEventToOutput(*event, eventDeviceFilterEntry);
                         if (inputDeviceIsHardware) {
                             hardwareInListener.addMessage(false, false, timestamp, timestampUsecs, *event, eventChannel, currentSketchpadTrack, eventDevice);
                         }
@@ -552,20 +564,26 @@ public:
         const char **ports = jack_get_ports(jackClient, nullptr, JACK_DEFAULT_MIDI_TYPE, JackPortIsPhysical);
         QList<MidiRouterDevice*> connectedDevices{internalDevices};
         QList<MidiRouterDevice*> newDevices;
+        MidiRouterDevice *newUsbGadgets[ZynthboxTrackCount + 1];
+        for (int i = 0; i < ZynthboxTrackCount + 1; ++i) {
+            newUsbGadgets[i] = nullptr;
+        }
         if (ports == nullptr) {
             qDebug() << Q_FUNC_INFO << "No physical ports found";
         } else {
+            int usbMidiGadgetCount{0};
             for (const char **p = ports; *p; p++) {
                 const QString portName{QString::fromLocal8Bit(*p)};
                 MidiRouterDevice *device{nullptr};
                 jack_port_t *hardwarePort = jack_port_by_name(jackClient, *p);
                 if (hardwarePort) {
                     QString humanReadableName, zynthianId, hardwareId;
-                    int num_aliases;
+                    ZynthboxBasics::Track forceDestinationTrack{ZynthboxBasics::CurrentTrack};
+                    bool forceInputEnabled{false}, forceOutputEnabled{false}, isUsbMidiGadget{false};
                     char *aliases[2];
                     aliases[0] = (char *)malloc(size_t(jack_port_name_size()));
                     aliases[1] = (char *)malloc(size_t(jack_port_name_size()));
-                    num_aliases = jack_port_get_aliases(hardwarePort, aliases);
+                    int num_aliases = jack_port_get_aliases(hardwarePort, aliases);
                     static const QString ttyMidiPortName{"ttymidi:MIDI_"};
                     if (portName.startsWith(ttyMidiPortName)) {
                         humanReadableName = QString{"Midi 5-Pin"};
@@ -583,9 +601,25 @@ public:
                                         splitAlias.removeFirst();
                                     }
                                 }
-                                humanReadableName = splitAlias.join(" ");
                                 zynthianId = splitAlias.join("_");
                                 hardwareId = hardwareIdSplit.join("-");
+                                static const QString usbMidiGadgetName{"f_midi"};
+                                if (zynthianId == usbMidiGadgetName) {
+                                    // If the USB ports exist, we should hook those up
+                                    // - The first one is our "master" track, which should always play to the current track
+                                    // - The others in turn are equivalents to each track, and should always send to that track
+                                    if (usbMidiGadgetCount == 0) {
+                                        // Then it's the system main port, which should always play to the current track
+                                        humanReadableName = QString{"USB MIDI Main"};
+                                    } else {
+                                        // Then it's a track-equivalent port, which should always play to that track
+                                        humanReadableName = QString{"USB MIDI Track %1"}.arg(usbMidiGadgetCount);
+                                        forceDestinationTrack = ZynthboxBasics::Track(usbMidiGadgetCount - 1);
+                                    }
+                                    forceInputEnabled = forceOutputEnabled = isUsbMidiGadget = true;
+                                } else {
+                                    humanReadableName = splitAlias.join(" ");
+                                }
                                 break;
                             }
                         }
@@ -621,13 +655,30 @@ public:
                             device->setZynthianId(zynthianId);
                             device->setHardwareId(hardwareId);
                             device->setHumanReadableName(humanReadableName);
+                            if (isUsbMidiGadget) {
+                                if (usbMidiGadgetCount == 0) {
+                                    device->setSendBeatClock(true);
+                                    device->setSendTimecode(true);
+                                    device->setDeviceType(MidiRouterDevice::MasterTrackType);
+                                } else {
+                                    device->setSendBeatClock(false);
+                                    device->setSendTimecode(false);
+                                    device->setVisible(false);
+                                }
+                                newUsbGadgets[usbMidiGadgetCount] = device;
+                                ++usbMidiGadgetCount;
+                            }
+                            device->completeInitialisation();
+                            if (forceDestinationTrack != ZynthboxBasics::CurrentTrack) {
+                                device->setMidiChannelTargetTrack(-1, forceDestinationTrack);
+                            }
                         }
                     }
                     if (jackPortFlags & JackPortIsOutput) {
                         bool currentState{device->inputEnabled()};
                         bool portIsUnknown{device->inputPortName().isEmpty()};
                         device->setInputPortName(inputPortName);
-                        device->setInputEnabled(!disabledMidiInPorts.contains(device->zynthianId()));
+                        device->setInputEnabled((!disabledMidiInPorts.contains(device->zynthianId())) || forceInputEnabled);
                         connectPorts(portName, QString("ZLRouter:%1").arg(inputPortName));
                         if (portIsUnknown || currentState != device->inputEnabled()) {
                             // Only debug this out if there's a change or the device is new
@@ -637,7 +688,7 @@ public:
                         bool currentState{device->outputEnabled()};
                         bool portIsUnknown{device->outputPortName().isEmpty()};
                         device->setOutputPortName(outputPortName);
-                        device->setOutputEnabled(enabledMidiOutPorts.contains(device->zynthianId()));
+                        device->setOutputEnabled(enabledMidiOutPorts.contains(device->zynthianId()) || forceOutputEnabled);
                         connectPorts(QString("ZLRouter:%1").arg(outputPortName), portName);
                         if (portIsUnknown || currentState != device->outputEnabled()) {
                             // Only debug this out if there's a change or the device is new
@@ -653,18 +704,22 @@ public:
             }
             free(ports);
         }
-        for (MidiRouterDevice *device : qAsConst(devices)) {
-            if (connectedDevices.contains(device) == false) {
-                // A device has been removed, notify people about that
-                Q_EMIT q->removedHardwareDevice(device->zynthianId(), device->humanReadableName());
+        for (MidiRouterDevice *oldDevice : qAsConst(devices)) {
+            if (connectedDevices.contains(oldDevice) == false) {
+                // A device has been removed, notify people about that (unless it's an invisible device, then never mind)
+                if (oldDevice->visible()) {
+                    Q_EMIT q->removedHardwareDevice(oldDevice->zynthianId(), oldDevice->humanReadableName());
+                }
                 // And then we should get rid of it, because it'd all done and stuff (doing this through a timer delay, to make sure we don't end up deleting a device part way through a process run loop)
-                QTimer::singleShot(1000, device, &QObject::deleteLater);
+                QTimer::singleShot(1000, oldDevice, &QObject::deleteLater);
             }
         }
         devices = connectedDevices;
         for (MidiRouterDevice *device : qAsConst(newDevices)) {
-            // A new device was discovered, notify people about that
-            Q_EMIT q->addedHardwareDevice(device->zynthianId(), device->humanReadableName());
+            // A new device was discovered, notify people about that (unless it's an invisible device, then never mind)
+            if (device->visible()) {
+                Q_EMIT q->addedHardwareDevice(device->zynthianId(), device->humanReadableName());
+            }
         }
         QList<MidiRouterDevice*> enabledInputs;
         QList<MidiRouterDevice*> enabledOutputs;
@@ -679,6 +734,9 @@ public:
         }
         allEnabledInputs = enabledInputs;
         allEnabledOutputs = enabledOutputs;
+        for (int i = 0; i < ZynthboxTrackCount + 1; ++i) {
+            usbMidiPorts[i] = newUsbGadgets[i];
+        }
         for (SketchpadTrackInfo *track : qAsConst(sketchpadTracks)) {
             disconnectFromOutputs(track);
             connectToOutputs(track);
