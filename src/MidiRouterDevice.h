@@ -32,6 +32,12 @@ class MidiRouterDevice : public QObject {
      * \brief The device's human-readable name
      */
     Q_PROPERTY(QString humanReadableName READ humanReadableName NOTIFY humanReadableNameChanged)
+    /**
+     * \brief Whether the device is marked as visible in device model
+     * This was created to hide the per-track usb gadget entries by default
+     * @default true
+     */
+    Q_PROPERTY(bool visible READ visible WRITE setVisible NOTIFY visibleChanged)
 
     /**
      * \brief The sketchpad tracks targeted by the equivalent midi channels to the indices in the list
@@ -136,6 +142,11 @@ public:
     Q_DECLARE_FLAGS(DeviceTypes, DeviceType)
     explicit MidiRouterDevice(jack_client_t *jackClient, MidiRouter *parent = nullptr);
     ~MidiRouterDevice() override;
+    /**
+     * \brief Called after device object creation, and loads the automatically stored settings
+     * @note This is called automatically by MidiRouter when the device object is created
+     */
+    void completeInitialisation();
     const int &id() const;
 
     /**
@@ -191,6 +202,18 @@ public:
      * @return The sketchpad track the initial note activation was sent to (or -1 if there was no activation)
      */
     const int &noteActivationTrack(const int &channel, const int &note) const;
+
+    /**
+     * \brief Defines whether the device should be marked as visible in the devices model
+     * @param visible If the device should be shown, pass true, otherwise pass false
+     */
+    void setVisible(const bool &visible);
+    /**
+     * \brief Whether the device is marked as visible in the devices model
+     * @return True if the device is marked as visible in the model, false otherwise
+     */
+    bool visible() const;
+    Q_SIGNAL void visibleChanged();
 
     /**
      * \brief Set the hardware ID of the device (essentially our internal ID used to distinguish the device)

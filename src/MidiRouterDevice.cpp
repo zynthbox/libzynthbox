@@ -71,6 +71,7 @@ public:
     int midiChannelTargetTrack[16];
     int ccValues[16][128];
     jack_client_t *jackClient{nullptr};
+    bool visible{true};
     QString hardwareId{"no-hardware-id"};
     QString zynthianId;
     QString humanReadableName;
@@ -123,7 +124,7 @@ public:
     void loadDeviceSettings() {
         if (doingSettingsHandling == false) {
             doingSettingsHandling = true;
-            // qDebug() << Q_FUNC_INFO << q->zynthianId() << "Loading device settings";
+            // qDebug() << Q_FUNC_INFO << humanReadableName << q->objectName() << "Loading device settings";
             QSettings settings;
             settings.beginGroup("MIDIDeviceSettings");
             settings.beginGroup(q->zynthianId());
@@ -135,7 +136,7 @@ public:
                 }
                 Q_EMIT q->midiChannelTargetTracksChanged();
             } else if (receiveFromChannelVariant.count() != 0) {
-                qWarning() << Q_FUNC_INFO << q->zynthianId() << "Fetched the receiveFromChannel values - we've ended up with an unacceptable number of entries, and the retrieved value was" << receiveFromChannelVariant;
+                qWarning() << Q_FUNC_INFO << humanReadableName << q->objectName() << "Fetched the receiveFromChannel values - we've ended up with an unacceptable number of entries, and the retrieved value was" << receiveFromChannelVariant;
             }
             QVariantList sendToChannelVariant = settings.value("sendToChannel", {}).toList();
             if (sendToChannelVariant.count() == 16) {
@@ -144,10 +145,10 @@ public:
                 }
                 Q_EMIT q->channelsToSendToChanged();
             } else if (sendToChannelVariant.count() != 0) {
-                qWarning() << Q_FUNC_INFO << q->zynthianId() << "Fetched the sendToChannel values - we've ended up with an unacceptable number of entries, and the retrieved value was" << sendToChannelVariant;
+                qWarning() << Q_FUNC_INFO << humanReadableName << q->objectName() << "Fetched the sendToChannel values - we've ended up with an unacceptable number of entries, and the retrieved value was" << sendToChannelVariant;
             }
-            q->setSendTimecode(settings.value("sendTimecode", true).toBool());
-            q->setSendBeatClock(settings.value("sendBeatClock", true).toBool());
+            q->setSendTimecode(settings.value("sendTimecode", sendTimecode).toBool());
+            q->setSendBeatClock(settings.value("sendBeatClock", sendBeatClock).toBool());
             // Fetch the MPE settings
             settings.beginGroup("MPESettings");
             q->setLowerMasterChannel(settings.value("lowerMasterChannel", 0).toInt());
@@ -162,11 +163,11 @@ public:
             // Fetch the two event filters
             const QString storedInputEventFilter{settings.value("inputEventFilter", "").toString()};
             if (inputEventFilter->deserialize(storedInputEventFilter) == false) {
-                qWarning() << Q_FUNC_INFO << q->zynthianId() << "Failed to deserialize the input event filter settings from the stored value" << storedInputEventFilter;
+                qWarning() << Q_FUNC_INFO << humanReadableName << q->objectName() << "Failed to deserialize the input event filter settings from the stored value" << storedInputEventFilter;
             }
             const QString storedOutputEventFilter{settings.value("outputEventFilter", "").toString()};
             if (outputEventFilter->deserialize(storedOutputEventFilter) == false) {
-                qWarning() << Q_FUNC_INFO << q->zynthianId() << "Failed to deserialise the output event filter settings from the stored value" << storedOutputEventFilter;
+                qWarning() << Q_FUNC_INFO << humanReadableName << q->objectName() << "Failed to deserialise the output event filter settings from the stored value" << storedOutputEventFilter;
             }
             settings.endGroup();
             settings.endGroup();
@@ -176,7 +177,7 @@ public:
     void saveDeviceSettings() {
         if (doingSettingsHandling == false) {
             doingSettingsHandling = true;
-            // qDebug() << Q_FUNC_INFO << q->zynthianId() << "Saving device settings";
+            // qDebug() << Q_FUNC_INFO << humanReadableName << q->objectName() << "Saving device settings";
             QSettings settings;
             settings.beginGroup("MIDIDeviceSettings");
             settings.beginGroup(q->zynthianId());
@@ -219,13 +220,6 @@ MidiRouterDevice::MidiRouterDevice(jack_client_t *jackClient, MidiRouter *parent
     DeviceMessageTranslations::load();
     d->jackClient = jackClient;
     setMidiChannelTargetTrack(-1, -1);
-    // In short - we'll set either the hardware id and the zynthian id, or either, during creation of
-    // an object, and to avoid having to do any further hoop jumping, we just postpone loading this until
-    // the next run of the event loop, because it doesn't really matter if it's quite that immediate
-    QTimer::singleShot(1, this, [this, parent](){
-        d->loadDeviceSettings();
-        qobject_cast<MidiRouterDeviceModel*>(parent->model())->addDevice(this);
-    });
     // Make sure that we save the settings when things change
     QTimer *deviceSettingsSaverThrottle{new QTimer(this)};
     deviceSettingsSaverThrottle->setSingleShot(true);
@@ -249,6 +243,7 @@ MidiRouterDevice::MidiRouterDevice(jack_client_t *jackClient, MidiRouter *parent
 
 MidiRouterDevice::~MidiRouterDevice()
 {
+    qobject_cast<MidiRouterDeviceModel*>(d->router->model())->removeDevice(this);
     // Pull down the ports when the device is removed
     setInputPortName(QString{});
     setOutputPortName(QString{});
@@ -262,9 +257,14 @@ MidiRouterDevice::~MidiRouterDevice()
             }
         }
     }
-    qobject_cast<MidiRouterDeviceModel*>(d->router->model())->removeDevice(this);
     delete d;
     DeviceMessageTranslations::unload();
+}
+
+void MidiRouterDevice::completeInitialisation()
+{
+    d->loadDeviceSettings();
+    qobject_cast<MidiRouterDeviceModel*>(d->router->model())->addDevice(this);
 }
 
 const int &MidiRouterDevice::id() const
@@ -351,20 +351,24 @@ void MidiRouterDevice::writeEventToOutputActual(jack_midi_event_t& event)
         if (errorCode == -EINVAL) {
             // If the error invalid happens, we should likely assume the event was out of order for whatever reason, and just schedule it at the same time as the most recently scheduled event
             #if DebugRouterDevice
-                qWarning() << Q_FUNC_INFO << "Attempted to write out-of-order event for time" << event.time << "so writing to most recent instead:" << d->mostRecentOutputTime;
+                qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Attempted to write out-of-order event for time" << event.time << "so writing to most recent instead:" << d->mostRecentOutputTime;
             #endif
             errorCode = jack_midi_event_write(d->outputBuffer, d->mostRecentOutputTime, event.buffer, event.size);
         }
         event.buffer[1] = untransposedNote;
         if (errorCode != 0) {
             if (errorCode == -ENOBUFS) {
-                qWarning() << Q_FUNC_INFO << "Ran out of space while writing events!";
+                // FIXME Super-massive hack hiding a bunch of trouble with the usb gadget midi thing and jack... it's still noisy, but... less
+                static const QString usbHumanName{"USB MIDI "};
+                if (d->humanReadableName.startsWith(usbHumanName)) {
+                    qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Ran out of space while writing events!";
+                }
             } else {
-                qWarning() << Q_FUNC_INFO << "Error writing midi event:" << -errorCode << strerror(-errorCode) << "for event at time" << event.time << "of size" << event.size;
+                qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Error writing midi event:" << -errorCode << strerror(-errorCode) << "for event at time" << event.time << "of size" << event.size;
             }
         #if DebugRouterDevice
         } else {
-            if (DebugRouterDevice) { qDebug() << Q_FUNC_INFO << "Wrote event to buffer at time" << QString::number(event.time).rightJustified(4, ' ') << "on channel" << currentChannel << "for port" << (output ? output->portName : "no-port-details") << "with data" << event.buffer[0] << event.buffer[1]; }
+            if (DebugRouterDevice) { qDebug() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Wrote event to buffer at time" << QString::number(event.time).rightJustified(4, ' ') << "on channel" << currentChannel << "for port" << (output ? output->portName : "no-port-details") << "with data" << event.buffer[0] << event.buffer[1]; }
         #endif
         }
         if (d->mostRecentOutputTime < event.time) {
@@ -378,7 +382,7 @@ void MidiRouterDevice::nextInputEvent()
     if (d->inputBuffer != nullptr && d->nextInputEventIndex < d->inputEventCount) {
         if (int error = jack_midi_event_get(&currentInputEvent, d->inputBuffer, d->nextInputEventIndex)) {
             currentInputEvent.size = 0;
-            qWarning() << Q_FUNC_INFO << "jack_midi_event_get, received event lost! We were supposed to have" << d->inputEventCount << "events, attempted to fetch at index" << d->nextInputEventIndex << "and the error code is" << error << strerror(-error);
+            qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "jack_midi_event_get, received event lost! We were supposed to have" << d->inputEventCount << "events, attempted to fetch at index" << d->nextInputEventIndex << "and the error code is" << error << strerror(-error);
         } else {
             // Let's make sure the event is going to be at least reasonably valid
             d->deviceToZynthbox(&currentInputEvent);
@@ -392,7 +396,7 @@ void MidiRouterDevice::nextInputEvent()
                 }
             }
             // if (d->type.testFlag(MidiRouterDevice::HardwareDeviceType)) {
-            //     qDebug() << Q_FUNC_INFO << "Retrieved jack midi event on device" << d->humanReadableName << "with data size" << d->currentInputEvent->size << "at time" << d->currentInputEvent->time << "event" << d->nextInputEventIndex + 1 << "of" << d->inputEventCount;
+            //     qDebug() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Retrieved jack midi event on device" << d->humanReadableName << "with data size" << d->currentInputEvent->size << "at time" << d->currentInputEvent->time << "event" << d->nextInputEventIndex + 1 << "of" << d->inputEventCount;
             // }
         }
     } else {
@@ -436,7 +440,7 @@ void MidiRouterDevice::setNoteActive(const int &sketchpadTrack, const int& chann
             }
         }
     } else {
-        qWarning() << Q_FUNC_INFO << "Attempted to set note activation state for note" << note << "on channel" << channel << "to" << active;
+        qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Attempted to set note activation state for note" << note << "on channel" << channel << "to" << active;
     }
 }
 
@@ -448,6 +452,19 @@ const int & MidiRouterDevice::noteActivationState(const int& channel, const int&
 const int & MidiRouterDevice::noteActivationTrack(const int& channel, const int& note) const
 {
     return d->noteActivationTrack[channel][note];
+}
+
+void MidiRouterDevice::setVisible(const bool& visible)
+{
+    if (d->visible != visible) {
+        d->visible = visible;
+        Q_EMIT visibleChanged();
+    }
+}
+
+bool MidiRouterDevice::visible() const
+{
+    return d->visible;
 }
 
 void MidiRouterDevice::setHardwareId(const QString& hardwareId)
@@ -499,7 +516,7 @@ void MidiRouterDevice::setInputPortName(const QString& portName)
         d->direction.setFlag(MidiRouterDevice::InDevice, true);
         if (d->inputPort) {
             if (int error = jack_port_unregister(d->jackClient, d->inputPort)) {
-                qDebug() << Q_FUNC_INFO << "Failed to unregister input port even though there's one registered. We'll ignore that and keep going, but this seems not quite right. Reported error was:" << error << strerror(-error);
+                qDebug() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Failed to unregister input port even though there's one registered. We'll ignore that and keep going, but this seems not quite right. Reported error was:" << error << strerror(-error);
             }
             d->inputPort = nullptr;
         }
@@ -535,7 +552,7 @@ void MidiRouterDevice::setOutputPortName(const QString& portName)
         d->direction.setFlag(MidiRouterDevice::OutDevice, true);
         if (d->outputPort) {
             if (int error = jack_port_unregister(d->jackClient, d->outputPort)) {
-                qDebug() << Q_FUNC_INFO << "Failed to unregister output port even though there's one registered. We'll ignore that and keep going, but this seems not quite right. Reported error was:" << error << strerror(-error);
+                qDebug() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Failed to unregister output port even though there's one registered. We'll ignore that and keep going, but this seems not quite right. Reported error was:" << error << strerror(-error);
             }
             d->outputPort = nullptr;
         }
@@ -952,15 +969,15 @@ bool MidiRouterDevice::saveDeviceSettings(const QString& filePath)
                 file.close();
                 result = true;
             } else {
-                qWarning() << Q_FUNC_INFO << "Could not open the file for writing" << filePath;
+                qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Could not open the file for writing" << filePath;
             }
         } else {
             if (file.exists()) {
-                qWarning() << Q_FUNC_INFO << "The file already exists, and we could not delete it:" << filePath;
+                qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "The file already exists, and we could not delete it:" << filePath;
             }
         }
     } else {
-        qWarning() << Q_FUNC_INFO << "The filename passed to the function failed to pass basic sanity checks (don't save in the root, and please don't try and pass in the root directory - it won't delete, as it's not just a file, and also just, why?)" << filePath;
+        qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "The filename passed to the function failed to pass basic sanity checks (don't save in the root, and please don't try and pass in the root directory - it won't delete, as it's not just a file, and also just, why?)" << filePath;
     }
     return result;
 }
@@ -988,7 +1005,7 @@ bool MidiRouterDevice::loadDeviceSettings(const QString& filePath)
                                 }
                                 Q_EMIT midiChannelTargetTracksChanged();
                             } else if (receiveFromChannelArray.count() != 0) {
-                                qWarning() << Q_FUNC_INFO << "Fetched the receiveFromChannel values - we've ended up with an unacceptable number of entries, and the retrieved value was" << receiveFromChannelArray;
+                                qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Fetched the receiveFromChannel values - we've ended up with an unacceptable number of entries, and the retrieved value was" << receiveFromChannelArray;
                             }
                         }
                         value = settingsObject.value("sendToChannel");
@@ -1000,7 +1017,7 @@ bool MidiRouterDevice::loadDeviceSettings(const QString& filePath)
                                 }
                                 Q_EMIT channelsToSendToChanged();
                             } else if (sendToChannelArray.count() != 0) {
-                                qWarning() << Q_FUNC_INFO << "Fetched the sendToChannel values - we've ended up with an unacceptable number of entries, and the retrieved value was" << sendToChannelArray;
+                                qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Fetched the sendToChannel values - we've ended up with an unacceptable number of entries, and the retrieved value was" << sendToChannelArray;
                             }
                         }
                         value = settingsObject.value("midiChannelTargetTrack");
@@ -1012,7 +1029,7 @@ bool MidiRouterDevice::loadDeviceSettings(const QString& filePath)
                                 }
                                 Q_EMIT channelsToSendToChanged();
                             } else if (midiChannelTargetTrackArray.count() != 0) {
-                                qWarning() << Q_FUNC_INFO << "Fetched the midiChannelTargetTrack values - we've ended up with an unacceptable number of entries, and the retrieved value was" << midiChannelTargetTrackArray;
+                                qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Fetched the midiChannelTargetTrack values - we've ended up with an unacceptable number of entries, and the retrieved value was" << midiChannelTargetTrackArray;
                             }
                         }
                         value = settingsObject.value("sendTimecode");
@@ -1061,7 +1078,7 @@ bool MidiRouterDevice::loadDeviceSettings(const QString& filePath)
                         if (value.isString()) {
                             const QString storedInputEventFilter{value.toString()};
                             if (d->inputEventFilter->deserialize(storedInputEventFilter) == false) {
-                                qWarning() << Q_FUNC_INFO << "Failed to deserialize the input event filter settings from the stored value" << storedInputEventFilter;
+                                qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Failed to deserialize the input event filter settings from the stored value" << storedInputEventFilter;
                             }
                         } else {
                             d->inputEventFilter->deserialize("");
@@ -1070,26 +1087,26 @@ bool MidiRouterDevice::loadDeviceSettings(const QString& filePath)
                         if (value.isString()) {
                             const QString storedOutputEventFilter{value.toString()};
                             if (d->outputEventFilter->deserialize(storedOutputEventFilter) == false) {
-                                qWarning() << Q_FUNC_INFO << "Failed to deserialise the output event filter settings from the stored value" << storedOutputEventFilter;
+                                qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Failed to deserialise the output event filter settings from the stored value" << storedOutputEventFilter;
                             }
                         } else {
                             d->outputEventFilter->deserialize("");
                         }
                         result = true;
                     } else {
-                        qWarning() << Q_FUNC_INFO << "The contents of the file were not a json document as expected. The data was:\n" << fileContents;
+                        qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "The contents of the file were not a json document as expected. The data was:\n" << fileContents;
                     }
                 } else {
-                    qWarning() << Q_FUNC_INFO << "There was an error while attempting to parse the saved json. The error description was" << error.errorString() << "and the data we attempted to parse was:\n" << fileContents;
+                    qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "There was an error while attempting to parse the saved json. The error description was" << error.errorString() << "and the data we attempted to parse was:\n" << fileContents;
                 }
             } else {
-                qWarning() << Q_FUNC_INFO << "The saved settings file contained no data";
+                qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "The saved settings file contained no data";
             }
         } else {
-            qWarning() << Q_FUNC_INFO << "Could not open file for reading. Error description given as:" << file.errorString();
+            qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Could not open file for reading. Error description given as:" << file.errorString();
         }
     } else {
-        qWarning() << Q_FUNC_INFO << "No such file:" << filePath;
+        qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "No such file:" << filePath;
     }
     return result;
 }
