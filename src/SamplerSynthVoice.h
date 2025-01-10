@@ -21,7 +21,7 @@ public:
     void setModwheel(int modwheelValue);
 
     void startNote (ClipCommand *clipCommand, jack_nframes_t timestamp);
-    void stopNote (float velocity, bool allowTailOff, jack_nframes_t timestamp);
+    void stopNote (float velocity, bool allowTailOff, jack_nframes_t timestamp, float peakGainLeft = -1, float peakGainRight = -1);
 
     void handleControlChange(jack_nframes_t time, int channel, int control, int value);
     void handleAftertouch(jack_nframes_t time, int channel, int note, int pressure);

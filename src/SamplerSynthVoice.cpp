@@ -11,7 +11,7 @@
 #include <QtMath>
 
 #define DataRingSize 256
-class DataRing {
+class SamplerSynthVoiceDataRing {
 public:
     struct alignas(64) Entry {
         Entry *previous{nullptr};
@@ -23,7 +23,7 @@ public:
         bool processed{true};
     };
 
-    DataRing () {
+    SamplerSynthVoiceDataRing () {
         Entry* entryPrevious{&ringData[DataRingSize - 1]};
         for (quint64 i = 0; i < DataRingSize; ++i) {
             entryPrevious->next = &ringData[i];
@@ -32,7 +32,7 @@ public:
         }
         readHead = writeHead = ringData;
     }
-    ~DataRing() {}
+    ~SamplerSynthVoiceDataRing() {}
     void write(jack_nframes_t time, float data, int midiChannel = -1, int midiNote = -1) {
         Entry *entry = writeHead;
         writeHead = writeHead->next;
@@ -308,10 +308,10 @@ public:
     // start/stop cycles so short that it fits inside a single process
     // run, as is needed for the granular playback mode
     ClipCommandRing commandRing;
-    DataRing aftertouchRing;
-    DataRing pitchRing;
-    DataRing ccControlRing;
-    DataRing ccValueRing;
+    SamplerSynthVoiceDataRing aftertouchRing;
+    SamplerSynthVoiceDataRing pitchRing;
+    SamplerSynthVoiceDataRing ccControlRing;
+    SamplerSynthVoiceDataRing ccValueRing;
     juce::ADSR adsr;
     SyncTimer *syncTimer{nullptr};
     SamplerSynth *samplerSynth{nullptr};
@@ -379,7 +379,7 @@ void SamplerSynthVoice::handleCommand(ClipCommand* clipCommand, jack_nframes_t t
 void SamplerSynthVoice::setCurrentCommand(ClipCommand *clipCommand)
 {
     if (d->clipCommand) {
-        // This means we're changing what we should be doing in playback, and we need to delete the old one
+        // This means we're changing what we should be doing in playback, and we need to update the old one
         if (clipCommand->changeLooping) {
             d->clipCommand->looping = clipCommand->looping;
             d->clipCommand->changeLooping = true;
@@ -420,7 +420,7 @@ void SamplerSynthVoice::setCurrentCommand(ClipCommand *clipCommand)
     for (int playheadIndex = 0; playheadIndex < PlayheadCount; ++playheadIndex) {
         PlayheadData &playhead = d->playbackData.playheads[playheadIndex];
         if (playhead.active) {
-            playhead.clipCommand = clipCommand;
+            playhead.clipCommand = d->clipCommand;
         }
     }
     isPlaying = d->clipCommand;
@@ -542,7 +542,7 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
     }
 }
 
-void SamplerSynthVoice::stopNote(float velocity, bool allowTailOff, jack_nframes_t timestamp)
+void SamplerSynthVoice::stopNote(float velocity, bool allowTailOff, jack_nframes_t timestamp, float peakGainLeft, float peakGainRight)
 {
     if (velocity > 0) {
         // Note off velocity (aka "lift" for mpe) is going to need thought...
@@ -556,6 +556,19 @@ void SamplerSynthVoice::stopNote(float velocity, bool allowTailOff, jack_nframes
     {
         d->adsr.reset();
         if (d->clip) {
+            // Before we stop, send out one last update for this command
+            if (d->clip->playbackPositionsModel()) {
+                for (int playheadIndex = 0; playheadIndex < PlayheadCount; ++playheadIndex) {
+                    const PlayheadData &playhead = d->playbackData.playheads[playheadIndex];
+                    if (playhead.active) {
+                        if (peakGainLeft > -1 || peakGainRight > -1) {
+                            d->clip->playbackPositionsModel()->setPositionData(timestamp, d->clipCommand, playheadIndex, peakGainLeft * playhead.playheadGain, peakGainRight * playhead.playheadGain, playhead.sourceSamplePosition / d->playbackData.sampleDuration, d->playbackData.pan);
+                        } else {
+                            d->clip->playbackPositionsModel()->setPositionData(timestamp, d->clipCommand, playheadIndex, 0.0, 0.0, playhead.sourceSamplePosition / d->playbackData.sampleDuration, d->playbackData.pan);
+                        }
+                    }
+                }
+            }
             d->clip = nullptr;
             d->sound = nullptr;
         }
@@ -873,18 +886,9 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                     } else {
                         if (d->sourceSamplePosition >= d->playbackData.stopPosition)
                         {
-                            // Before we stop, send out one last update for this command
-                            if (d->clip && d->clip->playbackPositionsModel()) {
-                                for (int playheadIndex = 0; playheadIndex < PlayheadCount; ++playheadIndex) {
-                                    const PlayheadData &playhead = d->playbackData.playheads[playheadIndex];
-                                    if (playhead.active) {
-                                        d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, playheadIndex, peakGainLeft * playhead.playheadGain, peakGainRight * playhead.playheadGain, playhead.sourceSamplePosition / d->playbackData.sampleDuration, d->playbackData.pan);
-                                    }
-                                }
-                            }
-                            stopNote(d->targetGain, false, currentFrame);
+                            stopNote(d->targetGain, false, currentFrame, peakGainLeft, peakGainRight);
                         } else if (isTailingOff == false && d->sourceSamplePosition >= d->playbackData.forwardTailingOffPosition) {
-                            stopNote(d->targetGain, true, currentFrame);
+                            stopNote(d->targetGain, true, currentFrame, peakGainLeft, peakGainRight);
                         }
                     }
                 } else {
@@ -898,32 +902,14 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                     } else {
                         if (d->sourceSamplePosition <= d->playbackData.startPosition)
                         {
-                            // Before we stop, send out one last update for this command
-                            if (d->clip && d->clip->playbackPositionsModel()) {
-                                for (int playheadIndex = 0; playheadIndex < PlayheadCount; ++playheadIndex) {
-                                    const PlayheadData &playhead = d->playbackData.playheads[playheadIndex];
-                                    if (playhead.active) {
-                                        d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, playheadIndex, peakGainLeft * playhead.playheadGain, peakGainRight * playhead.playheadGain, playhead.sourceSamplePosition / d->playbackData.sampleDuration, d->playbackData.pan);
-                                    }
-                                }
-                            }
-                            stopNote(d->targetGain, false, currentFrame);
+                            stopNote(d->targetGain, false, currentFrame, peakGainLeft, peakGainRight);
                         } else if (isTailingOff == false && d->sourceSamplePosition <= d->playbackData.backwardTailingOffPosition) {
-                            stopNote(d->targetGain, true, currentFrame);
+                            stopNote(d->targetGain, true, currentFrame, peakGainLeft, peakGainRight);
                         }
                     }
                 }
             } else {
-                // Before we stop, send out one last update for this command
-                if (d->clip && d->clip->playbackPositionsModel()) {
-                    for (int playheadIndex = 0; playheadIndex < PlayheadCount; ++playheadIndex) {
-                        const PlayheadData &playhead = d->playbackData.playheads[playheadIndex];
-                        if (playhead.active) {
-                            d->clip->playbackPositionsModel()->setPositionData(current_frames + frame, d->clipCommand, playheadIndex, peakGainLeft * playhead.playheadGain, peakGainRight * playhead.playheadGain, playhead.sourceSamplePosition / d->playbackData.sampleDuration, d->playbackData.pan);
-                        }
-                    }
-                }
-                stopNote(d->targetGain, false, currentFrame);
+                stopNote(d->targetGain, false, currentFrame, peakGainLeft, peakGainRight);
             }
         }
     }
@@ -934,10 +920,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
         }
     }
 
-    // TODO setPositionData should be more of a call and forget thing (so, update on end of run, and only remove automatically, use a ring to store the data to be interpreted in the model, interpret that data (very) regularly, and update it there, so that lifting is in the ui...)
-    // - Send clipCommand (don't actually read, just use the address of it as an ID), along with peakGian, position, and pan
-    // - Read ring in UI thread, update all data entries, and... we probably need a lot more potential positions (like maybe 32 voices times about ten? Call it 256 for no particular reason?)
-    // Because it might have gone away after being stopped above, so let's try and not crash
+    // And finally, end of the process run, if we're doing some playbackery, update the playback positions
     if (d->clip && d->clip->playbackPositionsModel()) {
         for (int playheadIndex = 0; playheadIndex < PlayheadCount; ++playheadIndex) {
             const PlayheadData &playhead = d->playbackData.playheads[playheadIndex];
