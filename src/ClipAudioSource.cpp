@@ -272,7 +272,11 @@ public:
     stopFadeAdjustment = newStopFadeAdjustment;
   }
 private:
-  void timerCallback() override;
+  void timerCallback() override {
+    // Calling this from a timer will lead to a bad time, make sure it happens somewhere more reasonable (like on the object's own thread, which in this case is the qml engine thread)
+    QMetaObject::invokeMethod(positionsModel, &ClipAudioSourcePositionsModel::updatePositions, Qt::QueuedConnection);
+    syncAudioLevel();
+  }
 };
 
 ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *parent)
@@ -837,12 +841,6 @@ const char *ClipAudioSource::getFilePath() const {
 
 tracktion_engine::AudioFile ClipAudioSource::getPlaybackFile() const {
   return tracktion_engine::AudioFile(*d->audioFile);
-}
-
-void ClipAudioSource::Private::timerCallback() {
-  // Calling this from a timer will lead to a bad time, make sure it happens somewhere more reasonable (like on the object's own thread, which in this case is the qml engine thread)
-  QMetaObject::invokeMethod(positionsModel, &ClipAudioSourcePositionsModel::updatePositions, Qt::QueuedConnection);
-  syncAudioLevel();
 }
 
 void ClipAudioSource::play(bool forceLooping, int midiChannel) {
