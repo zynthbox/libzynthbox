@@ -17,7 +17,8 @@ public:
     ~ClipAudioSourcePositionsModelEntry() override = default;
 
     void clear();
-    void updateData(const int &id, const int &playheadId, const float &progress, const float &gainLeft, const float &gainRight, const float &pan);
+    // emitting data changed is disable-able because otherwise we emit it twice when clearing
+    void updateData(const int &id, const int &playheadId, const float &progress, const float &gainLeft, const float &gainRight, const float &pan, const bool &emitDataChanged = true);
 
     int id() const;
     int playheadId() const;

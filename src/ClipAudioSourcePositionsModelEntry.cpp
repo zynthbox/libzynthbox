@@ -7,12 +7,13 @@ ClipAudioSourcePositionsModelEntry::ClipAudioSourcePositionsModelEntry(QObject* 
 
 void ClipAudioSourcePositionsModelEntry::clear()
 {
-    updateData(-1, -1, 0, 0, 0, 0);
+    updateData(-1, -1, 0, 0, 0, 0, false);
     m_gain = m_gainRight = m_gainLeft = 0;
     m_keepUntil = -1;
+    Q_EMIT dataChanged();
 }
 
-void ClipAudioSourcePositionsModelEntry::updateData(const int &id, const int& playheadId, const float& progress, const float& gainLeft, const float& gainRight, const float& pan)
+void ClipAudioSourcePositionsModelEntry::updateData(const int &id, const int& playheadId, const float& progress, const float& gainLeft, const float& gainRight, const float& pan, const bool &emitDataChanged)
 {
     m_id = id;
     m_playheadId = playheadId;
@@ -22,7 +23,9 @@ void ClipAudioSourcePositionsModelEntry::updateData(const int &id, const int& pl
     m_gainRight = (gainRight >= m_gainRight) ? gainRight : qMin(m_gainRight * 0.9f, m_gainRight - 0.01f);
     m_gain = qMax(m_gainLeft, m_gainRight);
     m_pan = pan;
-    Q_EMIT dataChanged();
+    if (emitDataChanged) {
+        Q_EMIT dataChanged();
+    }
 }
 
 int ClipAudioSourcePositionsModelEntry::id() const
