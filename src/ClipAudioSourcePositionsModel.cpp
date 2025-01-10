@@ -7,7 +7,7 @@
 #include <QDebug>
 
 #define DataRingSize 16384
-class DataRing {
+class ClipAudioSourcePositionsModelDataRing {
 public:
     struct alignas(64) Entry {
         Entry *previous{nullptr};
@@ -22,7 +22,7 @@ public:
         bool processed{true};
     };
 
-    DataRing () {
+    ClipAudioSourcePositionsModelDataRing () {
         Entry* entryPrevious{&ringData[DataRingSize - 1]};
         for (quint64 i = 0; i < DataRingSize; ++i) {
             entryPrevious->next = &ringData[i];
@@ -31,7 +31,7 @@ public:
         }
         readHead = writeHead = ringData;
     }
-    ~DataRing() {}
+    ~ClipAudioSourcePositionsModelDataRing() {}
     void write(const jack_nframes_t &timestamp, ClipCommand *clipCommand, const int &playheadIndex, const float &progress, const float &gainLeft, const float &gainRight, const float &pan) {
         Entry *entry = writeHead;
         writeHead = writeHead->next;
@@ -73,15 +73,6 @@ public:
     QString name;
 };
 
-struct PositionData {
-    qint64 id{-1};
-    ClipCommand *clipCommand{nullptr};
-    float progress{0.0f};
-    float gain{0.0f};
-    float pan{0.0f};
-    qint64 keepUntil{0};
-};
-
 class ClipAudioSourcePositionsModelPrivate
 {
 public:
@@ -107,7 +98,7 @@ public:
     jack_nframes_t mostRecentPositionUpdate{0};
     // ui update period, or double the frame size, which ever is larger
     jack_nframes_t updateGracePeriod{2048};
-    DataRing positionUpdates;
+    ClipAudioSourcePositionsModelDataRing positionUpdates;
 };
 
 ClipAudioSourcePositionsModel::ClipAudioSourcePositionsModel(ClipAudioSource *clip)
@@ -179,7 +170,6 @@ void ClipAudioSourcePositionsModel::setPositionData(const jack_nframes_t &timest
 {
     d->positionUpdates.write(timestamp, clipCommand, playheadIndex, progress, gainLeft, gainRight, pan);
     d->mostRecentPositionUpdate = timestamp; // we can safely do this without checking, as this timestamp will always grow
-    d->updatePeakGain = true;
 }
 
 void ClipAudioSourcePositionsModel::setMostRecentPositionUpdate(jack_nframes_t timestamp)
@@ -189,28 +179,6 @@ void ClipAudioSourcePositionsModel::setMostRecentPositionUpdate(jack_nframes_t t
 
 float ClipAudioSourcePositionsModel::peakGain()
 {
-    if (d->updatePeakGain) {
-        // First update the positions given new data
-        updatePositions();
-        // Then update the peak gain
-        float peakLeft{0.0f}, peakRight{0.0f};
-        for (int positionIndex = 0; positionIndex < ZynthboxClipMaximumPositionCount; ++positionIndex) {
-            peakLeft = qMax(peakLeft, d->entries[positionIndex]->gainLeft());
-            peakRight = qMax(peakRight, d->entries[positionIndex]->gainRight());
-        }
-        const float peakBoth{qMax(peakLeft, peakRight)};
-        if (abs(d->peakGain - peakBoth) > 0.001) {
-            d->peakGain = peakBoth;
-        }
-        if (abs(d->peakGainLeft - peakLeft) > 0.001) {
-            d->peakGainLeft = peakLeft;
-        }
-        if (abs(d->peakGainRight - peakRight) > 0.001) {
-            d->peakGainRight = peakRight;
-        }
-        d->updatePeakGain = false;
-        QMetaObject::invokeMethod(this, "peakGainChanged", Qt::QueuedConnection);
-    }
     return d->peakGain;
 }
 
@@ -244,8 +212,8 @@ void ClipAudioSourcePositionsModel::updatePositions()
     for (int positionIndex = 0; positionIndex < ZynthboxClipMaximumPositionCount; ++positionIndex) {
         ClipAudioSourcePositionsModelEntry *position = d->entries[positionIndex];
         if (position->m_keepUntil > -1 && position->m_keepUntil < d->mostRecentPositionUpdate) {
-            position->m_clipCommand = nullptr;
             position->clear();
+            position->m_clipCommand = nullptr;
             anyPositionUpdates = true;
         }
     }
@@ -255,6 +223,7 @@ void ClipAudioSourcePositionsModel::updatePositions()
     ClipCommand *clipCommand;
     int playheadIndex;
     float progress, gainLeft, gainRight, pan;
+    char positionChanges[ZynthboxClipMaximumPositionCount] = {0};
     while (d->positionUpdates.read(&timestamp, &clipCommand, &playheadIndex, &progress, &gainLeft, &gainRight, &pan)) {
         for (positionIndex = 0; positionIndex < ZynthboxClipMaximumPositionCount; ++positionIndex) {
             ClipAudioSourcePositionsModelEntry *position = d->entries[positionIndex];
@@ -263,6 +232,7 @@ void ClipAudioSourcePositionsModel::updatePositions()
                 position->m_clipCommand = clipCommand;
                 position->updateData(reinterpret_cast<qint64>(clipCommand), playheadIndex, progress, gainLeft, gainRight, pan);
                 position->m_keepUntil = timestamp + d->updateGracePeriod;
+                positionChanges[positionIndex]++;
                 anyPositionUpdates = true;
                 break;
             }
@@ -270,8 +240,30 @@ void ClipAudioSourcePositionsModel::updatePositions()
     }
     // Now notify that the model has changed its data (which is cheaper than a reset, as it updates existing delegates instead of remaking them)
     if (anyPositionUpdates) {
-        QModelIndex topLeft{createIndex(0, 0)};
-        QModelIndex bottomRight{createIndex(ZynthboxClipMaximumPositionCount - 1, 0)};
-        dataChanged(topLeft, bottomRight, {PositionIDRole, PositionProgressRole, PositionGainRole, PositionPanRole});
+        // Signal changes to the data in the model
+        for (int positionIndex = 0; positionIndex < ZynthboxClipMaximumPositionCount; ++positionIndex) {
+            if (positionChanges[positionIndex] > 0) {
+                const QModelIndex topLeft{createIndex(positionIndex, 0)};
+                const QModelIndex bottomRight{createIndex(positionIndex, 0)};
+                dataChanged(topLeft, bottomRight, {PositionIDRole, PositionProgressRole, PositionGainRole, PositionGainLeftRole, PositionGainRightRole, PositionPanRole});
+            }
+        }
+        // Ensure our peak properties are up to date
+        float peakLeft{0.0f}, peakRight{0.0f};
+        for (int positionIndex = 0; positionIndex < ZynthboxClipMaximumPositionCount; ++positionIndex) {
+            peakLeft = qMax(peakLeft, d->entries[positionIndex]->gainLeft());
+            peakRight = qMax(peakRight, d->entries[positionIndex]->gainRight());
+        }
+        const float peakBoth{qMax(peakLeft, peakRight)};
+        if (abs(d->peakGain - peakBoth) > 0.001) {
+            d->peakGain = peakBoth;
+        }
+        if (abs(d->peakGainLeft - peakLeft) > 0.001) {
+            d->peakGainLeft = peakLeft;
+        }
+        if (abs(d->peakGainRight - peakRight) > 0.001) {
+            d->peakGainRight = peakRight;
+        }
+        QMetaObject::invokeMethod(this, "peakGainChanged", Qt::QueuedConnection);
     }
 }
