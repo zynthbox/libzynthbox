@@ -615,8 +615,9 @@ int SamplerSynthPrivate::process(jack_nframes_t nframes)
         jack_time_t next_usecs;
         float period_usecs;
         jack_get_cycle_times(jackClient, &current_frames, &current_usecs, &next_usecs, &period_usecs);
+        const jack_nframes_t currentFrame{current_frames + nframes};
         for (ClipAudioSourcePositionsModel *model : qAsConst(positionModels)) {
-            model->setMostRecentPositionUpdate(current_frames + nframes);
+            model->setMostRecentPositionUpdate(currentFrame);
         }
     }
     return 0;
