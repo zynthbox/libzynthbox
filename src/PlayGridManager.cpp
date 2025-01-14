@@ -383,7 +383,7 @@ public:
 
     void updatePlaygrids()
     {
-        static const QStringList searchlist{QStandardPaths::writableLocation(QStandardPaths::HomeLocation) + "/.local/share/zynthian/playgrids", "/home/pi/zynthbox-qml/qml-ui/playgrids"};
+        static const QStringList searchlist{QStandardPaths::writableLocation(QStandardPaths::HomeLocation) + "/.local/share/zynthbox/playgrids", "/home/pi/zynthbox-qml/qml-ui/playgrids"};
         QStringList newPlaygrids;
 
         for (const QString &searchdir : searchlist) {
