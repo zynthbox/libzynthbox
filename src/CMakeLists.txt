@@ -4,6 +4,7 @@ add_library(libzynthbox SHARED)
 
 target_sources(libzynthbox
     PRIVATE
+        AppImageHelper.cpp
         Plugin.cpp
         ClipAudioSource.cpp
         ClipAudioSourceSubvoiceSettings.cpp
@@ -99,6 +100,7 @@ target_link_libraries(libzynthbox
         Qt5::Qml
         Qt5::Quick
         KF5::Pty
+        libappimage
 )
 
 target_include_directories(libzynthbox

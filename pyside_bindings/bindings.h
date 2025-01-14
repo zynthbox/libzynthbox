@@ -6,6 +6,7 @@
 #include <QPolygon>
 #include <QRect>
 
+#include <AppImageHelper.h>
 #include <AudioLevels.h>
 #include <ClipAudioSource.h>
 #include <ClipAudioSourceSubvoiceSettings.h>

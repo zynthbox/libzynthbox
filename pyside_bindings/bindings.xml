@@ -5,6 +5,7 @@
     <load-typesystem name="typesystem_network.xml" generate="no"/>
     <load-typesystem name="typesystem_qml.xml" generate="no"/>
 
+    <object-type name="AppImageHelper"></object-type>
     <object-type name="AudioLevels"></object-type>
     <object-type name="ClipAudioSource">
         <enum-type name="LoopStyle" />
