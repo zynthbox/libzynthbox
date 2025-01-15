@@ -1,7 +1,9 @@
 #pragma once
 
+#include <QCoreApplication>
 #include <QObject>
 #include <QString>
+
 
 /**
  * @brief The AppImageHelper class provides helper methods to interact with appimages
@@ -13,6 +15,19 @@ class AppImageHelper : public QObject
 {
     Q_OBJECT
 public:
-    static void registerAppImage(QString path);
-    static void unregisterAppImage(QString path);
+    static AppImageHelper* instance() {
+        static AppImageHelper* instance{nullptr};
+        if (!instance) {
+            instance = new AppImageHelper(qApp);
+        }
+        return instance;
+    }
+    // Delete the methods we dont want to avoid having copies of the singleton class
+    AppImageHelper(AppImageHelper const&) = delete;
+    void operator=(AppImageHelper const&) = delete;
+
+    Q_INVOKABLE void registerAppImage(QString path);
+    Q_INVOKABLE void unregisterAppImage(QString path);
+private:
+    explicit AppImageHelper(QObject *parent = nullptr);
 };

@@ -68,6 +68,7 @@
 #include "CUIAHelper.h"
 #include "GainHandler.h"
 #include "JackConnectionHandler.h"
+#include "AppImageHelper.h"
 
 #include "Plugin.h"
 
@@ -424,6 +425,13 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
         JackConnectionHandler *jackConnectionHandler = JackConnectionHandler::instance();
         QQmlEngine::setObjectOwnership(jackConnectionHandler, QQmlEngine::CppOwnership);
         return jackConnectionHandler;
+    });
+    qmlRegisterSingletonType<AppImageHelper>(uri, 1, 0, "AppImageHelper", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
+        Q_UNUSED(engine)
+        Q_UNUSED(scriptEngine)
+        AppImageHelper *appImageHelper = AppImageHelper::instance();
+        QQmlEngine::setObjectOwnership(appImageHelper, QQmlEngine::CppOwnership);
+        return appImageHelper;
     });
     qmlRegisterType<WaveFormItem>(uri, 1, 0, "WaveFormItem");
     qmlRegisterType<JackPassthroughVisualiserItem>(uri, 1, 0, "JackPassthroughVisualiserItem");

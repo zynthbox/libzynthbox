@@ -18,3 +18,7 @@ void AppImageHelper::unregisterAppImage(QString path)
         manager.unregisterAppImage(path.toStdString());
     }
 }
+
+AppImageHelper::AppImageHelper(QObject *parent) : QObject(parent)
+{
+}
