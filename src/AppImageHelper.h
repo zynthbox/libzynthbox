@@ -28,6 +28,7 @@ public:
 
     Q_INVOKABLE void registerAppImage(QString path);
     Q_INVOKABLE void unregisterAppImage(QString path);
+    Q_INVOKABLE QString getAppImageMd5Hash(QString path);
 private:
     explicit AppImageHelper(QObject *parent = nullptr);
 };

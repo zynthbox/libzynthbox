@@ -19,6 +19,12 @@ void AppImageHelper::unregisterAppImage(QString path)
     }
 }
 
+QString AppImageHelper::getAppImageMd5Hash(QString path)
+{
+    const char *path_cstr = path.toLatin1().data();
+    return QString(QLatin1String(appimage_get_md5(path_cstr)));
+}
+
 AppImageHelper::AppImageHelper(QObject *parent) : QObject(parent)
 {
 }
