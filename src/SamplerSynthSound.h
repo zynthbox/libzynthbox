@@ -11,9 +11,6 @@ public:
     ClipAudioSource *clip() const;
     juce::AudioBuffer<float>* audioData() const noexcept;
     const int &length() const;
-    int startPosition(int slice = 0) const;
-    int stopPosition(int slice = 0) const;
-    int rootMidiNote() const;
     const double &sourceSampleRate() const;
     // The amount of stretch applied to the sample compared to the source version (will be 1.0 if time stretching is disabled)
     const double &stretchRate() const;

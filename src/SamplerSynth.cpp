@@ -7,6 +7,7 @@
 #include "SamplerSynthVoice.h"
 #include "ClipCommand.h"
 #include "ClipAudioSourcePositionsModel.h"
+#include "ClipAudioSourceSliceSettings.h"
 #include "MidiRouter.h"
 #include "SyncTimer.h"
 #include "JackThreadAffinitySetter.h"
@@ -100,12 +101,13 @@ public:
         aftertouch = clipCommand->volume;
         envelope.reset();
         envelope.setSampleRate(clipCommand->clip->sampleRate());
-        envelope.setParameters(clipCommand->clip->adsrParameters());
-        startPosition = clipCommand->clip->getStartPosition(clipCommand->slice);
-        stopPosition = clipCommand->clip->getStopPosition(clipCommand->slice);
-        windowSize = (stopPosition - startPosition) * clipCommand->clip->grainSpray();
-        position = startPosition + (clipCommand->clip->grainPosition() * (stopPosition - startPosition));
-        if (clipCommand->clip->grainScan() != 0) {
+        ClipAudioSourceSliceSettings *slice{clipCommand->clip->sliceFromIndex(clipCommand->slice)};
+        envelope.setParameters(slice->adsrParameters());
+        startPosition = slice->startPositionSeconds();
+        stopPosition = slice->stopPositionSeconds();
+        windowSize = (stopPosition - startPosition) * slice->grainSpray();
+        position = startPosition + (slice->grainPosition() * (stopPosition - startPosition));
+        if (slice->grainScan() != 0) {
             scan = 100.0f * clipCommand->clip->sampleRate() / channel->sampleRate();
         } else {
             scan = 0;
@@ -118,6 +120,7 @@ public:
     }
     ClipCommand *pickNextGrain() {
         const ClipAudioSource *clip = command->clip;
+        const ClipAudioSourceSliceSettings *slice{command->clip->sliceFromIndex(command->slice)};
         ClipCommand *newGrain = ClipCommand::channelCommand(command->clip, command->midiChannel);
         if (newGrain == nullptr) {
             qWarning() << Q_FUNC_INFO << "Could not get a new grain, for some reason!";
@@ -136,24 +139,24 @@ public:
         // min1 = 1.0, max1 = 1.0, priority = 0.9, min2 = -1.2, max2 = -0.8
         // which then will result in the forward grains playing at normal pitch, backwards grains playing backward
         // at between 1.2 and 0.8 speed, and 90% of the generated grains being from the first set.
-        if (clip->grainPitchMinimum1() == 1.0 && clip->grainPitchMaximum1() == 1.0 && clip->grainPitchMinimum2() == 1.0 && clip->grainPitchMaximum2() == 1.0) {
+        if (slice->grainPitchMinimum1() == 1.0 && slice->grainPitchMaximum1() == 1.0 && slice->grainPitchMinimum2() == 1.0 && slice->grainPitchMaximum2() == 1.0) {
             // If all the pitch ranges are set to just play at normal pitch, don't do the random generation stuff below
             newGrain->changePitch = false;
             newGrain->pitchChange = 1.0f;
         } else {
             newGrain->changePitch = true;
-            if (QRandomGenerator::global()->generateDouble() < clip->grainPitchPriority()) {
+            if (QRandomGenerator::global()->generateDouble() < slice->grainPitchPriority()) {
                 // Lower range, use the first pitch range pair
-                newGrain->pitchChange = clip->grainPitchMinimum1() + QRandomGenerator::global()->bounded(clip->grainPitchMaximum1() - clip->grainPitchMinimum1()) + pitch;
+                newGrain->pitchChange = slice->grainPitchMinimum1() + QRandomGenerator::global()->bounded(slice->grainPitchMaximum1() - slice->grainPitchMinimum1()) + pitch;
             } else {
                 // Upper range, use the second pitch range pair
-                newGrain->pitchChange = clip->grainPitchMinimum2() + QRandomGenerator::global()->bounded(clip->grainPitchMaximum2() - clip->grainPitchMinimum2()) + pitch;
+                newGrain->pitchChange = slice->grainPitchMinimum2() + QRandomGenerator::global()->bounded(slice->grainPitchMaximum2() - slice->grainPitchMinimum2()) + pitch;
             }
         }
 
         // grain duration (grain size start plus random from 0 through grain size additional, at most the size of the sample window)
         // (divided by 1000, because start and stop are expected to be in seconds, not milliseconds)
-        const double duration = qMin((double(clip->grainSize()) + QRandomGenerator::global()->bounded(double(clip->grainSizeAdditional()))) / (abs(newGrain->pitchChange) * 1000.0f), double(clip->getDuration()));
+        const double duration = qMin((double(slice->grainSize()) + QRandomGenerator::global()->bounded(double(slice->grainSizeAdditional()))) / (abs(newGrain->pitchChange) * 1000.0f), double(clip->getDuration()));
         // grain start position
         if (windowSize < duration) {
             // If the duration is too long to fit inside the window, just start at the start - allow people to do it, since well, it'll work anyway
@@ -169,7 +172,7 @@ public:
         // grain stop position (start position plus duration - which has already been bounded by the above)
         newGrain->stopPosition = newGrain->startPosition + duration;
         // pan variance (random between pan minimum and pan maximum)
-        newGrain->pan = clip->grainPanMinimum() + QRandomGenerator::global()->bounded(clip->grainPanMaximum() - clip->grainPanMinimum());
+        newGrain->pan = slice->grainPanMinimum() + QRandomGenerator::global()->bounded(slice->grainPanMaximum() - slice->grainPanMinimum());
         return newGrain;
     }
     juce::ADSR envelope;
@@ -281,15 +284,16 @@ public:
                         // (grain interval minimum,
                         // plus random 0 through grain interval additional,
                         // multiplied by framesPerMillisecond)
-                        const double additionalInterval = command->clip->grainIntervalAdditional() > 0 ? QRandomGenerator::global()->bounded(double(command->clip->grainIntervalAdditional())) : 0.0f;
-                        if (command->clip->grainInterval() == 0) {
+                        const ClipAudioSourceSliceSettings *slice{command->clip->sliceFromIndex(command->slice)};
+                        const double additionalInterval = slice->grainIntervalAdditional() > 0 ? QRandomGenerator::global()->bounded(double(slice->grainIntervalAdditional())) : 0.0f;
+                        if (slice->grainInterval() == 0) {
                             voice->framesUntilNextGrain = framesPerMillisecond * (double(voice->stopPosition - voice->startPosition) + additionalInterval);
                         } else {
-                            voice->framesUntilNextGrain = framesPerMillisecond * (double(command->clip->grainInterval()) + additionalInterval);
+                            voice->framesUntilNextGrain = framesPerMillisecond * (double(slice->grainInterval()) + additionalInterval);
                         }
                         // Only do this if we're actually supposed to be scanning through the playback, otherwise it just gets a little silly
                         if (voice->scan != 0) {
-                            const float grainScan{command->clip->grainScan()};
+                            const float grainScan{slice->grainScan()};
                             voice->position += std::clamp((grainScan / voice->scan), -voice->windowSize, voice->windowSize);
                             if (grainScan < 0) {
                                 // We're moving in reverse, check lower bound
@@ -400,7 +404,8 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                         playGridManager()->midiMessageToClipCommands(&commandRing, midiChannel, byte1, note, velocity);
                         while (commandRing.readHead->processed == false) {
                             ClipCommand *command = commandRing.read();
-                            if (command->clip->granular()) {
+                            const ClipAudioSourceSliceSettings *slice{command->clip->sliceFromIndex(command->slice)};
+                            if (slice->granular()) {
                                 if (command->stopPlayback) {
                                     grainerator->stop(command);
                                 }

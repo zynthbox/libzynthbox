@@ -1,6 +1,7 @@
 
 #include "SamplerSynthSound.h"
 #include "AudioLevels.h"
+#include "ClipAudioSourceSliceSettings.h"
 #include "SamplerSynth.h"
 #include "JUCEHeaders.h"
 
@@ -137,7 +138,7 @@ public:
             connect(activeTimeStretcher, &SamplerSynthSoundTimestretcher::done, activeTimeStretcher, &QObject::deleteLater, Qt::QueuedConnection);
             activeTimeStretcher->abort();
         }
-        if (clip->timeStretchStyle() == ClipAudioSource::TimeStretchOff) {
+        if (clip->rootSliceActual()->timeStretchStyle() == ClipAudioSource::TimeStretchOff) {
             // qDebug() << Q_FUNC_INFO << "No time stretching required for clip" << clip->getFileName();
             completedTimeStretcher = nullptr;
             timeStretcherNeedsChanging = true;
@@ -176,9 +177,9 @@ SamplerSynthSound::SamplerSynthSound(ClipAudioSource *clip)
     d->clip = clip;
     d->loadSoundData();
     QObject::connect(clip, &ClipAudioSource::playbackFileChanged, &d->soundLoader, [this](){ isValid = false; d->soundLoader.start(1); }, Qt::QueuedConnection);
-    QObject::connect(clip, &ClipAudioSource::timeStretchStyleChanged, d, [this](){ d->updatePlaybackData(); });
     QObject::connect(clip, &ClipAudioSource::speedRatioChanged, d, [this](){ d->updatePlaybackData(); });
-    QObject::connect(clip, &ClipAudioSource::pitchChanged, d, [this](){ d->updatePlaybackData(); });
+    QObject::connect(clip->rootSliceActual(), &ClipAudioSourceSliceSettings::timeStretchStyleChanged, d, [this](){ d->updatePlaybackData(); });
+    QObject::connect(clip->rootSliceActual(), &ClipAudioSourceSliceSettings::pitchChanged, d, [this](){ d->updatePlaybackData(); });
 }
 
 SamplerSynthSound::~SamplerSynthSound()
@@ -204,7 +205,7 @@ juce::AudioBuffer<float> *SamplerSynthSound::audioData() const noexcept
         d->completedTimeStretcher = nullptr;
         d->timeStretcherNeedsChanging = false;
     }
-    if (d->playbackTimeStretcher && d->clip->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
+    if (d->playbackTimeStretcher && d->clip->rootSliceActual()->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
         return &d->playbackTimeStretcher->data;
     }
     return d->data.get();
@@ -212,25 +213,10 @@ juce::AudioBuffer<float> *SamplerSynthSound::audioData() const noexcept
 
 const int & SamplerSynthSound::length() const
 {
-    if (d->playbackTimeStretcher && d->clip->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
+    if (d->playbackTimeStretcher && d->clip->rootSliceActual()->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
         return d->playbackTimeStretcher->sampleLength;
     }
     return d->length;
-}
-
-int SamplerSynthSound::startPosition(int slice) const
-{
-    return d->clip->getStartPosition(slice) * d->sourceSampleRate;
-}
-
-int SamplerSynthSound::stopPosition(int slice) const
-{
-    return d->clip->getStopPosition(slice) * d->sourceSampleRate;
-}
-
-int SamplerSynthSound::rootMidiNote() const
-{
-    return d->clip->rootNote();
 }
 
 const double & SamplerSynthSound::sourceSampleRate() const
@@ -241,7 +227,7 @@ const double & SamplerSynthSound::sourceSampleRate() const
 const double & SamplerSynthSound::stretchRate() const
 {
     static const double noStretch{1.0};
-    if (d->playbackTimeStretcher && d->clip->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
+    if (d->playbackTimeStretcher && d->clip->rootSliceActual()->timeStretchStyle() != ClipAudioSource::TimeStretchOff) {
         return d->playbackTimeStretcher->stretchRate;
     }
     return noStretch;
@@ -308,13 +294,13 @@ void SamplerSynthSoundTimestretcher::run()
 
         d->soundTouch.setChannels(uint(numChannels));
         d->soundTouch.setSampleRate(d->parent->sourceSampleRate);
-        if (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchStandard) {
+        if (d->clip->rootSliceActual()->timeStretchStyle() == ClipAudioSource::TimeStretchStandard) {
             d->soundTouch.setSetting(SETTING_USE_AA_FILTER, 1); // Default when SOUNDTOUCH_PREVENT_CLICK_AT_RATE_CROSSOVER is not defined
             d->soundTouch.setSetting(SETTING_AA_FILTER_LENGTH, 64); // Default value set in the RateTransposer ctor
             d->soundTouch.setSetting(SETTING_USE_QUICKSEEK, 0); // Default value set in TDStretch ctor
             d->soundTouch.setSetting(SETTING_SEQUENCE_MS, 0); // Default value - defined as DEFAULT_SEQUENCE_MS USE_AUTO_SEQUENCE_LEN ( = 0)
             d->soundTouch.setSetting(SETTING_SEEKWINDOW_MS, 0); // Default value - defined as DEFAULT_SEEKWINDOW_MS USE_AUTO_SEEKWINDOW_LEN ( = 0)
-        } else if (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchBetter) {
+        } else if (d->clip->rootSliceActual()->timeStretchStyle() == ClipAudioSource::TimeStretchBetter) {
             // The settings used by the tracktion timestretcher's SoundTouchBetter setting
             d->soundTouch.setSetting(SETTING_USE_AA_FILTER, 1);
             d->soundTouch.setSetting(SETTING_AA_FILTER_LENGTH, 64);
@@ -323,7 +309,7 @@ void SamplerSynthSoundTimestretcher::run()
             d->soundTouch.setSetting(SETTING_SEEKWINDOW_MS, 25);
         }
         d->soundTouch.setTempo(d->clip->speedRatio());
-        d->soundTouch.setPitch(d->clip->pitchChangePrecalc());
+        d->soundTouch.setPitch(d->clip->rootSliceActual()->pitchChangePrecalc());
 
         // Resize the buffer to be able to fit the new samples (setting it just a little higher than we
         // actually need, to make sure we have enough space for all the samples, as flushing SoundTouch

@@ -1,8 +1,10 @@
 #include "SamplerSynthVoice.h"
 
 #include "ClipAudioSourcePositionsModel.h"
+#include "ClipAudioSourceSliceSettings.h"
 #include "ClipAudioSourceSubvoiceSettings.h"
 #include "ClipCommand.h"
+#include "GainHandler.h"
 #include "SamplerSynth.h"
 #include "SamplerSynthSound.h"
 #include "SyncTimer.h"
@@ -90,6 +92,7 @@ public:
     int samplesSinceLastUpdate{0};
     int sampleRate{48000};
     const ClipAudioSource *clip{nullptr};
+    const ClipAudioSourceSliceSettings *slice{nullptr};
     const ClipCommand *clipCommand{nullptr};
     const SamplerSynthSound *sound{nullptr};
     PlayheadData *nextPlayhead{nullptr};
@@ -100,9 +103,10 @@ public:
     };
     PlaybackStartPosition playbackStartPosition{StartPositionBeginning};
     // Set startFromTheStart to true to begin at gain 1 instead start from the sample's start position (otherwise we start from the loop fade position and apply the attack logic)
-    void start(const ClipAudioSource *theClip, const ClipCommand *theClipCommand, const SamplerSynthSound *theSound, const int &theSampleRate, const PlaybackStartPosition thePlaybackStartPosition) {
+    void start(const ClipAudioSource *theClip, const ClipAudioSourceSliceSettings *theSlice, const ClipCommand *theClipCommand, const SamplerSynthSound *theSound, const int &theSampleRate, const PlaybackStartPosition thePlaybackStartPosition) {
         startedNextPlayhead = false;
         clip = theClip;
+        slice = theSlice;
         clipCommand = theClipCommand;
         sound = theSound;
         sampleRate = theSampleRate;
@@ -202,9 +206,9 @@ public:
         }
         if (startNextPlayhead && startedNextPlayhead == false) {
             if (byHowManySamples > 0) {
-                nextPlayhead->start(clip, clipCommand, sound, sampleRate, StartPositionLoopPoint);
+                nextPlayhead->start(clip, slice, clipCommand, sound, sampleRate, StartPositionLoopPoint);
             } else {
-                nextPlayhead->start(clip, clipCommand, sound, sampleRate, StartPositionStopPoint);
+                nextPlayhead->start(clip, slice, clipCommand, sound, sampleRate, StartPositionStopPoint);
             }
             // As we'll be progressing all the playheads immediately following starting them, let's ensure we're ready to be progressed
             nextPlayhead->sourceSamplePosition -= byHowManySamples;
@@ -228,16 +232,16 @@ private:
     void updatePositions(bool initialFetch = false) {
         // If we're already performing a fade-out, don't update the positions for this playhead (we'll be gone shortly)
         if (sourceSamplePosition < decayStartSample || initialFetch) {
-            startPosition = double((clipCommand->setStartPosition ? clipCommand->startPosition * clip->sampleRate() : clip->getStartPositionSamples(clipCommand->slice))) / sound->stretchRate();
-            stopPosition = double((clipCommand->setStopPosition ? clipCommand->stopPosition * clip->sampleRate() : clip->getStopPositionSamples(clipCommand->slice))) / sound->stretchRate();
-            loopPosition = startPosition + (double(clip->loopDeltaSamples()) / sound->stretchRate());
+            startPosition = double((clipCommand->setStartPosition ? clipCommand->startPosition * clip->sampleRate() : slice->startPositionSamples())) / sound->stretchRate();
+            stopPosition = double((clipCommand->setStopPosition ? clipCommand->stopPosition * clip->sampleRate() : slice->stopPositionSamples())) / sound->stretchRate();
+            loopPosition = startPosition + (double(slice->loopDeltaSamples()) / sound->stretchRate());
             if (loopPosition >= stopPosition) {
                 loopPosition = startPosition;
             }
-            if (clip->playbackStyle() == ClipAudioSource::WavetableStyle) {
+            if (slice->playbackStyle() == ClipAudioSource::WavetableStyle) {
                 loopFadeAdjustment = 0;
             } else {
-                loopFadeAdjustment = double(clip->loopFadeAdjustment(clipCommand->slice)) / sound->stretchRate();
+                loopFadeAdjustment = double(slice->loopFadeAdjustment()) / sound->stretchRate();
             }
             if (loopFadeAdjustment < 0) {
                 attackStartSample = loopPosition + loopFadeAdjustment;
@@ -247,7 +251,7 @@ private:
                 attackEndSample = loopPosition + loopFadeAdjustment;
             }
             attackDuration = attackEndSample - attackStartSample;
-            stopFadeAdjustment = double(clip->stopFadeAdjustment(clipCommand->slice)) / sound->stretchRate();
+            stopFadeAdjustment = double(slice->stopFadeAdjustment()) / sound->stretchRate();
             if (stopFadeAdjustment < 0) {
                 decayStartSample = stopPosition + stopFadeAdjustment;
                 decayEndSample = stopPosition;
@@ -317,6 +321,7 @@ public:
     SamplerSynth *samplerSynth{nullptr};
     ClipCommand *clipCommand{nullptr};
     ClipAudioSource *clip{nullptr};
+    ClipAudioSourceSliceSettings *slice{nullptr};
     ClipAudioSourceSubvoiceSettings *subvoiceSettings{nullptr};
     SamplerSynthSound* sound{nullptr};
     double pitchRatio = 0;
@@ -357,8 +362,9 @@ void SamplerSynthVoice::handleCommand(ClipCommand* clipCommand, jack_nframes_t t
     d->commandRing.write(clipCommand, timestamp);
     if (clipCommand->stopPlayback == true) {
         // Available after the tailoff period
+        const ClipAudioSourceSliceSettings *slice{clipCommand->clip->sliceFromIndex(clipCommand->slice)};
         const double sourceSampleRate{clipCommand->clip->sampleRate()};
-        const double release{clipCommand->clip->adsrRelease() * sourceSampleRate};
+        const double release{slice->adsrRelease() * sourceSampleRate};
         availableAfter = timestamp + release;
         mostRecentStartCommand = nullptr;
     }
@@ -368,8 +374,9 @@ void SamplerSynthVoice::handleCommand(ClipCommand* clipCommand, jack_nframes_t t
             availableAfter = UINT_MAX;
         } else {
             const double sourceSampleRate{clipCommand->clip->sampleRate()};
-            const double startPosition = (int) ((clipCommand->setStartPosition ? clipCommand->startPosition * sourceSampleRate : clipCommand->clip->getStartPositionSamples(clipCommand->slice)));
-            const double stopPosition = (int) ((clipCommand->setStopPosition ? clipCommand->stopPosition * sourceSampleRate : clipCommand->clip->getStopPositionSamples(clipCommand->slice)));
+            const ClipAudioSourceSliceSettings *slice{clipCommand->clip->sliceFromIndex(clipCommand->slice)};
+            const double startPosition = (int) ((clipCommand->setStartPosition ? clipCommand->startPosition * sourceSampleRate : slice->startPositionSamples()));
+            const double stopPosition = (int) ((clipCommand->setStopPosition ? clipCommand->stopPosition * sourceSampleRate : slice->stopPositionSamples()));
             availableAfter = timestamp + (stopPosition - startPosition);
         }
         mostRecentStartCommand = clipCommand;
@@ -403,12 +410,9 @@ void SamplerSynthVoice::setCurrentCommand(ClipCommand *clipCommand)
             d->rgain = d->clipCommand->volume;
             d->targetGain = d->clipCommand->volume;
         }
-        if (clipCommand->changeSlice) {
-            d->clipCommand->slice = clipCommand->slice;
-        }
         if (clipCommand->startPlayback) {
             // This should be interpreted as "restart playback" in this case, so... reset the current position
-            d->sourceSamplePosition = d->clip->getStartPositionSamples(d->clipCommand->slice);
+            d->sourceSamplePosition = d->slice->startPositionSamples();
         }
         if (clipCommand->changePan) {
             d->clipCommand->pan = clipCommand->pan;
@@ -479,10 +483,11 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
     if (auto sound = d->samplerSynth->clipToSound(clipCommand->clip)) {
         d->sound = sound;
         d->clip = sound->clip();
+        d->slice = d->clip->sliceFromIndex(clipCommand->slice);
         d->subvoiceSettings = clipCommand->subvoice == -1 ? nullptr : d->clip->subvoiceSettingsActual()[clipCommand->subvoice];
         d->playbackData.sourceSampleRate = d->sound->sourceSampleRate();
 
-        d->playbackData.snappedToBeat = (trunc(d->clip->getLengthBeats()) == d->clip->getLengthBeats());
+        d->playbackData.snappedToBeat = (trunc(d->slice->lengthBeats()) == d->slice->lengthBeats());
         d->playbackData.isLooping = d->clipCommand->looping;
 
         d->targetGain = clipCommand->volume;
@@ -492,7 +497,7 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
 
         d->adsr.reset();
         d->adsr.setSampleRate(d->playbackData.sourceSampleRate);
-        d->adsr.setParameters(d->clip->granular() ? d->clip->grainADSR().getParameters() : d->clip->adsrParameters());
+        d->adsr.setParameters(d->slice->granular() ? d->slice->grainADSR().getParameters() : d->slice->adsrParameters());
         isTailingOff = false;
         d->adsr.noteOn();
 
@@ -514,17 +519,17 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         const double lowpassTan = std::tan(M_PI * lowpassAdjustmentInHz / d->playbackData.sourceSampleRate);
         d->playbackData.lowpassCoefficient = (lowpassTan - 1.f) / (lowpassTan + 1.f);
 
-        d->playbackData.pan = std::clamp(float(d->clip->pan()) + d->clipCommand->pan + (d->subvoiceSettings ? d->subvoiceSettings->pan() : 0.0f), -1.0f, 1.0f);
-        d->playbackData.startPosition = double((d->clipCommand->setStartPosition ? d->clipCommand->startPosition * d->playbackData.sourceSampleRate : d->clip->getStartPositionSamples(d->clipCommand->slice))) / d->sound->stretchRate();
-        d->playbackData.stopPosition = double((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition * d->playbackData.sourceSampleRate : d->clip->getStopPositionSamples(d->clipCommand->slice))) / d->sound->stretchRate();
-        d->playbackData.loopPosition = d->playbackData.startPosition + (double(d->clip->loopDeltaSamples()) / d->sound->stretchRate());
+        d->playbackData.pan = std::clamp(float(d->slice->pan()) + d->clipCommand->pan + (d->subvoiceSettings ? d->subvoiceSettings->pan() : 0.0f), -1.0f, 1.0f);
+        d->playbackData.startPosition = double((d->clipCommand->setStartPosition ? d->clipCommand->startPosition * d->playbackData.sourceSampleRate : d->slice->startPositionSamples())) / d->sound->stretchRate();
+        d->playbackData.stopPosition = double((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition * d->playbackData.sourceSampleRate : d->slice->stopPositionSamples())) / d->sound->stretchRate();
+        d->playbackData.loopPosition = d->playbackData.startPosition + (double(d->slice->loopDeltaSamples()) / d->sound->stretchRate());
         if (d->playbackData.loopPosition >= d->playbackData.stopPosition) {
             d->playbackData.loopPosition = d->playbackData.startPosition;
         }
         d->playbackData.forwardTailingOffPosition = d->playbackData.stopPosition - (double(d->adsr.getParameters().release * d->playbackData.sourceSampleRate) / d->sound->stretchRate());
         d->playbackData.backwardTailingOffPosition = d->playbackData.startPosition + (double(d->adsr.getParameters().release * d->playbackData.sourceSampleRate) / d->sound->stretchRate());
 
-        d->pitchRatio = std::pow(2.0, (clipCommand->midiNote - sound->rootMidiNote()) / 12.0);
+        d->pitchRatio = std::pow(2.0, (clipCommand->midiNote - d->slice->rootNote()) / 12.0);
         if (d->clipCommand->changePitch && d->clipCommand->pitchChange < 0) {
             d->sourceSamplePosition = d->playbackData.stopPosition;
         } else {
@@ -536,7 +541,7 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         } else {
             availableAfter = timestamp + jack_nframes_t(d->playbackData.stopPosition - d->playbackData.startPosition);
         }
-        d->playbackData.playheads[0].start(d->clip, d->clipCommand, d->sound, d->samplerSynth->sampleRate(), PlayheadData::StartPositionBeginning);
+        d->playbackData.playheads[0].start(d->clip, d->slice, d->clipCommand, d->sound, d->samplerSynth->sampleRate(), PlayheadData::StartPositionBeginning);
     } else {
         jassertfalse; // this object can only play SamplerSynthSounds!
     }
@@ -570,6 +575,7 @@ void SamplerSynthVoice::stopNote(float velocity, bool allowTailOff, jack_nframes
                 }
             }
             d->clip = nullptr;
+            d->slice = nullptr;
             d->sound = nullptr;
         }
         if (d->clipCommand) {
@@ -638,10 +644,10 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
             d->playbackData.inR = nullptr;
         }
         d->playbackData.sampleDuration = d->sound->length();
-        d->playbackData.pan = std::clamp(float(d->clip->pan()) + d->clipCommand->pan + (d->subvoiceSettings ? d->subvoiceSettings->pan() : 0.0f), -1.0f, 1.0f);
-        d->playbackData.startPosition = double((d->clipCommand->setStartPosition ? d->clipCommand->startPosition * d->playbackData.sourceSampleRate : d->clip->getStartPositionSamples(d->clipCommand->slice))) / d->sound->stretchRate();
-        d->playbackData.stopPosition = double((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition * d->playbackData.sourceSampleRate : d->clip->getStopPositionSamples(d->clipCommand->slice))) / d->sound->stretchRate();
-        d->playbackData.loopPosition = d->playbackData.startPosition + (double(d->clip->loopDeltaSamples()) / d->sound->stretchRate());
+        d->playbackData.pan = std::clamp(float(d->slice->pan()) + d->clipCommand->pan + (d->subvoiceSettings ? d->subvoiceSettings->pan() : 0.0f), -1.0f, 1.0f);
+        d->playbackData.startPosition = double((d->clipCommand->setStartPosition ? d->clipCommand->startPosition * d->playbackData.sourceSampleRate : d->slice->startPositionSamples())) / d->sound->stretchRate();
+        d->playbackData.stopPosition = double((d->clipCommand->setStopPosition ? d->clipCommand->stopPosition * d->playbackData.sourceSampleRate : d->slice->stopPositionSamples())) / d->sound->stretchRate();
+        d->playbackData.loopPosition = d->playbackData.startPosition + (double(d->slice->loopDeltaSamples()) / d->sound->stretchRate());
         if (d->playbackData.loopPosition >= d->playbackData.stopPosition) {
             d->playbackData.loopPosition = d->playbackData.startPosition;
         }
@@ -706,7 +712,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
         while (d->pitchRing.readHead->processed == false && d->pitchRing.readHead->time == frame) {
             const float pitch = d->pitchRing.read(&dataChannel, &dataNote);
             if (isTailingOff == false && (d->clipCommand && (dataChannel == -1 || (d->clipCommand && dataChannel == d->clipCommand->midiChannel)))) {
-                d->pitchRatio = std::pow(2.0, (std::clamp(pitch + double(d->clipCommand->midiNote), 0.0, 127.0) - double(d->sound->rootMidiNote())) / 12.0);
+                d->pitchRatio = std::pow(2.0, (std::clamp(pitch + double(d->clipCommand->midiNote), 0.0, 127.0) - double(d->slice->rootNote())) / 12.0);
             }
         }
         while (d->aftertouchRing.readHead->processed == false && d->aftertouchRing.readHead->time == frame) {
@@ -737,10 +743,10 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
         // Don't actually perform playback operations unless we've got something to play
         if (d->clip) {
             // If we're using timestretching for our clip shifting, then we should not also be applying the clip's pitch shifting here
-            const float clipPitchChange = d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchOff
-                ? (d->clipCommand->changePitch ? d->clipCommand->pitchChange * d->clip->pitchChangePrecalc() : d->clip->pitchChangePrecalc()) * (d->subvoiceSettings ? d->subvoiceSettings->pitchChangePrecalc() : 1.0f)
+            const float clipPitchChange = d->clip->rootSliceActual()->timeStretchStyle() == ClipAudioSource::TimeStretchOff
+                ? (d->clipCommand->changePitch ? d->clipCommand->pitchChange * d->clip->rootSliceActual()->pitchChangePrecalc() : d->clip->rootSliceActual()->pitchChangePrecalc()) * (d->subvoiceSettings ? d->subvoiceSettings->pitchChangePrecalc() : 1.0f)
                 : (d->clipCommand->changePitch ? d->clipCommand->pitchChange : 1.0f) * (d->subvoiceSettings ? d->subvoiceSettings->pitchChangePrecalc() : 1.0f);
-            const float clipGain = d->clip->getGain() * (d->subvoiceSettings ? d->subvoiceSettings->gain() : 1.0f);
+            const float clipGain = d->clip->rootSliceActual()->gainHandlerActual()->gain() * d->slice->gainHandlerActual()->gain() * (d->subvoiceSettings ? d->subvoiceSettings->gain() : 1.0f);
             const float lPan = 2 * (1.0 + qMax(-1.0f, (d->playbackData.pan))); // Used for m/s panning, to ensure the signal is proper, we need to multiply it by 2 eventually, so might as well pre-do that calculation here
             const float rPan = 2 * (1.0 - qMax(-1.0f, (d->playbackData.pan))); // Used for m/s panning, to ensure the signal is proper, we need to multiply it by 2 eventually, so might as well pre-do that calculation here
 
@@ -748,7 +754,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
             float l{0};
             float r{0};
             // If we're using timestretching for our clip's pitch shifting, then we also should not be applying the speed ratio here
-            const double pitchRatio{d->pitchRatio * clipPitchChange * (d->clip->timeStretchStyle() == ClipAudioSource::TimeStretchOff ? d->clip->speedRatio() : 1.0f) * d->sound->sampleRateRatio()};
+            const double pitchRatio{d->pitchRatio * clipPitchChange * (d->clip->rootSliceActual()->timeStretchStyle() == ClipAudioSource::TimeStretchOff ? d->clip->speedRatio() : 1.0f) * d->sound->sampleRateRatio()};
             for (int playheadIndex = 0; playheadIndex < PlayheadCount; ++playheadIndex) {
                 const PlayheadData &playhead = d->playbackData.playheads[playheadIndex];
                 if (playhead.active) {
@@ -774,7 +780,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                         int previousSampleIndex{sampleIndex - 1};
                         int nextSampleIndex{sampleIndex + 1};
                         int nextNextSampleIndex{sampleIndex + 2};
-                        if (d->playbackData.isLooping && d->clip->loopCrossfadeAmount() == 0) {
+                        if (d->playbackData.isLooping && d->slice->loopCrossfadeAmount() == 0) {
                             // If we are looping, we'll need to wrap our data stream to match the loop
                             // But, don't do this if we're crossfading (at which point the loop stream interpolation is done by the playheads, not here)
                             if (d->firstRoll) {
