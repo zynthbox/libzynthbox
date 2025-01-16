@@ -38,7 +38,10 @@ namespace tracktion_engine {
 #define DEBUG_CLIP false
 #define IF_DEBUG_CLIP if (DEBUG_CLIP)
 
-#define SLICE_COUNT 128
+// This gives us a nice, total chunk of 8 potential levels for any
+// multi-sampled instrument with 128 recorded notes. It'll be a huge
+// sample, but as a top-level potential, that seems reasonable
+#define SLICE_COUNT 1024
 
 #define equaliserBandCount 6
 
@@ -573,6 +576,11 @@ QObject * ClipAudioSource::rootSlice() const
 ClipAudioSourceSliceSettings * ClipAudioSource::rootSliceActual() const
 {
   return d->rootSlice;
+}
+
+int ClipAudioSource::sliceCountMaximum() const
+{
+  return SLICE_COUNT;
 }
 
 int ClipAudioSource::sliceCount() const

@@ -122,14 +122,18 @@ class ClipAudioSource : public QObject {
      */
     Q_PROPERTY(QObject* rootSlice READ rootSlice CONSTANT)
     /**
+     * \brief The maximum number of slices you can have in any one clip, not counting the root slice
+     */
+    Q_PROPERTY(int sliceCountMaximum READ sliceCountMaximum CONSTANT)
+    /**
      * \brief How many slices are active in the clip
      * @default 0
      * @minimum 0
-     * @maximum 128
+     * @maximum sliceCountMaximum
      */
     Q_PROPERTY(int sliceCount READ sliceCount WRITE setSliceCount NOTIFY sliceCountChanged)
     /**
-     * \brief A list containing all potential 128 slices, whether active or not
+     * \brief A list containing all potential slices, whether active or not
      */
     Q_PROPERTY(QVariantList sliceSettings READ sliceSettings CONSTANT)
     /**
@@ -137,10 +141,10 @@ class ClipAudioSource : public QObject {
      */
     Q_PROPERTY(SamplePickingStyle slicePickingStyle READ slicePickingStyle WRITE setSlicePickingStyle NOTIFY slicePickingStyleChanged)
     /**
-     * \brief The index of the currently selected slice
+     * \brief The index of the currently selected slice (-1 being the root slice)
      * @default -1
      * @minimum -1
-     * @maximum 127
+     * @maximum sliceCountMaximum - 1
      */
     Q_PROPERTY(int selectedSlice READ selectedSlice WRITE setSelectedSlice NOTIFY selectedSliceChanged)
     /**
@@ -312,6 +316,7 @@ public:
   QObject* rootSlice() const;
   ClipAudioSourceSliceSettings* rootSliceActual() const;
 
+  int sliceCountMaximum() const;
   int sliceCount() const;
   void setSliceCount(const int &sliceCount);
   Q_SIGNAL void sliceCountChanged();
