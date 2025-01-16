@@ -12,38 +12,32 @@ class ClipAudioSource;
 struct ClipCommand {
     ClipCommand() {};
     ClipCommand(ClipAudioSource *clip, int midiNote) : clip(clip), midiNote(midiNote) {};
-    ClipAudioSource* clip{nullptr};
-    int midiNote{-1};
-    int subvoice{-1};
-    int midiChannel{-1};
-    bool startPlayback{false};
-    bool stopPlayback{false};
-    // Which slice to use (-1 means no slice, play normal)
-    bool changeSlice{false};
-    int slice{-1};
-    bool changeLooping{false};
+    ClipAudioSource* clip{nullptr}; ///@< The audio clip the command relates to
+    int midiNote{-1}; ///@< The midi note to play the clip at
+    int subvoice{-1}; ///@< -1 is the base voice, 0 through 15 is a specific subvoice
+    int slice{-1}; /// @< -1 is the root slice, 0 and above is a specific slice. Invalid slices will be counted as the root slice
+    int midiChannel{-1}; ///@< The midi channel the note message came from
+    bool startPlayback{false}; ///@< Whether the command asks for the clip to be started (if an equivalent active clip exists, playback will be restarted)
+    bool stopPlayback{false}; ///@< Whether to stop playback of the equivalent active clip (any playing clip which has the same midi note, subvoice, slice, and midi channel)
+    bool changeLooping{false}; ///@< Whether to change the looping state of an equivalent active clip
     bool looping{false};
-    bool changePitch{false};
+    bool changePitch{false}; ///@< Whether to change the pitch adjustment of an equivalent active clip
     float pitchChange{0.0f};
-    bool changeSpeed{false};
+    bool changeSpeed{false}; ///@< Whether to change the speed ratio of an equivalent active clip
     float speedRatio{0.0f};
-    bool changeGainDb{false};
+    bool changeGainDb{false}; ///@< Whether to change the gain (in dB) of an equivalent active clip
     float gainDb{0.0f};
-    bool changeVolume{false};
+    bool changeVolume{false}; ///@< Whether to change the volume (in absolute terms) of an equivalent active clip
     float volume{1.0f};
-    bool changePan{false};
-    float pan{0.0f};
-    bool setStartPosition{false};
-    float startPosition{0};
-    bool setStopPosition{false};
-    float stopPosition{0};
+    bool changePan{false}; ///@< Whether to change the panning of an equivalent active clip
+    float pan{0.0f}; ///@< The pan adjustment (-1 being panned fully left, 1 being panned fully right, 0 being center pan)
+    bool setStartPosition{false}; ///@< Whether to change the playback start position of an equivalent active clip
+    float startPosition{0}; ///@< The absolute start position in source samples
+    bool setStopPosition{false}; ///@< Whether to change the playback stop position of an equivalent active clip
+    float stopPosition{0}; ///@< The absolute stop position in source samples
 
     bool equivalentTo(ClipCommand *other) const {
-        return clip == other->clip
-            && (
-                (changeSlice == true && other->changeSlice == true && slice == other->slice)
-                || (changeSlice == false && other->changeSlice == false && midiNote == other->midiNote && subvoice == other->subvoice && midiChannel == other->midiChannel)
-            );
+        return clip == other->clip && midiNote == other->midiNote && subvoice == other->subvoice && slice == other->slice && midiChannel == other->midiChannel;
     }
 
     /**
@@ -57,6 +51,8 @@ struct ClipCommand {
         command->clip = clip;
         command->midiChannel = -1;
         command->midiNote = 60;
+        command->subvoice = -1;
+        command->slice = -1;
         return command;
     }
     /**
@@ -66,6 +62,9 @@ struct ClipCommand {
     {
         ClipCommand *command = SyncTimer::instance()->getClipCommand();
         command->clip = clip;
+        command->midiNote = 60;
+        command->subvoice = -1;
+        command->slice = -1;
         command->midiChannel = channelID;
         return command;
     }
@@ -74,11 +73,10 @@ struct ClipCommand {
         command->clip = nullptr;
         command->midiNote = -1;
         command->subvoice = -1;
+        command->slice = -1;
         command->midiChannel = -1;
         command->startPlayback = false;
         command->stopPlayback = false;
-        command->changeSlice = false;
-        command->slice = -1;
         command->changeLooping = false;
         command->looping = false;
         command->changePitch = false;
