@@ -19,6 +19,11 @@ ClipAudioSourceSubvoiceSettings::ClipAudioSourceSubvoiceSettings(QObject* parent
 {
 }
 
+ClipAudioSourceSubvoiceSettings::~ClipAudioSourceSubvoiceSettings()
+{
+    delete d;
+}
+
 float ClipAudioSourceSubvoiceSettings::pan() const
 {
     return d->pan;

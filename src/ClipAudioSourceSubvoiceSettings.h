@@ -13,7 +13,7 @@ class ClipAudioSourceSubvoiceSettings : public QObject
     Q_PROPERTY(float gainDb READ gainDb NOTIFY gainChanged)
 public:
     explicit ClipAudioSourceSubvoiceSettings(QObject *parent = nullptr);
-    ~ClipAudioSourceSubvoiceSettings() override = default;
+    ~ClipAudioSourceSubvoiceSettings() override;
 
     float pan() const;
     void setPan(const float &pan);
