@@ -3,6 +3,7 @@
 #include "ClipAudioSource.h"
 
 class ClipAudioSourceSliceSettingsPrivate;
+class ClipAudioSourceSubvoiceSettings;
 class GainHandler;
 class ClipAudioSourceSliceSettings : public QObject
 {
@@ -176,6 +177,23 @@ class ClipAudioSourceSliceSettings : public QObject
      * @maximum 127
      */
     Q_PROPERTY(int velocityMaximum READ velocityMaximum WRITE setVelocityMaximum NOTIFY velocityMaximumChanged)
+
+    /**
+     * \brief If this is set to true, the root slice's voice settings will be used in place of the slice's own
+     * @default true
+     */
+    Q_PROPERTY(bool inheritSubvoices READ inheritSubvoices WRITE setInheritSubvoices NOTIFY inheritSubvoicesChanged)
+    /**
+     * \brief Defines how many of the subvoices should be activated when starting playback
+     * @default 0
+     * @minimum 0
+     * @maximum 16
+     */
+    Q_PROPERTY(int subvoiceCount READ subvoiceCount WRITE setSubvoiceCount NOTIFY subvoiceCountChanged)
+    /**
+     * \brief A list containing the 16 entries for subvoices, whether active or not
+     */
+    Q_PROPERTY(QVariantList subvoiceSettings READ subvoiceSettings CONSTANT)
 
     /**
      * \brief The attack part of an ADSR envelope (number of seconds from the start of the clip playback start point)
@@ -453,6 +471,22 @@ public:
     int velocityMaximum() const;
     void setVelocityMaximum(const int &velocityMaximum);
     Q_SIGNAL void velocityMaximumChanged();
+
+    bool inheritSubvoices() const;
+    void setInheritSubvoices(const bool &inheritSubvoices);
+    Q_SIGNAL void inheritSubvoicesChanged();
+    int subvoiceCount() const;
+    void setSubvoiceCount(const int &subvoiceCount);
+    Q_SIGNAL void subvoiceCountChanged();
+    QVariantList subvoiceSettings() const;
+    const QList<ClipAudioSourceSubvoiceSettings*> &subvoiceSettingsActual() const;
+    /**
+     * These two are used by SamplerSynthVoice to pull
+     * out the appropriate subvoice settings as implied
+     * by the state of the inheritSubvoices property
+     */
+    int subvoiceCountPlayback() const;
+    const QList<ClipAudioSourceSubvoiceSettings*> &subvoiceSettingsPlayback() const;
 
     float adsrAttack() const;
     void setADSRAttack(const float& newValue);

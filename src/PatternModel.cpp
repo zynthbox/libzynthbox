@@ -681,7 +681,7 @@ public:
                                 // to force one-shots to stop, all-notes-off is handled by SamplerSynth directly
                             } else {
                                 // subvoice -1 is conceptually the prime voice, anything from 0 inclusive to the amount non-inclusive are the subvoices
-                                for (int subvoice = -1; subvoice < clip->subvoiceCount(); ++subvoice) {
+                                for (int subvoice = -1; subvoice < slice->subvoiceCountPlayback(); ++subvoice) {
                                     ClipCommand *command = ClipCommand::channelCommand(clip, (byte1 & 0xf));
                                     command->startPlayback = !stopPlayback;
                                     command->stopPlayback = stopPlayback;

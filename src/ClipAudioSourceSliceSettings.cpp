@@ -3,6 +3,7 @@
 #include <QDebug>
 
 #include "JUCEHeaders.h"
+#include "ClipAudioSourceSubvoiceSettings.h"
 #include "GainHandler.h"
 #include "SyncTimer.h"
 
@@ -21,6 +22,12 @@ public:
         parameters.sustain = 1.0f;
         parameters.release = 0.01f;
         grainADSR.setParameters(parameters);
+        // Sub-voices
+        for (int subvoiceIndex = 0; subvoiceIndex < 16; ++subvoiceIndex) {
+            ClipAudioSourceSubvoiceSettings *newSubvoice = new ClipAudioSourceSubvoiceSettings(q);
+            subvoiceSettings << QVariant::fromValue<QObject*>(newSubvoice);
+            subvoiceSettingsActual << newSubvoice;
+        }
     }
     ClipAudioSource *clip{nullptr};
     ClipAudioSourceSliceSettings *q{nullptr};
@@ -56,6 +63,13 @@ public:
     int keyZoneEnd{127};
     int velocityMinimum{1};
     int velocityMaximum{127};
+
+    // Subvoices (extra voices which are launched at the same time as the sound usually is, with a number of adjustments to some settings, specifically pan, pitch, and gain)
+    bool inheritSubvoices{true};
+    int subvoiceCount{0};
+    QVariantList subvoiceSettings;
+    QList<ClipAudioSourceSubvoiceSettings*> subvoiceSettingsActual;
+
     juce::ADSR adsr;
 
     bool granular{false};
@@ -599,6 +613,58 @@ void ClipAudioSourceSliceSettings::setVelocityMaximum(const int& velocityMaximum
             setVelocityMinimum(d->velocityMaximum);
         }
     }
+}
+
+bool ClipAudioSourceSliceSettings::inheritSubvoices() const
+{
+    return d->inheritSubvoices;
+}
+
+void ClipAudioSourceSliceSettings::setInheritSubvoices(const bool& inheritSubvoices)
+{
+    if (d->inheritSubvoices != inheritSubvoices) {
+        d->inheritSubvoices = inheritSubvoices;
+        Q_EMIT inheritSubvoicesChanged();
+    }
+}
+
+int ClipAudioSourceSliceSettings::subvoiceCount() const
+{
+  return d->subvoiceCount;
+}
+
+void ClipAudioSourceSliceSettings::setSubvoiceCount(const int& subvoiceCount)
+{
+  if (d->subvoiceCount != subvoiceCount) {
+    d->subvoiceCount = subvoiceCount;
+    Q_EMIT subvoiceCountChanged();
+  }
+}
+
+QVariantList ClipAudioSourceSliceSettings::subvoiceSettings() const
+{
+  return d->subvoiceSettings;
+}
+
+const QList<ClipAudioSourceSubvoiceSettings*> & ClipAudioSourceSliceSettings::subvoiceSettingsActual() const
+{
+  return d->subvoiceSettingsActual;
+}
+
+int ClipAudioSourceSliceSettings::subvoiceCountPlayback() const
+{
+    if (d->inheritSubvoices) {
+        return d->clip->rootSliceActual()->subvoiceCount();
+    }
+    return d->subvoiceCount;
+}
+
+const QList<ClipAudioSourceSubvoiceSettings *> & ClipAudioSourceSliceSettings::subvoiceSettingsPlayback() const
+{
+    if (d->inheritSubvoices) {
+        return d->clip->rootSliceActual()->subvoiceSettingsActual();
+    }
+    return d->subvoiceSettingsActual;
 }
 
 float ClipAudioSourceSliceSettings::adsrAttack() const

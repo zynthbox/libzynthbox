@@ -10,7 +10,6 @@
 
 #include "ClipAudioSource.h"
 #include "ClipAudioSourceSliceSettings.h"
-#include "ClipAudioSourceSubvoiceSettings.h"
 #include "ClipAudioSourcePositionsModel.h"
 
 #include <QDateTime>
@@ -83,12 +82,6 @@ public:
     for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
         sideChainGain[channelIndex] = new jack_default_audio_sample_t[8192](); // TODO This is an awkward assumption, there has to be a sensible way to do this - jack should know this, right?
     }
-    // Sub-voices
-    for (int subvoiceIndex = 0; subvoiceIndex < 16; ++subvoiceIndex) {
-      ClipAudioSourceSubvoiceSettings *newSubvoice = new ClipAudioSourceSubvoiceSettings(q);
-      subvoiceSettings << QVariant::fromValue<QObject*>(newSubvoice);
-      subvoiceSettingsActual << newSubvoice;
-    }
     // The slices are created in the CAS ctor, otherwise we're missing some important information that isn't there until the clip's been loaded
   }
   ClipAudioSource *q;
@@ -113,11 +106,6 @@ public:
   int sketchpadTrack{-1};
   int laneAffinity{0};
   ClipAudioSourcePositionsModel *positionsModel{nullptr};
-
-  // Subvoices (extra voices which are launched at the same time as the sound usually is, with a number of adjustments to some settings, specifically pan, pitch, and gain)
-  int subvoiceCount{0};
-  QVariantList subvoiceSettings;
-  QList<ClipAudioSourceSubvoiceSettings*> subvoiceSettingsActual;
 
   ClipAudioSourceSliceSettings *rootSlice{nullptr};
   int sliceCount{0};
@@ -543,29 +531,6 @@ QObject *ClipAudioSource::playbackPositions()
 ClipAudioSourcePositionsModel *ClipAudioSource::playbackPositionsModel()
 {
     return d->positionsModel;
-}
-
-int ClipAudioSource::subvoiceCount() const
-{
-  return d->subvoiceCount;
-}
-
-void ClipAudioSource::setSubvoiceCount(const int& subvoiceCount)
-{
-  if (d->subvoiceCount != subvoiceCount) {
-    d->subvoiceCount = subvoiceCount;
-    Q_EMIT subvoiceCountChanged();
-  }
-}
-
-QVariantList ClipAudioSource::subvoiceSettings() const
-{
-  return d->subvoiceSettings;
-}
-
-const QList<ClipAudioSourceSubvoiceSettings*> & ClipAudioSource::subvoiceSettingsActual() const
-{
-  return d->subvoiceSettingsActual;
 }
 
 QObject * ClipAudioSource::rootSlice() const

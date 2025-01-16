@@ -20,7 +20,6 @@
 #include <juce_events/juce_events.h>
 
 class SyncTimer;
-class ClipAudioSourceSubvoiceSettings;
 class ClipAudioSourceSliceSettings;
 class ClipAudioSourcePositionsModel;
 class JackPassthroughAnalyser;
@@ -104,18 +103,6 @@ class ClipAudioSource : public QObject {
      * \brief A model which contains the current positions at which the clip is being played back in SamplerSynth
      */
     Q_PROPERTY(QObject* playbackPositions READ playbackPositions CONSTANT)
-
-    /**
-     * \brief Defines how many of the subvoices should be activated when starting playback
-     * @default 0
-     * @minimum 0
-     * @maximum 16
-     */
-    Q_PROPERTY(int subvoiceCount READ subvoiceCount WRITE setSubvoiceCount NOTIFY subvoiceCountChanged)
-    /**
-     * \brief A list containing the 16 entries for subvoices, whether active or not
-     */
-    Q_PROPERTY(QVariantList subvoiceSettings READ subvoiceSettings CONSTANT)
 
     /**
      * \brief The slice object which contains the settings for the clip itself
@@ -298,12 +285,6 @@ public:
 
   QObject *playbackPositions();
   ClipAudioSourcePositionsModel *playbackPositionsModel();
-
-  int subvoiceCount() const;
-  void setSubvoiceCount(const int &subvoiceCount);
-  Q_SIGNAL void subvoiceCountChanged();
-  QVariantList subvoiceSettings() const;
-  const QList<ClipAudioSourceSubvoiceSettings*> &subvoiceSettingsActual() const;
 
   /**
    * \brief Holds the settings for when performing un-sliced playback

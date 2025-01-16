@@ -484,7 +484,7 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         d->sound = sound;
         d->clip = sound->clip();
         d->slice = d->clip->sliceFromIndex(clipCommand->slice);
-        d->subvoiceSettings = clipCommand->subvoice == -1 ? nullptr : d->clip->subvoiceSettingsActual()[clipCommand->subvoice];
+        d->subvoiceSettings = clipCommand->subvoice == -1 ? nullptr : d->slice->subvoiceSettingsPlayback()[clipCommand->subvoice];
         d->playbackData.sourceSampleRate = d->sound->sourceSampleRate();
 
         d->playbackData.snappedToBeat = (trunc(d->slice->lengthBeats()) == d->slice->lengthBeats());
