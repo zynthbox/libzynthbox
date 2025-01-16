@@ -244,6 +244,10 @@ void ClipAudioSourcePositionsModel::updatePositions()
         for (int positionIndex = 0; positionIndex < ZynthboxClipMaximumPositionCount; ++positionIndex) {
             if (positionChanges[positionIndex] > 0) {
                 const QModelIndex topLeft{createIndex(positionIndex, 0)};
+                // Find the next *empty* position, and use that-minus-one as the bottomRight position
+                while (positionIndex < ZynthboxClipMaximumPositionCount && positionChanges[positionIndex] > 0) {
+                    ++positionIndex;
+                }
                 const QModelIndex bottomRight{createIndex(positionIndex, 0)};
                 dataChanged(topLeft, bottomRight, {PositionIDRole, PositionProgressRole, PositionGainRole, PositionGainLeftRole, PositionGainRightRole, PositionPanRole});
             }
