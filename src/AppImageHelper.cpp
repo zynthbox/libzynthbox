@@ -7,7 +7,9 @@ void AppImageHelper::registerAppImage(QString path)
 {
     auto manager = appimage::desktop_integration::IntegrationManager();
     if (!manager.isARegisteredAppImage(path.toStdString())) {
-        manager.registerAppImage(appimage::core::AppImage(path.toStdString()));
+        auto app = appimage::core::AppImage(path.toStdString());
+        manager.registerAppImage(app);
+        manager.generateThumbnails(app);
     }
 }
 
@@ -16,6 +18,7 @@ void AppImageHelper::unregisterAppImage(QString path)
     auto manager = appimage::desktop_integration::IntegrationManager();
     if (manager.isARegisteredAppImage(path.toStdString())) {
         manager.unregisterAppImage(path.toStdString());
+        manager.removeThumbnails(path.toStdString());
     }
 }
 
