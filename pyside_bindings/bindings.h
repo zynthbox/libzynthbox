@@ -9,6 +9,7 @@
 #include <AppImageHelper.h>
 #include <AudioLevels.h>
 #include <ClipAudioSource.h>
+#include <ClipAudioSourceSliceSettings.h>
 #include <ClipAudioSourceSubvoiceSettings.h>
 #include <CUIAHelper.h>
 #include <GainHandler.h>

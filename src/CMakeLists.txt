@@ -7,6 +7,7 @@ target_sources(libzynthbox
         AppImageHelper.cpp
         Plugin.cpp
         ClipAudioSource.cpp
+        ClipAudioSourceSliceSettings.cpp
         ClipAudioSourceSubvoiceSettings.cpp
         ClipAudioSourcePositionsModel.cpp
         ClipAudioSourcePositionsModelEntry.cpp

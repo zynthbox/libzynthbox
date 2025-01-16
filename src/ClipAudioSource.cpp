@@ -9,6 +9,7 @@
 */
 
 #include "ClipAudioSource.h"
+#include "ClipAudioSourceSliceSettings.h"
 #include "ClipAudioSourceSubvoiceSettings.h"
 #include "ClipAudioSourcePositionsModel.h"
 
@@ -21,6 +22,7 @@
 #include "../tracktion_engine/examples/common/Utilities.h"
 #include "Helper.h"
 #include "ClipCommand.h"
+#include "GainHandler.h"
 #include "JackPassthroughAnalyser.h"
 #include "JackPassthroughCompressor.h"
 #include "JackPassthroughFilter.h"
@@ -36,20 +38,15 @@ namespace tracktion_engine {
 #define DEBUG_CLIP false
 #define IF_DEBUG_CLIP if (DEBUG_CLIP)
 
+#define SLICE_COUNT 128
+
 #define equaliserBandCount 6
-static constexpr float maxGainDB{24.0f};
 
 using namespace std;
 
 class ClipAudioSource::Private : public juce::Timer {
 public:
   Private(ClipAudioSource *qq) : q(qq) {
-    juce::ADSR::Parameters parameters = grainADSR.getParameters();
-    parameters.attack = 0.01f;
-    parameters.decay = 0.0f;
-    parameters.sustain = 1.0f;
-    parameters.release = 0.01f;
-    grainADSR.setParameters(parameters);
     // Equaliser
     for (int equaliserBand = 0; equaliserBand < equaliserBandCount; ++equaliserBand) {
         JackPassthroughFilter *newBand = new JackPassthroughFilter(equaliserBand, q);
@@ -89,6 +86,7 @@ public:
       subvoiceSettings << QVariant::fromValue<QObject*>(newSubvoice);
       subvoiceSettingsActual << newSubvoice;
     }
+    // The slices are created in the CAS ctor, otherwise we're missing some important information that isn't there until the clip's been loaded
   }
   ClipAudioSource *q;
   const te::Engine &getEngine() const { return *engine; };
@@ -100,31 +98,9 @@ public:
   juce::String chosenPath;
   juce::String fileName;
   QString filePath;
-  float startPositionInSeconds = 0;
-  int startPositionInSamples = 0;
-  bool snapLengthToBeat{false};
-  float lengthInSeconds = -1;
-  int lengthInSamples = -1;
-  float lengthInBeats = -1;
-  double loopCrossfadeAmount{0.0};
-  CrossfadingDirection loopStartCrossfadeDirection{CrossfadeOutie};
-  CrossfadingDirection stopCrossfadeDirection{CrossfadeInnie};
-  QList<int> loopFadeAdjustment;
-  QList<int> stopFadeAdjustment;
-  ClipAudioSource::PlaybackStyle playbackStyle{ClipAudioSource::NonLoopingPlaybackStyle};
-  bool looping{false};
-  float loopDelta{0.0f};
-  int loopDeltaSamples{0};
-  float loopDelta2{0.0f};
-  int loopDelta2Samples{0};
-  float gain{1.0f};
-  TimeStretchStyle timeStretchLive{ClipAudioSource::TimeStretchOff};
-  float pitchChange = 0;
-  float pitchChangePrecalc = 1.0f;
   bool autoSynchroniseSpeedRatio{false};
   float speedRatio = 1.0;
   float bpm{0};
-  float pan{0.0f};
   double sampleRate{0.0f};
   double currentLeveldB{-400.0};
   double prevLeveldB{-400.0};
@@ -134,51 +110,18 @@ public:
   int sketchpadTrack{-1};
   int laneAffinity{0};
   ClipAudioSourcePositionsModel *positionsModel{nullptr};
+
   // Subvoices (extra voices which are launched at the same time as the sound usually is, with a number of adjustments to some settings, specifically pan, pitch, and gain)
   int subvoiceCount{0};
   QVariantList subvoiceSettings;
   QList<ClipAudioSourceSubvoiceSettings*> subvoiceSettingsActual;
-  // Default is 16, but we also need to generate the positions, so that is set up in the ClipAudioSource ctor
-  int slices{0};
-  QVariantList slicePositions;
-  QList<double> slicePositionsCache;
-  int sliceBaseMidiNote{60};
-  int keyZoneStart{0};
-  int keyZoneEnd{127};
-  int rootNote{60};
-  juce::ADSR adsr;
 
-  bool granular{false};
-  float grainPosition{0.0f};
-  float grainSpray{1.0f};
-  float grainScan{0.0f};
-  float grainInterval{10};
-  float grainIntervalAdditional{10};
-  float grainSize{100};
-  float grainSizeAdditional{50};
-  float grainPanMinimum{-1.0f};
-  float grainPanMaximum{1.0f};
-  float grainPitchMinimum1{1.0};
-  float grainPitchMaximum1{1.0};
-  float grainPitchMinimum2{1.0};
-  float grainPitchMaximum2{1.0};
-  float grainPitchPriority{0.5};
-  float grainSustain{0.3f};
-  float grainTilt{0.5f};
-  juce::ADSR grainADSR;
-  void updateGrainADSR() {
-    // Sustain is 0.0 through 1.0, defines how much of the base period should be given to sustain
-    // The time as known by the envelope is in seconds, and we're holding milliseconds, so... divide by a thousand
-    const float remainingPeriod = (grainSize * (1.0f - grainSustain)) / 1000.0f;
-    juce::ADSR::Parameters parameters;
-    // Tilt is 0.0 through 1.0, defines how much of the period should be attack and how much should be
-    // release (0.0 is all attack no release, 0.5 is even split, 1.0 is all release)
-    parameters.attack = remainingPeriod * grainTilt;
-    parameters.decay = 0.0f;
-    parameters.sustain = 1.0f;
-    parameters.release = remainingPeriod * (1.0f - grainTilt);
-    grainADSR.setParameters(parameters);
-  }
+  ClipAudioSourceSliceSettings *rootSlice{nullptr};
+  int sliceCount{0};
+  QVariantList sliceSettings;
+  QList<ClipAudioSourceSliceSettings*> sliceSettingsActual;
+  int selectedSlice{-1};
+  SamplePickingStyle slicePickingStyle{ClipAudioSource::AllPickingStyle};
 
   bool equaliserEnabled{false};
   JackPassthroughFilter* equaliserSettings[equaliserBandCount];
@@ -221,6 +164,35 @@ public:
   double progress{0};
   bool isPlaying{false};
 
+  void syncProgress() {
+    if (nextPositionUpdateTime < QDateTime::currentMSecsSinceEpoch()) {
+      double newPosition = rootSlice->startPositionSeconds() / q->getDuration();
+      if (positionsModel && positionsModel->firstProgress() > -1.0f) {
+        newPosition = positionsModel->firstProgress();
+        if (isPlaying == false) {
+          isPlaying = true;
+          Q_EMIT q->isPlayingChanged();
+        }
+      } else {
+        if (isPlaying == true) {
+          isPlaying = false;
+          Q_EMIT q->isPlayingChanged();
+        }
+      }
+      if (abs(firstPositionProgress - newPosition) > 0.001) {
+        firstPositionProgress = newPosition;
+        progress = firstPositionProgress * q->getDuration();
+        Q_EMIT q->positionChanged();
+        Q_EMIT q->progressChanged();
+        // This really wants to be 16, so we can get to 60 updates per second, but that tears to all heck without compositing, so... for now
+        // (tested with higher rates, but it tears, so while it looks like an arbitrary number, afraid it's as high as we can go)
+        // d->nextPositionUpdateTime = QDateTime::currentMSecsSinceEpoch() + 100; // 10 updates per second, this is loooow...
+        // If it turns out this is a problem, we can reinstate the old code above, or perhaps do it on-demand...
+        // (it will a problem be for rpi4 but is that a problem-problem if we're more properly rpi5, and it's really purely visual?)
+        nextPositionUpdateTime = QDateTime::currentMSecsSinceEpoch() + 16;
+      }
+    }
+  }
   void syncAudioLevel() {
     if (nextGainUpdateTime < QDateTime::currentMSecsSinceEpoch()) {
       prevLeveldB = currentLeveldB;
@@ -251,26 +223,6 @@ public:
       q->setSpeedRatio(1.0);
     }
   }
-  void updateCrossfadeAmounts() {
-    QList<int> newLoopFadeAdjustment, newStopFadeAdjustment;
-    for (int sliceIndex = -1; sliceIndex < slices; ++sliceIndex) {
-      const double startPositionInSamples{double(q->getStartPositionSamples(sliceIndex) + q->loopDelta())};
-      const double stopPositionInSamples{double(q->getStopPositionSamples(sliceIndex))};
-      const int fadeDurationSamples{int((stopPositionInSamples - startPositionInSamples) * loopCrossfadeAmount)};
-      if (loopStartCrossfadeDirection == CrossfadeInnie) {
-        newLoopFadeAdjustment.append(fadeDurationSamples);
-      } else {
-        newLoopFadeAdjustment.append(-fadeDurationSamples);
-      }
-      if (stopCrossfadeDirection == CrossfadeInnie) {
-        newStopFadeAdjustment.append(-fadeDurationSamples);
-      } else {
-        newStopFadeAdjustment.append(fadeDurationSamples);
-      }
-    }
-    loopFadeAdjustment = newLoopFadeAdjustment;
-    stopFadeAdjustment = newStopFadeAdjustment;
-  }
 private:
   void timerCallback() override {
     // Calling this from a timer will lead to a bad time, make sure it happens somewhere more reasonable (like on the object's own thread, which in this case is the qml engine thread)
@@ -281,16 +233,13 @@ private:
 
 ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *parent)
     : QObject(parent)
-    , d(new Private(this)) {
+    , d(new Private(this))
+{
   moveToThread(Plugin::instance()->qmlEngine()->thread());
   d->syncTimer = SyncTimer::instance();
   d->engine = Plugin::instance()->getTracktionEngine();
   d->id = Plugin::instance()->nextClipId();
   Plugin::instance()->addCreatedClipToMap(this);
-
-  connect(this, &ClipAudioSource::grainSizeChanged, this, [this]() { d->updateGrainADSR(); });
-  connect(this, &ClipAudioSource::grainSustainChanged, this, [this]() { d->updateGrainADSR(); });
-  connect(this, &ClipAudioSource::grainTiltChanged, this, [this]() { d->updateGrainADSR(); });
 
   IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Opening file:" << filepath;
 
@@ -299,13 +248,19 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
   d->filePath = QString::fromUtf8(filepath);
   d->audioFile = new tracktion_engine::AudioFile(*d->engine, d->givenFile);
   d->sampleRate = d->audioFile->getSampleRate();
-  d->adsr.setSampleRate(d->sampleRate);
-  d->adsr.setParameters({0.0f, 0.0f, 1.0f, 0.0f});
-  setLengthSamples(d->audioFile->getLengthInSamples());
+
+  // Slices
+  d->rootSlice = new ClipAudioSourceSliceSettings(-1, this);
+  d->rootSlice->setLengthSamples(d->audioFile->getLengthInSamples());
+  for (int sliceIndex = 0; sliceIndex < SLICE_COUNT; ++sliceIndex) {
+    ClipAudioSourceSliceSettings *newSlice = new ClipAudioSourceSliceSettings(sliceIndex, this);
+    d->sliceSettings << QVariant::fromValue<QObject*>(newSlice);
+    d->sliceSettingsActual << newSlice;
+  }
 
   if (muted) {
     IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Clip marked to be muted";
-    setGainAbsolute(0.0f);
+    d->rootSlice->gainHandlerActual()->setGainAbsolute(0.0f);
   }
 
   d->positionsModel = new ClipAudioSourcePositionsModel(this);
@@ -314,28 +269,10 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
   // connect(d->positionsModel, &ClipAudioSourcePositionsModel::peakGainChanged, this, [&](){ d->syncAudioLevel(); });
   connect(d->positionsModel, &QAbstractItemModel::dataChanged, this, [&](const QModelIndex& topLeft, const QModelIndex& /*bottomRight*/, const QVector< int >& roles = QVector<int>()){
     if (topLeft.row() == 0 && roles.contains(ClipAudioSourcePositionsModel::PositionProgressRole)) {
-      syncProgress();
+      d->syncProgress();
     }
   });
   SamplerSynth::instance()->registerClip(this);
-
-  connect(this, &ClipAudioSource::loopCrossfadeAmountChanged, this, [this](){ d->updateCrossfadeAmounts(); });
-  connect(this, &ClipAudioSource::loopStartCrossfadeDirectionChanged, this, [this](){ d->updateCrossfadeAmounts(); });
-  connect(this, &ClipAudioSource::stopCrossfadeDirectionChanged, this, [this](){ d->updateCrossfadeAmounts(); });
-  connect(this, &ClipAudioSource::slicesChanged, this, [this](){ d->updateCrossfadeAmounts(); });
-  connect(this, &ClipAudioSource::startPositionChanged, this, [this](){ d->updateCrossfadeAmounts(); });
-  connect(this, &ClipAudioSource::loopDeltaChanged, this, [this](){ d->updateCrossfadeAmounts(); });
-  connect(this, &ClipAudioSource::loopDelta2Changed, this, [this](){ d->updateCrossfadeAmounts(); });
-  connect(this, &ClipAudioSource::lengthChanged, this, [this](){ d->updateCrossfadeAmounts(); });
-
-  connect(this, &ClipAudioSource::slicePositionsChanged, this, [&](){
-    QList<double> newSlicePositionsCache;
-    for (const QVariant &position : d->slicePositions) {
-        newSlicePositionsCache << position.toDouble();
-    }
-    d->slicePositionsCache = newSlicePositionsCache;
-  });
-  setSlices(16);
 
   connect(d->syncTimer, &SyncTimer::bpmChanged, this, [this](){ d->updateBpmDependentValues(); } );
   connect(this, &ClipAudioSource::bpmChanged, this, [this](){ d->updateBpmDependentValues(); } );
@@ -356,240 +293,15 @@ ClipAudioSource::~ClipAudioSource() {
     }, true);
 }
 
-void ClipAudioSource::syncProgress() {
-  if (d->nextPositionUpdateTime < QDateTime::currentMSecsSinceEpoch()) {
-    double newPosition = d->startPositionInSeconds / getDuration();
-    if (d->positionsModel && d->positionsModel->firstProgress() > -1.0f) {
-      newPosition = d->positionsModel->firstProgress();
-      if (d->isPlaying == false) {
-        d->isPlaying = true;
-        Q_EMIT isPlayingChanged();
-      }
-    } else {
-      if (d->isPlaying == true) {
-        d->isPlaying = false;
-        Q_EMIT isPlayingChanged();
-      }
-    }
-    if (abs(d->firstPositionProgress - newPosition) > 0.001) {
-      d->firstPositionProgress = newPosition;
-      d->progress = d->firstPositionProgress * getDuration();
-      Q_EMIT positionChanged();
-      Q_EMIT progressChanged();
-      // This really wants to be 16, so we can get to 60 updates per second, but that tears to all heck without compositing, so... for now
-      // (tested with higher rates, but it tears, so while it looks like an arbitrary number, afraid it's as high as we can go)
-      // d->nextPositionUpdateTime = QDateTime::currentMSecsSinceEpoch() + 100; // 10 updates per second, this is loooow...
-      // If it turns out this is a problem, we can reinstate the old code above, or perhaps do it on-demand...
-      // (it will a problem be for rpi4 but is that a problem-problem if we're more properly rpi5, and it's really purely visual?)
-      d->nextPositionUpdateTime = QDateTime::currentMSecsSinceEpoch() + 16;
-    }
-  }
-}
-
-ClipAudioSource::PlaybackStyle ClipAudioSource::playbackStyle() const
-{
-  return d->playbackStyle;
-}
-
-QString ClipAudioSource::playbackStyleLabel() const
-{
-  switch (d->playbackStyle) {
-    case LoopingPlaybackStyle: {
-      static const QLatin1String label{"Looping"};
-      return label;
-      break; }
-    case OneshotPlaybackStyle: {
-      static const QLatin1String label{"One-shot"};
-      return label;
-      break; }
-    case GranularNonLoopingPlaybackStyle: {
-      static const QLatin1String label{"Granular Non-looping"};
-      return label;
-      break; }
-    case GranularLoopingPlaybackStyle: {
-      static const QLatin1String label{"Granular Looping"};
-      return label;
-      break; }
-    case WavetableStyle: {
-      static const QLatin1String label{"Wavetable"};
-      return label;
-      break; }
-    case NonLoopingPlaybackStyle:
-    default: {
-      static const QLatin1String label{"Non-looping"};
-      return label;
-      break; }
-  }
-}
-
-void ClipAudioSource::setPlaybackStyle(const PlaybackStyle& playbackStyle)
-{
-  if (d->playbackStyle != playbackStyle) {
-    d->playbackStyle = playbackStyle;
-    Q_EMIT playbackStyleChanged();
-    switch (playbackStyle) {
-      case LoopingPlaybackStyle:
-        setLooping(true);
-        setGranular(false);
-        break;
-      case OneshotPlaybackStyle:
-        setLooping(false);
-        setGranular(false);
-        break;
-      case GranularNonLoopingPlaybackStyle:
-        setLooping(false);
-        setGranular(true);
-        break;
-      case GranularLoopingPlaybackStyle:
-        setLooping(true);
-        setGranular(true);
-        break;
-      case WavetableStyle:
-        // WavetableStyle is functionally the same as LoopingPlaybackStyle, but is informative to allow the UI
-        // to do a bit of supportive work (in short: treat the length as a window size, lock the loop delta
-        // to 0, and moving the start point as multiples of the window size)
-        setLooping(true);
-        setGranular(false);
-        setLoopDeltaSamples(0);
-        if (d->lengthInSamples > (d->audioFile->getLengthInSamples() / 4)) {
-          setLengthSamples(d->audioFile->getLengthInSamples() / 32);
-        }
-        // TODO Maybe we should do something clever like make some reasonable assumptions here if length is unreasonably large for a wavetable and then lock the wavetable position to a multiple of that when switching? Or is that too destructive?
-        break;
-      case NonLoopingPlaybackStyle:
-      default:
-        setLooping(false);
-        setGranular(false);
-        break;
-    }
-  }
-}
-
-void ClipAudioSource::setLooping(bool looping) {
-  if (d->looping != looping) {
-    d->looping = looping;
-    Q_EMIT loopingChanged();
-  }
-}
-
-bool ClipAudioSource::looping() const
-{
-  return d->looping;
-}
-
-float ClipAudioSource::loopDelta() const
-{
-  return d->loopDelta;
-}
-
-int ClipAudioSource::loopDeltaSamples() const
-{
-  return d->loopDeltaSamples;
-}
-
-void ClipAudioSource::setLoopDelta(const float& newLoopDelta)
-{
-  if (d->loopDelta != newLoopDelta) {
-    d->loopDelta = newLoopDelta;
-    d->loopDeltaSamples = newLoopDelta * d->sampleRate;
-    Q_EMIT loopDeltaChanged();
-  }
-}
-
-void ClipAudioSource::setLoopDeltaSamples(const int& newLoopDeltaSamples)
-{
-  if (d->loopDeltaSamples != newLoopDeltaSamples) {
-    d->loopDeltaSamples = newLoopDeltaSamples;
-    d->loopDelta = double(newLoopDeltaSamples) / d->sampleRate;
-    Q_EMIT loopDeltaChanged();
-  }
-}
-
-float ClipAudioSource::loopDelta2() const
-{
-  return d->loopDelta2;
-}
-
-int ClipAudioSource::loopDelta2Samples() const
-{
-  return d->loopDelta2Samples;
-}
-
-void ClipAudioSource::setLoopDelta2(const float& newLoopDelta2)
-{
-  if (d->loopDelta2 != newLoopDelta2) {
-    d->loopDelta2 = newLoopDelta2;
-    d->loopDelta2Samples = newLoopDelta2 * d->sampleRate;
-    Q_EMIT loopDelta2Changed();
-  }
-}
-
-void ClipAudioSource::setLoopDelta2Samples(const int& newLoopDelta2Samples)
-{
-  if (d->loopDelta2Samples != newLoopDelta2Samples) {
-    d->loopDelta2Samples = newLoopDelta2Samples;
-    d->loopDelta2 = double(newLoopDelta2Samples) / d->sampleRate;
-    Q_EMIT loopDelta2Changed();
-  }
-}
-
-void ClipAudioSource::setStartPosition(float startPositionInSeconds) {
-  setStartPositionSamples(startPositionInSeconds * d->sampleRate);
-}
-
-void ClipAudioSource::setStartPositionSamples(int startPositionInSamples)
-{
-  if (d->startPositionInSamples != startPositionInSamples) {
-    d->startPositionInSamples = jmax(0, startPositionInSamples);
-    d->startPositionInSeconds = double(startPositionInSamples) / d->sampleRate;
-    Q_EMIT startPositionChanged();
-    IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Start Position to" << d->startPositionInSeconds << "seconds, meaning" << d->startPositionInSamples << "samples of" << d->audioFile->getLengthInSamples();
-  }
-}
-
-float ClipAudioSource::getStartPosition(int slice) const
-{
-    if (slice > -1 && slice < d->slicePositionsCache.length()) {
-        return d->startPositionInSeconds + (d->lengthInSeconds * d->slicePositionsCache[slice]);
-    } else {
-        return d->startPositionInSeconds;
-    }
-}
-
-int ClipAudioSource::getStartPositionSamples(int slice) const
-{
-  if (slice > -1 && slice < d->slicePositionsCache.length()) {
-    return d->startPositionInSamples + (d->lengthInSamples * d->slicePositionsCache[slice]);
-  } else {
-    return d->startPositionInSamples;
-  }
-}
-
-float ClipAudioSource::getStopPosition(int slice) const
-{
-    if (slice > -1 && slice + 1 < d->slicePositionsCache.length()) {
-        return d->startPositionInSeconds + (d->lengthInSeconds * d->slicePositionsCache[slice + 1]);
-    } else {
-        return d->startPositionInSeconds + d->lengthInSeconds;
-    }
-}
-
-int ClipAudioSource::getStopPositionSamples(int slice) const
-{
-  if (slice > -1 && slice + 1 < d->slicePositionsCache.length()) {
-    return d->startPositionInSamples + (d->lengthInSamples * d->slicePositionsCache[slice + 1]);
-  } else {
-    return d->startPositionInSamples + d->lengthInSamples;
-  }
-}
-
 float ClipAudioSource::guessBPM(int slice) const
 {
   float guessedBPM{0.0f};
   // Set up our basic prerequisite knowledge
   const int numChannels{d->audioFile->getNumChannels()};
-  int startSample = d->audioFile->getLengthInSamples() * getStartPosition(slice);
-  int lastSample = d->audioFile->getLengthInSamples() * getStopPosition(slice);
+  const float sliceStartPosition{slice == -1 ? d->rootSlice->startPositionSeconds() : d->sliceSettingsActual.at(slice)->startPositionSeconds()};
+  const float sliceStopPosition{slice == -1 ? d->rootSlice->stopPositionSeconds() : d->sliceSettingsActual.at(slice)->stopPositionSeconds()};
+  int startSample = d->audioFile->getLengthInSamples() * sliceStartPosition;
+  int lastSample = d->audioFile->getLengthInSamples() * sliceStopPosition;
   // Pull the samples we want out of the reader and stuff them into the bpm detector
   const int numSamples{numChannels * (lastSample - startSample)};
   juce::int64 numLeft{numSamples};
@@ -616,36 +328,6 @@ float ClipAudioSource::guessBPM(int slice) const
   }
   guessedBPM = bpmDetector.getBpm();
   return guessedBPM;
-}
-
-void ClipAudioSource::setTimeStretchStyle(const TimeStretchStyle &timeStretchLive)
-{
-  if (d->timeStretchLive != timeStretchLive) {
-    d->timeStretchLive = timeStretchLive;
-    Q_EMIT timeStretchStyleChanged();
-  }
-}
-
-ClipAudioSource::TimeStretchStyle ClipAudioSource::timeStretchStyle() const
-{
-  return d->timeStretchLive;
-}
-
-void ClipAudioSource::setPitch(float pitchChange, bool /*immediate*/) {
-  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Pitch to" << pitchChange;
-  d->pitchChange = pitchChange;
-  d->pitchChangePrecalc = std::pow(2.0, d->pitchChange / 12.0) /* * sampleRate() / sampleRate() */; // should this perhaps be a sound sample rate over playback sample rate thing?
-  Q_EMIT pitchChanged();
-}
-
-float ClipAudioSource::pitch() const
-{
-  return d->pitchChange;
-}
-
-float ClipAudioSource::pitchChangePrecalc() const
-{
-  return d->pitchChangePrecalc;
 }
 
 void ClipAudioSource::setAutoSynchroniseSpeedRatio(const bool& autoSynchroniseSpeedRatio)
@@ -685,138 +367,6 @@ float ClipAudioSource::bpm() const
   return d->bpm;
 }
 
-float ClipAudioSource::getGain() const
-{
-  return d->gain;
-}
-
-float ClipAudioSource::getGainDB() const
-{
-  return juce::Decibels::gainToDecibels(d->gain);
-}
-
-float ClipAudioSource::gainAbsolute() const
-{
-  return juce::jmap(juce::Decibels::gainToDecibels(d->gain, -maxGainDB), -maxGainDB, maxGainDB, 0.0f, 1.0f);
-}
-
-void ClipAudioSource::setGain(const float &gain)
-{
-  if (d->gain != gain && 0.0f <= gain && gain <= 15.84893192461113) {
-    d->gain = gain;
-    Q_EMIT gainChanged();
-  }
-}
-
-void ClipAudioSource::setGainDb(const float &db) {
-  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting gain:" << db;
-  setGain(juce::Decibels::decibelsToGain(db, -maxGainDB));
-}
-
-void ClipAudioSource::setGainAbsolute(const float &gainAbsolute)
-{
-  setGain(juce::Decibels::decibelsToGain(juce::jmap(gainAbsolute, 0.0f, 1.0f, -maxGainDB, maxGainDB), -maxGainDB));
-}
-
-void ClipAudioSource::setSnapLengthToBeat(const bool& snapLengthToBeat)
-{
-  if (d->snapLengthToBeat != snapLengthToBeat) {
-    d->snapLengthToBeat = snapLengthToBeat;
-    Q_EMIT snapLengthToBeatChanged();
-  }
-}
-
-bool ClipAudioSource::snapLengthToBeat() const
-{
-  return d->snapLengthToBeat;
-}
-
-void ClipAudioSource::setLengthBeats(float beat) {
-  // IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Interval:" << d->syncTimer->getInterval(bpm);
-  float lengthInSeconds = d->syncTimer->subbeatCountToSeconds(quint64(d->bpm == 0 ? d->syncTimer->getBpm() : d->bpm), quint64((beat * d->syncTimer->getMultiplier())));
-  // qDebug() << Q_FUNC_INFO << beat << d->bpm << d->syncTimer->getBpm() << lengthInSeconds << d->sampleRate << lengthInSeconds * d->sampleRate;
-  if (lengthInSeconds != d->lengthInSeconds) {
-    // IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Setting Length to" << lengthInSeconds;
-    d->lengthInSeconds = lengthInSeconds;
-    d->lengthInSamples = lengthInSeconds * d->sampleRate;
-    d->lengthInBeats = beat;
-    Q_EMIT lengthChanged();
-  }
-}
-
-void ClipAudioSource::setLengthSamples(int lengthInSamples)
-{
-  if (d->lengthInSamples != lengthInSamples) {
-    d->lengthInSamples = lengthInSamples;
-    d->lengthInSeconds = double(lengthInSamples) / d->sampleRate;
-    d->lengthInBeats = double(d->syncTimer->secondsToSubbeatCount(d->bpm == 0 ? d->syncTimer->getBpm() : d->bpm, d->lengthInSeconds)) / double(d->syncTimer->getMultiplier());
-    Q_EMIT lengthChanged();
-  }
-}
-
-float ClipAudioSource::getLengthBeats() const {
-  return d->lengthInBeats;
-}
-
-int ClipAudioSource::getLengthSamples() const
-{
-  return d->lengthInSamples;
-}
-
-float ClipAudioSource::getLengthSeconds() const
-{
-  return double(d->lengthInSamples) / d->sampleRate;
-}
-
-double ClipAudioSource::loopCrossfadeAmount() const
-{
-  return d->loopCrossfadeAmount;
-}
-
-void ClipAudioSource::setLoopCrossfadeAmount(const double& loopCrossfadeAmount)
-{
-  if (d->loopCrossfadeAmount != loopCrossfadeAmount) {
-    d->loopCrossfadeAmount = std::clamp(loopCrossfadeAmount, 0.0, 0.5);
-    Q_EMIT loopCrossfadeAmountChanged();
-  }
-}
-
-ClipAudioSource::CrossfadingDirection ClipAudioSource::loopStartCrossfadeDirection() const
-{
-  return d->loopStartCrossfadeDirection;
-}
-
-void ClipAudioSource::setLoopStartCrossfadeDirection(const CrossfadingDirection& loopStartCrossfadeDirection)
-{
-  if (d->loopStartCrossfadeDirection != loopStartCrossfadeDirection) {
-    d->loopStartCrossfadeDirection = loopStartCrossfadeDirection;
-    Q_EMIT loopStartCrossfadeDirectionChanged();
-  }
-}
-
-ClipAudioSource::CrossfadingDirection ClipAudioSource::stopCrossfadeDirection() const
-{
-  return d->stopCrossfadeDirection;
-}
-
-void ClipAudioSource::setStopCrossfadeDirection(const CrossfadingDirection& stopCrossfadeDirection)
-{
-  if (d->stopCrossfadeDirection != stopCrossfadeDirection) {
-    d->stopCrossfadeDirection = stopCrossfadeDirection;
-    Q_EMIT stopCrossfadeDirectionChanged();
-  }
-}
-
-int ClipAudioSource::loopFadeAdjustment(const int &slice) const
-{
-  return d->loopFadeAdjustment[slice + 1];
-}
-
-int ClipAudioSource::stopFadeAdjustment(const int &slice) const
-{
-  return d->stopFadeAdjustment[slice + 1];
-}
-
 float ClipAudioSource::getDuration() const {
   return d->audioFile->getLength();
 }
@@ -830,7 +380,7 @@ const char *ClipAudioSource::getFileName() const {
   return static_cast<const char *>(d->fileName.toUTF8());
 }
 
-double ClipAudioSource::sampleRate() const
+const double &ClipAudioSource::sampleRate() const
 {
   return d->sampleRate;
 }
@@ -844,7 +394,7 @@ tracktion_engine::AudioFile ClipAudioSource::getPlaybackFile() const {
 }
 
 void ClipAudioSource::play(bool forceLooping, int midiChannel) {
-  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Starting clip " << this << d->filePath << " which is really " << d->audioFile << " in a " << (forceLooping ? "looping" : "non-looping") << " manner from " << d->startPositionInSeconds << " and for " << d->lengthInSeconds << " seconds";
+  IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Starting clip " << this << d->filePath << " which is really " << d->audioFile << " in a " << (forceLooping ? "looping" : "non-looping") << " manner from " << d->rootSlice->startPositionSeconds() << " and for " << d->rootSlice->lengthSeconds() << " seconds";
 
   ClipCommand *command = ClipCommand::channelCommand(this, midiChannel);
   command->midiNote = 60;
@@ -855,7 +405,7 @@ void ClipAudioSource::play(bool forceLooping, int midiChannel) {
     command->looping = true;
     command->stopPlayback = true; // this stops any current loop plays, and immediately starts a new one
   } else {
-    command->looping = d->looping;
+    command->looping = d->rootSlice->looping();
   }
   command->startPlayback = true;
   d->syncTimer->scheduleClipCommand(command, 0);
@@ -1010,495 +560,105 @@ QVariantList ClipAudioSource::subvoiceSettings() const
   return d->subvoiceSettings;
 }
 
-const QList<ClipAudioSourceSubvoiceSettings*> & ClipAudioSource::subvoiceSettingsActual()
+const QList<ClipAudioSourceSubvoiceSettings*> & ClipAudioSource::subvoiceSettingsActual() const
 {
   return d->subvoiceSettingsActual;
 }
 
-int ClipAudioSource::slices() const
+QObject * ClipAudioSource::rootSlice() const
 {
-    return d->slices;
+  return d->rootSlice;
 }
 
-void ClipAudioSource::setSlices(int slices)
+ClipAudioSourceSliceSettings * ClipAudioSource::rootSliceActual() const
 {
-    if (d->slices != slices) {
-        if (slices == 0) {
-            // Special casing clearing, because simple case, why not make it fast
-            d->slicePositions.clear();
-            Q_EMIT slicePositionsChanged();
-        } else if (d->slices > slices) {
-            // Just remove the slices that are too many
-            while (d->slicePositions.length() > slices) {
-                d->slicePositions.removeLast();
-            }
-            Q_EMIT slicePositionsChanged();
-        } else if (d->slices < slices) {
-            // Fit the new number of slices evenly into the available space
-            double lastSlicePosition{0.0f};
-            if (d->slicePositions.count() > 0) {
-                lastSlicePosition = d->slicePositions.last().toDouble();
-            }
-            double positionIncrement{(1.0f - lastSlicePosition) / (slices - d->slices)};
-            double newPosition{lastSlicePosition + positionIncrement};
-            if (d->slicePositions.count() == 0) {
-                d->slicePositions << QVariant::fromValue<double>(0.0f);
-            }
-            while (d->slicePositions.length() < slices) {
-                d->slicePositions << QVariant::fromValue<double>(newPosition);
-                newPosition += positionIncrement;
-            }
-            Q_EMIT slicePositionsChanged();
-        }
-        d->slices = slices;
-        Q_EMIT slicesChanged();
+  return d->rootSlice;
+}
+
+int ClipAudioSource::sliceCount() const
+{
+  return d->sliceCount;
+}
+
+void ClipAudioSource::setSliceCount(const int& sliceCount)
+{
+  if (d->sliceCount != sliceCount) {
+    d->sliceCount = sliceCount;
+    Q_EMIT sliceCountChanged();
+  }
+}
+
+QVariantList ClipAudioSource::sliceSettings() const
+{
+  return d->sliceSettings;
+}
+
+const QList<ClipAudioSourceSliceSettings *> & ClipAudioSource::sliceSettingsActual() const
+{
+  return d->sliceSettingsActual;
+}
+
+int ClipAudioSource::selectedSlice() const
+{
+  return d->selectedSlice;
+}
+
+void ClipAudioSource::setSelectedSlice(const int& selectedSlice)
+{
+  if (d->selectedSlice != selectedSlice) {
+    d->selectedSlice = std::clamp(selectedSlice, -1, SLICE_COUNT - 1);
+    Q_EMIT selectedSliceChanged();
+  }
+}
+
+QObject * ClipAudioSource::selectedSliceObject() const
+{
+  if (d->selectedSlice == -1) {
+    return d->rootSlice;
+  }
+  return d->sliceSettingsActual.at(d->selectedSlice);
+}
+
+void ClipAudioSource::insertSlice(const int& sliceIndex)
+{
+}
+
+void ClipAudioSource::removeSlice(const int& sliceIndex)
+{
+  if (0 < d->sliceCount && -1 < sliceIndex && sliceIndex < SLICE_COUNT) {
+    for (int currentSliceIndex = sliceIndex; currentSliceIndex < d->sliceCount && currentSliceIndex + 1 < SLICE_COUNT - 1; ++currentSliceIndex) {
+      d->sliceSettingsActual.at(currentSliceIndex)->cloneFrom(d->sliceSettingsActual.at(currentSliceIndex + 1));
     }
-}
-
-QVariantList ClipAudioSource::slicePositions() const
-{
-    return d->slicePositions;
-}
-
-void ClipAudioSource::setSlicePositions(const QVariantList &slicePositions)
-{
-    if (d->slicePositions != slicePositions) {
-        d->slicePositions = slicePositions;
-        Q_EMIT slicePositionsChanged();
-        d->slices = slicePositions.length();
-        Q_EMIT slicesChanged();
-    }
-}
-
-double ClipAudioSource::slicePosition(int slice) const
-{
-    double position{0.0f};
-    if (slice > -1 && slice < d->slicePositionsCache.length()) {
-        position = d->slicePositionsCache[slice];
-    }
-    return position;
-}
-
-void ClipAudioSource::setSlicePosition(int slice, float position)
-{
-    if (slice > -1 && slice < d->slicePositions.length()) {
-        d->slicePositions[slice] = position;
-        Q_EMIT slicePositionsChanged();
-    }
-}
-
-int ClipAudioSource::sliceBaseMidiNote() const
-{
-    return d->sliceBaseMidiNote;
-}
-
-void ClipAudioSource::setSliceBaseMidiNote(int sliceBaseMidiNote)
-{
-    if (d->sliceBaseMidiNote != sliceBaseMidiNote) {
-        d->sliceBaseMidiNote = sliceBaseMidiNote;
-        Q_EMIT sliceBaseMidiNoteChanged();
-    }
-}
-
-int ClipAudioSource::sliceForMidiNote(int midiNote) const
-{
-    return ((d->slices - (d->sliceBaseMidiNote % d->slices)) + midiNote) % d->slices;
-}
-
-int ClipAudioSource::keyZoneStart() const
-{
-  return d->keyZoneStart;
-}
-
-void ClipAudioSource::setKeyZoneStart(int keyZoneStart)
-{
-  keyZoneStart = std::clamp(keyZoneStart, -1, 127);
-  if (d->keyZoneStart != keyZoneStart) {
-    d->keyZoneStart = keyZoneStart;
-    Q_EMIT keyZoneStartChanged();
-    if (d->keyZoneEnd < d->keyZoneStart) {
-      setKeyZoneEnd(d->keyZoneStart);
-    }
+    // Now everything's been moved down once, set the count to one less, and clear the newly hidden slice
+    setSliceCount(d->sliceCount - 1);
+    d->sliceSettingsActual.at(d->sliceCount)->clear();
   }
 }
 
-int ClipAudioSource::keyZoneEnd() const
+const QList<int> & ClipAudioSource::sliceIndicesForMidiNote(const int& midiNote) const
 {
-  return d->keyZoneEnd;
+  
 }
 
-void ClipAudioSource::setKeyZoneEnd(int keyZoneEnd)
+ClipAudioSourceSliceSettings * ClipAudioSource::sliceFromIndex(const int& sliceIndex) const
 {
-  keyZoneEnd = std::clamp(keyZoneEnd, -1, 127);
-  if (d->keyZoneEnd != keyZoneEnd) {
-    d->keyZoneEnd = keyZoneEnd;
-    Q_EMIT keyZoneEndChanged();
-    if (d->keyZoneStart > d->keyZoneEnd) {
-      setKeyZoneStart(d->keyZoneEnd);
-    }
+  if (-1 < sliceIndex && sliceIndex < SLICE_COUNT) {
+    return d->sliceSettingsActual.at(sliceIndex);
   }
+  return d->rootSlice;
 }
 
-int ClipAudioSource::rootNote() const
+ClipAudioSource::SamplePickingStyle ClipAudioSource::slicePickingStyle() const
 {
-  return d->rootNote;
+  return d->slicePickingStyle;
 }
 
-void ClipAudioSource::setRootNote(int rootNote)
+void ClipAudioSource::setSlicePickingStyle(const ClipAudioSource::SamplePickingStyle& slicePickingStyle)
 {
-  rootNote = std::clamp(rootNote, -1, 127);
-  if (d->rootNote != rootNote) {
-    d->rootNote = rootNote;
-    Q_EMIT rootNoteChanged();
+  if (d->slicePickingStyle != slicePickingStyle) {
+    d->slicePickingStyle = slicePickingStyle;
+    Q_EMIT slicePickingStyleChanged();
   }
-}
-
-float ClipAudioSource::pan() {
-    return d->pan;
-}
-
-void ClipAudioSource::setPan(float pan) {
-  if (d->pan != pan) {
-    IF_DEBUG_CLIP cerr << "Setting pan : " << pan;
-    d->pan = pan;
-    Q_EMIT panChanged();
-  }
-}
-
-float ClipAudioSource::adsrAttack() const
-{
-  return d->adsr.getParameters().attack;
-}
-
-void ClipAudioSource::setADSRAttack(const float& newValue)
-{
-  juce::ADSR::Parameters params = d->adsr.getParameters();
-  if (params.attack != newValue) {
-    params.attack = newValue;
-    d->adsr.setParameters(params);
-    Q_EMIT adsrParametersChanged();
-  }
-}
-
-float ClipAudioSource::adsrDecay() const
-{
-  return d->adsr.getParameters().decay;
-}
-
-void ClipAudioSource::setADSRDecay(const float& newValue)
-{
-  juce::ADSR::Parameters params = d->adsr.getParameters();
-  if (params.decay != newValue) {
-    params.decay = newValue;
-    d->adsr.setParameters(params);
-    Q_EMIT adsrParametersChanged();
-  }
-}
-
-float ClipAudioSource::adsrSustain() const
-{
-  return d->adsr.getParameters().sustain;
-}
-
-void ClipAudioSource::setADSRSustain(const float& newValue)
-{
-  juce::ADSR::Parameters params = d->adsr.getParameters();
-  if (params.sustain != newValue) {
-    params.sustain = newValue;
-    d->adsr.setParameters(params);
-    Q_EMIT adsrParametersChanged();
-  }
-}
-
-float ClipAudioSource::adsrRelease() const
-{
-  return d->adsr.getParameters().release;
-}
-
-void ClipAudioSource::setADSRRelease(const float& newValue)
-{
-  juce::ADSR::Parameters params = d->adsr.getParameters();
-  if (params.release != newValue) {
-    params.release = newValue;
-    d->adsr.setParameters(params);
-    Q_EMIT adsrParametersChanged();
-  }
-}
-
-void ClipAudioSource::setADSRParameters(const juce::ADSR::Parameters& parameters)
-{
-  d->adsr.setParameters(parameters);
-  Q_EMIT adsrParametersChanged();
-}
-
-const juce::ADSR::Parameters & ClipAudioSource::adsrParameters() const
-{
-  return d->adsr.getParameters();
-}
-
-const juce::ADSR & ClipAudioSource::adsr() const
-{
-  return d->adsr;
-}
-
-bool ClipAudioSource::granular() const
-{
-  return d->granular;
-}
-
-void ClipAudioSource::setGranular(const bool& newValue)
-{
-  if (d->granular != newValue) {
-    d->granular = newValue;
-    Q_EMIT granularChanged();
-  }
-}
-
-float ClipAudioSource::grainPosition() const
-{
-  return d->grainPosition;
-}
-
-void ClipAudioSource::setGrainPosition(const float& newValue)
-{
-  if (d->grainPosition != newValue) {
-    d->grainPosition = newValue;
-    Q_EMIT grainPositionChanged();
-  }
-}
-
-float ClipAudioSource::grainSpray() const
-{
-  return d->grainSpray;
-}
-
-void ClipAudioSource::setGrainSpray(const float& newValue)
-{
-  if (d->grainSpray != newValue) {
-    d->grainSpray = newValue;
-    Q_EMIT grainSprayChanged();
-  }
-}
-
-float ClipAudioSource::grainScan() const
-{
-  return d->grainScan;
-}
-
-void ClipAudioSource::setGrainScan(const float& newValue)
-{
-  if (d->grainScan != newValue) {
-    d->grainScan = newValue;
-    Q_EMIT grainScanChanged();
-  }
-}
-
-float ClipAudioSource::grainInterval() const
-{
-  return d->grainInterval;
-}
-
-void ClipAudioSource::setGrainInterval(const float& newValue)
-{
-  const float adjustedValue{qMax(0.0f, newValue)};
-  if (d->grainInterval != adjustedValue) {
-    d->grainInterval = adjustedValue;
-    Q_EMIT grainIntervalChanged();
-  }
-}
-
-float ClipAudioSource::grainIntervalAdditional() const
-{
-  return d->grainIntervalAdditional;
-}
-
-void ClipAudioSource::setGrainIntervalAdditional(const float& newValue)
-{
-  const float adjustedValue{qMax(0.0f, newValue)};
-  if (d->grainIntervalAdditional != adjustedValue) {
-    d->grainIntervalAdditional = adjustedValue;
-    Q_EMIT grainIntervalAdditionalChanged();
-  }
-}
-
-float ClipAudioSource::grainSize() const
-{
-  return d->grainSize;
-}
-
-void ClipAudioSource::setGrainSize(const float& newValue)
-{
-  const float adjustedValue{qMax(1.0f, newValue)};
-  if (d->grainSize != adjustedValue) {
-    d->grainSize = adjustedValue;
-    Q_EMIT grainSizeChanged();
-  }
-}
-
-float ClipAudioSource::grainSizeAdditional() const
-{
-  return d->grainSizeAdditional;
-}
-
-void ClipAudioSource::setGrainSizeAdditional(const float& newValue)
-{
-  if (d->grainSizeAdditional != newValue) {
-    d->grainSizeAdditional = newValue;
-    Q_EMIT grainSizeAdditionalChanged();
-  }
-}
-
-float ClipAudioSource::grainPanMinimum() const
-{
-  return d->grainPanMinimum;
-}
-
-void ClipAudioSource::setGrainPanMinimum(const float& newValue)
-{
-  const float adjustedValue{std::clamp(newValue, -1.0f, 1.0f)};
-  if (d->grainPanMinimum != adjustedValue) {
-    d->grainPanMinimum = adjustedValue;
-    Q_EMIT grainPanMinimumChanged();
-    if (d->grainPanMaximum < adjustedValue) {
-      d->grainPanMaximum = adjustedValue;
-      Q_EMIT grainPanMaximumChanged();
-    }
-  }
-}
-
-float ClipAudioSource::grainPanMaximum() const
-{
-  return d->grainPanMaximum;
-}
-
-void ClipAudioSource::setGrainPanMaximum(const float& newValue)
-{
-  const float adjustedValue{std::clamp(newValue, -1.0f, 1.0f)};
-  if (d->grainPanMaximum != adjustedValue) {
-    d->grainPanMaximum = adjustedValue;
-    Q_EMIT grainPanMaximumChanged();
-    if (d->grainPanMinimum > adjustedValue) {
-      d->grainPanMinimum = adjustedValue;
-      Q_EMIT grainPanMinimumChanged();
-    }
-  }
-}
-
-float ClipAudioSource::grainPitchMinimum1() const
-{
-  return d->grainPitchMinimum1;
-}
-
-void ClipAudioSource::setGrainPitchMinimum1(const float& newValue)
-{
-  const float adjustedValue{std::clamp(newValue, -2.0f, 2.0f)};
-  if (d->grainPitchMinimum1 != adjustedValue) {
-    d->grainPitchMinimum1 = adjustedValue;
-    Q_EMIT grainPitchMinimum1Changed();
-    if (d->grainPitchMaximum1 < adjustedValue) {
-      d->grainPitchMaximum1 = adjustedValue;
-      Q_EMIT grainPitchMaximum1Changed();
-    }
-  }
-}
-
-float ClipAudioSource::grainPitchMaximum1() const
-{
-  return d->grainPitchMaximum1;
-}
-
-void ClipAudioSource::setGrainPitchMaximum1(const float& newValue)
-{
-  const float adjustedValue{std::clamp(newValue, -2.0f, 2.0f)};
-  if (d->grainPitchMaximum1 != adjustedValue) {
-    d->grainPitchMaximum1 = adjustedValue;
-    Q_EMIT grainPitchMaximum1Changed();
-    if (d->grainPitchMinimum1 > adjustedValue) {
-      d->grainPitchMinimum1 = adjustedValue;
-      Q_EMIT grainPitchMinimum1Changed();
-    }
-  }
-}
-
-float ClipAudioSource::grainPitchMinimum2() const
-{
-  return d->grainPitchMinimum2;
-}
-
-void ClipAudioSource::setGrainPitchMinimum2(const float& newValue)
-{
-  const float adjustedValue{std::clamp(newValue, -2.0f, 2.0f)};
-  if (d->grainPitchMinimum2 != adjustedValue) {
-    d->grainPitchMinimum2 = adjustedValue;
-    Q_EMIT grainPitchMinimum2Changed();
-    if (d->grainPitchMaximum2 < adjustedValue) {
-      d->grainPitchMaximum2 = adjustedValue;
-      Q_EMIT grainPitchMaximum2Changed();
-    }
-  }
-}
-
-float ClipAudioSource::grainPitchMaximum2() const
-{
-  return d->grainPitchMaximum2;
-}
-
-void ClipAudioSource::setGrainPitchMaximum2(const float& newValue)
-{
-  const float adjustedValue{std::clamp(newValue, -2.0f, 2.0f)};
-  if (d->grainPitchMaximum2 != adjustedValue) {
-    d->grainPitchMaximum2 = adjustedValue;
-    Q_EMIT grainPitchMaximum2Changed();
-    if (d->grainPitchMinimum2 > adjustedValue) {
-      d->grainPitchMinimum2 = adjustedValue;
-      Q_EMIT grainPitchMinimum2Changed();
-    }
-  }
-}
-
-float ClipAudioSource::grainPitchPriority() const
-{
-  return d->grainPitchPriority;
-}
-
-void ClipAudioSource::setGrainPitchPriority(const float& newValue)
-{
-  const float adjustedValue{std::clamp(newValue, 0.0f, 1.0f)};
-  if (d->grainPitchPriority != adjustedValue) {
-    d->grainPitchPriority = adjustedValue;
-    Q_EMIT grainPitchPriorityChanged();
-  }
-}
-
-float ClipAudioSource::grainSustain() const
-{
-  return d->grainSustain;
-}
-
-void ClipAudioSource::setGrainSustain(const float& newValue)
-{
-  if (d->grainSustain != newValue) {
-    d->grainSustain = newValue;
-    Q_EMIT grainSustainChanged();
-  }
-}
-
-float ClipAudioSource::grainTilt() const
-{
-  return d->grainTilt;
-}
-
-void ClipAudioSource::setGrainTilt(const float& newValue)
-{
-  if (d->grainTilt != newValue) {
-    d->grainTilt = newValue;
-    Q_EMIT grainTiltChanged();
-  }
-}
-
-const juce::ADSR & ClipAudioSource::grainADSR() const
-{
-  return d->grainADSR;
 }
 
 bool ClipAudioSource::equaliserEnabled() const
