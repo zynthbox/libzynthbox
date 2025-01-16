@@ -39,6 +39,7 @@
 
 #include "ClipCommand.h"
 #include "ClipAudioSource.h"
+#include "ClipAudioSourceSliceSettings.h"
 #include "MidiRouter.h"
 #include "SyncTimer.h"
 #include "TimerCommand.h"
@@ -648,7 +649,7 @@ public:
     QList<ClipAudioSource*> clipsForMidiNote(int midiNote) const {
         QList<ClipAudioSource*> found;
         for (ClipAudioSource *needle : qAsConst(clips)) {
-            if (needle && needle->keyZoneStart() <= midiNote && midiNote <= needle->keyZoneEnd()) {
+            if (needle && needle->rootSliceActual()->keyZoneStart() <= midiNote && midiNote <= needle->rootSliceActual()->keyZoneEnd()) {
                 found << needle;
             }
         }
@@ -664,38 +665,47 @@ public:
     void midiMessageToClipCommands(ClipCommandRing *listToPopulate, const int &byte1, const int &byte2, const int &byte3) const {
         for (ClipAudioSource *clip : qAsConst(clips)) {
             // There must be a clip or it just doesn't matter, and then the note must fit inside the clip's keyzone
-            if (clip && clip->keyZoneStart() <= byte2 && byte2 <= clip->keyZoneEnd()) {
-                const bool stopPlayback{byte1 < 0x90 || byte3 == 0};
-                if (clip->playbackStyle() == ClipAudioSource::OneshotPlaybackStyle && stopPlayback) {
-                    // if stop command and clip playback style is Oneshot, don't submit the stop command - just let it run out
-                    // to force one-shots to stop, all-notes-off is handled by SamplerSynth directly
-                } else {
-                    // subvoice -1 is conceptually the prime voice, anything from 0 inclusive to the amount non-inclusive are the subvoices
-                    for (int subvoice = -1; subvoice < clip->subvoiceCount(); ++subvoice) {
-                        ClipCommand *command = ClipCommand::channelCommand(clip, (byte1 & 0xf));
-                        command->startPlayback = !stopPlayback;
-                        command->stopPlayback = stopPlayback;
-                        command->subvoice = subvoice;
-                        if (command->startPlayback) {
-                            command->changeVolume = true;
-                            command->volume = float(byte3) / float(127);
+            if (clip) {
+                const QList<ClipAudioSourceSliceSettings*> slices{clip->sliceSettingsActual()};
+                const int &sliceCount{clip->sliceCount()};
+                const int extraSliceCount{sliceCount + 1};
+                // This little trick (going to slice count + 1) ensures that we run through the slices in defined order, and also process the root slice last
+                for (int sliceIndex = 0; sliceIndex < extraSliceCount; ++sliceIndex) {
+                    const ClipAudioSourceSliceSettings *slice{sliceIndex == sliceCount ? clip->rootSliceActual() : slices.at(sliceIndex)};
+                    if (slice->keyZoneStart() <= byte2 && byte2 <= slice->keyZoneEnd()) {
+                        const bool stopPlayback{byte1 < 0x90 || byte3 == 0};
+                        if (slice->effectivePlaybackStyle() == ClipAudioSource::OneshotPlaybackStyle && stopPlayback) {
+                            // if stop command and clip playback style is Oneshot, don't submit the stop command - just let it run out
+                            // to force one-shots to stop, all-notes-off is handled by SamplerSynth directly
+                        } else {
+                            // subvoice -1 is conceptually the prime voice, anything from 0 inclusive to the amount non-inclusive are the subvoices
+                            for (int subvoice = -1; subvoice < clip->subvoiceCount(); ++subvoice) {
+                                ClipCommand *command = ClipCommand::channelCommand(clip, (byte1 & 0xf));
+                                command->startPlayback = !stopPlayback;
+                                command->stopPlayback = stopPlayback;
+                                command->subvoice = subvoice;
+                                command->slice = slice->index();
+                                if (command->startPlayback) {
+                                    command->changeVolume = true;
+                                    command->volume = float(byte3) / float(127);
+                                }
+                                if (command->stopPlayback) {
+                                    // Don't actually set volume, just store the volume for velocity purposes... yes this is kind of a hack
+                                    command->volume = float(byte3) / float(127);
+                                }
+                                    command->midiNote = byte2;
+                                    command->changeLooping = true;
+                                    command->looping = slice->looping();
+                                // }
+                                listToPopulate->write(command, 0);
+                                // qDebug() << Q_FUNC_INFO << "Wrote command to list for" << clip;
+                            }
                         }
-                        if (command->stopPlayback) {
-                            // Don't actually set volume, just store the volume for velocity purposes... yes this is kind of a hack
-                            command->volume = float(byte3) / float(127);
+                        // If our selection mode is a one-sample-only mode, bail now (that is,
+                        // as with samples, only AllPickingStyle wants us to pick more than one slice)
+                        if (clip->slicePickingStyle() != ClipAudioSource::AllPickingStyle) {
+                            break;
                         }
-                        // if (clip->playbackStyle() == ClipAudioSource::SlicedPlaybackMode) {
-                        // if (false) {
-                        //     command->midiNote = 60; // TODO see scribble-notes on the topic of more powerful slice playback
-                        //     command->changeSlice = true;
-                        //     command->slice = clip->sliceForMidiNote(byte2);
-                        // } else {
-                            command->midiNote = byte2;
-                            command->changeLooping = true;
-                            command->looping = clip->looping();
-                        // }
-                        listToPopulate->write(command, 0);
-                        // qDebug() << Q_FUNC_INFO << "Wrote command to list for" << clip;
                     }
                 }
                 // If our selection mode is a one-sample-only mode, bail now (that is,
@@ -1737,33 +1747,33 @@ QObject *PatternModel::clipSliceNotes() const
         auto fillClipSliceNotes = [this](){
             QList<int> notesToFit;
             QList<QString> noteTitles;
-            ClipAudioSource *previousClip{nullptr};
-            for (int i = 0; i < d->clips.count(); ++i) {
-                ClipAudioSource *clip = d->clips.at(i);
-                if (clip) {
-                    int sliceStart{clip->sliceBaseMidiNote()};
-                    int nextClipStart{129};
-                    for (int j = i + 1; j < d->clips.count(); ++j) {
-                        ClipAudioSource *nextClip = d->clips.at(j);
-                        if (nextClip) {
-                            nextClipStart = nextClip->sliceBaseMidiNote();
-                            break;
-                        }
-                    }
-                    // Let's see if we can push it /back/ a bit, and still get a full thing... less lovely, but it gives a full spread
-                    if (nextClipStart - clip->slices() < sliceStart) {
-                        sliceStart = qMax(previousClip ? previousClip->sliceBaseMidiNote() + previousClip->slices(): 0, nextClipStart - clip->slices());
-                    }
-                    // Now let's add as many notes as we need, or have space for, whichever is smaller
-                    int addedNotes{0};
-                    for (int note = sliceStart; note < nextClipStart && addedNotes < clip->slices(); ++note) {
-                        notesToFit << note;
-                        noteTitles << QString("Sample %1\nSlice %2").arg(QString::number(i + 1)).arg(QString::number(clip->sliceForMidiNote(note) + 1));
-                        ++addedNotes;
-                    }
-                    previousClip = clip;
-                }
-            }
+            // ClipAudioSource *previousClip{nullptr};
+            // for (int i = 0; i < d->clips.count(); ++i) {
+            //     ClipAudioSource *clip = d->clips.at(i);
+            //     if (clip) {
+            //         int sliceStart{clip->sliceBaseMidiNote()};
+            //         int nextClipStart{129};
+            //         for (int j = i + 1; j < d->clips.count(); ++j) {
+            //             ClipAudioSource *nextClip = d->clips.at(j);
+            //             if (nextClip) {
+            //                 nextClipStart = nextClip->sliceBaseMidiNote();
+            //                 break;
+            //             }
+            //         }
+            //         // Let's see if we can push it /back/ a bit, and still get a full thing... less lovely, but it gives a full spread
+            //         if (nextClipStart - clip->slices() < sliceStart) {
+            //             sliceStart = qMax(previousClip ? previousClip->sliceBaseMidiNote() + previousClip->slices(): 0, nextClipStart - clip->slices());
+            //         }
+            //         // Now let's add as many notes as we need, or have space for, whichever is smaller
+            //         int addedNotes{0};
+            //         for (int note = sliceStart; note < nextClipStart && addedNotes < clip->slices(); ++note) {
+            //             notesToFit << note;
+            //             noteTitles << QString("Sample %1\nSlice %2").arg(QString::number(i + 1)).arg(QString::number(clip->sliceForMidiNote(note) + 1));
+            //             ++addedNotes;
+            //         }
+            //         previousClip = clip;
+            //     }
+            // }
             int howManyRows{int(sqrt(notesToFit.length()))};
             int i{0};
             d->clipSliceNotes->startLongOperation();
@@ -1950,8 +1960,8 @@ QObject *PatternModel::gridModel() const
                             for (ClipAudioSource* clip : clips) {
                                 int clipIndex = d->clips.indexOf(clip);
                                 QString actualNote{};
-                                if (clip->rootNote() != 60) {
-                                    int actualNoteValue = note->midiNote() + (60 - clip->rootNote());
+                                if (clip->rootSliceActual()->rootNote() != 60) {
+                                    int actualNoteValue = note->midiNote() + (60 - clip->rootSliceActual()->rootNote());
                                     if (actualNoteValue > -1 && actualNoteValue < 128) {
                                         actualNote = QString(" (%1)").arg(midiNoteNames[actualNoteValue]);
                                     }
@@ -1983,8 +1993,8 @@ QObject *PatternModel::gridModel() const
         auto updateClips = [this,refilTimer](){
             for (ClipAudioSource *clip : d->clips) {
                 if (clip) {
-                    connect(clip, &ClipAudioSource::keyZoneStartChanged, refilTimer, QOverload<>::of(&QTimer::start));
-                    connect(clip, &ClipAudioSource::keyZoneEndChanged, refilTimer, QOverload<>::of(&QTimer::start));
+                    connect(clip->rootSliceActual(), &ClipAudioSourceSliceSettings::keyZoneStartChanged, refilTimer, QOverload<>::of(&QTimer::start));
+                    connect(clip->rootSliceActual(), &ClipAudioSourceSliceSettings::keyZoneEndChanged, refilTimer, QOverload<>::of(&QTimer::start));
                 }
             }
         };
