@@ -54,6 +54,8 @@ public:
     int rootNote{60};
     int keyZoneStart{0};
     int keyZoneEnd{127};
+    int velocityMinimum{1};
+    int velocityMaximum{127};
     juce::ADSR adsr;
 
     bool granular{false};
@@ -565,6 +567,38 @@ void ClipAudioSourceSliceSettings::setKeyZoneEnd(const int &keyZoneEnd)
       setKeyZoneStart(d->keyZoneEnd);
     }
   }
+}
+
+int ClipAudioSourceSliceSettings::velocityMinimum() const
+{
+    return d->velocityMinimum;
+}
+
+void ClipAudioSourceSliceSettings::setVelocityMinimum(const int& velocityMinimum)
+{
+    if (d->velocityMinimum != velocityMinimum) {
+        d->velocityMinimum = std::clamp(velocityMinimum, 1, 127);
+        Q_EMIT velocityMinimumChanged();
+        if (d->velocityMinimum > d->velocityMaximum) {
+            setVelocityMaximum(d->velocityMinimum);
+        }
+    }
+}
+
+int ClipAudioSourceSliceSettings::velocityMaximum() const
+{
+    return d->velocityMaximum;
+}
+
+void ClipAudioSourceSliceSettings::setVelocityMaximum(const int& velocityMaximum)
+{
+    if (d->velocityMaximum != velocityMaximum) {
+        d->velocityMaximum = std::clamp(velocityMaximum, 1, 127);
+        Q_EMIT velocityMaximumChanged();
+        if (d->velocityMinimum > d->velocityMaximum) {
+            setVelocityMinimum(d->velocityMaximum);
+        }
+    }
 }
 
 float ClipAudioSourceSliceSettings::adsrAttack() const

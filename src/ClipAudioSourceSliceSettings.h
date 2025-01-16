@@ -158,6 +158,24 @@ class ClipAudioSourceSliceSettings : public QObject
      * @default 127
      */
     Q_PROPERTY(int keyZoneEnd READ keyZoneEnd WRITE setKeyZoneEnd NOTIFY keyZoneEndChanged)
+    /**
+     * \brief The minimum velocity for which this slice should be activated
+     * @note For stopping, all slices which match the keyzone will be stopped
+     * Setting this may cause the maximum to change as well (pushing it up as required)
+     * @default 1
+     * @minimum 1
+     * @maximum 127
+     */
+    Q_PROPERTY(int velocityMinimum READ velocityMinimum WRITE setVelocityMinimum NOTIFY velocityMinimumChanged)
+    /**
+     * \brief The maximum velocity for which this slice should be activated
+     * @note For stopping, all slices which match the keyzone will be stopped
+     * Setting this may change the minimum to change as well (pushing it down as required)
+     * @default 127
+     * @minimum 1
+     * @maximum 127
+     */
+    Q_PROPERTY(int velocityMaximum READ velocityMaximum WRITE setVelocityMaximum NOTIFY velocityMaximumChanged)
 
     /**
      * \brief The attack part of an ADSR envelope (number of seconds from the start of the clip playback start point)
@@ -427,6 +445,14 @@ public:
     int keyZoneEnd() const;
     void setKeyZoneEnd(const int &keyZoneEnd);
     Q_SIGNAL void keyZoneEndChanged();
+
+    int velocityMinimum() const;
+    void setVelocityMinimum(const int &velocityMinimum);
+    Q_SIGNAL void velocityMinimumChanged();
+
+    int velocityMaximum() const;
+    void setVelocityMaximum(const int &velocityMaximum);
+    Q_SIGNAL void velocityMaximumChanged();
 
     float adsrAttack() const;
     void setADSRAttack(const float& newValue);
