@@ -556,8 +556,11 @@ int ClipAudioSource::sliceCount() const
 void ClipAudioSource::setSliceCount(const int& sliceCount)
 {
   if (d->sliceCount != sliceCount) {
-    d->sliceCount = sliceCount;
+    d->sliceCount = std::clamp(sliceCount, 0, SLICE_COUNT);
     Q_EMIT sliceCountChanged();
+    if (d->selectedSlice >= d->sliceCount) {
+      setSelectedSlice(d->sliceCount - 1);
+    }
   }
 }
 
@@ -579,7 +582,7 @@ int ClipAudioSource::selectedSlice() const
 void ClipAudioSource::setSelectedSlice(const int& selectedSlice)
 {
   if (d->selectedSlice != selectedSlice) {
-    d->selectedSlice = std::clamp(selectedSlice, -1, SLICE_COUNT - 1);
+    d->selectedSlice = std::clamp(selectedSlice, -1, d->sliceCount - 1);
     Q_EMIT selectedSliceChanged();
   }
 }
