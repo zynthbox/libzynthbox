@@ -120,6 +120,11 @@ class ClipAudioSource : public QObject {
      */
     Q_PROPERTY(int sliceCount READ sliceCount WRITE setSliceCount NOTIFY sliceCountChanged)
     /**
+     * \brief Whether slices should be contiguous or not (in which case they are free-form)
+     * @default false
+     */
+    Q_PROPERTY(bool slicesContiguous READ slicesContiguous WRITE setSlicesContiguous NOTIFY slicesContiguousChanged)
+    /**
      * \brief A list containing all potential slices, whether active or not
      */
     Q_PROPERTY(QVariantList sliceSettings READ sliceSettings CONSTANT)
@@ -301,6 +306,9 @@ public:
   int sliceCount() const;
   void setSliceCount(const int &sliceCount);
   Q_SIGNAL void sliceCountChanged();
+  bool slicesContiguous() const;
+  void setSlicesContiguous(const bool &slicesContiguous);
+  Q_SIGNAL void slicesContiguousChanged();
   QVariantList sliceSettings() const;
   const QList<ClipAudioSourceSliceSettings*> &sliceSettingsActual() const;
   int selectedSlice() const;

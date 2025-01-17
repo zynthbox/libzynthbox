@@ -109,6 +109,7 @@ public:
 
   ClipAudioSourceSliceSettings *rootSlice{nullptr};
   int sliceCount{0};
+  bool slicesContiguous{false};
   QVariantList sliceSettings;
   QList<ClipAudioSourceSliceSettings*> sliceSettingsActual;
   int selectedSlice{-1};
@@ -561,6 +562,19 @@ void ClipAudioSource::setSliceCount(const int& sliceCount)
     if (d->selectedSlice >= d->sliceCount) {
       setSelectedSlice(d->sliceCount - 1);
     }
+  }
+}
+
+bool ClipAudioSource::slicesContiguous() const
+{
+  return d->slicesContiguous;
+}
+
+void ClipAudioSource::setSlicesContiguous(const bool& slicesContiguous)
+{
+  if (d->slicesContiguous != slicesContiguous) {
+    d->slicesContiguous = slicesContiguous;
+    Q_EMIT slicesContiguousChanged();
   }
 }
 
