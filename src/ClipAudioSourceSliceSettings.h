@@ -179,6 +179,17 @@ class ClipAudioSourceSliceSettings : public QObject
     Q_PROPERTY(int velocityMaximum READ velocityMaximum WRITE setVelocityMaximum NOTIFY velocityMaximumChanged)
 
     /**
+     * \brief The sample-level exclusivity group for the slice
+     * Group -1 is "no exclusivity", and the default
+     * Any value above that is an exclusivity group, and any slice in some group
+     * will stop the playback of any other slice with the same group.
+     * @default -1
+     * @minimum -1
+     * @maximum 1024
+     */
+    Q_PROPERTY(int exclusivityGroup READ exclusivityGroup WRITE setExclusivityGroup NOTIFY exclusivityGroupChanged)
+
+    /**
      * \brief If this is set to true, the root slice's voice settings will be used in place of the slice's own
      * @default true
      */
@@ -471,6 +482,10 @@ public:
     int velocityMaximum() const;
     void setVelocityMaximum(const int &velocityMaximum);
     Q_SIGNAL void velocityMaximumChanged();
+
+    int exclusivityGroup() const;
+    void setExclusivityGroup(const int &exclusivityGroup);
+    Q_SIGNAL void exclusivityGroupChanged();
 
     bool inheritSubvoices() const;
     void setInheritSubvoices(const bool &inheritSubvoices);

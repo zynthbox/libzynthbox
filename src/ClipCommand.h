@@ -16,6 +16,7 @@ struct ClipCommand {
     int midiNote{-1}; ///@< The midi note to play the clip at
     int subvoice{-1}; ///@< -1 is the base voice, 0 through 15 is a specific subvoice
     int slice{-1}; /// @< -1 is the root slice, 0 and above is a specific slice. Invalid slices will be counted as the root slice
+    int exclusivityGroup{-1}; ///@< -1 is no exclusivity, 0 and up will stop any other playback of a clip on the same track which share the same exclusivity group
     int midiChannel{-1}; ///@< The midi channel the note message came from
     bool startPlayback{false}; ///@< Whether the command asks for the clip to be started (if an equivalent active clip exists, playback will be restarted)
     bool stopPlayback{false}; ///@< Whether to stop playback of the equivalent active clip (any playing clip which has the same midi note, subvoice, slice, and midi channel)
@@ -53,6 +54,7 @@ struct ClipCommand {
         command->midiNote = 60;
         command->subvoice = -1;
         command->slice = -1;
+        command->exclusivityGroup = -1;
         return command;
     }
     /**
@@ -65,6 +67,7 @@ struct ClipCommand {
         command->midiNote = 60;
         command->subvoice = -1;
         command->slice = -1;
+        command->exclusivityGroup = -1;
         command->midiChannel = channelID;
         return command;
     }
@@ -74,6 +77,7 @@ struct ClipCommand {
         command->midiNote = -1;
         command->subvoice = -1;
         command->slice = -1;
+        command->exclusivityGroup = -1;
         command->midiChannel = -1;
         command->startPlayback = false;
         command->stopPlayback = false;

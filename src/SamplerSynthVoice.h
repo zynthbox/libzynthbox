@@ -15,6 +15,7 @@ public:
     ~SamplerSynthVoice();
 
     void handleCommand(ClipCommand *clipCommand, jack_nframes_t timestamp);
+    void checkExclusivity(ClipCommand *clipCommand, jack_nframes_t timestamp);
 
     void setCurrentCommand(ClipCommand *clipCommand);
 

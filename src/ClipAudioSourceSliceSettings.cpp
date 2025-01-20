@@ -64,6 +64,8 @@ public:
     int velocityMinimum{1};
     int velocityMaximum{127};
 
+    int exclusivityGroup{-1};
+
     // Subvoices (extra voices which are launched at the same time as the sound usually is, with a number of adjustments to some settings, specifically pan, pitch, and gain)
     bool inheritSubvoices{true};
     int subvoiceCount{0};
@@ -612,6 +614,19 @@ void ClipAudioSourceSliceSettings::setVelocityMaximum(const int& velocityMaximum
         if (d->velocityMinimum > d->velocityMaximum) {
             setVelocityMinimum(d->velocityMaximum);
         }
+    }
+}
+
+int ClipAudioSourceSliceSettings::exclusivityGroup() const
+{
+    return d->exclusivityGroup;
+}
+
+void ClipAudioSourceSliceSettings::setExclusivityGroup(const int& exclusivityGroup)
+{
+    if (d->exclusivityGroup != exclusivityGroup) {
+        d->exclusivityGroup = std::clamp(exclusivityGroup, -1, 1024);
+        Q_EMIT exclusivityGroupChanged();
     }
 }
 

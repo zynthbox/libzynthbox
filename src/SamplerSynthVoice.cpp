@@ -383,6 +383,20 @@ void SamplerSynthVoice::handleCommand(ClipCommand* clipCommand, jack_nframes_t t
     }
 }
 
+void SamplerSynthVoice::checkExclusivity(ClipCommand* clipCommand, jack_nframes_t timestamp)
+{
+    // If the command calls for the same exclusivity group that we are in, stop playback of our current thing
+    if (d->clipCommand->exclusivityGroup == clipCommand->exclusivityGroup) {
+        ClipCommand* newCommand{d->syncTimer->getClipCommand()};
+        newCommand->stopPlayback = true;
+        newCommand->clip = d->clipCommand->clip;
+        newCommand->slice = d->clipCommand->slice;
+        newCommand->subvoice = d->clipCommand->subvoice;
+        newCommand->volume = 1.0f;
+        d->commandRing.write(newCommand, timestamp);
+    }
+}
+
 void SamplerSynthVoice::setCurrentCommand(ClipCommand *clipCommand)
 {
     if (d->clipCommand) {

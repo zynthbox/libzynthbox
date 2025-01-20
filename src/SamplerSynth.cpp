@@ -204,6 +204,17 @@ public:
     }
     ~Grainerator() {}
     void start(ClipCommand *command, quint64 timestamp) {
+        if (command->startPlayback && command->exclusivityGroup > -1) {
+            // If we are starting playback, and this...
+            // - is the root slice
+            // - we have an exclusivity group
+            // test all the active voices to see whether they need to do something about what they're doing just now
+            for (GraineratorVoice *voice : qAsConst(voices)) {
+                if (voice->command && voice->command->exclusivityGroup == command->exclusivityGroup) {
+                    voice->stop();
+                }
+            }
+        }
         bool voiceFound{false};
         for (GraineratorVoice *voice : qAsConst(voices)) {
             if (voice->command == nullptr) {
@@ -639,6 +650,17 @@ double SamplerChannel::sampleRate() const
 
 void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick)
 {
+    if (clipCommand->startPlayback && clipCommand->exclusivityGroup > -1) {
+        // If we are starting playback, and we have an exclusivity group, test all the active
+        // voices to see whether they need to do something about what they're doing just now
+        for (const SubChannel &subChannel : qAsConst(subChannels)) {
+            SamplerSynthVoice *voice = subChannel.firstActiveVoice;
+            while (voice) {
+                voice->checkExclusivity(clipCommand, currentTick);
+                voice = voice->next;
+            }
+        }
+    }
     if (clipCommand->stopPlayback || clipCommand->startPlayback) {
         // If the clip had nothing to stop for restarting, we still need to start it, so let's handle that
         bool needsHandling{true};

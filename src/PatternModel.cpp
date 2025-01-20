@@ -687,6 +687,7 @@ public:
                                     command->stopPlayback = stopPlayback;
                                     command->subvoice = subvoice;
                                     command->slice = slice->index();
+                                    command->exclusivityGroup = slice->exclusivityGroup();
                                     if (command->startPlayback) {
                                         command->changeVolume = true;
                                         command->volume = float(byte3) / float(127);
@@ -700,7 +701,7 @@ public:
                                         command->looping = slice->looping();
                                     // }
                                     listToPopulate->write(command, 0);
-                                    // qDebug() << Q_FUNC_INFO << "Wrote command to list for" << clip;
+                                    // qDebug() << Q_FUNC_INFO << "Wrote command to list for" << clip << "slice" << slice << "subvoice" << subvoice;
                                 }
                             }
                             // If our selection mode is a one-sample-only mode, bail now (that is,
