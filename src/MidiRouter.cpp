@@ -438,7 +438,9 @@ public:
                                 if (currentTrack->applyKeyScale(*event)) {
                                     currentTrack->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
                                     switch (currentTrack->destination) {
+                                        // Functionally, these two are the same thing, the distinction is only really informational
                                         case MidiRouter::ZynthianDestination:
+                                        case MidiRouter::SamplerDestination:
                                             passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
                                             for (const int &zynthianChannel : currentTrack->zynthianChannels) {
                                                 if (zynthianChannel == -1) {
@@ -451,16 +453,9 @@ public:
                                             if (usbMidiPorts[sketchpadTrack + 1] && eventDevice != usbMidiPorts[sketchpadTrack + 1]) usbMidiPorts[sketchpadTrack + 1]->writeEventToOutput(*event, eventDeviceFilterEntry);
                                             passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
                                             break;
-                                        case MidiRouter::SamplerDestination:
-                                            passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
-                                            currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                            if (usbMidiPorts[0] && sketchpadTrack == currentSketchpadTrack && eventDevice != usbMidiPorts[0]) usbMidiPorts[0]->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                            if (usbMidiPorts[sketchpadTrack + 1] && eventDevice != usbMidiPorts[sketchpadTrack + 1]) usbMidiPorts[sketchpadTrack + 1]->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                            passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                            break;
                                         case MidiRouter::ExternalDestination:
                                         {
-                                            int externalChannel = (currentTrack->externalChannel == -1) ? currentTrack->trackIndex : currentTrack->externalChannel;
+                                            const int externalChannel = (currentTrack->externalChannel == -1) ? currentTrack->trackIndex : currentTrack->externalChannel;
                                             passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
                                             externalOutListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, externalChannel, sketchpadTrack, eventDevice);
                                             if (!(inputDeviceIsHardware == false && eventChannel == masterChannel)) {

@@ -2508,8 +2508,8 @@ void PatternModel::handleMidiMessage(const MidiRouter::ListenerPort &port, const
 void PatternModel::midiMessageToClipCommands(ClipCommandRing *listToPopulate, const int &samplerIndex, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3) const
 {
     if (samplerIndex == d->sketchpadTrack && (!d->sequence || (d->sequence->shouldMakeSounds() && (d->sequence->soloPatternObject() == this || d->enabled)))
-        // But also, don't make sounds unless we're sample-triggering or slicing (otherwise the synths will handle it)
-        && d->noteDestination == SampleTriggerDestination) {
+        // But also, only send notes there if we're in one of the internal-midi-triggered-sounds modes
+        && (d->noteDestination == SampleTriggerDestination || d->noteDestination == SynthDestination)) {
             d->midiMessageToClipCommands(listToPopulate, byte1, byte2, byte3);
     }
 }
