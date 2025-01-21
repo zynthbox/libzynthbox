@@ -761,8 +761,8 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                 ? (d->clipCommand->changePitch ? d->clipCommand->pitchChange * d->clip->rootSliceActual()->pitchChangePrecalc() : d->clip->rootSliceActual()->pitchChangePrecalc()) * (d->subvoiceSettings ? d->subvoiceSettings->pitchChangePrecalc() : 1.0f)
                 : (d->clipCommand->changePitch ? d->clipCommand->pitchChange : 1.0f) * (d->subvoiceSettings ? d->subvoiceSettings->pitchChangePrecalc() : 1.0f);
             const float clipGain = d->clip->rootSliceActual()->gainHandlerActual()->gain() * d->slice->gainHandlerActual()->gain() * (d->subvoiceSettings ? d->subvoiceSettings->gain() : 1.0f);
-            const float lPan = 2 * (1.0 + qMax(-1.0f, (d->playbackData.pan))); // Used for m/s panning, to ensure the signal is proper, we need to multiply it by 2 eventually, so might as well pre-do that calculation here
-            const float rPan = 2 * (1.0 - qMax(-1.0f, (d->playbackData.pan))); // Used for m/s panning, to ensure the signal is proper, we need to multiply it by 2 eventually, so might as well pre-do that calculation here
+            const float lPan = 0.5f * (1.0f + qMax(-1.0f, d->playbackData.pan));
+            const float rPan = 0.5f * (1.0f - qMax(0.0f, d->playbackData.pan));
 
             const float envelopeValue = d->adsr.getNextSample();
             float l{0};
@@ -854,7 +854,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
 
             // Implement M/S Panning
             const float mSignal = 0.5 * (l + r);
-            const float sSignal = l - r;
+            const float sSignal = 0.5 * (l - r);
             l = lPan * mSignal + sSignal;
             r = rPan * mSignal - sSignal;
 
