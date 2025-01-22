@@ -1972,8 +1972,9 @@ QObject *PatternModel::gridModel() const
                                 }
                                 noteTitle += QString("\nSample %1%2").arg(QString::number(clipIndex + 1)).arg(actualNote);
                             }
-                        } else {
-                            noteTitle += QString{"\n(no sample)"};
+                        // } else {
+                            // No need to write this out explicitly...
+                            // noteTitle += QString{"\n(no sample)"};
                         }
                         metadata << QVariantMap{{"displayText", QVariant::fromValue<QString>(noteTitle)}};
                     } else {
