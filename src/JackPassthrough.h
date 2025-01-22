@@ -31,9 +31,16 @@ class JackPassthroughPrivate;
  */
 class JackPassthrough : public QObject {
     Q_OBJECT
+    // DEPRECATED Use the gainHandler instance directly
     Q_PROPERTY(float dryAmount READ dryAmount WRITE setDryAmount NOTIFY dryAmountChanged)
+    // DEPRECATED Use the gainHandler instance directly
     Q_PROPERTY(float wetFx1Amount READ wetFx1Amount WRITE setWetFx1Amount NOTIFY wetFx1AmountChanged)
+    // DEPRECATED Use the gainHandler instance directly
     Q_PROPERTY(float wetFx2Amount READ wetFx2Amount WRITE setWetFx2Amount NOTIFY wetFx2AmountChanged)
+
+    Q_PROPERTY(QObject* dryGainHandler READ dryGainHandler CONSTANT)
+    Q_PROPERTY(QObject* wetFx1GainHandler READ wetFx1GainHandler CONSTANT)
+    Q_PROPERTY(QObject* wetFx2GainHandler READ wetFx2GainHandler CONSTANT)
     /**
      * \brief Control dry/wet output mixture
      *
@@ -82,20 +89,27 @@ class JackPassthrough : public QObject {
      */
     Q_PROPERTY(QObject* compressorSettings READ compressorSettings NOTIFY compressorSettingsChanged)
 public:
-    explicit JackPassthrough(const QString &clientName, QObject *parent = nullptr, bool dryOutPortsEnabled = true, bool wetOutFx1PortsEnabled = true, bool wetOutFx2PortsEnabled = true);
+    explicit JackPassthrough(const QString &clientName, QObject *parent = nullptr, const bool &dryOutPortsEnabled = true, const bool &wetOutFx1PortsEnabled = true, const bool &wetOutFx2PortsEnabled = true, const float &minimumDB = -24.0f, const float &maximumDB = 24.0f);
     ~JackPassthrough() override;
 
+    // DEPRECATED Use the gainHandler instance directly
     float dryAmount() const;
     void setDryAmount(const float& newValue, bool resetDryWetMixAmount=true);
     Q_SIGNAL void dryAmountChanged();
 
+    // DEPRECATED Use the gainHandler instance directly
     float wetFx1Amount() const;
     void setWetFx1Amount(const float& newValue, bool resetDryWetMixAmount=true);
     Q_SIGNAL void wetFx1AmountChanged();
 
+    // DEPRECATED Use the gainHandler instance directly
     float wetFx2Amount() const;
     void setWetFx2Amount(const float& newValue, bool resetDryWetMixAmount=true);
     Q_SIGNAL void wetFx2AmountChanged();
+
+    QObject *dryGainHandler() const;
+    QObject *wetFx1GainHandler() const;
+    QObject *wetFx2GainHandler() const;
 
     float dryWetMixAmount() const;
     void setDryWetMixAmount(const float& newValue);

@@ -9,6 +9,7 @@
 */
 
 #include "JackPassthrough.h"
+#include "GainHandler.h"
 #include "JackPassthroughAnalyser.h"
 #include "JackPassthroughCompressor.h"
 #include "JackPassthroughFilter.h"
@@ -44,7 +45,7 @@ Q_GLOBAL_STATIC(JackClientHash, jackPassthroughClients)
 
 class JackPassthroughPrivate {
 public:
-    JackPassthroughPrivate(const QString &clientName, bool dryOutPortsEnabled, bool wetOutFx1PortsEnabled, bool wetOutFx2PortsEnabled, JackPassthrough *q);
+    JackPassthroughPrivate(const QString &clientName, const bool &dryOutPortsEnabled, const bool &wetOutFx1PortsEnabled, const bool &wetOutFx2PortsEnabled, const float &minimumDB, const float &maximumDB, JackPassthrough *q);
     ~JackPassthroughPrivate() {
         JackPassthroughAggregate *aggregate{nullptr};
         QString key;
@@ -69,6 +70,10 @@ public:
     JackPassthrough *q{nullptr};
     QString actualClientName;
     QString portPrefix;
+    GainHandler *dryGainHandler{nullptr};
+    GainHandler *wetFx1GainHandler{nullptr};
+    GainHandler *wetFx2GainHandler{nullptr};
+    GainHandler *wetDryMixGainHandler{nullptr};
     float dryAmount{1.0f};
     float wetFx1Amount{1.0f};
     float wetFx2Amount{1.0f};
@@ -290,7 +295,7 @@ static int jackPassthroughProcess(jack_nframes_t nframes, void* arg) {
     return 0;
 }
 
-JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName, bool dryOutPortsEnabled, bool wetOutFx1PortsEnabled, bool wetOutFx2PortsEnabled, JackPassthrough *q)
+JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName, const bool &dryOutPortsEnabled, const bool &wetOutFx1PortsEnabled, const bool &wetOutFx2PortsEnabled, const float &minimumDB, const float &maximumDB, JackPassthrough *q)
     : q(q)
 {
     jack_status_t real_jack_status{};
@@ -298,16 +303,36 @@ JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName, bool d
     this->dryOutPortsEnabled = dryOutPortsEnabled;
     this->wetOutFx1PortsEnabled = wetOutFx1PortsEnabled;
     this->wetOutFx2PortsEnabled = wetOutFx2PortsEnabled;
+
+    dryGainHandler = new GainHandler(q);
+    dryGainHandler->setMinimumDecibel(minimumDB);
+    dryGainHandler->setMaximumDecibel(maximumDB);
+    QObject::connect(dryGainHandler, &GainHandler::gainChanged, q, [this](){ dryAmount = dryGainHandler->gain(); });
+    QObject::connect(dryGainHandler, &GainHandler::gainChanged, q, &JackPassthrough::dryAmountChanged);
+    wetFx1GainHandler = new GainHandler(q);
+    wetFx1GainHandler->setMinimumDecibel(minimumDB);
+    wetFx1GainHandler->setMaximumDecibel(maximumDB);
+    QObject::connect(wetFx1GainHandler, &GainHandler::gainChanged, q, [this](){ wetFx1Amount = wetFx1GainHandler->gain(); });
+    QObject::connect(wetFx1GainHandler, &GainHandler::gainChanged, q, &JackPassthrough::wetFx1AmountChanged);
+    wetFx2GainHandler = new GainHandler(q);
+    wetFx2GainHandler->setMinimumDecibel(minimumDB);
+    wetFx2GainHandler->setMaximumDecibel(maximumDB);
+    QObject::connect(wetFx2GainHandler, &GainHandler::gainChanged, q, [this](){ wetFx2Amount = wetFx2GainHandler->gain(); });
+    QObject::connect(wetFx2GainHandler, &GainHandler::gainChanged, q, &JackPassthrough::wetFx2AmountChanged);
     // Set respective output amount to 0 if ports are not enabled
     if (!dryOutPortsEnabled) {
-        dryAmount = 0.0f;
+        dryGainHandler->setGainAbsolute(0.0f);
     }
     if (!wetOutFx1PortsEnabled) {
-        wetFx1Amount = 0.0f;
+        wetFx1GainHandler->setGainAbsolute(0.0f);
     }
     if (!wetOutFx2PortsEnabled) {
-        wetFx2Amount = 0.0f;
+         wetFx2GainHandler->setGainAbsolute(0.0f);
     }
+    // Calculation assistance tool for doing the wet/dry mix management
+    wetDryMixGainHandler = new GainHandler(q);
+    wetDryMixGainHandler->setMaximumDecibel(0.0f);
+
     if (clientName.contains(":")) {
         const QStringList splitName{clientName.split(":")};
         actualClientName = splitName[0];
@@ -404,9 +429,9 @@ JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName, bool d
     }
 }
 
-JackPassthrough::JackPassthrough(const QString &clientName, QObject *parent, bool dryOutPortsEnabled, bool wetOutFx1PortsEnabled, bool wetOutFx2PortsEnabled)
+JackPassthrough::JackPassthrough(const QString &clientName, QObject *parent, const bool &dryOutPortsEnabled, const bool &wetOutFx1PortsEnabled, const bool &wetOutFx2PortsEnabled, const float &minimumDB, const float &maximumDB)
     : QObject(parent)
-    , d(new JackPassthroughPrivate(clientName, dryOutPortsEnabled, wetOutFx1PortsEnabled, wetOutFx2PortsEnabled, this))
+    , d(new JackPassthroughPrivate(clientName, dryOutPortsEnabled, wetOutFx1PortsEnabled, wetOutFx2PortsEnabled, minimumDB, maximumDB, this))
 {
 }
 
@@ -417,13 +442,13 @@ JackPassthrough::~JackPassthrough()
 
 float JackPassthrough::dryAmount() const
 {
-    return d->dryAmount;
+    return d->dryGainHandler->gain();
 }
 
 void JackPassthrough::setDryAmount(const float &newValue, bool resetDryWetMixAmount)
 {
-    if (d->dryAmount != newValue) {
-        d->dryAmount = newValue;
+    if (d->dryGainHandler->gain() != newValue) {
+        d->dryGainHandler->setGain(newValue);
         if (resetDryWetMixAmount) {
             d->dryWetMixAmount = -1.0f;
         }
@@ -433,13 +458,13 @@ void JackPassthrough::setDryAmount(const float &newValue, bool resetDryWetMixAmo
 
 float JackPassthrough::wetFx1Amount() const
 {
-    return d->wetFx1Amount;
+    return d->wetFx1GainHandler->gain();
 }
 
 void JackPassthrough::setWetFx1Amount(const float &newValue, bool resetDryWetMixAmount)
 {
-    if (d->wetFx1Amount != newValue) {
-        d->wetFx1Amount = newValue;
+    if (d->wetFx1GainHandler->gain() != newValue) {
+        d->wetFx1GainHandler->setGain(newValue);
         if (resetDryWetMixAmount) {
             d->dryWetMixAmount = -1.0f;
         }
@@ -449,18 +474,33 @@ void JackPassthrough::setWetFx1Amount(const float &newValue, bool resetDryWetMix
 
 float JackPassthrough::wetFx2Amount() const
 {
-    return d->wetFx2Amount;
+    return d->wetFx2GainHandler->gain();
 }
 
 void JackPassthrough::setWetFx2Amount(const float &newValue, bool resetDryWetMixAmount)
 {
-    if (d->wetFx2Amount != newValue) {
-        d->wetFx2Amount = newValue;
+    if (d->wetFx2GainHandler->gain() != newValue) {
+        d->wetFx2GainHandler->setGain(newValue);
         if (resetDryWetMixAmount) {
             d->dryWetMixAmount = -1.0f;
         }
         Q_EMIT wetFx2AmountChanged();
     }
+}
+
+QObject * JackPassthrough::dryGainHandler() const
+{
+    return d->dryGainHandler;
+}
+
+QObject * JackPassthrough::wetFx1GainHandler() const
+{
+    return d->wetFx1GainHandler;
+}
+
+QObject * JackPassthrough::wetFx2GainHandler() const
+{
+    return d->wetFx2GainHandler;
 }
 
 float JackPassthrough::dryWetMixAmount() const
@@ -473,17 +513,19 @@ void JackPassthrough::setDryWetMixAmount(const float &newValue)
     if (d->dryWetMixAmount != newValue) {
         d->dryWetMixAmount = newValue;
         if (newValue >= 0.0f && newValue < 1.0f) {
-            setDryAmount(1.0f, false);
-            setWetFx1Amount(newValue, false);
-            setWetFx2Amount(newValue, false);
+            d->dryGainHandler->setGain(1.0f);
+            d->wetDryMixGainHandler->setGainAbsolute(newValue);
+            d->wetFx1GainHandler->setGain(d->wetDryMixGainHandler->gain());
+            d->wetFx2GainHandler->setGain(d->wetDryMixGainHandler->gain());
         } else if (newValue == 1.0f) {
-            setDryAmount(1.0f, false);
-            setWetFx1Amount(1.0f, false);
-            setWetFx2Amount(1.0f, false);
+            d->dryGainHandler->setGain(1.0f);
+            d->wetFx1GainHandler->setGain(1.0f);
+            d->wetFx2GainHandler->setGain(1.0f);
         } else if (newValue > 1.0f && newValue <= 2.0f) {
-            setDryAmount(2.0f - newValue, false);
-            setWetFx1Amount(1.0f, false);
-            setWetFx2Amount(1.0f, false);
+            d->wetDryMixGainHandler->setGainAbsolute(2.0f - newValue);
+            d->dryGainHandler->setGain(d->wetDryMixGainHandler->gain());
+            d->wetFx1GainHandler->setGain(1.0f);
+            d->wetFx2GainHandler->setGain(1.0f);
         }
         Q_EMIT dryWetMixAmountChanged();
     }
