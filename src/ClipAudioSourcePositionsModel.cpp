@@ -208,12 +208,14 @@ double ClipAudioSourcePositionsModel::firstProgress() const
 void ClipAudioSourcePositionsModel::updatePositions()
 {
     bool anyPositionUpdates{false};
+    char positionChanges[ZynthboxClipMaximumPositionCount] = {0};
     // Clear out all positions older than our grace time, so we can stuff things into the model
     for (int positionIndex = 0; positionIndex < ZynthboxClipMaximumPositionCount; ++positionIndex) {
         ClipAudioSourcePositionsModelEntry *position = d->entries[positionIndex];
         if (position->m_keepUntil > -1 && position->m_keepUntil < d->mostRecentPositionUpdate) {
             position->clear();
             position->m_clipCommand = nullptr;
+            positionChanges[positionIndex]++;
             anyPositionUpdates = true;
         }
     }
@@ -223,7 +225,6 @@ void ClipAudioSourcePositionsModel::updatePositions()
     ClipCommand *clipCommand;
     int playheadIndex;
     float progress, gainLeft, gainRight, pan;
-    char positionChanges[ZynthboxClipMaximumPositionCount] = {0};
     while (d->positionUpdates.read(&timestamp, &clipCommand, &playheadIndex, &progress, &gainLeft, &gainRight, &pan)) {
         for (positionIndex = 0; positionIndex < ZynthboxClipMaximumPositionCount; ++positionIndex) {
             ClipAudioSourcePositionsModelEntry *position = d->entries[positionIndex];
