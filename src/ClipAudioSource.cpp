@@ -156,7 +156,9 @@ public:
   double progress{0};
   bool isPlaying{false};
 
+  bool shouldSyncProgress{false};
   void syncProgress() {
+    shouldSyncProgress = false;
     if (nextPositionUpdateTime < QDateTime::currentMSecsSinceEpoch()) {
       double newPosition = rootSlice->startPositionSeconds() / q->getDuration();
       if (positionsModel && positionsModel->firstProgress() > -1.0f) {
@@ -220,6 +222,9 @@ private:
     // Calling this from a timer will lead to a bad time, make sure it happens somewhere more reasonable (like on the object's own thread, which in this case is the qml engine thread)
     QMetaObject::invokeMethod(positionsModel, &ClipAudioSourcePositionsModel::updatePositions, Qt::QueuedConnection);
     syncAudioLevel();
+    if (shouldSyncProgress) {
+      syncProgress();
+    }
   }
 };
 
@@ -260,9 +265,7 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
   // We don't connect to this, as we are already syncing explicitly in timerCallback
   // connect(d->positionsModel, &ClipAudioSourcePositionsModel::peakGainChanged, this, [&](){ d->syncAudioLevel(); });
   connect(d->positionsModel, &QAbstractItemModel::dataChanged, this, [&](const QModelIndex& topLeft, const QModelIndex& /*bottomRight*/, const QVector< int >& roles = QVector<int>()){
-    if (topLeft.row() == 0 && roles.contains(ClipAudioSourcePositionsModel::PositionProgressRole)) {
-      d->syncProgress();
-    }
+    d->shouldSyncProgress = true;
   });
   SamplerSynth::instance()->registerClip(this);
 
