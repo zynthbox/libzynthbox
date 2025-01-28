@@ -340,6 +340,21 @@ public:
    * @return The slice at the given index in the slice list, or the root slice for any invalid index
    */
   Q_INVOKABLE ClipAudioSourceSliceSettings *sliceFromIndex(const int &sliceIndex) const;
+  /**
+   * \brief Serialises the slice data into string form for persistence purposes (
+   * This is essentially a convenience function for sketchpad.clip, to reduce the round
+   * tripping we otherwise do when serialising the slices to a json string.
+   * @see stringToSlices()
+   */
+  Q_INVOKABLE QString slicesToString() const;
+  /**
+   * \brief Clears the slices, and resets them based on the given dump
+   * This is essentially a convenience function for sketchpad.clip, to reduce the round
+   * tripping we otherwise do when deserialising the slices based on the clip's json dump.
+   * @param data The serialised data as previously produced by slicesToString()
+   * @see slicesToString()
+   */
+  Q_INVOKABLE void stringToSlices(const QString& data);
 
   SamplePickingStyle slicePickingStyle() const;
   void setSlicePickingStyle(const SamplePickingStyle &slicePickingStyle);

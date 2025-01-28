@@ -10,8 +10,10 @@
 
 #include "ClipAudioSource.h"
 #include "ClipAudioSourceSliceSettings.h"
+#include "ClipAudioSourceSubvoiceSettings.h"
 #include "ClipAudioSourcePositionsModel.h"
 
+#include <QDataStream>
 #include <QDateTime>
 #include <QDebug>
 
@@ -639,6 +641,148 @@ ClipAudioSourceSliceSettings * ClipAudioSource::sliceFromIndex(const int& sliceI
     return d->sliceSettingsActual.at(sliceIndex);
   }
   return d->rootSlice;
+}
+
+QString ClipAudioSource::slicesToString() const
+{
+  static const QMetaEnum timeStretchEnum = ClipAudioSourceSliceSettings::staticMetaObject.enumerator(ClipAudioSourceSliceSettings::staticMetaObject.indexOfEnumerator("TimeStretchStyle"));
+  static const QMetaEnum playbackStyleEnum = ClipAudioSourceSliceSettings::staticMetaObject.enumerator(ClipAudioSourceSliceSettings::staticMetaObject.indexOfEnumerator("PlaybackStyle"));
+  static const QMetaEnum crossfadingDirectionEnum = ClipAudioSourceSliceSettings::staticMetaObject.enumerator(ClipAudioSourceSliceSettings::staticMetaObject.indexOfEnumerator("CrossfadingDirection"));
+  QByteArray output;
+  QDataStream stream(&output, QIODevice::WriteOnly);
+  QVariantHash settingsHash;
+  QVariantList slicesList;
+  for (int sliceIndex = 0; sliceIndex < d->sliceCount; ++sliceIndex) {
+    ClipAudioSourceSliceSettings *slice{d->sliceSettingsActual.at(sliceIndex)};
+    QVariantHash sliceObject;
+    sliceObject.insert("pan", slice->pan());
+    sliceObject.insert("pitch", slice->pitch());
+    sliceObject.insert("gain", slice->gainHandlerActual()->gainAbsolute());
+    sliceObject.insert("rootNote", slice->rootNote());
+    sliceObject.insert("keyZoneStart", slice->keyZoneStart());
+    sliceObject.insert("keyZoneEnd", slice->keyZoneEnd());
+    sliceObject.insert("velocityMinimum", slice->velocityMinimum());
+    sliceObject.insert("velocityMaximum", slice->velocityMaximum());
+    sliceObject.insert("adsrAttack", slice->adsrAttack());
+    sliceObject.insert("adsrDecay", slice->adsrDecay());
+    sliceObject.insert("adsrSustain", slice->adsrSustain());
+    sliceObject.insert("adsrRelease", slice->adsrRelease());
+    sliceObject.insert("grainInterval", slice->grainInterval());
+    sliceObject.insert("grainIntervalAdditional", slice->grainIntervalAdditional());
+    sliceObject.insert("grainPanMaximum", slice->grainPanMaximum());
+    sliceObject.insert("grainPanMinimum", slice->grainPanMinimum());
+    sliceObject.insert("grainPitchMaximum1", slice->grainPitchMaximum1());
+    sliceObject.insert("grainPitchMaximum2", slice->grainPitchMaximum2());
+    sliceObject.insert("grainPitchMinimum1", slice->grainPitchMinimum1());
+    sliceObject.insert("grainPitchMinimum2", slice->grainPitchMinimum2());
+    sliceObject.insert("grainPitchPriority", slice->grainPitchPriority());
+    sliceObject.insert("grainPosition", slice->grainPosition());
+    sliceObject.insert("grainScan", slice->grainScan());
+    sliceObject.insert("grainSize", slice->grainSize());
+    sliceObject.insert("grainSizeAdditional", slice->grainSizeAdditional());
+    sliceObject.insert("grainSpray", slice->grainSpray());
+    sliceObject.insert("grainSustain", slice->grainSustain());
+    sliceObject.insert("grainTilt", slice->grainTilt());
+    sliceObject.insert("timeStretchStyle", timeStretchEnum.valueToKey(slice->timeStretchStyle()));
+    sliceObject.insert("playbackStyle", playbackStyleEnum.valueToKey(slice->playbackStyle()));
+    sliceObject.insert("loopCrossfadeAmount", slice->loopCrossfadeAmount());
+    sliceObject.insert("loopStartCrossfadeDirection", crossfadingDirectionEnum.valueToKey(slice->loopStartCrossfadeDirection()));
+    sliceObject.insert("stopCrossfadeDirection", crossfadingDirectionEnum.valueToKey(slice->stopCrossfadeDirection()));
+    sliceObject.insert("startPositionSamples", slice->startPositionSamples());
+    sliceObject.insert("lengthSamples", slice->lengthSamples());
+    sliceObject.insert("loopDeltaSamples", slice->loopDeltaSamples());
+    sliceObject.insert("loopDelta2Samples", slice->loopDelta2Samples());
+    sliceObject.insert("subvoiceCount", slice->subvoiceCount());
+    QVariantList subvoicesList;
+    for (int subvoiceIndex = 0; subvoiceIndex < slice->subvoiceCount(); ++subvoiceIndex) {
+      ClipAudioSourceSubvoiceSettings *subvoice{slice->subvoiceSettingsActual().at(subvoiceIndex)};
+      QVariantHash subvoiceObject;
+      subvoiceObject.insert("pan", subvoice->pan());
+      subvoiceObject.insert("pitch", subvoice->pitch());
+      subvoiceObject.insert("gain", subvoice->gain());
+      subvoicesList.append(subvoiceObject);
+    }
+    sliceObject.insert("subvoices", subvoicesList);
+    slicesList.append(sliceObject);
+  }
+  settingsHash.insert("count", d->sliceCount);
+  settingsHash.insert("contiguous", d->slicesContiguous);
+  settingsHash.insert("settings", slicesList);
+  stream << settingsHash;
+  stream.device()->waitForBytesWritten(-1);
+  return output.toBase64();
+}
+
+void ClipAudioSource::stringToSlices(const QString& data)
+{
+  // const int startMsecs = QDateTime::currentMSecsSinceEpoch();
+  static const QMetaEnum timeStretchEnum = ClipAudioSourceSliceSettings::staticMetaObject.enumerator(ClipAudioSourceSliceSettings::staticMetaObject.indexOfEnumerator("TimeStretchStyle"));
+  static const QMetaEnum playbackStyleEnum = ClipAudioSourceSliceSettings::staticMetaObject.enumerator(ClipAudioSourceSliceSettings::staticMetaObject.indexOfEnumerator("PlaybackStyle"));
+  static const QMetaEnum crossfadingDirectionEnum = ClipAudioSourceSliceSettings::staticMetaObject.enumerator(ClipAudioSourceSliceSettings::staticMetaObject.indexOfEnumerator("CrossfadingDirection"));
+  const QByteArray decoded{QByteArray::fromBase64(data.toUtf8())};
+  QDataStream stream(decoded);
+  QVariantHash settingsObject;
+  stream >> settingsObject;
+  // qDebug() << Q_FUNC_INFO << "took" << QDateTime::currentMSecsSinceEpoch() - startMsecs << "ms to parse the string, for" << d->filePath << "which is" << data.length() << "bytes";
+  if (settingsObject.contains("settings")) {
+    QVariantList slicesArray = settingsObject.value("settings").toList();
+    // qDebug() << Q_FUNC_INFO << "Root is an object, we can work with this. It contains the keys" << settingsObject.keys() << "and how many objects are in it?" << slicesArray.count();
+    setSliceCount(settingsObject.value("count", 0).toInt());
+    for (int sliceIndex = 0; sliceIndex < qMin(d->sliceCount, d->sliceSettingsActual.count()); ++sliceIndex) {
+      const QVariantHash sliceObject = slicesArray.at(sliceIndex).toHash();
+      ClipAudioSourceSliceSettings *slice = d->sliceSettingsActual.at(sliceIndex);
+      slice->setPan(sliceObject.value("pan", 0.0).toDouble());
+      slice->setPitch(sliceObject.value("pitch", 0.0).toDouble());
+      slice->gainHandlerActual()->setGainAbsolute(sliceObject.value("gain", slice->gainHandlerActual()->absoluteGainAtZeroDb()).toDouble());
+      slice->setRootNote(sliceObject.value("rootNote", 60).toInt());
+      slice->setKeyZoneStart(sliceObject.value("keyZoneStart",0).toInt());
+      slice->setKeyZoneEnd(sliceObject.value("keyZoneEnd",127).toInt());
+      slice->setVelocityMinimum(sliceObject.value("velocityMinimum", 0).toInt());
+      slice->setVelocityMaximum(sliceObject.value("velocityMaximum", 127).toInt());
+      slice->setADSRAttack(sliceObject.value("adsrAttack", 0.0).toDouble());
+      slice->setADSRDecay(sliceObject.value("adsrDecay", 0.0).toDouble());
+      slice->setADSRSustain(sliceObject.value("adsrSustain", 1.0).toDouble());
+      slice->setADSRRelease(sliceObject.value("adsrRelease", 0.0).toDouble());
+      slice->setGrainInterval(sliceObject.value("grainInterval", 10).toDouble());
+      slice->setGrainIntervalAdditional(sliceObject.value("grainIntervalAdditional", 10).toDouble());
+      slice->setGrainPanMaximum(sliceObject.value("grainPanMaximum", 1.0).toDouble());
+      slice->setGrainPanMinimum(sliceObject.value("grainPanMinimum", -1.0).toDouble());
+      slice->setGrainPitchMaximum1(sliceObject.value("grainPitchMaximum1", 1.0).toDouble());
+      slice->setGrainPitchMaximum2(sliceObject.value("grainPitchMaximum2", 1.0).toDouble());
+      slice->setGrainPitchMinimum1(sliceObject.value("grainPitchMinimum1", 1.0).toDouble());
+      slice->setGrainPitchMinimum2(sliceObject.value("grainPitchMinimum2", 1.0).toDouble());
+      slice->setGrainPitchPriority(sliceObject.value("grainPitchPriority", 0.5).toDouble());
+      slice->setGrainPosition(sliceObject.value("grainPosition", 0.0).toDouble());
+      slice->setGrainScan(sliceObject.value("grainScan", 0.0).toDouble());
+      slice->setGrainSize(sliceObject.value("grainSize", 100).toDouble());
+      slice->setGrainSizeAdditional(sliceObject.value("grainSizeAdditional", 50).toDouble());
+      slice->setGrainSpray(sliceObject.value("grainSpray", 1.0).toDouble());
+      slice->setGrainSustain(sliceObject.value("grainSustain", 0.3).toDouble());
+      slice->setGrainTilt(sliceObject.value("grainTilt", 0.5f).toDouble());
+      slice->setTimeStretchStyle(ClipAudioSource::TimeStretchStyle(timeStretchEnum.keyToValue(sliceObject.value("timeStretchStyle","TimeStretchOff").toString().toUtf8())));
+      slice->setPlaybackStyle(ClipAudioSource::PlaybackStyle(playbackStyleEnum.keyToValue(sliceObject.value("playbackStyle", "NonLoopingPlaybackStyle").toString().toUtf8())));
+      slice->setLoopCrossfadeAmount(sliceObject.value("loopCrossfadeAmount", 0.0).toDouble());
+      slice->setLoopStartCrossfadeDirection(ClipAudioSource::CrossfadingDirection(crossfadingDirectionEnum.keyToValue(sliceObject.value("loopStartCrossfadeDirection", "CrossfadeOutie").toString().toUtf8())));
+      slice->setStopCrossfadeDirection(ClipAudioSource::CrossfadingDirection(crossfadingDirectionEnum.keyToValue(sliceObject.value("stopCrossfadeDirection", "CrossfadeInnie").toString().toUtf8())));
+      slice->setStartPositionSamples(sliceObject.value("startPositionSamples", 0.0).toDouble());
+      slice->setLengthSamples(sliceObject.value("lengthSamples", getDurationSamples()).toDouble());
+      slice->setLoopDeltaSamples(sliceObject.value("loopDeltaSamples", 0.0).toDouble());
+      slice->setLoopDelta2Samples(sliceObject.value("loopDelta2Samples", 0.0).toDouble());
+      slice->setSubvoiceCount(sliceObject.value("subvoiceCount", 0).toInt());
+      const QVariantList subvoicesArray = sliceObject.value("subvoices").toList();
+      for (int subvoiceIndex = 0; subvoiceIndex < slice->subvoiceCount(); ++subvoiceIndex) {
+        const QVariantHash &subvoiceObject = subvoicesArray.at(subvoiceIndex).toHash();
+        ClipAudioSourceSubvoiceSettings *subvoice = slice->subvoiceSettingsActual().at(subvoiceIndex);
+        subvoice->setPan(subvoiceObject.value("pan", 0.0).toDouble());
+        subvoice->setPitch(subvoiceObject.value("pitch", 0.0).toDouble());
+        subvoice->setGain(subvoiceObject.value("gain", 1.0).toDouble());
+      }
+    }
+    setSlicesContiguous(settingsObject.value("contiguous", false).toBool());
+  // } else {
+    // qDebug() << Q_FUNC_INFO << "No useful stored information, aborting restore";
+  }
+  // qDebug() << Q_FUNC_INFO << "took" << QDateTime::currentMSecsSinceEpoch() - startMsecs << "milliseconds for" << d->filePath;
 }
 
 ClipAudioSource::SamplePickingStyle ClipAudioSource::slicePickingStyle() const
