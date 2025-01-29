@@ -13,3 +13,4 @@ libzynthbox.creator.user
 libzynthbox.cxxflags
 libzynthbox.files
 libzynthbox.includes
+.qtc_clangd
