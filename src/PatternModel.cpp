@@ -180,7 +180,7 @@ public Q_SLOTS:
             timerCommand->parameter2 = false;
         } else { // or in other words "if (trackType == synth)"
             q->setNoteDestination(PatternModel::SynthDestination);
-            timerCommand->parameter2 = false;
+            timerCommand->parameter2 = true;
         }
         syncTimer->scheduleTimerCommand(0, timerCommand);
     }
@@ -663,17 +663,21 @@ public:
      * @param byte3 The third byte of a midi message
      */
     void midiMessageToClipCommands(ClipCommandRing *listToPopulate, const int &byte1, const int &byte2, const int &byte3) const {
+        bool matchedClip{false};
+        const bool stopPlayback{byte1 < 0x90 || byte3 == 0};
+        const float velocity{float(byte3) / float(127)};
+        const int midiChannel{(byte1 & 0xf)};
         for (ClipAudioSource *clip : qAsConst(clips)) {
             // There must be a clip or it just doesn't matter, and then the note must fit inside the clip's keyzone
             if (clip) {
                 const QList<ClipAudioSourceSliceSettings*> slices{clip->sliceSettingsActual()};
                 const int &sliceCount{clip->sliceCount()};
                 const int extraSliceCount{sliceCount + 1};
+                bool matchedSlice{false};
                 // This little trick (going to slice count + 1) ensures that we run through the slices in defined order, and also process the root slice last
                 for (int sliceIndex = 0; sliceIndex < extraSliceCount; ++sliceIndex) {
                     const ClipAudioSourceSliceSettings *slice{sliceIndex == sliceCount ? clip->rootSliceActual() : slices.at(sliceIndex)};
                     if (slice->keyZoneStart() <= byte2 && byte2 <= slice->keyZoneEnd()) {
-                        const bool stopPlayback{byte1 < 0x90 || byte3 == 0};
                         // Since the stop velocity is actually "lift", we can't count on it to match whatever the start velocity was, so... let's stop all notes that match
                         if (stopPlayback || (slice->velocityMinimum() <= byte3 && byte3 <= slice->velocityMaximum())) {
                             if (slice->effectivePlaybackStyle() == ClipAudioSource::OneshotPlaybackStyle && stopPlayback) {
@@ -682,7 +686,7 @@ public:
                             } else {
                                 // subvoice -1 is conceptually the prime voice, anything from 0 inclusive to the amount non-inclusive are the subvoices
                                 for (int subvoice = -1; subvoice < slice->subvoiceCountPlayback(); ++subvoice) {
-                                    ClipCommand *command = ClipCommand::channelCommand(clip, (byte1 & 0xf));
+                                    ClipCommand *command = ClipCommand::channelCommand(clip, midiChannel);
                                     command->startPlayback = !stopPlayback;
                                     command->stopPlayback = stopPlayback;
                                     command->subvoice = subvoice;
@@ -690,23 +694,24 @@ public:
                                     command->exclusivityGroup = slice->exclusivityGroup();
                                     if (command->startPlayback) {
                                         command->changeVolume = true;
-                                        command->volume = float(byte3) / float(127);
+                                        command->volume = velocity;
                                     }
                                     if (command->stopPlayback) {
                                         // Don't actually set volume, just store the volume for velocity purposes... yes this is kind of a hack
-                                        command->volume = float(byte3) / float(127);
+                                        command->volume = velocity;
                                     }
                                         command->midiNote = byte2;
                                         command->changeLooping = true;
                                         command->looping = slice->looping();
                                     // }
+                                    matchedClip = matchedSlice = true;
                                     listToPopulate->write(command, 0);
                                     // qDebug() << Q_FUNC_INFO << "Wrote command to list for" << clip << "slice" << slice << "subvoice" << subvoice;
                                 }
                             }
                             // If our selection mode is a one-sample-only mode, bail now (that is,
                             // as with samples, only AllPickingStyle wants us to pick more than one slice)
-                            if (clip->slicePickingStyle() != ClipAudioSource::AllPickingStyle) {
+                            if (matchedSlice && clip->slicePickingStyle() != ClipAudioSource::AllPickingStyle) {
                                 break;
                             }
                         }
@@ -714,7 +719,7 @@ public:
                 }
                 // If our selection mode is a one-sample-only mode, bail now (that is,
                 // only AllPickingStyle wants us to pick more than one sample)
-                if (zlSyncManager->samplePickingStyle != ClipAudioSource::AllPickingStyle) {
+                if (matchedClip && zlSyncManager->samplePickingStyle != ClipAudioSource::AllPickingStyle) {
                     break;
                 }
             }
