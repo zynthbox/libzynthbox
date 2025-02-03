@@ -69,6 +69,7 @@
 #include "GainHandler.h"
 #include "JackConnectionHandler.h"
 #include "AppImageHelper.h"
+#include "AudioTagHelper.h"
 
 #include "Plugin.h"
 
@@ -432,6 +433,13 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
         AppImageHelper *appImageHelper = AppImageHelper::instance();
         QQmlEngine::setObjectOwnership(appImageHelper, QQmlEngine::CppOwnership);
         return appImageHelper;
+    });
+    qmlRegisterSingletonType<AudioTagHelper>(uri, 1, 0, "AudioTagHelper", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
+        Q_UNUSED(engine)
+        Q_UNUSED(scriptEngine)
+        AudioTagHelper *audioTagHelper = AudioTagHelper::instance();
+        QQmlEngine::setObjectOwnership(audioTagHelper, QQmlEngine::CppOwnership);
+        return audioTagHelper;
     });
     qmlRegisterType<WaveFormItem>(uri, 1, 0, "WaveFormItem");
     qmlRegisterType<JackPassthroughVisualiserItem>(uri, 1, 0, "JackPassthroughVisualiserItem");

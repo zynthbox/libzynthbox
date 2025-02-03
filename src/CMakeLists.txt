@@ -54,6 +54,7 @@ target_sources(libzynthbox
         CUIAHelper.cpp
         ZynthboxBasics.cpp
         GainHandler.cpp
+        AudioTagHelper.cpp
 )
 target_compile_definitions(libzynthbox
     PUBLIC
@@ -102,6 +103,7 @@ target_link_libraries(libzynthbox
         Qt5::Quick
         KF5::Pty
         libappimage
+        ${TagLib_LIBRARIES}
 )
 
 target_include_directories(libzynthbox

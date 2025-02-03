@@ -32,6 +32,7 @@ if(GENERATE_PYTHON_BINDINGS)
 endif(GENERATE_PYTHON_BINDINGS)
 
 pkg_check_modules(Jack REQUIRED jack)
+pkg_check_modules(TagLib REQUIRED taglib)
 
 include_directories(tracktion_engine/modules/)
 add_subdirectory(tracktion_engine/modules/juce)

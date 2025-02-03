@@ -8,6 +8,7 @@
 
 #include <AppImageHelper.h>
 #include <AudioLevels.h>
+#include <AudioTagHelper.h>
 #include <ClipAudioSource.h>
 #include <ClipAudioSourceSliceSettings.h>
 #include <ClipAudioSourceSubvoiceSettings.h>

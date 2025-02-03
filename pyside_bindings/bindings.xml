@@ -7,6 +7,7 @@
 
     <object-type name="AppImageHelper"></object-type>
     <object-type name="AudioLevels"></object-type>
+    <object-type name="AudioTagHelper"></object-type>
     <object-type name="ClipAudioSource">
         <enum-type name="LoopStyle" />
         <enum-type name="PlaybackStyle" />
