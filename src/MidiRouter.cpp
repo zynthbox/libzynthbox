@@ -47,6 +47,8 @@ struct SketchpadTrackInfo {
     }
     int zynthianChannels[16];
     MidiRouterDevice *routerDevice{nullptr};
+    MidiRouterDevice *syncTimerSequencer{nullptr};
+    MidiRouterDevice *syncTimerController{nullptr};
     QString portName;
     int trackIndex{-1};
     int externalChannel{-1};
@@ -834,6 +836,7 @@ MidiRouter::MidiRouter(QObject *parent)
     qRegisterMetaType<MidiRouterFilterEntryRewriter::EventSize>();
     qRegisterMetaType<MidiRouterFilterEntryRewriter::EventByte>();
     qRegisterMetaType<MidiRouterFilterEntryRewriter::ValueSpecifier>();
+    connect(this, &MidiRouter::currentSketchpadTrackChanged, this, &MidiRouter::currentSketchpadTrackTargetTracksChanged);
     reloadConfiguration();
     TransportManager::instance(d->syncTimer)->initialize();
     // Open the client.
@@ -917,6 +920,7 @@ MidiRouter::MidiRouter(QObject *parent)
                     syncTimerDevice->setMidiChannelTargetTrack(-1, track);
                     syncTimerDevice->setZynthianMasterChannel(d->masterChannel);
                     d->internalDevices << syncTimerDevice;
+                    d->sketchpadTracks[track]->syncTimerSequencer = syncTimerDevice;
                     d->connectPorts(QLatin1String("SyncTimer:Track%1-Sequencer").arg(QString::number(track)).toUtf8(), QLatin1String("ZLRouter:SyncTimer-Track%1-Sequencer").arg(QString::number(track)).toUtf8());
                     // Then the controller device
                     syncTimerDevice = new MidiRouterDevice(d->jackClient, this);
@@ -928,6 +932,7 @@ MidiRouter::MidiRouter(QObject *parent)
                     syncTimerDevice->setMidiChannelTargetTrack(-1, track);
                     syncTimerDevice->setZynthianMasterChannel(d->masterChannel);
                     d->internalDevices << syncTimerDevice;
+                    d->sketchpadTracks[track]->syncTimerController = syncTimerDevice;
                     d->connectPorts(QLatin1String("SyncTimer:Track%1-Controller").arg(QString::number(track)).toUtf8(), QLatin1String("ZLRouter:SyncTimer-Track%1-Controller").arg(QString::number(track)).toUtf8());
                 }
                 // SyncTimer also has a master track for controlling things that are not directly tied to
@@ -1074,6 +1079,56 @@ void MidiRouter::setSkechpadTrackDestination(int sketchpadTrack, MidiRouter::Rou
             d->connectToOutputs(trackInfo);
         }
     }
+}
+
+ZynthboxBasics::Track MidiRouter::sketchpadTrackTargetTrack(const ZynthboxBasics::Track& sketchpadTrack) const
+{
+    int destinationTrack{0};
+    if (sketchpadTrack == ZynthboxBasics::CurrentTrack || sketchpadTrack == ZynthboxBasics::AnyTrack || sketchpadTrack == ZynthboxBasics::NoTrack) {
+        destinationTrack = d->sketchpadTracks[d->currentSketchpadTrack]->syncTimerSequencer->targetTrackForMidiChannel(0);
+    } else {
+        destinationTrack = d->sketchpadTracks[sketchpadTrack]->syncTimerSequencer->targetTrackForMidiChannel(0);
+    }
+    // qDebug() << Q_FUNC_INFO << sketchpadTrack << destinationTrack;
+    if (0 > destinationTrack || destinationTrack > ZynthboxTrackCount) {
+        destinationTrack = d->currentSketchpadTrack;
+    }
+    return ZynthboxBasics::Track(destinationTrack);
+}
+
+void MidiRouter::setSketchpadTrackTargetTrack(const ZynthboxBasics::Track& sketchpadTrack, const ZynthboxBasics::Track& targetTrack)
+{
+    int track{sketchpadTrack};
+    if (0 < track || track < ZynthboxTrackCount) {
+        track = d->currentSketchpadTrack;
+    }
+    d->sketchpadTracks[track]->syncTimerSequencer->setMidiChannelTargetTrack(-1, targetTrack);
+    d->sketchpadTracks[track]->syncTimerController->setMidiChannelTargetTrack(-1, targetTrack);
+    // qDebug() << Q_FUNC_INFO << sketchpadTrack << track << targetTrack;
+    Q_EMIT sketchpadTrackTargetTracksChanged();
+    if (track == d->currentSketchpadTrack) {
+        Q_EMIT currentSketchpadTrackTargetTracksChanged();
+    }
+}
+
+QVariantList MidiRouter::sketchpadTrackTargetTracks() const
+{
+    QVariantList targetTracks;
+    for (int track = 0; track < ZynthboxTrackCount; ++track) {
+        targetTracks << sketchpadTrackTargetTrack(ZynthboxBasics::Track(track));
+    }
+    // qDebug() << Q_FUNC_INFO << targetTracks;
+    return targetTracks;
+}
+
+ZynthboxBasics::Track MidiRouter::currentSketchpadTrackTargetTrack() const
+{
+    return sketchpadTrackTargetTrack(ZynthboxBasics::CurrentTrack);
+}
+
+void MidiRouter::setCurrentSketchpadTrackTargetTrack(const ZynthboxBasics::Track& targetTrack)
+{
+    setSketchpadTrackTargetTrack(ZynthboxBasics::CurrentTrack, targetTrack);
 }
 
 void MidiRouter::setCurrentSketchpadTrack(int sketchpadTrack)

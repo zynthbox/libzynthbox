@@ -30,6 +30,15 @@ class MidiRouter : public QThread
      */
     Q_PROPERTY(int currentSketchpadTrack READ currentSketchpadTrack WRITE setCurrentSketchpadTrack NOTIFY currentSketchpadTrackChanged)
     /**
+     * \brief The sketchpad track which will receive all midi events from the current sketchpad track
+     */
+    Q_PROPERTY(ZynthboxBasics::Track currentSketchpadTrackTargetTrack READ currentSketchpadTrackTargetTrack WRITE setCurrentSketchpadTrackTargetTrack NOTIFY currentSketchpadTrackTargetTracksChanged)
+    /**
+     * \brief The destination tracks for all sketchpad tracks, in order
+     * @see currentSketchpadTrackTargetTrack
+     */
+    Q_PROPERTY(QVariantList sketchpadTrackTargetTracks READ sketchpadTrackTargetTracks NOTIFY sketchpadTrackTargetTracksChanged)
+    /**
      * \brief The master channels as defined by the MPE split point (16 entries, one per channel)
      * @note if the split is all-Upper zone, this will be what is set in webconf, otherwise it will be 0 or 15, depending on the Zone
      * @see setExpressiveSplitPoint(int)
@@ -78,6 +87,25 @@ public:
      * @param externalChannel If set, messages on the given channel will be translated to end up on this channel instead
      */
     void setSkechpadTrackDestination(int sketchpadTrack, RoutingDestination destination, int externalChannel = -1);
+
+    /**
+     * \brief The track which should receive midi events on the given track
+     * @param sketchpadTrack The track you wish to retrieve the target track for
+     * @return The target track for the given sketchpad track
+     */
+    ZynthboxBasics::Track sketchpadTrackTargetTrack(const ZynthboxBasics::Track &sketchpadTrack) const;
+    /**
+     * \brief Set the track which should receive the midi events on the given track
+     * @param sketchpadTrack The track that you wish to set the target track for (AnyTrack and NoTrack are not valid and will result in the function being ignored)
+     * @param targetTrack The track that should receive all midi events from the given track (AnyTrack is not valid and will result in the function being ignored)
+     */
+    Q_INVOKABLE void setSketchpadTrackTargetTrack(const ZynthboxBasics::Track &sketchpadTrack, const ZynthboxBasics::Track &targetTrack);
+    QVariantList sketchpadTrackTargetTracks() const;
+    Q_SIGNAL void sketchpadTrackTargetTracksChanged();
+    ZynthboxBasics::Track currentSketchpadTrackTargetTrack() const;
+    // Same exclusion rules as setSketchpadTrackTargetTrack (AnyTrack is not valid and will be ignored)
+    Q_INVOKABLE void setCurrentSketchpadTrackTargetTrack(const ZynthboxBasics::Track &targetTrack);
+    Q_SIGNAL void currentSketchpadTrackTargetTracksChanged();
 
     void setCurrentSketchpadTrack(int currentSketchpadTrack);
     int currentSketchpadTrack() const;
