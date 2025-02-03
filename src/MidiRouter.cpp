@@ -1099,7 +1099,7 @@ ZynthboxBasics::Track MidiRouter::sketchpadTrackTargetTrack(const ZynthboxBasics
 void MidiRouter::setSketchpadTrackTargetTrack(const ZynthboxBasics::Track& sketchpadTrack, const ZynthboxBasics::Track& targetTrack)
 {
     int track{sketchpadTrack};
-    if (0 < track || track < ZynthboxTrackCount) {
+    if (0 > track || track > ZynthboxTrackCount) {
         track = d->currentSketchpadTrack;
     }
     d->sketchpadTracks[track]->syncTimerSequencer->setMidiChannelTargetTrack(-1, targetTrack);
