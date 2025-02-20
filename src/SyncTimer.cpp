@@ -7,6 +7,7 @@
 #include "ClipCommand.h"
 #include "Helper.h"
 #include "MidiRouter.h"
+#include "MidiRouterDevice.h"
 #include "SamplerSynth.h"
 #include "TimerCommand.h"
 #include "TransportManager.h"
@@ -1625,12 +1626,14 @@ void SyncTimer::sendMidiMessageImmediately(int size, int byte0, int byte1, int b
 
 void SyncTimer::sendProgramChangeImmediately(int midiChannel, int program, int sketchpadTrack)
 {
-    sendMidiMessageImmediately(2, 192 + std::clamp(midiChannel, 0, 16), std::clamp(program, 0, 127), sketchpadTrack);
+    sendMidiMessageImmediately(2, 192 + std::clamp(midiChannel, 0, 15), std::clamp(program, 0, 127), sketchpadTrack);
 }
 
 void SyncTimer::sendCCMessageImmediately(int midiChannel, int control, int value, int sketchpadTrack)
 {
-    sendMidiMessageImmediately(3, 176 + std::clamp(midiChannel, 0, 16), std::clamp(control, 0, 127), std::clamp(value, 0, 127), sketchpadTrack);
+    const MidiRouterDevice *trackController{MidiRouter::instance()->getSketchpadTrackControllerDevice(-1 < sketchpadTrack && sketchpadTrack < ZynthboxTrackCount ? ZynthboxBasics::Track(sketchpadTrack) : ZynthboxBasics::CurrentTrack)};
+    trackController->forceSetCCValue(midiChannel, control, value);
+    sendMidiMessageImmediately(3, 176 + std::clamp(midiChannel, 0, 15), std::clamp(control, 0, 127), std::clamp(value, 0, 127), sketchpadTrack);
 }
 
 void SyncTimer::sendMidiBufferImmediately(const juce::MidiBuffer& buffer, int sketchpadTrack)
