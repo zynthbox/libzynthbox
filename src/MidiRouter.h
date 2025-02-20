@@ -8,6 +8,7 @@
 #include <QThread>
 
 class MidiRouterPrivate;
+class MidiRouterDevice;
 /**
  * \brief System for routing midi messages from one jack input port (ZLRouter:MidiIn) to a set of output ports (ZLRouter::Channel0 through 15) based on their input channel settings
  *
@@ -159,6 +160,8 @@ public:
 
     QObject *model() const;
     Q_SIGNAL void modelChanged();
+
+    Q_INVOKABLE MidiRouterDevice *getSketchpadTrackControllerDevice(const ZynthboxBasics::Track &track) const;
 
     Q_SIGNAL void addedHardwareDevice(const QString &deviceId, const QString &humanReadableName);
     Q_SIGNAL void removedHardwareDevice(const QString &deviceId, const QString &humanReadableName);

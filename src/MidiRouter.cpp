@@ -913,7 +913,6 @@ MidiRouter::MidiRouter(QObject *parent)
                     MidiRouterDevice *syncTimerDevice = new MidiRouterDevice(d->jackClient, this);
                     syncTimerDevice->setZynthianId(QLatin1String("SyncTimer-Track%1-Sequencer").arg(QString::number(track)));
                     syncTimerDevice->setHumanReadableName(QLatin1String("SyncTimer Track%1-Sequencer").arg(QString::number(track)));
-                    syncTimerDevice->setDeviceType(MidiRouterDevice::ControllerType);
                     syncTimerDevice->setDeviceType(MidiRouterDevice::SequencerType);
                     syncTimerDevice->setInputPortName(QLatin1String("SyncTimer-Track%1-Sequencer").arg(QString::number(track)).toUtf8());
                     syncTimerDevice->setInputEnabled(true);
@@ -1014,6 +1013,7 @@ void MidiRouter::run() {
                 CUIAHelper::Event event = device->cuiaRing.read(&cuiaOriginId, &cuiaTrack, &cuiaSlot, &cuiaValue);
                 Q_EMIT cuiaEvent(CUIAHelper::instance()->cuiaCommand(event), cuiaOriginId, cuiaTrack, cuiaSlot, cuiaValue);
             }
+            device->emitCCValueChanges();
         }
         Q_EMIT processingLoadChanged();
         msleep(5);
@@ -1062,6 +1062,16 @@ float MidiRouter::processingLoad() const
 QObject * MidiRouter::model() const
 {
     return d->devicesModel;
+}
+
+MidiRouterDevice * MidiRouter::getSketchpadTrackControllerDevice(const ZynthboxBasics::Track& track) const
+{
+    if (track == ZynthboxBasics::CurrentTrack || track == ZynthboxBasics::AnyTrack) {
+        return d->sketchpadTracks[d->currentSketchpadTrack]->syncTimerController;
+    } else if (track == ZynthboxBasics::NoTrack) {
+        return nullptr;
+    }
+    return d->sketchpadTracks[track]->syncTimerController;
 }
 
 void MidiRouter::markAsDone() {
