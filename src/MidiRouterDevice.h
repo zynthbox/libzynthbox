@@ -204,6 +204,34 @@ public:
     const int &noteActivationTrack(const int &channel, const int &note) const;
 
     /**
+     * \brief Fetch the given control change value of the given midi channel
+     * To set the value, you should send a cc change via the functions available on SyncTimer
+     * @param midiChannel The midi channel to fetch the value on
+     * @param ccControl The control you wish to fetch the known value for
+     * @see SyncTimer::sendCCMessageImmediately(int, int, int, int)
+     */
+    Q_INVOKABLE int ccValue(const int &midiChannel, const int &ccControl) const;
+    /**
+     * \brief Fired whenever a value changes (this is done slightly behind the fact, to not impact processing)
+     * @param midiChannel The midi channel the value changed on
+     * @param ccControl The control the value changed for
+     * @param ccValue The new value for the given control
+     */
+    Q_SIGNAL void ccValueChanged(const int &midiChannel, const int &ccControl, const int &ccValue);
+    /**
+     * \brief Called by MidiRouter during its run function, to ensure a timely, and un-interrupted processing of the events
+     */
+    void emitCCValueChanges();
+    /**
+     * \brief Called by SyncTimer to force update the CC value when setting it (to ensure rapid updates work correctly)
+     * @note This does not cause the change signal to be emitted (that will happen elsewhere)
+     * @param midiChannel The midi channel the value changed on
+     * @param ccControl The control the value changed for
+     * @param ccValue The new value for the given control
+     */
+    void forceSetCCValue(const int &midiChannel, const int &ccControl, const int &ccValue) const;
+
+    /**
      * \brief Defines whether the device should be marked as visible in the devices model
      * @param visible If the device should be shown, pass true, otherwise pass false
      */

@@ -23,6 +23,49 @@
 
 #define DebugRouterDevice false
 
+#define MidiRouterDeviceCCValueRingSize 512
+class MidiRouterDeviceCCValueRing {
+public:
+    struct Entry {
+        Entry *next{nullptr};
+        Entry *previous{nullptr};
+        bool processed{true};
+        jack_midi_event_t event;
+    };
+    explicit MidiRouterDeviceCCValueRing() {
+        Entry* entryPrevious{&ringData[MidiRouterDeviceCCValueRingSize - 1]};
+        for (quint64 i = 0; i < MidiRouterDeviceCCValueRingSize; ++i) {
+            entryPrevious->next = &ringData[i];
+            ringData[i].previous = entryPrevious;
+            entryPrevious = &ringData[i];
+        }
+        readHead = writeHead = ringData;
+    }
+    ~MidiRouterDeviceCCValueRing() {
+    }
+
+    void write(const jack_midi_event_t &event) {
+        Entry *entry = writeHead;
+        writeHead = writeHead->next;
+        if (entry->processed == false) {
+            qWarning() << Q_FUNC_INFO << "There is unprocessed data at the write location: midi event of size" << entry->event.size << ". This likely means the buffer size is too small, which will require attention at the api level.";
+        }
+        entry->event = event;
+        entry->processed = false;
+    }
+    // This ring does not have a read-and-clear function, as it is likely to be called from the jack process loop and we want to avoid that doing memory type things
+    void markAsRead() {
+        Entry *entry = readHead;
+        readHead = readHead->next;
+        entry->processed = true;
+    }
+
+    Entry *readHead{nullptr};
+    Entry *writeHead{nullptr};
+private:
+    Entry ringData[MidiRouterDeviceCCValueRingSize];
+};
+
 class MidiRouterDevicePrivate {
 public:
     MidiRouterDevicePrivate (MidiRouterDevice *q)
@@ -70,6 +113,7 @@ public:
     int noteActivationTrack[16][128];
     int midiChannelTargetTrack[16];
     int ccValues[16][128];
+    MidiRouterDeviceCCValueRing ccValueUpdates;
     jack_client_t *jackClient{nullptr};
     bool visible{true};
     QString hardwareId{"no-hardware-id"};
@@ -394,6 +438,8 @@ void MidiRouterDevice::nextInputEvent()
                     currentInputEvent.buffer = otherEvent.buffer;
                     // leave the time code intact
                 }
+                d->ccValueUpdates.write(currentInputEvent);
+                d->ccValues[currentInputEvent.buffer[0] & 0xf][currentInputEvent.buffer[1]] = currentInputEvent.buffer[2];
             }
             // if (d->type.testFlag(MidiRouterDevice::HardwareDeviceType)) {
             //     qDebug() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Retrieved jack midi event on device" << d->humanReadableName << "with data size" << d->currentInputEvent->size << "at time" << d->currentInputEvent->time << "event" << d->nextInputEventIndex + 1 << "of" << d->inputEventCount;
@@ -452,6 +498,25 @@ const int & MidiRouterDevice::noteActivationState(const int& channel, const int&
 const int & MidiRouterDevice::noteActivationTrack(const int& channel, const int& note) const
 {
     return d->noteActivationTrack[channel][note];
+}
+
+int MidiRouterDevice::ccValue(const int& midiChannel, const int& ccControl) const
+{
+    return d->ccValues[std::clamp(midiChannel, 0, 15)][std::clamp(ccControl, 0, 127)];
+}
+
+void MidiRouterDevice::emitCCValueChanges()
+{
+    while (d->ccValueUpdates.readHead->processed == false) {
+        const jack_midi_event_t &event{d->ccValueUpdates.readHead->event};
+        Q_EMIT ccValueChanged(event.buffer[0] & 0xf, event.buffer[1], event.buffer[2]);
+        d->ccValueUpdates.markAsRead();
+    }
+}
+
+void MidiRouterDevice::forceSetCCValue(const int& midiChannel, const int& ccControl, const int& ccValue) const
+{
+    d->ccValues[std::clamp(midiChannel, 0, 15)][std::clamp(ccControl, 0, 127)] = std::clamp(ccValue, 0, 127);
 }
 
 void MidiRouterDevice::setVisible(const bool& visible)
