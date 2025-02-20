@@ -597,7 +597,7 @@ void SequenceModel::load(const QString &fileName, bool importOnly)
         setActivePattern(obj.value("activePattern").toInt());
         setBpm(obj.value("bpm").toInt());
     }
-    // This ensures that when we're first creating ourselves a sequence, we end up with some models in it
+    // This ensures that once we're done loading patterns from storage, we have a full complement (whether there were any loaded or not)
     if (d->patternModels.count() < PATTERN_COUNT) {
         for (int i = d->patternModels.count(); i < PATTERN_COUNT; ++i) {
             const int intermediaryChannelIndex = i / ZynthboxSlotCount;
