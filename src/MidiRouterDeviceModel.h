@@ -36,6 +36,10 @@ class MidiRouterDeviceModel : public QAbstractListModel {
      * \brief A list of objects containing information about all available midi in ports
      */
     Q_PROPERTY(QVariantList midiInSources READ midiInSources NOTIFY midiInSourcesChanged)
+    /**
+     * \brief A list of objects containing information about all available midi output ports
+     */
+    Q_PROPERTY(QVariantList midiOutSources READ midiOutSources NOTIFY midiOutSourcesChanged)
 public:
     explicit MidiRouterDeviceModel(jack_client_t *jackClient, MidiRouter *parent = nullptr);
     ~MidiRouterDeviceModel() override;
@@ -66,6 +70,9 @@ public:
     QVariantList midiInSources() const;
     Q_INVOKABLE int midiInSourceIndex(const QString &value) const;
     Q_SIGNAL void midiInSourcesChanged();
+    QVariantList midiOutSources() const;
+    Q_INVOKABLE int midiOutSourceIndex(const QString &value) const;
+    Q_SIGNAL void midiOutSourcesChanged();
 private:
     std::unique_ptr<MidiRouterDeviceModelPrivate> d;
 };

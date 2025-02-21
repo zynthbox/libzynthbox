@@ -77,6 +77,7 @@ public:
 
     QVariantList audioInSources;
     QVariantList midiInSources;
+    QVariantList midiOutSources;
 
     void deviceDataChanged(MidiRouterDevice *device, MidiRouterDeviceModel::Roles role) {
         const int deviceIndex = devices.indexOf(device);
@@ -170,6 +171,11 @@ void MidiRouterDeviceModel::addDevice(MidiRouterDevice* device)
             {"value", "external:" + device->hardwareId()},
             {"device", QVariant::fromValue<QObject*>(device)}
         };
+        d->midiOutSources << QVariantMap{
+            {"text", device->humanReadableName()},
+            {"value", "external:" + device->hardwareId()},
+            {"device", QVariant::fromValue<QObject*>(device)}
+        };
         connect(device, &MidiRouterDevice::humanReadableNameChanged, this, [this, device](){
             for (int index = 0; index < d->midiInSources.length(); ++index) {
                 if (d->midiInSources[index].toMap()["device"].value<QObject*>() == device) {
@@ -180,6 +186,7 @@ void MidiRouterDeviceModel::addDevice(MidiRouterDevice* device)
         });
     }
     Q_EMIT midiInSourcesChanged();
+    Q_EMIT midiOutSourcesChanged();
 }
 
 void MidiRouterDeviceModel::removeDevice(MidiRouterDevice* device)
@@ -195,6 +202,10 @@ void MidiRouterDeviceModel::removeDevice(MidiRouterDevice* device)
                 if (d->midiInSources[index].toMap()["device"].value<QObject*>() == device) {
                     d->midiInSources.removeAt(index);
                     Q_EMIT midiInSourcesChanged();
+                }
+                if (d->midiOutSources[index].toMap()["device"].value<QObject*>() == device) {
+                    d->midiOutSources.removeAt(index);
+                    Q_EMIT midiOutSourcesChanged();
                 }
             }
             break;
@@ -298,6 +309,22 @@ int MidiRouterDeviceModel::midiInSourceIndex(const QString& value) const
 {
     for (int index = 0; index < d->midiInSources.length(); ++index) {
         QVariantMap element = d->midiInSources[index].toMap();
+        if (element["value"] == value) {
+            return index;
+        }
+    }
+    return -1;
+}
+
+QVariantList MidiRouterDeviceModel::midiOutSources() const
+{
+    return d->midiOutSources;
+}
+
+int MidiRouterDeviceModel::midiOutSourceIndex(const QString& value) const
+{
+    for (int index = 0; index < d->midiOutSources.length(); ++index) {
+        QVariantMap element = d->midiOutSources[index].toMap();
         if (element["value"] == value) {
             return index;
         }
