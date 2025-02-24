@@ -6,6 +6,7 @@
 #include <QPolygon>
 #include <QRect>
 
+#include <AdjectiveNoun.h>
 #include <AppImageHelper.h>
 #include <AudioLevels.h>
 #include <AudioTagHelper.h>
