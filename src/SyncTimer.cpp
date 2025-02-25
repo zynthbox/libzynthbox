@@ -105,9 +105,12 @@ using frame_clock = std::conditional_t<
 #define NanosecondsPerMillisecond 1000000
 #define BeatSubdivisions 96
 #define BeatsPerBar 4
-// The midi beat clock signal should go out at a rate of 24ppqn - at the current beat subdivision of 96, that makes it every 3rd tick of our step ring
-#define TicksPerMidiBeatClock 3
+// The midi beat clock signal should go out at a rate of 24ppqn - at the current beat subdivision of 96, that makes it every 4th tick of our step ring
+#define TicksPerMidiBeatClock 4
 static const jack_midi_data_t jackMidiBeatMessage{0xF8};
+static const jack_midi_data_t jackMidiStartMessage{0xFA};
+// static const jack_midi_data_t jackMidiContinueMessage{0xFB};
+static const jack_midi_data_t jackMidiStopMessage{0xFC};
 // There's BeatsPerBar * BeatSubdivisions ticks per bar
 #define TicksPerBar 384
 
@@ -572,8 +575,6 @@ public:
                 // first run for this playback session, let's do a touch of setup
                 jackNextPlaybackPosition = current_usecs;
                 jackBar = jackBeat = jackBeatTick = jackTick = 0;
-                // We need to send out a beat clock tick on the first position as well, so let's make sure we do that
-                jackMidiBeatTick = TicksPerMidiBeatClock - 1;
                 transportManager->restartTransport();
                 mostRecentlyUpdatedJackPlayheadForTimerTick = 0;
                 for (int step = 0; step < StepRingCount; ++step) {
@@ -623,12 +624,16 @@ public:
             // Assign this step's position, so we can retrieve it if any consumers need that (such as for live recording reasons)
             mostRecentlyUpdatedJackPlayheadForTimerTick = jackPlayhead;
             jackPlayheadForTimerTick[jackPlayhead % StepRingCount] = current_frames + relativePosition;
-            // Make sure there's a midi beat pulse going out if one is needed
-            ++jackMidiBeatTick;
-            bool writeBeatTick{false};
+            // Make sure there's a midi beat pulse going out if one is needed (that is, on tick 0)
             if (jackMidiBeatTick == TicksPerMidiBeatClock) {
                 jackMidiBeatTick = 0;
             }
+            const bool writeBeatTick{jackMidiBeatTick == 0};
+            if (writeBeatTick) {
+                // Write beat clock onto the master control track, for distribution everywhere...
+                jack_midi_event_write(bufferSequencer[ZynthboxTrackCount], relativePosition, &jackMidiBeatMessage, 1);
+            }
+            ++jackMidiBeatTick;
 
             // In case we're cycling through stuff we've already played, let's just... not do anything with that
             // Basically that just means nobody else has attempted to do stuff with the step since we last played it
@@ -636,9 +641,6 @@ public:
                 stepData->played = true;
                 // First, let's get the midi messages sent out
                 for (int track = 0; track < ZynthboxTrackCount + 1; ++track) {
-                    if (writeBeatTick) {
-                        jack_midi_event_write(bufferSequencer[track], relativePosition, &jackMidiBeatMessage, 1);
-                    }
                     auto handleJuceMessage = [this, firstAvailableFrame, nframes, &errorCode, track, relativePosition](const juce::MidiMessageMetadata &juceMessage, void** buffer) -> bool {
                         if (firstAvailableFrame >= nframes) {
                             qWarning() << Q_FUNC_INFO << "First available frame is in the future - that's a problem";
@@ -689,13 +691,18 @@ public:
                     Q_EMIT q->timerCommand(command);
                     switch (command->operation) {
                         case TimerCommand::StartPlaybackOperation:
-                            startPlayback(command, firstAvailableFrame + current_frames, stepNextPlaybackPosition);
-                            // Start playback does in fact happen here, but anything scheduled for step 0 of playback will happen on /next/ step.
-                            // Consequently, we'll need to kind of lie a little bit, since playback actually will start next step, not this step.
-                            jackPlayheadAtStart = firstAvailableFrame + current_frames + (thisStepSubbeatLengthInMicroseconds / microsecondsPerFrame);
+                            if (startPlayback(command, firstAvailableFrame + current_frames, stepNextPlaybackPosition)) {
+                                // Start playback does in fact happen here, but anything scheduled for step 0 of playback will happen on /next/ step.
+                                // Consequently, we'll need to kind of lie a little bit, since playback actually will start next step, not this step.
+                                jackPlayheadAtStart = firstAvailableFrame + current_frames + (thisStepSubbeatLengthInMicroseconds / microsecondsPerFrame);
+                                jack_midi_event_write(bufferSequencer[ZynthboxTrackCount], relativePosition, &jackMidiStartMessage, 1); // Tell any listener that playback should begin
+                                jackMidiBeatTick = 0; // Ensure a tick heads out on the next loop, so that playback actually starts on anything that is expected to
+                            }
                             break;
                         case TimerCommand::StopPlaybackOperation:
-                            stopPlayback(firstAvailableFrame + current_frames, stepNextPlaybackPosition);
+                            if (stopPlayback(firstAvailableFrame + current_frames, stepNextPlaybackPosition)) {
+                                jack_midi_event_write(bufferSequencer[ZynthboxTrackCount], relativePosition, &jackMidiStopMessage, 1);
+                            }
                             break;
                         case TimerCommand::StartClipLoopOperation:
                         case TimerCommand::StopClipLoopOperation:
@@ -874,7 +881,7 @@ public:
         return 0;
     }
 
-    void startPlayback(TimerCommand *command, jack_nframes_t currentFrame, jack_time_t currentFrameUsecs) {
+    bool startPlayback(TimerCommand *command, jack_nframes_t currentFrame, jack_time_t currentFrameUsecs) {
         if (timerThread->isPaused()) {
             SegmentHandler *handler = SegmentHandler::instance();
             if (command->parameter == 1) {
@@ -901,13 +908,16 @@ public:
                 q->start();
                 qDebug() << Q_FUNC_INFO << "Metronome and playback started";
             }
+            return true;
         } else {
             qDebug() << Q_FUNC_INFO << "Attempted to start playback without playback running";
+            return false;
         }
     }
-    void stopPlayback(jack_nframes_t currentFrame, jack_time_t currentFrameUsecs) {
+    bool stopPlayback(jack_nframes_t currentFrame, jack_time_t currentFrameUsecs) {
         if (timerThread->isPaused()) {
             qDebug() << Q_FUNC_INFO << "Attempted to stop playback when playback was already stopped";
+            return false;
         } else {
             PlayGridManager *pgm = PlayGridManager::instance();
             if (SegmentHandler::instance()->songMode()) {
@@ -952,6 +962,7 @@ public:
                 }
                 qDebug() << Q_FUNC_INFO << "Metronome and playback stopped";
             }
+            return true;
         }
     }
 
