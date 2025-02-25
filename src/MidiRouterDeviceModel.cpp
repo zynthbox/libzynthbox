@@ -203,6 +203,8 @@ void MidiRouterDeviceModel::removeDevice(MidiRouterDevice* device)
                     d->midiInSources.removeAt(index);
                     Q_EMIT midiInSourcesChanged();
                 }
+            }
+            for (int index = 0; index < d->midiOutSources.length(); ++index) {
                 if (d->midiOutSources[index].toMap()["device"].value<QObject*>() == device) {
                     d->midiOutSources.removeAt(index);
                     Q_EMIT midiOutSourcesChanged();
