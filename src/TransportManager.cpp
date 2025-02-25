@@ -26,7 +26,7 @@ public:
 
     uint32_t mostRecentEventCount{0};
     jack_time_t nextMidiTick{0};
-    jack_midi_data_t midiTickEvent{0xf9};
+    const jack_midi_data_t midiTickEvent{0xf9};
     int process(jack_nframes_t nframes) {
         jack_nframes_t current_frames;
         jack_time_t current_usecs;
