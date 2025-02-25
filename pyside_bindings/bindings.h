@@ -34,6 +34,7 @@
 #include <Plugin.h>
 #include <ProcessWrapper.h>
 #include <SequenceModel.h>
+#include <SndHelper.h>
 #include <SyncTimer.h>
 #include <ZynthboxBasics.h>
 

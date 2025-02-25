@@ -4,57 +4,58 @@ add_library(libzynthbox SHARED)
 
 target_sources(libzynthbox
     PRIVATE
+        AdjectiveNoun.cpp
         AppImageHelper.cpp
-        Plugin.cpp
+        AudioLevels.cpp
+        AudioLevelsChannel.cpp
+        AudioTagHelper.cpp
+        Chords.cpp
         ClipAudioSource.cpp
-        ClipAudioSourceSliceSettings.cpp
-        ClipAudioSourceSubvoiceSettings.cpp
         ClipAudioSourcePositionsModel.cpp
         ClipAudioSourcePositionsModelEntry.cpp
-        MidiRouter.cpp
-        MidiRouterDevice.cpp
-        MidiRouterFilter.cpp
-        MidiRouterFilterEntry.cpp
-        MidiRouterFilterEntryRewriter.cpp
-        SamplerSynth.cpp
-        SamplerSynthSound.cpp
-        SamplerSynthVoice.cpp
-        SyncTimer.cpp
-        TransportManager.cpp
+        ClipAudioSourceSliceSettings.cpp
+        ClipAudioSourceSubvoiceSettings.cpp
+        CUIAHelper.cpp
+        DiskWriter.cpp
+        FilterProxy.cpp
+        GainHandler.cpp
         Helper.cpp
-        QPainterContext.cpp
-        WaveFormItem.cpp
         JackConnectionHandler.cpp
         JackPassthrough.cpp
         JackPassthroughAnalyser.cpp
         JackPassthroughCompressor.cpp
-        JackPassthroughVisualiserItem.cpp
         JackPassthroughFilter.cpp
+        JackPassthroughVisualiserItem.cpp
         JackThreadAffinitySetter.cpp
-        AudioLevels.cpp
-        AudioLevelsChannel.cpp
-        DiskWriter.cpp
-        FilterProxy.cpp
+        KeyScales.cpp
+        MidiRecorder.cpp
+        MidiRouter.cpp
+        MidiRouterDevice.cpp
+        MidiRouterDeviceModel.cpp
+        MidiRouterFilter.cpp
+        MidiRouterFilterEntry.cpp
+        MidiRouterFilterEntryRewriter.cpp
         Note.cpp
         NotesModel.cpp
-        MidiRecorder.cpp
         PatternImageProvider.cpp
         PatternModel.cpp
+        PlayfieldManager.cpp
         PlayGrid.cpp
         PlayGridManager.cpp
+        Plugin.cpp
+        ProcessWrapper.cpp
+        QPainterContext.cpp
+        SamplerSynth.cpp
+        SamplerSynthSound.cpp
+        SamplerSynthVoice.cpp
         SegmentHandler.cpp
         SequenceModel.cpp
         SettingsContainer.cpp
-        PlayfieldManager.cpp
-        MidiRouterDeviceModel.cpp
-        KeyScales.cpp
-        Chords.cpp
-        ProcessWrapper.cpp
-        AdjectiveNoun.cpp
-        CUIAHelper.cpp
+        SndHelper.cpp
+        SyncTimer.cpp
+        TransportManager.cpp
+        WaveFormItem.cpp
         ZynthboxBasics.cpp
-        GainHandler.cpp
-        AudioTagHelper.cpp
 )
 target_compile_definitions(libzynthbox
     PUBLIC
