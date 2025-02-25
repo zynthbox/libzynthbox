@@ -390,7 +390,9 @@ void MidiRouterDevice::writeEventToOutputActual(jack_midi_event_t& event)
     const bool isNoteMessage = event.buffer[0] > 0x7F && event.buffer[0] < 0xA0;
     if (isNoteMessage == false || d->acceptsNote[event.buffer[1]]) {
         const jack_midi_data_t untransposedNote{event.buffer[1]};
-        event.buffer[1] = std::clamp(int(event.buffer[1]) + d->transposeAmount, 0, 127);
+        if (isNoteMessage) {
+            event.buffer[1] = std::clamp(int(event.buffer[1]) + d->transposeAmount, 0, 127);
+        }
         int errorCode = jack_midi_event_write(d->outputBuffer, event.time, event.buffer, event.size);
         if (errorCode == -EINVAL) {
             // If the error invalid happens, we should likely assume the event was out of order for whatever reason, and just schedule it at the same time as the most recently scheduled event
