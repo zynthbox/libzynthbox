@@ -14,7 +14,7 @@ AudioTagHelper::~AudioTagHelper()
 {
 }
 
-QMap<QString, QString> AudioTagHelper::readWavMetadata(const QString& filepath)
+const QMap<QString, QString> AudioTagHelper::readWavMetadata(const QString& filepath)
 {
     QMap<QString, QString> result;
     TagLib::RIFF::WAV::File tagLibFile(qPrintable(filepath));

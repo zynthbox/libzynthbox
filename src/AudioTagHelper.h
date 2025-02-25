@@ -23,7 +23,7 @@ public:
      * @param filepath The file that you wish to read all the RIFF tags from
      * @return A map of the tags (key is the tag name, value is the tag's value), or an empty hash if the file could not be accessed, or did not exist
      */
-    QMap<QString, QString> readWavMetadata(const QString &filepath);
+    const QMap<QString, QString> readWavMetadata(const QString &filepath);
 
     /**
      * \brief Write the given set of tags to the file at the given location
