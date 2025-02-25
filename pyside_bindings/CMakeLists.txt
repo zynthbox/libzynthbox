@@ -30,7 +30,7 @@ set(generated_sources
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/plugin_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/processwrapper_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/sequencemodel_wrapper.cpp
-        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/sndhelper_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/sndlibraryhelper_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/synctimer_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/zynthboxbasics_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/zynthbox_module_wrapper.cpp

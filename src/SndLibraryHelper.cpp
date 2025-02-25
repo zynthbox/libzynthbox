@@ -1,4 +1,4 @@
-#include "SndHelper.h"
+#include "SndLibraryHelper.h"
 #include "AudioTagHelper.h"
 #include <QDir>
 #include <QDebug>
@@ -22,13 +22,12 @@
  */
 #define IFDEBUG(x) if(DEBUG) x
 
-SndHelper::SndHelper(QObject *parent) : QObject(parent)
+SndLibraryHelper::SndLibraryHelper(QObject *parent) : QObject(parent)
 {
 }
 
-void SndHelper::serializeTo(const QString sourceDir, const QString outputFile)
+void SndLibraryHelper::serializeTo(const QString sourceDir, const QString outputFile)
 {
-    IFDEBUG(qDebug() << "Start Serialize");
     QDir dir(sourceDir);
     if (dir.exists()) {
         QFileInfoList fileList = dir.entryInfoList(QStringList() << "*.snd", QDir::Files);
@@ -65,5 +64,4 @@ void SndHelper::serializeTo(const QString sourceDir, const QString outputFile)
             }
         }
     }
-    IFDEBUG(qDebug() << "End Serialize");
 }
