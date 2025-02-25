@@ -49,9 +49,11 @@ struct SketchpadTrackInfo {
     MidiRouterDevice *routerDevice{nullptr};
     MidiRouterDevice *syncTimerSequencer{nullptr};
     MidiRouterDevice *syncTimerController{nullptr};
+    MidiRouterDevice *externalDevice{nullptr}; // If set, send to this device instead of whatever enabled devices we've got (updated based on externalDeviceID whenever the hardware setup changes)
     QString portName;
     int trackIndex{-1};
     int externalChannel{-1};
+    QString externalDeviceID; // Used to determine whether an external device should be assigned
     MidiRouter::RoutingDestination destination{MidiRouter::ZynthianDestination};
     int currentlySelectedPatternIndex{-1};
     PatternModel *currentlySelectedPattern{nullptr};
@@ -462,8 +464,17 @@ public:
                                             externalOutListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, externalChannel, sketchpadTrack, eventDevice);
                                             if (!(inputDeviceIsHardware == false && eventChannel == masterChannel)) {
                                                 // Since we've already done this above for master-channel events, don't write them again
-                                                for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
-                                                    device->writeEventToOutput(*event, eventDeviceFilterEntry, externalChannel);
+                                                if (currentTrack->externalDevice) {
+                                                    if (eventDevice != currentTrack->externalDevice) {
+                                                        currentTrack->externalDevice->writeEventToOutput(*event, eventDeviceFilterEntry, externalChannel);
+                                                        // qDebug() << Q_FUNC_INFO << "Writing event to extenal device" << currentTrack->externalDevice << event->buffer[0] << event->buffer[1] << event->buffer[2] << "from device" << eventDevice;
+                                                    }
+                                                } else {
+                                                    for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
+                                                        if (eventDevice != device) {
+                                                            device->writeEventToOutput(*event, eventDeviceFilterEntry, externalChannel);
+                                                        }
+                                                    }
                                                 }
                                             }
                                             currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
@@ -497,7 +508,9 @@ public:
                             } else if (isTimecode && device->sendTimecode() == false) {
                                 continue;
                             }
-                            device->writeEventToOutput(*event, eventDeviceFilterEntry);
+                            if (device != eventDevice) {
+                                device->writeEventToOutput(*event, eventDeviceFilterEntry);
+                            }
                         }
                         if (isBeatClock || isTimecode) {
                             for (MidiRouterDevice *zynthianDevice : qAsConst(zynthianOutputs)) {
@@ -709,6 +722,12 @@ public:
                 }
                 // And then we should get rid of it, because it'd all done and stuff (doing this through a timer delay, to make sure we don't end up deleting a device part way through a process run loop)
                 QTimer::singleShot(1000, oldDevice, &QObject::deleteLater);
+                // Technically this happens implicitly below, but... let's just be sure, avoid something weird happening in the future
+                for (SketchpadTrackInfo *trackInfo : qAsConst(sketchpadTracks)) {
+                    if (trackInfo->externalDevice == oldDevice) {
+                        trackInfo->externalDevice = nullptr;
+                    }
+                }
             }
         }
         devices = connectedDevices;
@@ -729,6 +748,27 @@ public:
                 enabledOutputs << device;
             }
         }
+        // Run through each SketchpadTrack in turn and ensure externalDevice matches the given ID
+        for (SketchpadTrackInfo *trackInfo : qAsConst(sketchpadTracks)) {
+            MidiRouterDevice *trackExternalDevice{nullptr};
+            for (MidiRouterDevice *device : qAsConst(devices)) {
+                if ((trackInfo->externalDeviceID == "" && device->hardwareId() == "ttymidi:MIDI") || trackInfo->externalDeviceID == QString("external:%1").arg(device->hardwareId())) {
+                    trackExternalDevice = device;
+                    break;
+                }
+            }
+            if (trackInfo->externalDevice != trackExternalDevice) {
+                trackInfo->externalDevice = trackExternalDevice;
+                // qDebug() << Q_FUNC_INFO << "Set" << trackInfo->trackIndex << "external device to" << trackExternalDevice << "based on" << trackInfo->externalDeviceID;
+            }
+        }
+        for (SketchpadTrackInfo *trackInfo : qAsConst(sketchpadTracks)) {
+            // If a track has a device set as its external target, then we want to make sure that it's in the enabled outputs
+            // list (or we'll end up not sending timecodes etc to it, if the device is set to receive that)
+            if (trackInfo->externalDevice && enabledOutputs.contains(trackInfo->externalDevice) == false) {
+                enabledOutputs << trackInfo->externalDevice;
+            }
+        }
         allEnabledInputs = enabledInputs;
         allEnabledOutputs = enabledOutputs;
         for (int i = 0; i < ZynthboxTrackCount + 1; ++i) {
@@ -745,9 +785,9 @@ public:
         if (track->destination == MidiRouter::ZynthianDestination) {
             // Nothing to be done to unhook things here
         } else if (track->destination == MidiRouter::ExternalDestination) {
-            for (const QString &externalPort : enabledMidiOutPorts) {
-                disconnectPorts(portName, externalPort);
-            }
+            // for (const QString &externalPort : enabledMidiOutPorts) {
+                // disconnectPorts(portName, externalPort);
+            // }
         }
     }
 
@@ -756,9 +796,9 @@ public:
         if (track->destination == MidiRouter::ZynthianDestination) {
             // Nothing to be done to hook things up here
         } else if (track->destination == MidiRouter::ExternalDestination) {
-            for (const QString &externalPort : enabledMidiOutPorts) {
-                connectPorts(portName, externalPort);
-            }
+            // for (const QString &externalPort : enabledMidiOutPorts) {
+                // connectPorts(portName, externalPort);
+            // }
         }
     }
 
@@ -1087,6 +1127,25 @@ void MidiRouter::setSkechpadTrackDestination(int sketchpadTrack, MidiRouter::Rou
             d->disconnectFromOutputs(trackInfo);
             trackInfo->destination = destination;
             d->connectToOutputs(trackInfo);
+        }
+    }
+}
+
+void MidiRouter::setSketchpadTrackExternalDeviceTarget(const ZynthboxBasics::Track& sketchpadTrack, const QString& externalDeviceID)
+{
+    if (sketchpadTrack == ZynthboxBasics::AnyTrack || sketchpadTrack == ZynthboxBasics::NoTrack) {
+        // Do nothing in this case (as per documentation), as these don't really make any sense
+    } else {
+        SketchpadTrackInfo *trackInfo{nullptr};
+        if (sketchpadTrack == ZynthboxBasics::CurrentTrack) {
+            trackInfo = d->sketchpadTracks[d->currentSketchpadTrack];
+        } else {
+            trackInfo = d->sketchpadTracks[sketchpadTrack];
+        }
+        if (trackInfo->externalDeviceID != externalDeviceID) {
+            trackInfo->externalDeviceID = externalDeviceID;
+            // Ensure we're up to date
+            d->refreshDevices();
         }
     }
 }

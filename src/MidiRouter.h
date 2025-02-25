@@ -88,6 +88,13 @@ public:
      * @param externalChannel If set, messages on the given channel will be translated to end up on this channel instead
      */
     void setSkechpadTrackDestination(int sketchpadTrack, RoutingDestination destination, int externalChannel = -1);
+    /**
+     * \brief Sets the hardware ID of the external device this track should target in external mode
+     * If this is set to nothing, we will simply use the defaults (that is, any enabled hardware output)
+     * @param sketchpadTrack The sketchpad track (AnyTrack and NoTrack are not valid and will result in the function call being ignored)
+     * @param externalDeviceID The ID of the targeted device, including the "external:" prefix
+     */
+    void setSketchpadTrackExternalDeviceTarget(const ZynthboxBasics::Track &sketchpadTrack, const QString &externalDeviceID);
 
     /**
      * \brief The track which should receive midi events on the given track
