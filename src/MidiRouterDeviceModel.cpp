@@ -171,22 +171,32 @@ void MidiRouterDeviceModel::addDevice(MidiRouterDevice* device)
             {"value", "external:" + device->hardwareId()},
             {"device", QVariant::fromValue<QObject*>(device)}
         };
+        QMetaObject::invokeMethod(this, "midiInSourcesChanged", Qt::QueuedConnection);
         d->midiOutSources << QVariantMap{
             {"text", device->humanReadableName()},
             {"value", "external:" + device->hardwareId()},
             {"device", QVariant::fromValue<QObject*>(device)}
         };
+        QMetaObject::invokeMethod(this, "midiOutSourcesChanged", Qt::QueuedConnection);
         connect(device, &MidiRouterDevice::humanReadableNameChanged, this, [this, device](){
             for (int index = 0; index < d->midiInSources.length(); ++index) {
                 if (d->midiInSources[index].toMap()["device"].value<QObject*>() == device) {
-                    d->midiInSources.removeAt(index);
+                    auto theSource = d->midiInSources.takeAt(index).toMap();
+                    theSource["text"] = device->humanReadableName();
+                    d->midiInSources << theSource;
                     Q_EMIT midiInSourcesChanged();
                 }
             }
-        });
+            for (int index = 0; index < d->midiOutSources.length(); ++index) {
+                if (d->midiOutSources[index].toMap()["device"].value<QObject*>() == device) {
+                    auto theSource = d->midiOutSources.takeAt(index).toMap();
+                    theSource["text"] = device->humanReadableName();
+                    d->midiOutSources << theSource;
+                    Q_EMIT midiOutSourcesChanged();
+                }
+            }
+        }, Qt::QueuedConnection);
     }
-    Q_EMIT midiInSourcesChanged();
-    Q_EMIT midiOutSourcesChanged();
 }
 
 void MidiRouterDeviceModel::removeDevice(MidiRouterDevice* device)
@@ -201,13 +211,13 @@ void MidiRouterDeviceModel::removeDevice(MidiRouterDevice* device)
             for (int index = 0; index < d->midiInSources.length(); ++index) {
                 if (d->midiInSources[index].toMap()["device"].value<QObject*>() == device) {
                     d->midiInSources.removeAt(index);
-                    Q_EMIT midiInSourcesChanged();
+                    QMetaObject::invokeMethod(this, "midiInSourcesChanged", Qt::QueuedConnection);
                 }
             }
             for (int index = 0; index < d->midiOutSources.length(); ++index) {
                 if (d->midiOutSources[index].toMap()["device"].value<QObject*>() == device) {
                     d->midiOutSources.removeAt(index);
-                    Q_EMIT midiOutSourcesChanged();
+                    QMetaObject::invokeMethod(this, "midiOutSourcesChanged", Qt::QueuedConnection);
                 }
             }
             break;
