@@ -23,6 +23,29 @@ public:
     SndLibraryHelper(SndLibraryHelper const&) = delete;
     void operator=(SndLibraryHelper const&) = delete;
 
+    /**
+     * @brief serializeTo Create a json statistics file with metadata of the snd files from sourceDir
+     * @param sourceDir Parent directory from where snd files will be searched
+     * @param outputFile Path to json file where the statistics json will be written to
+     *
+     * The output json will be in the following format :
+     * <code>
+     * {
+     *   "<category>": {
+     *     "count": "<number of files in category>"
+     *     "files": {
+     *       "<file name>": {
+     *         "synthSlotsData": [<array of 5 strings>],
+     *         "sampleSlotsData": [<array of 5 strings>],
+     *         "fxSlotsData": [<array of 5 strings>]
+     *       },
+     *       ...
+     *     }
+     *   },
+     *   ...
+     * }
+     * </code>
+     */
     Q_INVOKABLE void serializeTo(const QString sourceDir, const QString outputFile);
 private:
     explicit SndLibraryHelper(QObject *parent = nullptr);
