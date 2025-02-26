@@ -195,8 +195,8 @@ public:
     SegmentHandler *q{nullptr};
     SegmentHandlerPrivate* d{nullptr};
     QObject *zlSong{nullptr};
-    QObject *zlSketchesModel{nullptr};
-    QObject *zLSelectedSketch{nullptr};
+    QObject *zlArrangementsModel{nullptr};
+    QObject *zLSelectedArrangement{nullptr};
     QObject *zLSegmentsModel{nullptr};
     QList<QObject*> zlChannels;
 
@@ -209,37 +209,37 @@ public:
             }
             zlSong = newZlSong;
             if (zlSong) {
-                setZLSketchesModel(zlSong->property("sketchesModel").value<QObject*>());
+                setZLArrangementsModel(zlSong->property("arrangementsModel").value<QObject*>());
                 fetchSequenceModels();
             }
             updateChannels();
         }
     }
 
-    void setZLSketchesModel(QObject *newZLSketchesModel) {
-        // qDebug() << Q_FUNC_INFO << "Setting new sketches model:" << newZLSketchesModel;
-        if (zlSketchesModel != newZLSketchesModel) {
-            if (zlSketchesModel) {
-                zlSketchesModel->disconnect(this);
+    void setZLArrangementsModel(QObject *newZLArrangementsModel) {
+        // qDebug() << Q_FUNC_INFO << "Setting new arrangements model:" << newZLArrangementsModel;
+        if (zlArrangementsModel != newZLArrangementsModel) {
+            if (zlArrangementsModel) {
+                zlArrangementsModel->disconnect(this);
             }
-            zlSketchesModel = newZLSketchesModel;
-            if (zlSketchesModel) {
-                connect(zlSketchesModel, SIGNAL(selectedSketchIndexChanged()), this, SLOT(selectedSketchIndexChanged()), Qt::QueuedConnection);
-                selectedSketchIndexChanged();
+            zlArrangementsModel = newZLArrangementsModel;
+            if (zlArrangementsModel) {
+                connect(zlArrangementsModel, SIGNAL(selectedArrangementIndexChanged()), this, SLOT(selectedArrangementIndexChanged()), Qt::QueuedConnection);
+                selectedArrangementIndexChanged();
             }
         }
     }
 
-    void setZLSelectedSketch(QObject *newSelectedSketch) {
-        if (zLSelectedSketch != newSelectedSketch) {
-            if (zLSelectedSketch) {
-                zLSelectedSketch->disconnect(this);
+    void setZLSelectedArrangement(QObject *newSelectedArrangement) {
+        if (zLSelectedArrangement != newSelectedArrangement) {
+            if (zLSelectedArrangement) {
+                zLSelectedArrangement->disconnect(this);
                 setZLSegmentsModel(nullptr);
             }
-            zLSelectedSketch = newSelectedSketch;
-            if (zLSelectedSketch) {
-                connect(zLSelectedSketch, SIGNAL(segmentsModelChanged()), this, SLOT(selectedSegmentModelChanged()));
-                setZLSegmentsModel(zLSelectedSketch->property("segmentsModel").value<QObject*>());
+            zLSelectedArrangement = newSelectedArrangement;
+            if (zLSelectedArrangement) {
+                connect(zLSelectedArrangement, SIGNAL(segmentsModelChanged()), this, SLOT(selectedSegmentModelChanged()));
+                setZLSegmentsModel(zLSelectedArrangement->property("segmentsModel").value<QObject*>());
             }
         }
     }
@@ -270,11 +270,11 @@ public:
         }
     }
 public Q_SLOTS:
-    void selectedSketchIndexChanged() {
-        int sketchIndex = zlSketchesModel->property("selectedSketchIndex").toInt();
-        QObject *sketch{nullptr};
-        QMetaObject::invokeMethod(zlSketchesModel, "getSketch", Qt::DirectConnection, Q_RETURN_ARG(QObject*, sketch), Q_ARG(int, sketchIndex));
-        setZLSelectedSketch(sketch);
+    void selectedArrangementIndexChanged() {
+        int arrangementIndex = zlArrangementsModel->property("selectedArrangementIndex").toInt();
+        QObject *arrangement{nullptr};
+        QMetaObject::invokeMethod(zlArrangementsModel, "getArrangement", Qt::DirectConnection, Q_RETURN_ARG(QObject*, arrangement), Q_ARG(int, arrangementIndex));
+        setZLSelectedArrangement(arrangement);
     }
     void fetchSequenceModels() {
         const QObjectList sequenceModels{d->playGridManager->getSequenceModels()};
@@ -288,7 +288,7 @@ public Q_SLOTS:
         }
     }
     void selectedSegmentModelChanged() {
-        setZLSegmentsModel(zLSelectedSketch->property("segmentsModel").value<QObject*>());
+        setZLSegmentsModel(zLSelectedArrangement->property("segmentsModel").value<QObject*>());
     }
     void updateSegments(qint64 stopAfter) {
         static const QLatin1String sampleLoopedType{"sample-loop"};
