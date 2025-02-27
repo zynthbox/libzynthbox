@@ -13,6 +13,10 @@
 #include <QFile>
 #include <QIODevice>
 #include <QRegularExpression>
+#include <taglib/taglib.h>
+#include <taglib/wavfile.h>
+#include <taglib/tpropertymap.h>
+#include <taglib/tstring.h>
 
 /**
  * When DEBUG is set to true it will print a set of logs
@@ -45,17 +49,19 @@ void SndLibraryHelper::serializeTo(const QString sourceDir, const QString output
         IFDEBUG(qDebug() << "START Serialization");
         for (const QFileInfo &file: fileList) {
             IFDEBUG(qDebug() << QString("Extracting metadata from file #%1: %2").arg(++i).arg(file.fileName()));
-            const auto metadata = AudioTagHelper::instance()->readWavMetadata(file.filePath());
-            if (metadata.contains("ZYNTHBOX_SOUND_SYNTH_FX_SNAPSHOT") &&
-                metadata.contains("ZYNTHBOX_SOUND_SAMPLE_SNAPSHOT") &&
-                metadata.contains("ZYNTHBOX_SOUND_CATEGORY")
-            ) {
+            // const auto metadata = AudioTagHelper::instance()->readWavMetadata(file.filePath());
+            TagLib::RIFF::WAV::File tagLibFile(qPrintable(file.filePath()));
+            TagLib::PropertyMap tags = tagLibFile.properties();
+            if (tags.contains("ZYNTHBOX_SOUND_SYNTH_FX_SNAPSHOT") &&
+                tags.contains("ZYNTHBOX_SOUND_SAMPLE_SNAPSHOT") &&
+                tags.contains("ZYNTHBOX_SOUND_CATEGORY")
+                ) {
                 QJsonArray synthSlotsData = {"", "", "", "", ""};
                 QJsonArray sampleSlotsData = {"", "", "", "", ""};
                 QJsonArray fxSlotsData = {"", "", "", "", ""};
-                const QString category = metadata["ZYNTHBOX_SOUND_CATEGORY"];
-                const auto synthFxSnapshotJsonObj = QJsonDocument::fromJson(metadata["ZYNTHBOX_SOUND_SYNTH_FX_SNAPSHOT"].toUtf8()).object();
-                const auto sampleSnapshotJsonObj = QJsonDocument::fromJson(metadata["ZYNTHBOX_SOUND_SAMPLE_SNAPSHOT"].toUtf8()).object();
+                const QString category = TStringToQString(tags["ZYNTHBOX_SOUND_CATEGORY"].front());
+                const auto synthFxSnapshotJsonObj = QJsonDocument::fromJson(TStringToQString(tags["ZYNTHBOX_SOUND_SYNTH_FX_SNAPSHOT"].front()).toUtf8()).object();
+                const auto sampleSnapshotJsonObj = QJsonDocument::fromJson(TStringToQString(tags["ZYNTHBOX_SOUND_SAMPLE_SNAPSHOT"].front()).toUtf8()).object();
                 for (auto layerData : synthFxSnapshotJsonObj["layers"].toArray()) {
                     const auto layerDataObj = layerData.toObject();
                     const QString engineType = layerDataObj["engine_type"].toString();
