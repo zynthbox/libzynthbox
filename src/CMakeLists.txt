@@ -51,7 +51,8 @@ target_sources(libzynthbox
         SegmentHandler.cpp
         SequenceModel.cpp
         SettingsContainer.cpp
-        SndLibraryHelper.cpp
+        SndLibrary.cpp
+        SndLibraryModel.cpp
         SyncTimer.cpp
         TransportManager.cpp
         WaveFormItem.cpp

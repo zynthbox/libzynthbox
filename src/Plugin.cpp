@@ -70,7 +70,7 @@
 #include "JackConnectionHandler.h"
 #include "AppImageHelper.h"
 #include "AudioTagHelper.h"
-#include "SndLibraryHelper.h"
+#include "SndLibrary.h"
 
 #include "Plugin.h"
 
@@ -442,12 +442,12 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
         QQmlEngine::setObjectOwnership(audioTagHelper, QQmlEngine::CppOwnership);
         return audioTagHelper;
     });
-    qmlRegisterSingletonType<SndLibraryHelper>(uri, 1, 0, "SndLibraryHelper", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
+    qmlRegisterSingletonType<SndLibrary>(uri, 1, 0, "SndLibrary", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
         Q_UNUSED(engine)
         Q_UNUSED(scriptEngine)
-        SndLibraryHelper *sndLibraryHelper = SndLibraryHelper::instance();
-        QQmlEngine::setObjectOwnership(sndLibraryHelper, QQmlEngine::CppOwnership);
-        return sndLibraryHelper;
+        SndLibrary *sndLibrary = SndLibrary::instance();
+        QQmlEngine::setObjectOwnership(sndLibrary, QQmlEngine::CppOwnership);
+        return sndLibrary;
     });
     qmlRegisterType<WaveFormItem>(uri, 1, 0, "WaveFormItem");
     qmlRegisterType<JackPassthroughVisualiserItem>(uri, 1, 0, "JackPassthroughVisualiserItem");
