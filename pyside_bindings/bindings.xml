@@ -87,7 +87,12 @@
     <object-type name="SequenceModel">
         <enum-type name="Roles" />
     </object-type>
+    <object-type name="SndFile">
+    </object-type>
     <object-type name="SndLibrary">
+    </object-type>
+    <object-type name="SndLibraryModel">
+        <enum-type name="Roles" />
     </object-type>
     <object-type name="NotesModel">
         <enum-type name="Roles" />

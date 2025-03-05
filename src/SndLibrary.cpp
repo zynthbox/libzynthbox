@@ -23,13 +23,20 @@
  */
 #define DEBUG true
 
-/**
- * Use this macro to check if in debug mode
- */
-#define IFDEBUG(x) if(DEBUG) x
-
-SndLibrary::SndLibrary(QObject *parent) : QObject(parent)
+SndLibrary::SndLibrary(QObject *parent)
+    : QObject(parent)
+    , m_soundsModel(new SndLibraryModel(this))
+    , m_soundsByOriginModel(new QSortFilterProxyModel(this))
+    , m_soundsByCategoryModel(new QSortFilterProxyModel(this))
 {
+    m_soundsByOriginModel->setSourceModel(m_soundsModel);
+    m_soundsByOriginModel->setFilterRole(SndLibraryModel::OriginRole);
+    m_soundsByOriginModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+    m_soundsByOriginModel->setFilterFixedString("my-sounds");
+
+    m_soundsByCategoryModel->setSourceModel(m_soundsByOriginModel);
+    m_soundsByCategoryModel->setFilterRole(SndLibraryModel::CategoryRole);
+    m_soundsByCategoryModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
 }
 
 void SndLibrary::serializeTo(const QString sourceDir, const QString outputFile)
@@ -45,9 +52,9 @@ void SndLibrary::serializeTo(const QString sourceDir, const QString outputFile)
         const QFileInfoList fileList = dir.entryInfoList(QStringList() << "*.snd", QDir::Files);
         QMap<QString, QJsonObject> categoryFilesMap;
         int i = 0;
-        IFDEBUG(qDebug() << "START Serialization");
+        if(DEBUG) qDebug() << "START Serialization";
         for (const QFileInfo &file: fileList) {
-            IFDEBUG(qDebug() << QString("Extracting metadata from file #%1: %2").arg(++i).arg(file.fileName()));
+            if(DEBUG) qDebug() << QString("Extracting metadata from file #%1: %2").arg(++i).arg(file.fileName());
             // const auto metadata = AudioTagHelper::instance()->readWavMetadata(file.filePath());
             TagLib::RIFF::WAV::File tagLibFile(qPrintable(file.filePath()));
             TagLib::PropertyMap tags = tagLibFile.properties();
@@ -95,10 +102,10 @@ void SndLibrary::serializeTo(const QString sourceDir, const QString outputFile)
                 sndObj["sampleSlotsData"] = sampleSlotsData;
                 sndObj["fxSlotsData"] = fxSlotsData;
                 categoryFilesMap[category].insert(file.fileName(), sndObj);
-                // IFDEBUG(qDebug() << QString("  Category : | %1 |").arg(category));
-                // IFDEBUG(qDebug() << QString("  Synth    : | %1 |").arg(synthSlotsData.join(" | ")));
-                // IFDEBUG(qDebug() << QString("  Sample   : | %1 |").arg(sampleSlotsData.join(" | ")));
-                // IFDEBUG(qDebug() << QString("  Fx       : | %1 |").arg(fxSlotsData.join(" | ")));
+                // if(DEBUG) qDebug() << QString("  Category : | %1 |").arg(category);
+                // if(DEBUG) qDebug() << QString("  Synth    : | %1 |").arg(synthSlotsData.join(" | "));
+                // if(DEBUG) qDebug() << QString("  Sample   : | %1 |").arg(sampleSlotsData.join(" | "));
+                // if(DEBUG) qDebug() << QString("  Fx       : | %1 |").arg(fxSlotsData.join(" | "));
             }
         }
         QFile file(outputFile);
@@ -114,6 +121,35 @@ void SndLibrary::serializeTo(const QString sourceDir, const QString outputFile)
         file.open(QFile::WriteOnly);
         file.write(result.toJson(QJsonDocument::Compact));
         file.close();
-        IFDEBUG(qDebug() << "END Serialization");
+        if(DEBUG) qDebug() << "END Serialization";
+    }
+}
+
+QSortFilterProxyModel* SndLibrary::model()
+{
+    return m_soundsByCategoryModel;
+}
+
+SndLibraryModel *SndLibrary::sourceModel()
+{
+    return m_soundsModel;
+}
+
+void SndLibrary::refresh()
+{
+    m_soundsModel->refresh();
+}
+
+void SndLibrary::setOriginFilter(QString origin)
+{
+    m_soundsByOriginModel->setFilterFixedString(origin);
+}
+
+void SndLibrary::setCategoryFilter(QString category)
+{
+    if (category == "*") {
+        m_soundsByCategoryModel->setFilterRegExp("");
+    } else {
+        m_soundsByCategoryModel->setFilterFixedString(category);
     }
 }

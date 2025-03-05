@@ -35,6 +35,7 @@
 #include <ProcessWrapper.h>
 #include <SequenceModel.h>
 #include <SndLibrary.h>
+#include <SndLibraryModel.h>
 #include <SyncTimer.h>
 #include <ZynthboxBasics.h>
 

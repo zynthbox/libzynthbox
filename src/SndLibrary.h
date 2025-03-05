@@ -1,8 +1,10 @@
 #pragma once
 
+#include "SndLibraryModel.h"
 #include <QCoreApplication>
 #include <QObject>
 #include <QString>
+#include <QSortFilterProxyModel>
 
 
 /**
@@ -47,6 +49,15 @@ public:
      * </code>
      */
     Q_INVOKABLE void serializeTo(const QString sourceDir, const QString outputFile);
+
+    Q_INVOKABLE QSortFilterProxyModel* model();
+    Q_INVOKABLE SndLibraryModel* sourceModel();
+    Q_INVOKABLE void refresh();
+    Q_INVOKABLE void setOriginFilter(QString origin);
+    Q_INVOKABLE void setCategoryFilter(QString category);
 private:
     explicit SndLibrary(QObject *parent = nullptr);
+    SndLibraryModel *m_soundsModel{nullptr};
+    QSortFilterProxyModel *m_soundsByOriginModel{nullptr};
+    QSortFilterProxyModel *m_soundsByCategoryModel{nullptr};
 };
