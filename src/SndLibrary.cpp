@@ -125,16 +125,6 @@ void SndLibrary::serializeTo(const QString sourceDir, const QString outputFile)
     }
 }
 
-QSortFilterProxyModel* SndLibrary::model()
-{
-    return m_soundsByCategoryModel;
-}
-
-SndLibraryModel *SndLibrary::sourceModel()
-{
-    return m_soundsModel;
-}
-
 void SndLibrary::refresh()
 {
     m_soundsModel->refresh();

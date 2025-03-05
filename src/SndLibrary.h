@@ -13,6 +13,8 @@
 class SndLibrary : public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(QObject* model MEMBER m_soundsByCategoryModel CONSTANT)
+
 public:
     static SndLibrary* instance() {
         static SndLibrary* instance{nullptr};
@@ -50,8 +52,6 @@ public:
      */
     Q_INVOKABLE void serializeTo(const QString sourceDir, const QString outputFile);
 
-    Q_INVOKABLE QSortFilterProxyModel* model();
-    Q_INVOKABLE SndLibraryModel* sourceModel();
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void setOriginFilter(QString origin);
     Q_INVOKABLE void setCategoryFilter(QString category);
