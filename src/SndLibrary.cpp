@@ -56,6 +56,10 @@ SndLibrary::SndLibrary(QObject *parent)
     val = pluginsFile.readAll();
     pluginsFile.close();
     m_pluginsObj = QJsonDocument::fromJson(val.toUtf8()).object();
+
+    connect(m_soundsModel, &SndLibraryModel::categoryFilesCountChanged, this, [=](QString category, QString origin, int count) {
+        Q_EMIT categoryFilesCountChanged(category, origin, count);
+    }, Qt::QueuedConnection);
 }
 
 void SndLibrary::serializeTo(const QString sourceDir, const QString origin, const QString outputFile)

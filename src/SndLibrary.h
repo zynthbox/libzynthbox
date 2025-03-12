@@ -74,6 +74,15 @@ public:
      */
     Q_INVOKABLE SndFileInfo* extractSndFileInfo(const QString filepath, const QString origin);
 
+signals:
+    /**
+     * @brief categoryFilesCountChanged Emitted when files get added/removed for a specific category
+     * @param category Category whose file count changed
+     * @param origin Origin of the category whose file count changed
+     * @param count Number of files in category
+     */
+    void categoryFilesCountChanged(QString category, QString origin, int count);
+
 private:
     explicit SndLibrary(QObject *parent = nullptr);
     SndLibraryModel *m_soundsModel{nullptr};

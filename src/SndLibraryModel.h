@@ -41,6 +41,16 @@ public:
      * @return Returns if the action was successful
      */
     Q_INVOKABLE bool removeSndFileInfo(SndFileInfo *sound);
+
+signals:
+    /**
+     * @brief categoryFilesCountChanged Emitted when files get added/removed for a specific category
+     * @param category Category whose file count changed
+     * @param origin Origin of the category whose file count changed
+     * @param count Number of files in category
+     */
+    void categoryFilesCountChanged(QString category, QString origin, int count);
+
 private:
     QList<SndFileInfo*> m_sounds;
 };
