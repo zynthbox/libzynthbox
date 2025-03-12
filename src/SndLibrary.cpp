@@ -114,6 +114,7 @@ void SndLibrary::setOriginFilter(const QString origin)
 {
     m_soundsByOriginModel->setFilterFixedString(origin);
     m_soundsByNameModel->setFilterRegExp("");
+    m_soundsByNameModel->sort(0);
 }
 
 void SndLibrary::setCategoryFilter(const QString category)
@@ -124,6 +125,7 @@ void SndLibrary::setCategoryFilter(const QString category)
         m_soundsByCategoryModel->setFilterFixedString(category);
     }
     m_soundsByNameModel->setFilterRegExp("");
+    m_soundsByNameModel->sort(0);
 }
 
 void SndLibrary::addSndFiles(const QStringList sndFilepaths, const QString origin, const QString statsFilepath)
@@ -166,7 +168,8 @@ void SndLibrary::addSndFiles(const QStringList sndFilepaths, const QString origi
             sndObj["fxSlotsData"] = QJsonArray::fromStringList(soundInfo->m_fxSlotsData);
             categoryFilesMap[soundInfo->m_category].insert(soundInfo->m_name, sndObj);
         }
-    }
+    }    
+    m_soundsByNameModel->sort(0);
 
     // Write updated json to stats file
     if (file.open(QFile::WriteOnly | QFile::Truncate | QFile::Text)) {
