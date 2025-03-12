@@ -5,6 +5,7 @@
 #include <QObject>
 #include <QString>
 #include <QSortFilterProxyModel>
+#include <QJsonObject>
 
 
 /**
@@ -13,7 +14,7 @@
 class SndLibrary : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(QObject* model MEMBER m_soundsByCategoryModel CONSTANT)
+    Q_PROPERTY(QObject* model MEMBER m_soundsByNameModel CONSTANT)
 
 public:
     static SndLibrary* instance() {
@@ -50,14 +51,34 @@ public:
      * }
      * </code>
      */
-    Q_INVOKABLE void serializeTo(const QString sourceDir, const QString outputFile);
-
+    Q_INVOKABLE void serializeTo(const QString sourceDir, const QString origin, const QString outputFile);
     Q_INVOKABLE void refresh();
-    Q_INVOKABLE void setOriginFilter(QString origin);
-    Q_INVOKABLE void setCategoryFilter(QString category);
+    Q_INVOKABLE void setOriginFilter(const QString origin);
+    Q_INVOKABLE void setCategoryFilter(const QString category);
+    /**
+     * @brief addSndFile Extract information from the snd file and add the snd file info to statistics file and model
+     * @param filepath Path of the snd file to be added
+     * @return Returns if the action was successful
+     */
+    Q_INVOKABLE void addSndFiles(const QStringList sndFilepaths, const QString origin, const QString statsFilepath);
+    /**
+     * @brief removeSndFile Remove the snd file info from statistics file and model
+     * @param filepath Path of the snd file to be removed
+     * @return Returns if the action was successful
+     */
+    Q_INVOKABLE bool removeSndFile(const QString filepath, const QString origin);
+    /**
+     * @brief extractSndFileInfo Read metadata from a snd file and extract the information to a SndFileInfo
+     * @param filepath Path to the snd file
+     * @return Returns a SndFileInfo* object if it was correctly able to extract the information otherwise returns a nullptr
+     */
+    Q_INVOKABLE SndFileInfo* extractSndFileInfo(const QString filepath, const QString origin);
+
 private:
     explicit SndLibrary(QObject *parent = nullptr);
     SndLibraryModel *m_soundsModel{nullptr};
     QSortFilterProxyModel *m_soundsByOriginModel{nullptr};
     QSortFilterProxyModel *m_soundsByCategoryModel{nullptr};
+    QSortFilterProxyModel *m_soundsByNameModel{nullptr};
+    QJsonObject m_pluginsObj;
 };

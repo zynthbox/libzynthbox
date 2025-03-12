@@ -1,52 +1,12 @@
 #pragma once
 
+#include "SndFileInfo.h"
+
 #include <QAbstractListModel>
 #include <QByteArray>
 #include <QHash>
 #include <QObject>
 #include <QList>
-#include <QStringList>
-
-
-class SndFile : public QObject {
-    Q_OBJECT
-    Q_PROPERTY(QString name MEMBER m_name CONSTANT)
-    Q_PROPERTY(QString origin MEMBER m_origin CONSTANT)
-    Q_PROPERTY(QString category MEMBER m_category CONSTANT)
-    Q_PROPERTY(QStringList synthSlotsData MEMBER m_synthSlotsData CONSTANT)
-    Q_PROPERTY(QStringList sampleSlotsData MEMBER m_sampleSlotsData CONSTANT)
-    Q_PROPERTY(QStringList fxSlotsData MEMBER m_fxSlotsData CONSTANT)
-
-public:
-    explicit SndFile(
-        QString name,
-        QString origin,
-        QString category,
-        QStringList synthSlotsData,
-        QStringList sampleSlotsData,
-        QStringList fxSlotsData,
-        QObject *parent = nullptr
-    )
-        : QObject(parent)
-        , m_name(name)
-        , m_origin(origin)
-        , m_category(category)
-        , m_synthSlotsData(synthSlotsData)
-        , m_sampleSlotsData(sampleSlotsData)
-        , m_fxSlotsData(fxSlotsData)
-    {}
-
-    QString m_name;
-    /**
-     * @brief origin Store the origin of the sound file
-     * origin can be either `my-sounds` or `community-sounds`
-     */
-    QString m_origin;
-    QString m_category;
-    QStringList m_synthSlotsData;
-    QStringList m_sampleSlotsData;
-    QStringList m_fxSlotsData;
-};
 
 
 class SndLibraryModel : public QAbstractListModel
@@ -68,7 +28,19 @@ public:
     /**
      * @brief Re-read the statistics file and re-populate the sounds model
      */
-    void refresh();
+    Q_INVOKABLE void refresh();
+    /**
+     * @brief addSndFileInfo Add a snd file info to model
+     * @param sound SndFileInfo instance that will be inserted into the model
+     * @return Returns if the action was successful
+     */
+    Q_INVOKABLE bool addSndFileInfo(SndFileInfo *sound);
+    /**
+     * @brief removeSndFileInfo Remove a snd file info from model
+     * @param sound SndFileInfo instance that will be removed from the model
+     * @return Returns if the action was successful
+     */
+    Q_INVOKABLE bool removeSndFileInfo(SndFileInfo *sound);
 private:
-    QList<SndFile*> m_sounds;
+    QList<SndFileInfo*> m_sounds;
 };

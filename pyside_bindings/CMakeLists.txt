@@ -30,7 +30,7 @@ set(generated_sources
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/plugin_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/processwrapper_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/sequencemodel_wrapper.cpp
-        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/sndfile_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/sndfileinfo_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/sndlibrary_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/sndlibrarymodel_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/synctimer_wrapper.cpp

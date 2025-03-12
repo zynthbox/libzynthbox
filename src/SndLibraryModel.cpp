@@ -1,4 +1,6 @@
+#include "SndLibrary.h"
 #include "SndLibraryModel.h"
+
 #include <QFile>
 #include <QDebug>
 #include <QtGlobal>
@@ -12,7 +14,9 @@
  * When DEBUG is set to true it will print a set of logs
  * which is not meant for production builds
  */
+#ifndef DEBUG
 #define DEBUG true
+#endif
 
 SndLibraryModel::SndLibraryModel(QObject *parent)
     : QAbstractListModel(parent)
@@ -43,19 +47,19 @@ QVariant SndLibraryModel::data(const QModelIndex &index, int role) const
 {
     QVariant result;
     if (checkIndex(index)) {
-        SndFile *sndFile = m_sounds.at(index.row());
+        SndFileInfo *sndFileInfo = m_sounds.at(index.row());
         switch (role) {
             case NameRole:
-                result.setValue(sndFile->m_name);
+                result.setValue(sndFileInfo->m_name);
                 break;
             case OriginRole:
-                result.setValue(sndFile->m_origin);
+                result.setValue(sndFileInfo->m_origin);
                 break;
             case CategoryRole:
-                result.setValue(sndFile->m_category);
+                result.setValue(sndFileInfo->m_category);
                 break;
             case SoundRole:
-                result.setValue(sndFile);
+                result.setValue(sndFileInfo);
                 break;
             default:
                 break;
@@ -82,7 +86,7 @@ void SndLibraryModel::refresh()
                 beginInsertRows(index(m_sounds.size()).parent(), m_sounds.size(), m_sounds.size() + categoryFilesCount - 1);
                 for (auto categorySoundEntry = categoryFilesObj.constBegin(); categorySoundEntry != categoryFilesObj.constEnd(); ++categorySoundEntry) {
                     if(DEBUG) qDebug() << "Reading sound details for" << categorySoundEntry.key();
-                    m_sounds.append(new SndFile(
+                    m_sounds.append(new SndFileInfo(
                         categorySoundEntry.key(),
                         origin,
                         category,
@@ -98,4 +102,18 @@ void SndLibraryModel::refresh()
             qCritical() << "Cannot open statistics file" << file.fileName();
         }
     }
+}
+
+bool SndLibraryModel::addSndFileInfo(SndFileInfo *sound)
+{
+    beginInsertRows(index(m_sounds.size()).parent(), m_sounds.size(), m_sounds.size());
+    m_sounds.append(sound);
+    endInsertRows();
+    return true;
+}
+
+bool SndLibraryModel::removeSndFileInfo(SndFileInfo *sound)
+{
+    Q_UNUSED(sound);
+    return false;
 }

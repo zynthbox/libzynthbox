@@ -51,6 +51,7 @@ target_sources(libzynthbox
         SegmentHandler.cpp
         SequenceModel.cpp
         SettingsContainer.cpp
+        SndFileInfo.h
         SndLibrary.cpp
         SndLibraryModel.cpp
         SyncTimer.cpp

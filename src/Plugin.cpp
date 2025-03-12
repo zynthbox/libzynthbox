@@ -331,7 +331,7 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
     qmlRegisterUncreatableType<MidiRouterFilter>(uri, 1, 0, "MidiRouterFilter", "Accessible through MidiRouterDevice (in turn accessible through MidiRouterDeviceModel)");
     qmlRegisterUncreatableType<MidiRouterFilterEntry>(uri, 1, 0, "MidiRouterFilterEntry", "Accessible through MidiRouterFilter");
     qmlRegisterUncreatableType<MidiRouterFilterEntryRewriter>(uri, 1, 0, "MidiRouterFilterEntryRewriter", "Accessible through MidiRouterFilterEntry");
-    qmlRegisterUncreatableType<SndFile>(uri, 1, 0, "SndFile", "Accessible through SndLibraryModel");
+    qmlRegisterUncreatableType<SndFileInfo>(uri, 1, 0, "SndFileInfo", "Accessible through SndLibraryModel");
     qmlRegisterUncreatableType<SndLibraryModel>(uri, 1, 0, "SndLibraryModel", "Accessible through SndLibrary::model and SndLibrary::sourceModel");
     qmlRegisterType<GainHandler>(uri, 1, 0, "GainHandler");
     qmlRegisterType<PlayGrid>(uri, 1, 0, "PlayGrid");

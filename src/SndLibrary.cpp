@@ -21,87 +21,63 @@
  * When DEBUG is set to true it will print a set of logs
  * which is not meant for production builds
  */
+#ifndef DEBUG
 #define DEBUG true
+#endif
 
 SndLibrary::SndLibrary(QObject *parent)
     : QObject(parent)
     , m_soundsModel(new SndLibraryModel(this))
     , m_soundsByOriginModel(new QSortFilterProxyModel(this))
     , m_soundsByCategoryModel(new QSortFilterProxyModel(this))
+    , m_soundsByNameModel(new QSortFilterProxyModel(this))
 {
     m_soundsByOriginModel->setSourceModel(m_soundsModel);
     m_soundsByOriginModel->setFilterRole(SndLibraryModel::OriginRole);
     m_soundsByOriginModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
     m_soundsByOriginModel->setFilterFixedString("my-sounds");
+    m_soundsByOriginModel->setDynamicSortFilter(false);
 
     m_soundsByCategoryModel->setSourceModel(m_soundsByOriginModel);
     m_soundsByCategoryModel->setFilterRole(SndLibraryModel::CategoryRole);
     m_soundsByCategoryModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+    m_soundsByCategoryModel->setDynamicSortFilter(false);
+
+    m_soundsByNameModel->setSourceModel(m_soundsByCategoryModel);
+    m_soundsByNameModel->setFilterRole(SndLibraryModel::NameRole);
+    m_soundsByNameModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+    m_soundsByNameModel->setSortRole(SndLibraryModel::NameRole);
+    m_soundsByNameModel->setSortCaseSensitivity(Qt::CaseInsensitive);
+    m_soundsByNameModel->setDynamicSortFilter(false);
+
+    QString val;
+    QFile pluginsFile("/zynthian/zynthbox-qml/config/plugins.json");
+    pluginsFile.open(QIODevice::ReadOnly | QIODevice::Text);
+    val = pluginsFile.readAll();
+    pluginsFile.close();
+    m_pluginsObj = QJsonDocument::fromJson(val.toUtf8()).object();
 }
 
-void SndLibrary::serializeTo(const QString sourceDir, const QString outputFile)
+void SndLibrary::serializeTo(const QString sourceDir, const QString origin, const QString outputFile)
 {
     QDir dir(sourceDir);
     if (dir.exists()) {
-        QString val;
-        QFile pluginsFile("/zynthian/zynthbox-qml/config/plugins.json");
-        pluginsFile.open(QIODevice::ReadOnly | QIODevice::Text);
-        val = pluginsFile.readAll();
-        pluginsFile.close();
-        const auto pluginsObj = QJsonDocument::fromJson(val.toUtf8()).object();
         const QFileInfoList fileList = dir.entryInfoList(QStringList() << "*.snd", QDir::Files);
         QMap<QString, QJsonObject> categoryFilesMap;
         int i = 0;
         if(DEBUG) qDebug() << "START Serialization";
         for (const QFileInfo &file: fileList) {
             if(DEBUG) qDebug() << QString("Extracting metadata from file #%1: %2").arg(++i).arg(file.fileName());
-            // const auto metadata = AudioTagHelper::instance()->readWavMetadata(file.filePath());
-            TagLib::RIFF::WAV::File tagLibFile(qPrintable(file.filePath()));
-            TagLib::PropertyMap tags = tagLibFile.properties();
-            if (tags.contains("ZYNTHBOX_SOUND_SYNTH_FX_SNAPSHOT") &&
-                tags.contains("ZYNTHBOX_SOUND_SAMPLE_SNAPSHOT") &&
-                tags.contains("ZYNTHBOX_SOUND_CATEGORY")
-                ) {
-                QJsonArray synthSlotsData = {"", "", "", "", ""};
-                QJsonArray sampleSlotsData = {"", "", "", "", ""};
-                QJsonArray fxSlotsData = {"", "", "", "", ""};
-                const QString category = TStringToQString(tags["ZYNTHBOX_SOUND_CATEGORY"].front());
-                const auto synthFxSnapshotJsonObj = QJsonDocument::fromJson(TStringToQString(tags["ZYNTHBOX_SOUND_SYNTH_FX_SNAPSHOT"].front()).toUtf8()).object();
-                const auto sampleSnapshotJsonObj = QJsonDocument::fromJson(TStringToQString(tags["ZYNTHBOX_SOUND_SAMPLE_SNAPSHOT"].front()).toUtf8()).object();
-                for (auto layerData : synthFxSnapshotJsonObj["layers"].toArray()) {
-                    const auto layerDataObj = layerData.toObject();
-                    const QString engineType = layerDataObj["engine_type"].toString();
-                    QString engineName = layerDataObj["engine_name"].toString().split("/").last();
-                    if (!engineName.isEmpty()) {
-                        /**
-                         *  A regex to filter out plugin name variables like `${ZBP_00158_name}`
-                         *  The regex matches the format `${`, captures the plugin id `ZBP_\\d*` and matches the plugin name variable `_name}`
-                         */
-                        const QRegularExpression pluginIdNameRegex("\\$\\{(ZBP_\\d*)_name\\}");
-                        // Find out the plugin id from engine name if any
-                        const QRegularExpressionMatch match = pluginIdNameRegex.match(engineName);
-                        // Replace the variable with actual plugin name
-                        if (match.hasMatch()) {
-                            engineName.replace(pluginIdNameRegex, pluginsObj[match.captured(1)].toObject()["name"].toString());
-                        }
-                    }
-                    if (engineType == "MIDI Synth") {
-                        synthSlotsData[layerDataObj["slot_index"].toInt()] = QString("%1 > %2").arg(engineName).arg(layerDataObj["preset_name"].toString());
-                    } else if (engineType == "Audio Effect") {
-                        fxSlotsData[layerDataObj["slot_index"].toInt()] = QString("%1 > %2").arg(engineName).arg(layerDataObj["preset_name"].toString());
-                    }
-                }
-                for (int i = 0; i < sampleSnapshotJsonObj.keys().length(); ++i) {
-                    sampleSlotsData[i] = sampleSnapshotJsonObj[QString("%1").arg(i)].toObject()["filename"].toString();
-                }
-                if (!categoryFilesMap.contains(category)) {
-                    categoryFilesMap[category] = QJsonObject();
+            SndFileInfo *soundInfo = extractSndFileInfo(file.filePath(), origin);
+            if (soundInfo != nullptr) {
+                if (!categoryFilesMap.contains(soundInfo->m_category)) {
+                    categoryFilesMap[soundInfo->m_category] = QJsonObject();
                 }
                 QJsonObject sndObj;
-                sndObj["synthSlotsData"] = synthSlotsData;
-                sndObj["sampleSlotsData"] = sampleSlotsData;
-                sndObj["fxSlotsData"] = fxSlotsData;
-                categoryFilesMap[category].insert(file.fileName(), sndObj);
+                sndObj["synthSlotsData"] = QJsonArray::fromStringList(soundInfo->m_synthSlotsData);
+                sndObj["sampleSlotsData"] = QJsonArray::fromStringList(soundInfo->m_sampleSlotsData);
+                sndObj["fxSlotsData"] = QJsonArray::fromStringList(soundInfo->m_fxSlotsData);
+                categoryFilesMap[soundInfo->m_category].insert(file.fileName(), sndObj);
                 // if(DEBUG) qDebug() << QString("  Category : | %1 |").arg(category);
                 // if(DEBUG) qDebug() << QString("  Synth    : | %1 |").arg(synthSlotsData.join(" | "));
                 // if(DEBUG) qDebug() << QString("  Sample   : | %1 |").arg(sampleSlotsData.join(" | "));
@@ -130,16 +106,132 @@ void SndLibrary::refresh()
     m_soundsModel->refresh();
 }
 
-void SndLibrary::setOriginFilter(QString origin)
+void SndLibrary::setOriginFilter(const QString origin)
 {
     m_soundsByOriginModel->setFilterFixedString(origin);
+    m_soundsByNameModel->setFilterRegExp("");
 }
 
-void SndLibrary::setCategoryFilter(QString category)
+void SndLibrary::setCategoryFilter(const QString category)
 {
     if (category == "*") {
         m_soundsByCategoryModel->setFilterRegExp("");
     } else {
         m_soundsByCategoryModel->setFilterFixedString(category);
     }
+    m_soundsByNameModel->setFilterRegExp("");
+}
+
+void SndLibrary::addSndFiles(const QStringList sndFilepaths, const QString origin, const QString statsFilepath)
+{
+    QFile file(statsFilepath);
+    QJsonObject resultObj;
+    QMap<QString, QJsonObject> categoryFilesMap;
+
+    // Read statistics file if exists otherwise create empty object
+    if (file.exists()) {
+        if (file.open(QFile::ReadOnly | QFile::Text)) {
+            resultObj = QJsonDocument::fromJson(file.readAll()).object();
+            file.close();
+        } else {
+            qCritical() << "Cannot open statistics file" << file.fileName();
+        }
+    }
+
+    // Extract sound information from all snd files and add them to model
+    for (auto sndFilepath : sndFilepaths) {
+        if(DEBUG) qDebug() << "Extracting sound information from" << sndFilepath;
+        SndFileInfo *soundInfo = extractSndFileInfo(sndFilepath, origin);
+        if (!categoryFilesMap.contains(soundInfo->m_category)) {
+            if(DEBUG) qDebug() << "categoryFilesMap do not have entry for category" << soundInfo->m_category;
+            if (resultObj.contains(soundInfo->m_category)) {
+                if(DEBUG) qDebug() << "  Copying category from statsFile";
+                // If stats file already has a category entry, copy it and add new files to that category
+                categoryFilesMap[soundInfo->m_category] = resultObj[soundInfo->m_category].toObject()["files"].toObject();
+            } else {
+                if(DEBUG) qDebug() << "  Creating empty category";
+                // If stats do not have the category entry, create new empty object
+                categoryFilesMap[soundInfo->m_category] = QJsonObject();
+            }
+        }
+        if (soundInfo != nullptr) {
+            m_soundsModel->addSndFileInfo(soundInfo);
+            QJsonObject sndObj;
+            sndObj["synthSlotsData"] = QJsonArray::fromStringList(soundInfo->m_synthSlotsData);
+            sndObj["sampleSlotsData"] = QJsonArray::fromStringList(soundInfo->m_sampleSlotsData);
+            sndObj["fxSlotsData"] = QJsonArray::fromStringList(soundInfo->m_fxSlotsData);
+            categoryFilesMap[soundInfo->m_category].insert(soundInfo->m_name, sndObj);
+        }
+    }
+
+    // Write updated json to stats file
+    if (file.open(QFile::WriteOnly | QFile::Truncate | QFile::Text)) {
+        for (auto key : categoryFilesMap.keys()) {
+            auto categoryFiles = categoryFilesMap.value(key);
+            QJsonObject categoryObj;
+            categoryObj["count"] = categoryFiles.count();
+            categoryObj["files"] = categoryFiles;
+            resultObj[key] = categoryObj;
+        }
+        const QJsonDocument result(resultObj);
+        file.write(result.toJson(QJsonDocument::Compact));
+        file.close();
+    }
+}
+
+bool SndLibrary::removeSndFile(const QString filepath, const QString origin)
+{
+    Q_UNUSED(filepath);
+    Q_UNUSED(origin);
+    return false;
+}
+
+SndFileInfo* SndLibrary::extractSndFileInfo(const QString filepath, const QString origin)
+{
+    const QFileInfo sourceFileInfo(filepath);
+    SndFileInfo* soundInfo{nullptr};
+
+    // const auto metadata = AudioTagHelper::instance()->readWavMetadata(file.filePath());
+    TagLib::RIFF::WAV::File tagLibFile(qPrintable(filepath));
+    TagLib::PropertyMap tags = tagLibFile.properties();
+    if (tags.contains("ZYNTHBOX_SOUND_SYNTH_FX_SNAPSHOT") &&
+        tags.contains("ZYNTHBOX_SOUND_SAMPLE_SNAPSHOT") &&
+        tags.contains("ZYNTHBOX_SOUND_CATEGORY")
+        ) {
+        QStringList synthSlotsData = {"", "", "", "", ""};
+        QStringList sampleSlotsData = {"", "", "", "", ""};
+        QStringList fxSlotsData = {"", "", "", "", ""};
+        const QString category = TStringToQString(tags["ZYNTHBOX_SOUND_CATEGORY"].front());
+        const auto synthFxSnapshotJsonObj = QJsonDocument::fromJson(TStringToQString(tags["ZYNTHBOX_SOUND_SYNTH_FX_SNAPSHOT"].front()).toUtf8()).object();
+        const auto sampleSnapshotJsonObj = QJsonDocument::fromJson(TStringToQString(tags["ZYNTHBOX_SOUND_SAMPLE_SNAPSHOT"].front()).toUtf8()).object();
+        for (auto layerData : synthFxSnapshotJsonObj["layers"].toArray()) {
+            const auto layerDataObj = layerData.toObject();
+            const QString engineType = layerDataObj["engine_type"].toString();
+            QString engineName = layerDataObj["engine_name"].toString().split("/").last();
+            if (!engineName.isEmpty()) {
+                /**
+                 *  A regex to filter out plugin name variables like `${ZBP_00158_name}`
+                 *  The regex matches the format `${`, captures the plugin id `ZBP_\\d*` and matches the plugin name variable `_name}`
+                 */
+                const QRegularExpression pluginIdNameRegex("\\$\\{(ZBP_\\d*)_name\\}");
+                // Find out the plugin id from engine name if any
+                const QRegularExpressionMatch match = pluginIdNameRegex.match(engineName);
+                // Replace the variable with actual plugin name
+                if (match.hasMatch()) {
+                    engineName.replace(pluginIdNameRegex, m_pluginsObj[match.captured(1)].toObject()["name"].toString());
+                }
+            }
+            if (engineType == "MIDI Synth") {
+                synthSlotsData[layerDataObj["slot_index"].toInt()] = QString("%1 > %2").arg(engineName).arg(layerDataObj["preset_name"].toString());
+            } else if (engineType == "Audio Effect") {
+                fxSlotsData[layerDataObj["slot_index"].toInt()] = QString("%1 > %2").arg(engineName).arg(layerDataObj["preset_name"].toString());
+            }
+        }
+        for (int i = 0; i < sampleSnapshotJsonObj.keys().length(); ++i) {
+            sampleSlotsData[i] = sampleSnapshotJsonObj[QString("%1").arg(i)].toObject()["filename"].toString();
+        }
+        soundInfo = new SndFileInfo(sourceFileInfo.fileName(), origin, category, synthSlotsData, sampleSlotsData, fxSlotsData, this);
+    }
+
+    return soundInfo;
 }
