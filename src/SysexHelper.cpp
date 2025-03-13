@@ -230,15 +230,31 @@ void SysexHelper::process(void* outputBuffer) const
 {
     // Write all the messages written to the output ring by calling send() to the given output buffer
     while (d->outputRing.readHead->processed == false) {
+        // qDebug() << Q_FUNC_INFO << "There is an unposted outgoing sysex message, let's post that" << d->outputRing.readHead->message << "into" << outputBuffer;
         if (d->outputRing.readHead->message) {
             const juce::MidiMessageMetadata &juceMessage{d->outputRing.readHead->message->juceMessage()};
+            // qDebug() << Q_FUNC_INFO << "The juce message has" << juceMessage.numBytes << "bytes and describes itself as" << juceMessage.getMessage().getDescription().toRawUTF8();
             int errorCode = jack_midi_event_write(outputBuffer, 0,
                 const_cast<jack_midi_data_t*>(juceMessage.data), // this might seems odd, but it's really only because juce's internal store is const here, and the data types are otherwise the same
                 size_t(juceMessage.numBytes) // this changes signedness, but from a lesser space (int) to a larger one (unsigned long)
             );
             if (errorCode == -ENOBUFS) {
                 // Then we have run out of space, and need to try again later. Assume sysex must be in order, and wait until the next round
+                // qDebug() << Q_FUNC_INFO << "We have apparently run out of buffer space, and will need to wait for the next round...";
                 break; // We explicitly do not mark the read head as having been read, which means the above is true
+            } else if (errorCode == -EINVAL) {
+                // This happens when there is either an invalid buffer that we're being asked to write to, or we are asked to write past the end of the buffer's frame size, or we are asked to write before the most recent event's time
+                if (outputBuffer == nullptr) {
+                    qDebug() << Q_FUNC_INFO << "Attempted to write to an null buffer, which will fail badly. We will drop this message.";
+                } else {
+                    qDebug() << Q_FUNC_INFO << "We have apparently been asked to write past the end of the buffer's length (but we are writing to time 0), or there are events in there already that have a later time (but how)?";
+                }
+            } else if (errorCode != 0) {
+                qDebug() << Q_FUNC_INFO << "Some other error, what in the world is it, when we're only supposed (according to the docs) to get -ENOBUFFS, but also get -EINVAL sometimes?" << errorCode;
+            }
+            if (d->outputRing.readHead->message->deleteOnSend()) {
+                d->outputRing.readHead->message->deleteLater();
+                d->outputRing.readHead->message = nullptr;
             }
         }
         d->outputRing.markAsRead();
@@ -247,6 +263,7 @@ void SysexHelper::process(void* outputBuffer) const
 
 void SysexHelper::handleInputEvent(const jack_midi_event_t& currentInputEvent) const
 {
+    // qDebug() << Q_FUNC_INFO << "Received input event, writing to ring";
     juce::MidiBuffer midiBuffer;
     midiBuffer.addEvent(currentInputEvent.buffer, currentInputEvent.size, 0);
     d->incomingEvents.write(midiBuffer);
@@ -254,8 +271,10 @@ void SysexHelper::handleInputEvent(const jack_midi_event_t& currentInputEvent) c
 
 void SysexHelper::handlePostponedEvents()
 {
+    // FIXME Handle chunked inputs (basically, we will need to have instructions from SysexMessage whether it is complete, or we need to keep reading into the same message... and then also have a way to abort the ongoing read... and a way to inform MidiRouterDevice that we are reading sysex... so, ongoingSysexRead field in the protected area for that?)
     // Convert the various incoming events into SysexMessage objects, and announce their existence to anybody who cares
     while (d->incomingEvents.readHead->processed == false) {
+        // qDebug() << Q_FUNC_INFO << "Unprocessed input event found, handling...";
         const juce::MidiBuffer &midiBuffer{d->incomingEvents.readHead->buffer};
         for (const juce::MidiMessageMetadata &message : midiBuffer) {
             if (message.numBytes > 3 && message.data[0] == 0xF0 && message.data[message.numBytes - 1] == 0xF7) {
