@@ -72,6 +72,8 @@
 #include "AudioTagHelper.h"
 #include "SndLibrary.h"
 #include "SndLibraryModel.h"
+#include "SysexHelper.h"
+#include "SysexMessage.h"
 
 #include "Plugin.h"
 
@@ -333,6 +335,8 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
     qmlRegisterUncreatableType<MidiRouterFilterEntryRewriter>(uri, 1, 0, "MidiRouterFilterEntryRewriter", "Accessible through MidiRouterFilterEntry");
     qmlRegisterUncreatableType<SndFileInfo>(uri, 1, 0, "SndFileInfo", "Accessible through SndLibraryModel");
     qmlRegisterUncreatableType<SndLibraryModel>(uri, 1, 0, "SndLibraryModel", "Accessible through SndLibrary::model and SndLibrary::sourceModel");
+    qmlRegisterUncreatableType<SysexHelper>(uri, 1, 0, "SysexHelper", "Each MidiRouterDevice has one of these on their sysexHelper property");
+    qmlRegisterUncreatableType<SysexMessage>(uri, 1, 0, "SysexMessage", "Fetch these using the functions on the object in the sysexHelper property on MidiRouterDevice instances");
     qmlRegisterType<GainHandler>(uri, 1, 0, "GainHandler");
     qmlRegisterType<PlayGrid>(uri, 1, 0, "PlayGrid");
     qmlRegisterType<ProcessWrapper>(uri, 1, 0, "ProcessWrapper");
