@@ -90,6 +90,7 @@ SysexMessage * SysexHelper::createMessage(QVariantList bytes, SysexMessage::Mess
         });
         d->createdMessages << message;
     } else {
+        qDebug() << Q_FUNC_INFO << "Error setting bytes, error was:" << message->errorDescription();
         message->deleteLater();
         message = nullptr;
     }
