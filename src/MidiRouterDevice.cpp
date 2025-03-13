@@ -267,10 +267,6 @@ MidiRouterDevice::MidiRouterDevice(jack_client_t *jackClient, MidiRouter *parent
     DeviceMessageTranslations::load();
     d->jackClient = jackClient;
     setMidiChannelTargetTrack(-1, -1);
-    // As one of the first things, ask the device what sort of device it is
-    SysexMessage *identityRequestMessage{d->sysexHelper->createKnownMessage(SysexHelper::IdentityRequestMessage)};
-    identityRequestMessage->setDeleteOnSend(true);
-    d->sysexHelper->send(identityRequestMessage);
     // Make sure that we save the settings when things change
     QTimer *deviceSettingsSaverThrottle{new QTimer(this)};
     deviceSettingsSaverThrottle->setSingleShot(true);
@@ -316,6 +312,10 @@ void MidiRouterDevice::completeInitialisation()
 {
     d->loadDeviceSettings();
     qobject_cast<MidiRouterDeviceModel*>(d->router->model())->addDevice(this);
+    // As one of the first things, ask the device what sort of device it is
+    SysexMessage *identityRequestMessage{d->sysexHelper->createKnownMessage(SysexHelper::IdentityRequestMessage)};
+    identityRequestMessage->setDeleteOnSend(true);
+    d->sysexHelper->send(identityRequestMessage);
 }
 
 const int &MidiRouterDevice::id() const
