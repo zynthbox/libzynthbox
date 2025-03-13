@@ -169,6 +169,7 @@ public:
     Q_SIGNAL void modelChanged();
 
     Q_INVOKABLE MidiRouterDevice *getSketchpadTrackControllerDevice(const ZynthboxBasics::Track &track) const;
+    Q_INVOKABLE MidiRouterDevice *getSketchpadTrackExternalDevice(const ZynthboxBasics::Track &track) const;
 
     Q_SIGNAL void addedHardwareDevice(const QString &deviceId, const QString &humanReadableName);
     Q_SIGNAL void removedHardwareDevice(const QString &deviceId, const QString &humanReadableName);

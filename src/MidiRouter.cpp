@@ -1114,6 +1114,16 @@ MidiRouterDevice * MidiRouter::getSketchpadTrackControllerDevice(const ZynthboxB
     return d->sketchpadTracks[track]->syncTimerController;
 }
 
+MidiRouterDevice * MidiRouter::getSketchpadTrackExternalDevice(const ZynthboxBasics::Track& track) const
+{
+    if (track == ZynthboxBasics::CurrentTrack || track == ZynthboxBasics::AnyTrack) {
+        return d->sketchpadTracks[d->currentSketchpadTrack]->externalDevice;
+    } else if (track == ZynthboxBasics::NoTrack) {
+        return nullptr;
+    }
+    return d->sketchpadTracks[track]->externalDevice;
+}
+
 void MidiRouter::markAsDone() {
     d->done = true;
 }
