@@ -110,7 +110,9 @@ public:
     int validateByteValue(const QVariant &byte, bool *byteValid, int position = -1) {
         int byteValue{0};
         *byteValid = true;
-        if (byte.type() == QVariant::Int) {
+        // TODO When updating to Qt 6, this all wants to turn into checking against QMetaType::Type instead
+        const QVariant::Type &byteType{byte.type()};
+        if (byteType == QVariant::Int || byteType == QVariant::Double || byteType == QVariant::UInt || byteType == QVariant::LongLong || byteType == QVariant::ULongLong) {
             byteValue = byte.toInt();
             if (byteValue < 0 || byteValue > 127) {
                 errorNumber = -2;
@@ -121,7 +123,7 @@ public:
                 }
                 *byteValid = false;
             }
-        } else if (byte.type() == QVariant::String) {
+        } else if (byteType == QVariant::String) {
             bool ok{false};
             byteValue = byte.toString().toInt(&ok, 16);
             if (ok == false || (byteValue < 0 || byteValue > 127)) {
@@ -144,9 +146,9 @@ public:
         } else {
             errorNumber = -1;
             if (position == -1) {
-                errorDescription = QString("The value is not a valid integer or hexadecimal value (accepted formats are 0x## or ##): %1").arg(byte.toString());
+                errorDescription = QString("The value is not a valid integer or hexadecimal value (accepted formats are 0x## or ##): %1 of data type %2").arg(byte.toString()).arg(byte.typeName());
             } else {
-                errorDescription = QString("The entry at position %1 is not a valid integer or hexadecimal value (accepted formats are 0x## or ##): %2").arg(position).arg(byte.toString());
+                errorDescription = QString("The entry at position %1 is not a valid integer or hexadecimal value (accepted formats are 0x## or ##): %2 of data type %3").arg(position).arg(byte.toString()).arg(byte.typeName());
             }
             *byteValid = false;
         }
