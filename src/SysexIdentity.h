@@ -7,6 +7,10 @@ class SysexIdentityPrivate;
 class SysexIdentity : public QObject {
     Q_OBJECT
     /**
+     * \brief A human-readable general description of this device, for when you just need a quick label for something to identify it
+     */
+    Q_PROPERTY(QString description READ description CONSTANT)
+    /**
      * \brief The one or three bytes which make up the manufacturer code for the device
      * This will be either a single byte (for old manufacturers like Roland with 0x41), or three bytes (for newer manufacturers)
      * For the newer manufacturers, the three bytes will always have a 0 byte as the first (for example Embodme, with 0x00 0x21 0x50)
@@ -50,6 +54,7 @@ public:
     explicit SysexIdentity(const SysexMessage *identityResponse, QObject *parent = nullptr);
     ~SysexIdentity() override;
 
+    QString description() const;
     QVariantList manufacturerId() const;
     QList<int> manufacturerIdRaw() const;
     QString manufacturerName() const;

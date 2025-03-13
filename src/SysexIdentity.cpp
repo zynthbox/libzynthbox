@@ -7,6 +7,7 @@
 class SysexIdentityPrivate {
 public:
     SysexIdentityPrivate() {}
+    QString description{"Device Description Goes Here"};
     QVariantList manufacturerId;
     QList<int> manufacturerIdRaw;
     QString manufacturerName;
@@ -66,6 +67,11 @@ SysexIdentity::SysexIdentity(const SysexMessage* identityResponse, QObject* pare
 SysexIdentity::~SysexIdentity()
 {
     delete d;
+}
+
+QString SysexIdentity::description() const
+{
+    return d->description;
 }
 
 QVariantList SysexIdentity::manufacturerId() const
