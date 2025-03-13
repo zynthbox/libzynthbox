@@ -118,6 +118,11 @@ class MidiRouterDevice : public QObject {
     // END Basic MIDI (and MPE/MIDI Polyphonic Expression) settings
 
     /**
+     * \brief A helper object for dealing with System Exchange message for this device
+     */
+    Q_PROPERTY(QObject* sysexHelper READ sysexHelper CONSTANT)
+
+    /**
      * \brief The filter which gets applied to input events for this device
      */
     Q_PROPERTY(MidiRouterFilter* inputEventFilter READ inputEventFilter CONSTANT)
@@ -221,7 +226,7 @@ public:
     /**
      * \brief Called by MidiRouter during its run function, to ensure a timely, and un-interrupted processing of the events
      */
-    void emitCCValueChanges();
+    void handlePostponedEvents();
     /**
      * \brief Called by SyncTimer to force update the CC value when setting it (to ensure rapid updates work correctly)
      * @note This does not cause the change signal to be emitted (that will happen elsewhere)
@@ -515,6 +520,12 @@ public:
      * \brief A midi ring for writing events to which want to be written out at the start of the next process run
      */
     MidiRing midiOutputRing;
+
+    /**
+     * \brief Returns an object intended to help with managing System Exchange messages for this device
+     * @return The instance of SysexHelper tied to this device
+     */
+    QObject *sysexHelper() const;
 
     /**
      * \brief Called from MidiRouter whenever a cuia event is fired by some device

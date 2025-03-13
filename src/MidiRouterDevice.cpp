@@ -5,6 +5,7 @@
 #include "MidiRouterDeviceModel.h"
 #include "MidiRouterFilter.h"
 #include "MidiRouterFilterEntryRewriter.h"
+#include "SysexHelper.h"
 #include "SyncTimer.h"
 
 #include <QDebug>
@@ -88,6 +89,7 @@ public:
                 ccValues[channel][note] = 0;
             }
         }
+        sysexHelper = new SysexHelper(q);
         inputEventFilter = new MidiRouterFilter(q);
         inputEventFilter->setDirection(MidiRouterFilter::InputDirection);
         outputEventFilter = new MidiRouterFilter(q);
@@ -96,6 +98,7 @@ public:
     MidiRouterDevice *q{nullptr};
     int id{-1};
     MidiRouter *router{nullptr};
+    SysexHelper *sysexHelper{nullptr};
     MidiRouterFilter *inputEventFilter{nullptr};
     MidiRouterFilter *outputEventFilter{nullptr};
     // Use this on any outgoing events, to ensure the event matches the device's master channel setup
@@ -264,6 +267,10 @@ MidiRouterDevice::MidiRouterDevice(jack_client_t *jackClient, MidiRouter *parent
     DeviceMessageTranslations::load();
     d->jackClient = jackClient;
     setMidiChannelTargetTrack(-1, -1);
+    // As one of the first things, ask the device what sort of device it is
+    SysexMessage *identityRequestMessage{d->sysexHelper->createKnownMessage(SysexHelper::IdentityRequestMessage)};
+    identityRequestMessage->setDeleteOnSend(true);
+    d->sysexHelper->send(identityRequestMessage);
     // Make sure that we save the settings when things change
     QTimer *deviceSettingsSaverThrottle{new QTimer(this)};
     deviceSettingsSaverThrottle->setSingleShot(true);
@@ -338,6 +345,8 @@ void MidiRouterDevice::processBegin(const jack_nframes_t &nframes)
         }
         midiOutputRing.markAsRead();
     }
+    // Send out any queued up sysex messages
+    d->sysexHelper->process(d->outputBuffer);
     // Set up the input buffer and fetch the first event (if there are any)
     d->nextInputEventIndex = 0;
     currentInputEvent.size = 0;
@@ -442,6 +451,9 @@ void MidiRouterDevice::nextInputEvent()
                 }
                 d->ccValueUpdates.write(currentInputEvent);
                 d->ccValues[currentInputEvent.buffer[0] & 0xf][currentInputEvent.buffer[1]] = currentInputEvent.buffer[2];
+            } else if (currentInputEvent.buffer[0] == 0xF0) {
+                // This is a sysex message, so pass it to the helper for handling
+                d->sysexHelper->handleInputEvent(currentInputEvent);
             }
             // if (d->type.testFlag(MidiRouterDevice::HardwareDeviceType)) {
             //     qDebug() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Retrieved jack midi event on device" << d->humanReadableName << "with data size" << d->currentInputEvent->size << "at time" << d->currentInputEvent->time << "event" << d->nextInputEventIndex + 1 << "of" << d->inputEventCount;
@@ -507,13 +519,14 @@ int MidiRouterDevice::ccValue(const int& midiChannel, const int& ccControl) cons
     return d->ccValues[std::clamp(midiChannel, 0, 15)][std::clamp(ccControl, 0, 127)];
 }
 
-void MidiRouterDevice::emitCCValueChanges()
+void MidiRouterDevice::handlePostponedEvents()
 {
     while (d->ccValueUpdates.readHead->processed == false) {
         const jack_midi_event_t &event{d->ccValueUpdates.readHead->event};
         Q_EMIT ccValueChanged(event.buffer[0] & 0xf, event.buffer[1], event.buffer[2]);
         d->ccValueUpdates.markAsRead();
     }
+    d->sysexHelper->handlePostponedEvents();
 }
 
 void MidiRouterDevice::forceSetCCValue(const int& midiChannel, const int& ccControl, const int& ccValue) const
@@ -1176,6 +1189,11 @@ bool MidiRouterDevice::loadDeviceSettings(const QString& filePath)
         qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "No such file:" << filePath;
     }
     return result;
+}
+
+QObject * MidiRouterDevice::sysexHelper() const
+{
+    return d->sysexHelper;
 }
 
 void MidiRouterDevice::cuiaEventFeedback(const CUIAHelper::Event &cuiaEvent, const int& /*originId*/, const ZynthboxBasics::Track& track, const ZynthboxBasics::Slot& slot, const int& value)

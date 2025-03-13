@@ -1053,7 +1053,7 @@ void MidiRouter::run() {
                 CUIAHelper::Event event = device->cuiaRing.read(&cuiaOriginId, &cuiaTrack, &cuiaSlot, &cuiaValue);
                 Q_EMIT cuiaEvent(CUIAHelper::instance()->cuiaCommand(event), cuiaOriginId, cuiaTrack, cuiaSlot, cuiaValue);
             }
-            device->emitCCValueChanges();
+            device->handlePostponedEvents();
         }
         Q_EMIT processingLoadChanged();
         msleep(5);

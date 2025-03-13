@@ -55,6 +55,9 @@ target_sources(libzynthbox
         SndLibrary.cpp
         SndLibraryModel.cpp
         SyncTimer.cpp
+        SysexHelper.cpp
+        SysexIdentity.cpp
+        SysexMessage.cpp
         TransportManager.cpp
         WaveFormItem.cpp
         ZynthboxBasics.cpp
