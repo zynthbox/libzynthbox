@@ -84,11 +84,13 @@ SndLibrary::SndLibrary(QObject *parent)
     });
 
     connect(m_soundsModel, &SndLibraryModel::categoryFilesCountChanged, this, [=](QString category, QString origin, int count) {
-        Q_UNUSED(origin);
-        QObject *obj = m_categories.value(category).value<QObject*>();
-        qobject_cast<SndCategoryInfo*>(obj)->setFileCount(count);
-        // Start timer to update all files count
-        m_updateAllFilesCountTimer->start();
+        // TODO : Check what to do with community-sounds
+        if (origin == "my-sounds") {
+            QObject *obj = m_categories.value(category).value<QObject*>();
+            qobject_cast<SndCategoryInfo*>(obj)->setFileCount(count);
+            // Start timer to update all files count
+            m_updateAllFilesCountTimer->start();
+        }
     }, Qt::QueuedConnection);
 
     // Populate sounds model when SndLibrary gets instantiated
@@ -202,10 +204,8 @@ void SndLibrary::addSndFiles(const QStringList sndFilepaths, const QString origi
             sndObj["sampleSlotsData"] = QJsonArray::fromStringList(soundInfo->m_sampleSlotsData);
             sndObj["fxSlotsData"] = QJsonArray::fromStringList(soundInfo->m_fxSlotsData);
             categoryFilesMap[soundInfo->m_category].insert(soundInfo->m_name, sndObj);
-            QObject *categoryObj = m_categories.value(soundInfo->m_category).value<QObject*>();
-            qobject_cast<SndCategoryInfo*>(categoryObj)->setFileCount(categoryFilesMap[soundInfo->m_category].count());
         }
-    }    
+    }
     m_soundsByNameModel->sort(0);
 
     // Write updated json to stats file
@@ -216,6 +216,8 @@ void SndLibrary::addSndFiles(const QStringList sndFilepaths, const QString origi
             categoryObj["count"] = categoryFiles.count();
             categoryObj["files"] = categoryFiles;
             resultObj[key] = categoryObj;
+            QObject *obj = m_categories.value(key).value<QObject*>();
+            qobject_cast<SndCategoryInfo*>(obj)->setFileCount(categoryFiles.count());
         }
         const QJsonDocument result(resultObj);
         file.write(result.toJson(QJsonDocument::Compact));
