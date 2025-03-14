@@ -34,6 +34,7 @@
 #include <Plugin.h>
 #include <ProcessWrapper.h>
 #include <SequenceModel.h>
+#include <SndCategoryInfo.h>
 #include <SndFileInfo.h>
 #include <SndLibrary.h>
 #include <SndLibraryModel.h>

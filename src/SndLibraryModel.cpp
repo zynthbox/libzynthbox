@@ -1,4 +1,3 @@
-#include "SndLibrary.h"
 #include "SndLibraryModel.h"
 
 #include <QFile>
@@ -21,7 +20,6 @@
 SndLibraryModel::SndLibraryModel(QObject *parent)
     : QAbstractListModel(parent)
 {
-    refresh();
 }
 
 QHash<int, QByteArray> SndLibraryModel::roleNames() const
@@ -97,6 +95,7 @@ void SndLibraryModel::refresh()
                     ));
                 }
                 endInsertRows();
+                Q_EMIT categoryFilesCountChanged(category, origin, categoryFilesCount);
             }
         } else {
             qCritical() << "Cannot open statistics file" << file.fileName();

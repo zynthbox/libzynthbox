@@ -70,6 +70,7 @@
 #include "JackConnectionHandler.h"
 #include "AppImageHelper.h"
 #include "AudioTagHelper.h"
+#include "SndCategoryInfo.h"
 #include "SndLibrary.h"
 #include "SndLibraryModel.h"
 #include "SysexHelper.h"
@@ -333,6 +334,7 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
     qmlRegisterUncreatableType<MidiRouterFilter>(uri, 1, 0, "MidiRouterFilter", "Accessible through MidiRouterDevice (in turn accessible through MidiRouterDeviceModel)");
     qmlRegisterUncreatableType<MidiRouterFilterEntry>(uri, 1, 0, "MidiRouterFilterEntry", "Accessible through MidiRouterFilter");
     qmlRegisterUncreatableType<MidiRouterFilterEntryRewriter>(uri, 1, 0, "MidiRouterFilterEntryRewriter", "Accessible through MidiRouterFilterEntry");
+    qmlRegisterUncreatableType<SndCategoryInfo>(uri, 1, 0, "SndCategoryInfo", "Accessible through SndLibrary::categories property");
     qmlRegisterUncreatableType<SndFileInfo>(uri, 1, 0, "SndFileInfo", "Accessible through SndLibraryModel");
     qmlRegisterUncreatableType<SndLibraryModel>(uri, 1, 0, "SndLibraryModel", "Accessible through SndLibrary::model and SndLibrary::sourceModel");
     qmlRegisterUncreatableType<SysexHelper>(uri, 1, 0, "SysexHelper", "Each MidiRouterDevice has one of these on their sysexHelper property");

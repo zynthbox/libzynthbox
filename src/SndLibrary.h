@@ -1,11 +1,19 @@
 #pragma once
 
 #include "SndLibraryModel.h"
+#include "SndCategoryInfo.h"
 #include <QCoreApplication>
 #include <QObject>
 #include <QString>
 #include <QSortFilterProxyModel>
 #include <QJsonObject>
+#include <QVariantList>
+#include <QMap>
+#include <QVariantMap>
+#include <QTimer>
+
+
+class SndLibraryModel;
 
 
 /**
@@ -15,6 +23,7 @@ class SndLibrary : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QObject* model MEMBER m_soundsByNameModel CONSTANT)
+    Q_PROPERTY(QVariantMap categories READ categories CONSTANT)
 
 public:
     static SndLibrary* instance() {
@@ -74,14 +83,7 @@ public:
      */
     Q_INVOKABLE SndFileInfo* extractSndFileInfo(const QString filepath, const QString origin);
 
-signals:
-    /**
-     * @brief categoryFilesCountChanged Emitted when files get added/removed for a specific category
-     * @param category Category whose file count changed
-     * @param origin Origin of the category whose file count changed
-     * @param count Number of files in category
-     */
-    void categoryFilesCountChanged(QString category, QString origin, int count);
+    QVariantMap categories();
 
 private:
     explicit SndLibrary(QObject *parent = nullptr);
@@ -90,4 +92,6 @@ private:
     QSortFilterProxyModel *m_soundsByCategoryModel{nullptr};
     QSortFilterProxyModel *m_soundsByNameModel{nullptr};
     QJsonObject m_pluginsObj;
+    QVariantMap m_categories;
+    QTimer *m_updateAllFilesCountTimer{nullptr};
 };

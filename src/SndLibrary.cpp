@@ -31,6 +31,7 @@ SndLibrary::SndLibrary(QObject *parent)
     , m_soundsByOriginModel(new QSortFilterProxyModel(this))
     , m_soundsByCategoryModel(new QSortFilterProxyModel(this))
     , m_soundsByNameModel(new QSortFilterProxyModel(this))
+    , m_updateAllFilesCountTimer(new QTimer(this))
 {
     m_soundsByOriginModel->setSourceModel(m_soundsModel);
     m_soundsByOriginModel->setFilterRole(SndLibraryModel::OriginRole);
@@ -57,9 +58,41 @@ SndLibrary::SndLibrary(QObject *parent)
     pluginsFile.close();
     m_pluginsObj = QJsonDocument::fromJson(val.toUtf8()).object();
 
+    QFile categoriesFile("/zynthian/zynthbox-qml/config/snd_categories.json");
+    categoriesFile.open(QIODevice::ReadOnly | QIODevice::Text);
+    val = categoriesFile.readAll();
+    categoriesFile.close();
+    auto categoriesObj = QJsonDocument::fromJson(val.toUtf8()).object();
+    for (auto category : categoriesObj.keys()) {
+        m_categories.insert(category, QVariant::fromValue(new SndCategoryInfo(categoriesObj[category].toString(), category, this)));
+    }
+
+    // A timer for reducing overhead when updating all files count after a category filecount changes
+    m_updateAllFilesCountTimer->setInterval(100);
+    m_updateAllFilesCountTimer->setSingleShot(true);
+    connect(m_updateAllFilesCountTimer, &QTimer::timeout, this, [=]() {
+        int count = 0;
+        for (auto entry = m_categories.begin(); entry != m_categories.end(); ++entry) {
+            // Add up filecount for all categories except `*` which represents all categories
+            if (entry.key() != "*") {
+                QObject *obj = entry.value().value<QObject*>();
+                count += qobject_cast<SndCategoryInfo*>(obj)->m_fileCount;
+            }
+        }
+        QObject *obj = m_categories.value("*").value<QObject*>();
+        qobject_cast<SndCategoryInfo*>(obj)->setFileCount(count);
+    });
+
     connect(m_soundsModel, &SndLibraryModel::categoryFilesCountChanged, this, [=](QString category, QString origin, int count) {
-        Q_EMIT categoryFilesCountChanged(category, origin, count);
+        Q_UNUSED(origin);
+        QObject *obj = m_categories.value(category).value<QObject*>();
+        qobject_cast<SndCategoryInfo*>(obj)->setFileCount(count);
+        // Start timer to update all files count
+        m_updateAllFilesCountTimer->start();
     }, Qt::QueuedConnection);
+
+    // Populate sounds model when SndLibrary gets instantiated
+    m_soundsModel->refresh();
 }
 
 void SndLibrary::serializeTo(const QString sourceDir, const QString origin, const QString outputFile)
@@ -96,6 +129,8 @@ void SndLibrary::serializeTo(const QString sourceDir, const QString origin, cons
             categoryObj["count"] = categoryFiles.count();
             categoryObj["files"] = categoryFiles;
             resultObj[key] = categoryObj;
+            QObject *obj = m_categories.value(key).value<QObject*>();
+            qobject_cast<SndCategoryInfo*>(obj)->setFileCount(categoryFiles.count());
         }
         const QJsonDocument result(resultObj);
         file.open(QFile::WriteOnly);
@@ -167,6 +202,8 @@ void SndLibrary::addSndFiles(const QStringList sndFilepaths, const QString origi
             sndObj["sampleSlotsData"] = QJsonArray::fromStringList(soundInfo->m_sampleSlotsData);
             sndObj["fxSlotsData"] = QJsonArray::fromStringList(soundInfo->m_fxSlotsData);
             categoryFilesMap[soundInfo->m_category].insert(soundInfo->m_name, sndObj);
+            QObject *categoryObj = m_categories.value(soundInfo->m_category).value<QObject*>();
+            qobject_cast<SndCategoryInfo*>(categoryObj)->setFileCount(categoryFilesMap[soundInfo->m_category].count());
         }
     }    
     m_soundsByNameModel->sort(0);
@@ -241,4 +278,9 @@ SndFileInfo* SndLibrary::extractSndFileInfo(const QString filepath, const QStrin
     }
 
     return soundInfo;
+}
+
+QVariantMap SndLibrary::categories()
+{
+    return m_categories;
 }
