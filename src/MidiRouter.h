@@ -168,8 +168,18 @@ public:
     QObject *model() const;
     Q_SIGNAL void modelChanged();
 
+    // DEPRECATED Use getSketchpadTrackInfo()
     Q_INVOKABLE MidiRouterDevice *getSketchpadTrackControllerDevice(const ZynthboxBasics::Track &track) const;
+    // DEPRECATED Use getSketchpadTrackInfo()
     Q_INVOKABLE MidiRouterDevice *getSketchpadTrackExternalDevice(const ZynthboxBasics::Track &track) const;
+    /**
+     * \brief Fetches the info objects for the given sketchpad track
+     * In particular useful for getting the associated MidiRouterDevice objects, held as properties
+     * on these objects (.controllerDevice, .sequencerDevice, and .externalDevice in particular)
+     * @param track The sketchpad track you wish to fetch the track info for (NoTrack will return a null object, CurrentTrack and AnyTrack will both return the current track)
+     * @returns A SketchpadTrackInfo instance for the given track
+     */
+    Q_INVOKABLE QObject *getSketchpadTrackInfo(const ZynthboxBasics::Track &track) const;
 
     Q_SIGNAL void addedHardwareDevice(const QString &deviceId, const QString &humanReadableName);
     Q_SIGNAL void removedHardwareDevice(const QString &deviceId, const QString &humanReadableName);

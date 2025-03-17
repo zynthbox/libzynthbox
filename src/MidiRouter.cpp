@@ -13,6 +13,7 @@
 #include "SyncTimer.h"
 #include "TransportManager.h"
 #include "JackThreadAffinitySetter.h"
+#include "SketchpadTrackInfo.h"
 
 #include <QDebug>
 #include <QProcessEnvironment>
@@ -32,54 +33,6 @@
 #define ZLROUTER_WATCHDOG false
 
 #define MAX_LISTENER_MESSAGES 1024
-
-// This is our translation from midi input channels to destinations. It contains
-// information on what external output channel should be used if it's not a straight
-// passthrough to the same channel the other side, and what channels should be
-// targeted on the zynthian outputs.
-struct SketchpadTrackInfo {
-    SketchpadTrackInfo(int trackIndex)
-        : trackIndex(trackIndex)
-    {
-        for (int i = 0; i < 16; ++i) {
-            zynthianChannels[i] = -1;
-        }
-    }
-    int zynthianChannels[16];
-    MidiRouterDevice *routerDevice{nullptr};
-    MidiRouterDevice *syncTimerSequencer{nullptr};
-    MidiRouterDevice *syncTimerController{nullptr};
-    MidiRouterDevice *externalDevice{nullptr}; // If set, send to this device instead of whatever enabled devices we've got (updated based on externalDeviceID whenever the hardware setup changes)
-    QString portName;
-    int trackIndex{-1};
-    int externalChannel{-1};
-    QString externalDeviceID; // Used to determine whether an external device should be assigned
-    MidiRouter::RoutingDestination destination{MidiRouter::ZynthianDestination};
-    int currentlySelectedPatternIndex{-1};
-    PatternModel *currentlySelectedPattern{nullptr};
-    KeyScales::Octave octave{KeyScales::Octave4};
-    KeyScales::Pitch pitch{KeyScales::PitchC};
-    KeyScales::Scale scale{KeyScales::ScaleChromatic};
-    PatternModel::KeyScaleLockStyle lockStyle{PatternModel::KeyScaleLockOff};
-    KeyScales *keyScales{KeyScales::instance()};
-    inline bool applyKeyScale(jack_midi_event_t& event) {
-        // We only care about events...
-        // - if we're supposed to be *some* kind of handling
-        // - the scale is not chromatic (if it is, any given note will be on scale)
-        // - it is a note related message (so note on or off, or poly aftertouch)
-        if (lockStyle != PatternModel::KeyScaleLockOff && scale != KeyScales::ScaleChromatic && 0x79 < event.buffer[0] && event.buffer[0] < 0xB0) {
-            // If we've got a pattern model defined, then we know what to do (otherwise we'll not have much idea)
-            if (lockStyle == PatternModel::KeyScaleLockRewrite) {
-                // Set the note value of the event to what it is supposed to be
-                event.buffer[1] = keyScales->onScaleNote(event.buffer[1], scale, pitch, octave);
-            } else if (lockStyle == PatternModel::KeyScaleLockBlock && keyScales->midiNoteOnScale(event.buffer[1], scale, pitch, octave) == false) {
-                // We do not accept this event, as it is for a note which is not on scale
-                return false;
-            }
-        }
-        return true;
-    }
-};
 
 struct MidiListenerPort {
     struct NoteMessage {
@@ -759,6 +712,7 @@ public:
             }
             if (trackInfo->externalDevice != trackExternalDevice) {
                 trackInfo->externalDevice = trackExternalDevice;
+                Q_EMIT trackInfo->externalDeviceChanged();
                 // qDebug() << Q_FUNC_INFO << "Set" << trackInfo->trackIndex << "external device to" << trackExternalDevice << "based on" << trackInfo->externalDeviceID;
             }
         }
@@ -816,6 +770,7 @@ public:
                         trackInfo->currentlySelectedPattern->disconnect(q);
                     }
                     trackInfo->currentlySelectedPattern = patternModel;
+                    Q_EMIT trackInfo->currentPatternChanged();
                     QObject::connect(patternModel, &PatternModel::scaleChanged, q, [this](){ updateAllTrackKeyScaleInfo(); });
                     QObject::connect(patternModel, &PatternModel::pitchChanged, q, [this](){ updateAllTrackKeyScaleInfo(); });
                     QObject::connect(patternModel, &PatternModel::octaveChanged, q, [this](){ updateAllTrackKeyScaleInfo(); });
@@ -824,6 +779,7 @@ public:
                     QObject::connect(patternModel, &QObject::destroyed, q, [trackInfo, patternModel](){
                         if (trackInfo->currentlySelectedPattern == patternModel) {
                             trackInfo->currentlySelectedPattern = nullptr;
+                            Q_EMIT trackInfo->currentPatternChanged();
                             trackInfo->lockStyle = PatternModel::KeyScaleLockOff;
                         }
                     });
@@ -1053,7 +1009,8 @@ void MidiRouter::run() {
                 CUIAHelper::Event event = device->cuiaRing.read(&cuiaOriginId, &cuiaTrack, &cuiaSlot, &cuiaValue);
                 Q_EMIT cuiaEvent(CUIAHelper::instance()->cuiaCommand(event), cuiaOriginId, cuiaTrack, cuiaSlot, cuiaValue);
             }
-            device->handlePostponedEvents();
+            // Ensure that this is run on the device object's own thread
+            QMetaObject::invokeMethod(device, &MidiRouterDevice::handlePostponedEvents, Qt::QueuedConnection);
         }
         Q_EMIT processingLoadChanged();
         msleep(5);
@@ -1122,6 +1079,16 @@ MidiRouterDevice * MidiRouter::getSketchpadTrackExternalDevice(const ZynthboxBas
         return nullptr;
     }
     return d->sketchpadTracks[track]->externalDevice;
+}
+
+QObject * MidiRouter::getSketchpadTrackInfo(const ZynthboxBasics::Track& track) const
+{
+    if (track == ZynthboxBasics::CurrentTrack || track == ZynthboxBasics::AnyTrack) {
+        return d->sketchpadTracks[d->currentSketchpadTrack];
+    } else if (track == ZynthboxBasics::NoTrack) {
+        return nullptr;
+    }
+    return d->sketchpadTracks[track];
 }
 
 void MidiRouter::markAsDone() {
