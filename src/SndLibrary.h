@@ -94,4 +94,5 @@ private:
     QJsonObject m_pluginsObj;
     QVariantMap m_categories;
     QTimer *m_updateAllFilesCountTimer{nullptr};
+    QTimer *m_sortModelByNameTimer{nullptr};
 };

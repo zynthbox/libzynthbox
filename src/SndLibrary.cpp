@@ -12,6 +12,7 @@
 #include <QFile>
 #include <QIODevice>
 #include <QRegularExpression>
+#include <QAbstractListModel>
 #include <taglib/taglib.h>
 #include <taglib/wavfile.h>
 #include <taglib/tpropertymap.h>
@@ -32,6 +33,7 @@ SndLibrary::SndLibrary(QObject *parent)
     , m_soundsByCategoryModel(new QSortFilterProxyModel(this))
     , m_soundsByNameModel(new QSortFilterProxyModel(this))
     , m_updateAllFilesCountTimer(new QTimer(this))
+    , m_sortModelByNameTimer(new QTimer(this))
 {
     m_soundsByOriginModel->setSourceModel(m_soundsModel);
     m_soundsByOriginModel->setFilterRole(SndLibraryModel::OriginRole);
@@ -68,7 +70,7 @@ SndLibrary::SndLibrary(QObject *parent)
     }
 
     // A timer for reducing overhead when updating all files count after a category filecount changes
-    m_updateAllFilesCountTimer->setInterval(100);
+    m_updateAllFilesCountTimer->setInterval(0);
     m_updateAllFilesCountTimer->setSingleShot(true);
     connect(m_updateAllFilesCountTimer, &QTimer::timeout, this, [=]() {
         int count = 0;
@@ -95,8 +97,16 @@ SndLibrary::SndLibrary(QObject *parent)
         } else {
             if (DEBUG) qDebug() << "Error updating fileCount for category *";
         }
-    });
+    }, Qt::QueuedConnection);
 
+    // A timer for reducing overhead when items need to be sorted after adding
+    m_sortModelByNameTimer->setInterval(0);
+    m_sortModelByNameTimer->setSingleShot(true);
+    connect(m_sortModelByNameTimer, &QTimer::timeout, this, [=]() {
+        m_soundsByNameModel->sort(0);
+    }, Qt::QueuedConnection);
+
+    // Update all files count when any category file count changes
     connect(m_soundsModel, &SndLibraryModel::categoryFilesCountChanged, this, [=](QString category, QString origin, int count) {
         // TODO : Check what to do with community-sounds
         if (origin == "my-sounds") {
@@ -114,6 +124,14 @@ SndLibrary::SndLibrary(QObject *parent)
                 if (DEBUG) qDebug() << "Error updating fileCount for category" << category;
             }
         }
+    }, Qt::QueuedConnection);
+
+    // Sort sounds model by name when a new item is inserted
+    connect(m_soundsModel, &QAbstractListModel::rowsInserted, this, [=](const QModelIndex &parent, int first, int last) {
+        Q_UNUSED(parent);
+        Q_UNUSED(first);
+        Q_UNUSED(last);
+        m_sortModelByNameTimer->start();
     }, Qt::QueuedConnection);
 
     // Populate sounds model when SndLibrary gets instantiated
@@ -182,8 +200,7 @@ void SndLibrary::refresh()
 void SndLibrary::setOriginFilter(const QString origin)
 {
     m_soundsByOriginModel->setFilterFixedString(origin);
-    m_soundsByNameModel->setFilterRegExp("");
-    m_soundsByNameModel->sort(0);
+    m_sortModelByNameTimer->start();
 }
 
 void SndLibrary::setCategoryFilter(const QString category)
@@ -193,8 +210,7 @@ void SndLibrary::setCategoryFilter(const QString category)
     } else {
         m_soundsByCategoryModel->setFilterFixedString(category);
     }
-    m_soundsByNameModel->setFilterRegExp("");
-    m_soundsByNameModel->sort(0);
+    m_sortModelByNameTimer->start();
 }
 
 void SndLibrary::addSndFiles(const QStringList sndFilepaths, const QString origin, const QString statsFilepath)
@@ -238,7 +254,6 @@ void SndLibrary::addSndFiles(const QStringList sndFilepaths, const QString origi
             categoryFilesMap[soundInfo->m_category].insert(soundInfo->m_name, sndObj);
         }
     }
-    m_soundsByNameModel->sort(0);
 
     // Write updated json to stats file
     if (file.open(QFile::WriteOnly | QFile::Truncate | QFile::Text)) {
