@@ -304,31 +304,56 @@ SndFileInfo* SndLibrary::extractSndFileInfo(const QString filepath, const QStrin
         const QString category = TStringToQString(tags["ZYNTHBOX_SOUND_CATEGORY"].front());
         const auto synthFxSnapshotJsonObj = QJsonDocument::fromJson(TStringToQString(tags["ZYNTHBOX_SOUND_SYNTH_FX_SNAPSHOT"].front()).toUtf8()).object();
         const auto sampleSnapshotJsonObj = QJsonDocument::fromJson(TStringToQString(tags["ZYNTHBOX_SOUND_SAMPLE_SNAPSHOT"].front()).toUtf8()).object();
-        for (auto layerData : synthFxSnapshotJsonObj["layers"].toArray()) {
-            const auto layerDataObj = layerData.toObject();
-            const QString engineType = layerDataObj["engine_type"].toString();
-            QString engineName = layerDataObj["engine_name"].toString().split("/").last();
-            if (!engineName.isEmpty()) {
-                /**
-                 *  A regex to filter out plugin name variables like `${ZBP_00158_name}`
-                 *  The regex matches the format `${`, captures the plugin id `ZBP_\\d*` and matches the plugin name variable `_name}`
-                 */
-                const QRegularExpression pluginIdNameRegex("\\$\\{(ZBP_\\d*)_name\\}");
-                // Find out the plugin id from engine name if any
-                const QRegularExpressionMatch match = pluginIdNameRegex.match(engineName);
-                // Replace the variable with actual plugin name
-                if (match.hasMatch()) {
-                    engineName.replace(pluginIdNameRegex, m_pluginsObj[match.captured(1)].toObject()["name"].toString());
+        // If metadata already contains parsed slots data, fetch it directly,
+        // otherwise parse the synthfx snapshot and sample snapshot to generate slots data
+        if (tags.contains("ZYNTHBOX_SOUND_SYNTH_SLOTS_DATA") &&
+            tags.contains("ZYNTHBOX_SOUND_SAMPLE_SLOTS_DATA") &&
+            tags.contains("ZYNTHBOX_SOUND_FX_SLOTS_DATA")
+            ) {
+            const auto synthSlotsDataVariantList = QJsonDocument::fromJson(TStringToQString(tags["ZYNTHBOX_SOUND_SYNTH_SLOTS_DATA"].front()).toUtf8()).array().toVariantList();
+            for (int i = 0; i < synthSlotsDataVariantList.size(); ++i) {
+                synthSlotsData[i] = synthSlotsDataVariantList.value(i).toString();
+            }
+
+            const auto sampleSlotsDataVariantList = QJsonDocument::fromJson(TStringToQString(tags["ZYNTHBOX_SOUND_SAMPLE_SLOTS_DATA"].front()).toUtf8()).array().toVariantList();
+            for (int i = 0; i < sampleSlotsDataVariantList.size(); ++i) {
+                sampleSlotsData[i] = sampleSlotsDataVariantList.value(i).toString();
+            }
+
+            const auto fxSlotsDataVariantList = QJsonDocument::fromJson(TStringToQString(tags["ZYNTHBOX_SOUND_FX_SLOTS_DATA"].front()).toUtf8()).array().toVariantList();
+            for (int i = 0; i < fxSlotsDataVariantList.size(); ++i) {
+                fxSlotsData[i] = fxSlotsDataVariantList.value(i).toString();
+            }
+        } else {
+            // FIXME : This parsing logic will eventually get removed as all new snd files will have the metadata
+            // ZYNTHBOX_SOUND_SYNTH_SLOTS_DATA, ZYNTHBOX_SOUND_SAMPLE_SLOTS_DATA, ZYNTHBOX_SOUND_FX_SLOTS_DATA and slots data need not require any parsing
+            // So remove this else clause after a considerable amount of time
+            for (auto layerData : synthFxSnapshotJsonObj["layers"].toArray()) {
+                const auto layerDataObj = layerData.toObject();
+                const QString engineType = layerDataObj["engine_type"].toString();
+                QString engineName = layerDataObj["engine_name"].toString().split("/").last();
+                if (!engineName.isEmpty()) {
+                    /**
+                     *  A regex to filter out plugin name variables like `${ZBP_00158_name}`
+                     *  The regex matches the format `${`, captures the plugin id `ZBP_\\d*` and matches the plugin name variable `_name}`
+                     */
+                    const QRegularExpression pluginIdNameRegex("\\$\\{(ZBP_\\d*)_name\\}");
+                    // Find out the plugin id from engine name if any
+                    const QRegularExpressionMatch match = pluginIdNameRegex.match(engineName);
+                    // Replace the variable with actual plugin name
+                    if (match.hasMatch()) {
+                        engineName.replace(pluginIdNameRegex, m_pluginsObj[match.captured(1)].toObject()["name"].toString());
+                    }
+                }
+                if (engineType == "MIDI Synth") {
+                    synthSlotsData[layerDataObj["slot_index"].toInt()] = QString("%1 > %2").arg(engineName).arg(layerDataObj["preset_name"].toString());
+                } else if (engineType == "Audio Effect") {
+                    fxSlotsData[layerDataObj["slot_index"].toInt()] = QString("%1 > %2").arg(engineName).arg(layerDataObj["preset_name"].toString());
                 }
             }
-            if (engineType == "MIDI Synth") {
-                synthSlotsData[layerDataObj["slot_index"].toInt()] = QString("%1 > %2").arg(engineName).arg(layerDataObj["preset_name"].toString());
-            } else if (engineType == "Audio Effect") {
-                fxSlotsData[layerDataObj["slot_index"].toInt()] = QString("%1 > %2").arg(engineName).arg(layerDataObj["preset_name"].toString());
+            for (int i = 0; i < sampleSnapshotJsonObj.keys().length(); ++i) {
+                sampleSlotsData[i] = sampleSnapshotJsonObj[QString("%1").arg(i)].toObject()["filename"].toString();
             }
-        }
-        for (int i = 0; i < sampleSnapshotJsonObj.keys().length(); ++i) {
-            sampleSlotsData[i] = sampleSnapshotJsonObj[QString("%1").arg(i)].toObject()["filename"].toString();
         }
         soundInfo = new SndFileInfo(sourceFileInfo.fileName(), origin, category, synthSlotsData, sampleSlotsData, fxSlotsData, this);
     }
