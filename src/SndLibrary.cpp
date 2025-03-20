@@ -361,6 +361,72 @@ SndFileInfo* SndLibrary::extractSndFileInfo(const QString filepath, const QStrin
     return soundInfo;
 }
 
+void SndLibrary::changeSndFileCategory(const SndFileInfo *sndFile, const QString newCategory)
+{
+    if (sndFile != nullptr) {
+        QString statsFile = "/zynthian/zynthian-my-data/sounds/" + sndFile->m_origin + "/.stat.json";
+        QFile file(statsFile);
+        QJsonObject resultObj;
+        QMap<QString, QJsonObject> categoryFilesMap;
+
+        // Read statistics file
+        if (file.exists()) {
+            if (file.open(QFile::ReadOnly | QFile::Text)) {
+                resultObj = QJsonDocument::fromJson(file.readAll()).object();
+                file.close();
+            } else {
+                qCritical() << "Cannot open statistics file" << file.fileName();
+            }
+            // Copy newCategory's existing data if exists or else create empty
+            if (!categoryFilesMap.contains(newCategory)) {
+                if(DEBUG) qDebug() << "categoryFilesMap do not have entry for category" << newCategory;
+                if (resultObj.contains(newCategory)) {
+                    if(DEBUG) qDebug() << "  Copying category from statsFile";
+                    // If stats file already has a category entry, copy it and add new files to that category
+                    categoryFilesMap[newCategory] = resultObj[newCategory].toObject()["files"].toObject();
+                } else {
+                    if(DEBUG) qDebug() << "  Creating empty category";
+                    // If stats do not have the category entry, create new empty object
+                    categoryFilesMap[newCategory] = QJsonObject();
+                }
+            }
+            // Copy old category files data
+            categoryFilesMap[sndFile->m_category] = resultObj[sndFile->m_category].toObject()["files"].toObject();
+            // Remove sndfile from old category and insert into new category
+            QJsonObject sndObj = categoryFilesMap[sndFile->m_category].value(sndFile->m_name).toObject();
+            categoryFilesMap[sndFile->m_category].remove(sndFile->m_name);
+            categoryFilesMap[newCategory].insert(sndFile->m_name, sndObj);
+
+            // Write updated json to stats file
+            if (file.open(QFile::WriteOnly | QFile::Truncate | QFile::Text)) {
+                for (auto key : categoryFilesMap.keys()) {
+                    auto categoryFiles = categoryFilesMap.value(key);
+                    QJsonObject categoryObj;
+                    categoryObj["count"] = categoryFiles.count();
+                    categoryObj["files"] = categoryFiles;
+                    resultObj[key] = categoryObj;
+                    QObject *obj = m_categories.value(key).value<QObject*>();
+                    if (obj != nullptr) {
+                        auto catObj = qobject_cast<SndCategoryInfo*>(obj);
+                        if (catObj != nullptr) {
+                            catObj->setFileCount(categoryFiles.count());
+                        }
+                    } else {
+                        if (DEBUG) qDebug() << "Error updating fileCount for category" << key;
+                    }
+                }
+                const QJsonDocument result(resultObj);
+                file.write(result.toJson(QJsonDocument::Compact));
+                file.close();
+            }
+
+            refresh();
+        } else {
+            qCritical() << "Cannot open statistics file" << file.fileName();
+        }
+    }
+}
+
 QVariantMap SndLibrary::categories()
 {
     return m_categories;

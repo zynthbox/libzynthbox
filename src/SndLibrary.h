@@ -82,6 +82,12 @@ public:
      * @return Returns a SndFileInfo* object if it was correctly able to extract the information otherwise returns a nullptr
      */
     Q_INVOKABLE SndFileInfo* extractSndFileInfo(const QString filepath, const QString origin);
+    /**
+     * @brief Change an sndfile's category
+     * @param sndFile SndFileInfo instance of the file that needs to change it's category
+     * @param newCategory New category which will be set
+     */
+    Q_INVOKABLE void changeSndFileCategory(const SndFileInfo *sndFile, const QString newCategory);
 
     QVariantMap categories();
 
