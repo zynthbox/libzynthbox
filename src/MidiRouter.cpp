@@ -1047,6 +1047,7 @@ void MidiRouter::cuiaEventFeedback(const QString& cuiaCommand, const int& origin
         for (MidiRouterDevice * device : qAsConst(d->allEnabledOutputs)) {
             device->cuiaEventFeedback(cuiaEvent, originId, track, slot, value);
         }
+        Q_EMIT cuiaEventHandled(cuiaCommand, originId, track, slot, value);
     }
 }
 
