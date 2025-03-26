@@ -11,6 +11,7 @@
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonValue>
+#include <QDebug>
 
 
 class SndFileInfo : public QObject {
@@ -129,6 +130,7 @@ private:
      */
     void fetchAndParseMetadata() {
         if (m_metadata.isEmpty()) {
+            if (DEBUG) qDebug() << "Reading metadata from file" + filePath();
             m_metadata = AudioTagHelper::instance()->readWavMetadata(filePath());
             if (m_metadata.contains("ZYNTHBOX_SOUND_SYNTH_SLOTS_DATA")) {
                 m_synthSlotsData.clear();

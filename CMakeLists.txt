@@ -22,6 +22,7 @@ set(ENV{PKG_CONFIG_PATH} "/usr/lib/pkgconfig:/usr/local/lib/pkgconfig")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${ECM_MODULE_PATH} ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
 option(GENERATE_PYTHON_BINDINGS "When on, the python module for libZynthbox will be generated (which requires Shiboken2 to be installed)" ON)
+option(PRINT_DEBUG_LOGS "When on, a bunch of debug logs will get printed. Default : Off" OFF)
 
 include(FindPkgConfig)
 include(KDEInstallDirs)

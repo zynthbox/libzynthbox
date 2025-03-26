@@ -20,13 +20,6 @@
 #include <taglib/tpropertymap.h>
 #include <taglib/tstring.h>
 
-/**
- * When DEBUG is set to true it will print a set of logs
- * which is not meant for production builds
- */
-#ifndef DEBUG
-#define DEBUG true
-#endif
 
 SndLibrary::SndLibrary(QObject *parent)
     : QObject(parent)

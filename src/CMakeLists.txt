@@ -82,6 +82,9 @@ target_compile_definitions(libzynthbox
     INTERFACE
         $<TARGET_PROPERTY:libzynthbox,COMPILE_DEFINITIONS>
 )
+if(PRINT_DEBUG_LOGS)
+    target_compile_definitions(libzynthbox PUBLIC DEBUG=1)
+endif()
 
 target_link_libraries(libzynthbox
     PRIVATE

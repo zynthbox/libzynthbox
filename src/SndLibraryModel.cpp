@@ -12,13 +12,6 @@
 #include <QDirIterator>
 #include <QFileInfo>
 
-/**
- * When DEBUG is set to true it will print a set of logs
- * which is not meant for production builds
- */
-#ifndef DEBUG
-#define DEBUG true
-#endif
 
 SndLibraryModel::SndLibraryModel(SndLibrary *sndLibrary)
     : QAbstractListModel(sndLibrary)
