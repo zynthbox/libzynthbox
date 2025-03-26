@@ -22,7 +22,8 @@ class SndLibraryModel;
 class SndLibrary : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(QObject* model MEMBER m_soundsByNameModel CONSTANT)
+    Q_PROPERTY(QObject* model READ model CONSTANT)
+    Q_PROPERTY(QObject* sourceModel READ sourceModel CONSTANT)
     Q_PROPERTY(QVariantMap categories READ categories CONSTANT)
 
 public:
@@ -62,6 +63,11 @@ public:
      * @return A QMap<QString, SndCategoryInfo*> where the key is the category id
      */
     QVariantMap categories();
+    /**
+     * \brief Getter for the library's model
+     * @return An instance of SndLibraryModel
+     */
+    QObject *model() const;
 
     /**
      * @brief Getter to retreive the source QAbstractListModel
@@ -73,6 +79,13 @@ public:
      * @brief Getter for snd index base dir
      */
     QString sndIndexPath();
+
+    /**
+     * \brief Emitted whenever a sound file has been added to the model
+     * @note Only connect to this using a queued connection, as otherwise it will slow down snd file scanning
+     * @param fileIdentifier The file identifier string for the newly discovered file
+     */
+    Q_SIGNAL void sndFileAdded(const QString &fileIdentifier);
 
 private:
     explicit SndLibrary(QObject *parent = nullptr);

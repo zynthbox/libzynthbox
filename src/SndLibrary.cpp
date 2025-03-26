@@ -185,6 +185,7 @@ void SndLibrary::processSndFile(const QString source)
         const QString symlinkFilePath = m_sndIndexPath + "/" + category + "/" + fileIdentifierBase64Encoded;
         QFile(source).link(symlinkFilePath);
     // }
+    Q_EMIT sndFileAdded(fileIdentifier);
 }
 
 void SndLibrary::refreshSndIndexLookupTable()
@@ -222,6 +223,11 @@ void SndLibrary::setCategoryFilter(const QString category)
 QVariantMap SndLibrary::categories()
 {
     return m_categories;
+}
+
+QObject *SndLibrary::model() const
+{
+    return m_soundsByNameModel;
 }
 
 SndLibraryModel *SndLibrary::sourceModel()
