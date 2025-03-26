@@ -176,15 +176,15 @@ void SndLibrary::processSndFile(const QString source)
      */
     const QString fileIdentifier = baseSoundsDir.relativeFilePath(source);
     const QString fileIdentifierBase64Encoded = fileIdentifier.toUtf8().toBase64(QByteArray::Base64Encoding | QByteArray::OmitTrailingEquals);
-    const bool isAlreadyProcessed = m_sndIndexLookupTable->contains(fileIdentifierBase64Encoded);
+    // const bool isAlreadyProcessed = m_sndIndexLookupTable->contains(fileIdentifierBase64Encoded);
     if (DEBUG) qDebug() << "Processing file" << fileIdentifier;
-    if (!isAlreadyProcessed) {
+    // if (!isAlreadyProcessed) {
         TagLib::RIFF::WAV::File tagLibFile(qPrintable(source));
         TagLib::PropertyMap tags = tagLibFile.properties();
         const QString category = TStringToQString(tags["ZYNTHBOX_SOUND_CATEGORY"].front());
         const QString symlinkFilePath = m_sndIndexPath + "/" + category + "/" + fileIdentifierBase64Encoded;
         QFile(source).link(symlinkFilePath);
-    }
+    // }
 }
 
 void SndLibrary::refreshSndIndexLookupTable()
