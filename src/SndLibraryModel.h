@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SndFileInfo.h"
+#include "SndLibrary.h"
 
 #include <QAbstractListModel>
 #include <QByteArray>
@@ -9,11 +10,14 @@
 #include <QList>
 
 
+class SndLibrary;
+
+
 class SndLibraryModel : public QAbstractListModel
 {
     Q_OBJECT
 public:
-    explicit SndLibraryModel(QObject *parent);
+    explicit SndLibraryModel(SndLibrary *sndLibrary);
 
     enum Roles {
         NameRole = Qt::UserRole + 1,
@@ -53,4 +57,5 @@ signals:
 
 private:
     QList<SndFileInfo*> m_sounds;
+    SndLibrary *m_sndLibrary{nullptr};
 };

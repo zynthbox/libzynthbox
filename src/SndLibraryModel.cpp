@@ -8,6 +8,9 @@
 #include <QJsonArray>
 #include <QJsonValue>
 #include <QVariant>
+#include <QDir>
+#include <QDirIterator>
+#include <QFileInfo>
 
 /**
  * When DEBUG is set to true it will print a set of logs
@@ -17,8 +20,9 @@
 #define DEBUG true
 #endif
 
-SndLibraryModel::SndLibraryModel(QObject *parent)
-    : QAbstractListModel(parent)
+SndLibraryModel::SndLibraryModel(SndLibrary *sndLibrary)
+    : QAbstractListModel(sndLibrary)
+    , m_sndLibrary(sndLibrary)
 {
 }
 
@@ -48,13 +52,13 @@ QVariant SndLibraryModel::data(const QModelIndex &index, int role) const
         SndFileInfo *sndFileInfo = m_sounds.at(index.row());
         switch (role) {
             case NameRole:
-                result.setValue(sndFileInfo->m_name);
+                result.setValue(sndFileInfo->name());
                 break;
             case OriginRole:
-                result.setValue(sndFileInfo->m_origin);
+                result.setValue(sndFileInfo->origin());
                 break;
             case CategoryRole:
-                result.setValue(sndFileInfo->m_category);
+                result.setValue(sndFileInfo->category());
                 break;
             case SoundRole:
                 result.setValue(sndFileInfo);
@@ -68,39 +72,35 @@ QVariant SndLibraryModel::data(const QModelIndex &index, int role) const
 
 void SndLibraryModel::refresh()
 {
+    auto t_start = std::chrono::high_resolution_clock::now();
     beginRemoveRows(index(0).parent(), 0, m_sounds.size());
     m_sounds.clear();
     endRemoveRows();
 
-    const QStringList origins = {"my-sounds", "community-sounds"};
-    for (auto origin : origins) {
-        QFile file("/zynthian/zynthian-my-data/sounds/" + origin + "/.stat.json");
-        if (file.open(QFile::ReadOnly | QFile::Text)) {
-            auto obj = QJsonDocument::fromJson(file.readAll()).object();
-            for (auto categoryEntry = obj.constBegin(); categoryEntry != obj.constEnd(); ++categoryEntry) {
-                const QString category = categoryEntry.key();
-                const int categoryFilesCount = categoryEntry.value().toObject()["count"].toInt();
-                const QJsonObject categoryFilesObj = categoryEntry.value().toObject()["files"].toObject();
-                beginInsertRows(index(m_sounds.size()).parent(), m_sounds.size(), m_sounds.size() + categoryFilesCount - 1);
-                for (auto categorySoundEntry = categoryFilesObj.constBegin(); categorySoundEntry != categoryFilesObj.constEnd(); ++categorySoundEntry) {
-                    if(DEBUG) qDebug() << "Reading sound details for" << categorySoundEntry.key();
-                    m_sounds.append(new SndFileInfo(
-                        categorySoundEntry.key(),
-                        origin,
-                        category,
-                        categorySoundEntry.value().toObject()["synthSlotsData"].toVariant().toStringList(),
-                        categorySoundEntry.value().toObject()["sampleSlotsData"].toVariant().toStringList(),
-                        categorySoundEntry.value().toObject()["fxSlotsData"].toVariant().toStringList(),
-                        this
-                    ));
-                }
-                endInsertRows();
-                Q_EMIT categoryFilesCountChanged(category, origin, categoryFilesCount);
-            }
-        } else {
-            qCritical() << "Cannot open statistics file" << file.fileName();
+    QDirIterator it(m_sndLibrary->sndIndexPath(), QDir::Files, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        const QFileInfo fileInfo = QFileInfo(it.next());
+        if (fileInfo.isSymbolicLink() && !fileInfo.symLinkTarget().isEmpty()) {
+            const QFileInfo sndFileInfo = QFileInfo(fileInfo.symLinkTarget());
+            const QString fileIdentifier = QByteArray::fromBase64(fileInfo.baseName().toUtf8(), QByteArray::Base64Encoding | QByteArray::OmitTrailingEquals);
+            const QString sndFileName = sndFileInfo.baseName();
+            const QString origin = fileIdentifier.split("/")[0];
+            const QString category = fileInfo.dir().dirName();
+            beginInsertRows(QModelIndex().parent(), m_sounds.size(), m_sounds.size());
+            if(DEBUG) qDebug() << "Reading sound index :" << fileIdentifier;
+            m_sounds.append(new SndFileInfo(
+                fileIdentifier,
+                sndFileName,
+                origin,
+                category,
+                this
+            ));
+            endInsertRows();
         }
     }
+
+    auto t_end = std::chrono::high_resolution_clock::now();
+    if (DEBUG) qDebug() << "SndLibraryModel Refresh Time Taken :" << std::chrono::duration<double, std::chrono::seconds::period>(t_end-t_start).count();
 }
 
 bool SndLibraryModel::addSndFileInfo(SndFileInfo *sound)

@@ -38,58 +38,41 @@ public:
     void operator=(SndLibrary const&) = delete;
 
     /**
-     * @brief serializeTo Create a json statistics file with metadata of the snd files from sourceDir
-     * @param sourceDir Parent directory from where snd files will be searched
-     * @param outputFile Path to json file where the statistics json will be written to
-     *
-     * The output json will be in the following format :
-     * <code>
-     * {
-     *   "<category>": {
-     *     "count": "<number of files in category>"
-     *     "files": {
-     *       "<file name>": {
-     *         "synthSlotsData": [<array of 5 strings>],
-     *         "sampleSlotsData": [<array of 5 strings>],
-     *         "fxSlotsData": [<array of 5 strings>]
-     *       },
-     *       ...
-     *     }
-     *   },
-     *   ...
-     * }
-     * </code>
+     * @brief Process snd files to create an index of snd files by category. This method will handle all the changes to snd files as required
+     * when processing an snd file. Indexing location can be set by setting the ENV variable `ZYNTHBOX_SND_INDEX_PATH`
+     * - If the elements in the sources are newly added, the method will index them by categories and create symlinks.
+     * - If the elements in the sources are removed, the method will remove them from the index and delete the symlinks
+     * @param sources Sources can be a list of snd files or a list of directories or a cobination of both
+     * If any element in the sources list is a snd file it will process it and index it by category.
+     * If any element in the sources list is a directory then it will process all the snd files in that directory and index it by category
      */
-    Q_INVOKABLE void serializeTo(const QString sourceDir, const QString origin, const QString outputFile);
-    Q_INVOKABLE void refresh();
+    Q_INVOKABLE void processSndFiles(const QStringList sources);
+    /**
+     * @brief Filter snd files by origin
+     * @param origin Accepted values : "my-sounds" or "community-sounds"
+     */
     Q_INVOKABLE void setOriginFilter(const QString origin);
+    /**
+     * @brief Filter snd files by category
+     * @param category One of the category from SndLibrary::categories to display snd files from that specific category
+     */
     Q_INVOKABLE void setCategoryFilter(const QString category);
     /**
-     * @brief addSndFile Extract information from the snd file and add the snd file info to statistics file and model
-     * @param filepath Path of the snd file to be added
-     * @return Returns if the action was successful
+     * @brief Getter for categories property
+     * @return A QMap<QString, SndCategoryInfo*> where the key is the category id
      */
-    Q_INVOKABLE void addSndFiles(const QStringList sndFilepaths, const QString origin, const QString statsFilepath);
-    /**
-     * @brief removeSndFile Remove the snd file info from statistics file and model
-     * @param filepath Path of the snd file to be removed
-     * @return Returns if the action was successful
-     */
-    Q_INVOKABLE bool removeSndFile(const QString filepath, const QString origin);
-    /**
-     * @brief extractSndFileInfo Read metadata from a snd file and extract the information to a SndFileInfo
-     * @param filepath Path to the snd file
-     * @return Returns a SndFileInfo* object if it was correctly able to extract the information otherwise returns a nullptr
-     */
-    Q_INVOKABLE SndFileInfo* extractSndFileInfo(const QString filepath, const QString origin);
-    /**
-     * @brief Change an sndfile's category
-     * @param sndFile SndFileInfo instance of the file that needs to change it's category
-     * @param newCategory New category which will be set
-     */
-    Q_INVOKABLE void changeSndFileCategory(const SndFileInfo *sndFile, const QString newCategory);
-
     QVariantMap categories();
+
+    /**
+     * @brief Getter to retreive the source QAbstractListModel
+     * @return SndLibraryModel instance
+     */
+    SndLibraryModel *sourceModel();
+
+    /**
+     * @brief Getter for snd index base dir
+     */
+    QString sndIndexPath();
 
 private:
     explicit SndLibrary(QObject *parent = nullptr);
@@ -101,4 +84,26 @@ private:
     QVariantMap m_categories;
     QTimer *m_updateAllFilesCountTimer{nullptr};
     QTimer *m_sortModelByNameTimer{nullptr};
+    QString m_sndIndexPath;
+    QMap<QString, QStringList*> *m_sndIndexLookupTable{nullptr};
+
+    /**
+     * @brief Process single snd files to create an index of snd files by category. This method is meant to be used internally by SndLibrary::processSndFiles
+     * Indexing location can be set by setting the ENV variable `ZYNTHBOX_SND_INDEX_PATH`
+     * - If the elements in the sources are newly added, the method will index them by categories and create symlinks.
+     * - If the elements in the sources are removed, the method will remove them from the index and delete the symlinks
+     * @param sources Sources can be a list of snd files or a list of directories or a cobination of both
+     * If any element in the sources list is a snd file it will process it and index it by category.
+     * If any element in the sources list is a directory then it will process all the snd files in that directory and index it by category
+     */
+    void processSndFile(const QString source);
+
+    /**
+     * @brief Refresh the lookup table that will be used to check if an snd file is already processed or not
+     * - To generate the lookup table, recursively find all symlinks from path set in the ENV variable `ZYNTHBOX_SND_INDEX_PATH`
+     * - Create an entry for each file identifier(name of the symlink file) and the value is a QStringList
+     * - The value will contain all the categories that the snd file is associated to. There can be only 1 zynthbox category
+     *   associated to it (0-99) and more than 0 user defined category associated to the snd file
+     */
+    void refreshSndIndexLookupTable();
 };
