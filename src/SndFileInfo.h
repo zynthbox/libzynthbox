@@ -38,22 +38,6 @@ public:
         )
         : QObject(parent)
         , m_fileIdentifier(fileIdentifier)
-        , m_fileIdentifierBase64Encoded(fileIdentifier.toUtf8().toBase64(QByteArray::Base64Encoding | QByteArray::OmitTrailingEquals))
-        , m_name(name)
-        , m_origin(origin)
-        , m_category(category)
-    {}
-
-    explicit SndFileInfo(
-        QByteArray fileIdentifierBase64Encoded,
-        QString name,
-        QString origin,
-        QString category,
-        QObject *parent = nullptr
-        )
-        : QObject(parent)
-        , m_fileIdentifierBase64Encoded(fileIdentifierBase64Encoded)
-        , m_fileIdentifier(QByteArray::fromBase64(fileIdentifierBase64Encoded, QByteArray::Base64Encoding | QByteArray::OmitTrailingEquals))
         , m_name(name)
         , m_origin(origin)
         , m_category(category)
@@ -63,6 +47,9 @@ public:
         return m_fileIdentifier;
     }
     Q_INVOKABLE QString fileIdentifierBase64Encoded() {
+        if (m_fileIdentifierBase64Encoded.isEmpty()) {
+            m_fileIdentifierBase64Encoded = m_fileIdentifier.toUtf8().toBase64(QByteArray::Base64Encoding | QByteArray::OmitTrailingEquals);
+        }
         return m_fileIdentifierBase64Encoded;
     }
     Q_INVOKABLE QString name() {
