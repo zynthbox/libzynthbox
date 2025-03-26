@@ -84,6 +84,8 @@ target_compile_definitions(libzynthbox
 )
 if(PRINT_DEBUG_LOGS)
     target_compile_definitions(libzynthbox PUBLIC DEBUG=1)
+else()
+    target_compile_definitions(libzynthbox PUBLIC DEBUG=0)
 endif()
 
 target_link_libraries(libzynthbox
