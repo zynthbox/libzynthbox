@@ -73,9 +73,11 @@ QVariant SndLibraryModel::data(const QModelIndex &index, int role) const
 void SndLibraryModel::refresh()
 {
     auto t_start = std::chrono::high_resolution_clock::now();
+    QMap<QString, int> categoriesFileCount;
     beginRemoveRows(index(0).parent(), 0, m_sounds.size());
     m_sounds.clear();
     endRemoveRows();
+
 
     QDirIterator it(m_sndLibrary->sndIndexPath(), QDir::Files, QDirIterator::Subdirectories);
     while (it.hasNext()) {
@@ -95,7 +97,14 @@ void SndLibraryModel::refresh()
                 category,
                 this
             ));
+            if (!categoriesFileCount.contains(origin + "/" + category)) {
+                categoriesFileCount[origin + "/" + category] = 0;
+            }
+            ++categoriesFileCount[origin + "/" + category];
             endInsertRows();
+        }
+        for (auto it = categoriesFileCount.constBegin(); it != categoriesFileCount.constEnd(); ++it) {
+            Q_EMIT categoryFilesCountChanged(it.key().split("/")[1], it.key().split("/")[0], it.value());
         }
     }
 
