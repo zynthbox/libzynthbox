@@ -142,6 +142,7 @@ SndLibrary::SndLibrary(QObject *parent)
 void SndLibrary::processSndFiles(const QStringList sources)
 {
     auto t_start = std::chrono::high_resolution_clock::now();
+    QDir baseSoundsDir("/zynthian/zynthian-my-data/sounds/");
     refreshSndIndexLookupTable();
     for (auto source : sources) {
         const QFileInfo sourceInfo(source);
@@ -156,7 +157,18 @@ void SndLibrary::processSndFiles(const QStringList sources)
                 processSndFile(sourceInfo.filePath());
             }
         } else {
-            // TODO : Handle source file removed. Remove symlinks
+            // Source file removed. Remove symlinks
+            const QString fileIdentifier = baseSoundsDir.relativeFilePath(source);
+            const QString fileIdentifierBase64Encoded = fileIdentifier.toUtf8().toBase64(QByteArray::Base64Encoding | QByteArray::OmitTrailingEquals);
+            if (DEBUG) qDebug() << "Snd file removed :" << fileIdentifier << fileIdentifierBase64Encoded;
+            if (m_sndIndexLookupTable->contains(fileIdentifierBase64Encoded)) {
+                const auto categories = m_sndIndexLookupTable->value(fileIdentifierBase64Encoded);
+                if (DEBUG) qDebug() << "  symlink had categories :" << categories->join(",");
+                for (const auto& cat : *categories) {
+                    if (DEBUG) qDebug() << "  Removing symlink :" << m_sndIndexPath + "/" + cat + "/" + fileIdentifierBase64Encoded;
+                    QFile::remove(m_sndIndexPath + "/" + cat + "/" + fileIdentifierBase64Encoded);
+                }
+            }
         }
     }
     auto t_end = std::chrono::high_resolution_clock::now();
@@ -192,13 +204,15 @@ void SndLibrary::refreshSndIndexLookupTable()
 {
     auto t_start = std::chrono::high_resolution_clock::now();
     m_sndIndexLookupTable->clear();
-    QDirIterator it(m_sndIndexPath, QDir::Files, QDirIterator::Subdirectories);
+    QDirIterator it(m_sndIndexPath, QDir::Files | QDir::System, QDirIterator::Subdirectories);
     while (it.hasNext()) {
         auto fileInfo = QFileInfo(it.next());
-        if (!m_sndIndexLookupTable->contains(fileInfo.baseName())) {
-            m_sndIndexLookupTable->insert(fileInfo.baseName(), new QStringList());
+        if (fileInfo.isSymbolicLink() && fileInfo.symLinkTarget().endsWith(".snd")) {
+            if (!m_sndIndexLookupTable->contains(fileInfo.baseName())) {
+                m_sndIndexLookupTable->insert(fileInfo.baseName(), new QStringList());
+            }
+            m_sndIndexLookupTable->value(fileInfo.baseName())->append(fileInfo.dir().dirName());
         }
-        m_sndIndexLookupTable->value(fileInfo.baseName())->append(fileInfo.dir().dirName());
     }
     auto t_end = std::chrono::high_resolution_clock::now();
     if (DEBUG) qDebug() << "refreshSndIndexLookupTable Time Taken :" << std::chrono::duration<double, std::chrono::seconds::period>(t_end-t_start).count();
