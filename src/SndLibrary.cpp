@@ -29,7 +29,7 @@ SndLibrary::SndLibrary(QObject *parent)
     , m_soundsByNameModel(new QSortFilterProxyModel(this))
     , m_updateAllFilesCountTimer(new QTimer(this))
     , m_sortModelByNameTimer(new QTimer(this))
-    , m_sndIndexPath(qEnvironmentVariable("ZYNTHBOX_SND_INDEX_PATH", "/zynthian/config/sounds_index"))
+    , m_sndIndexPath(qEnvironmentVariable("ZYNTHBOX_SND_INDEX_PATH", "/zynthian/zynthian-my-data/sounds/categories"))
     , m_sndIndexLookupTable(new QMap<QString, QStringList*>)
 {
     m_soundsByOriginModel->setSourceModel(m_soundsModel);
