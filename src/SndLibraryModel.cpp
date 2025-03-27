@@ -110,7 +110,8 @@ void SndLibraryModel::refresh()
 
 bool SndLibraryModel::addSndFileInfo(SndFileInfo *sound)
 {
-    beginInsertRows(index(m_sounds.size()).parent(), m_sounds.size(), m_sounds.size());
+    if (DEBUG) qDebug() << "Adding snd file at index" << m_sounds.size();
+    beginInsertRows(QModelIndex().parent(), m_sounds.size(), m_sounds.size());
     m_sounds.append(sound);
     endInsertRows();
     return true;
@@ -118,6 +119,14 @@ bool SndLibraryModel::addSndFileInfo(SndFileInfo *sound)
 
 bool SndLibraryModel::removeSndFileInfo(SndFileInfo *sound)
 {
-    Q_UNUSED(sound);
-    return false;
+    int index = m_sounds.indexOf(sound);
+    if (index >= 0) {
+        if (DEBUG) qDebug() << "Removing snd file from index" << index;
+        beginRemoveRows(QModelIndex().parent(), index, index);
+        m_sounds.removeAt(index);
+        endRemoveRows();
+        return true;
+    } else {
+        return false;
+    }
 }
