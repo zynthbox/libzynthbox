@@ -20,7 +20,7 @@ class SndFileInfo : public QObject {
     Q_PROPERTY(QString fileIdentifierBase64Encoded READ fileIdentifierBase64Encoded CONSTANT)
     Q_PROPERTY(QString name READ name CONSTANT)
     Q_PROPERTY(QString origin READ origin CONSTANT)
-    Q_PROPERTY(QString category READ category CONSTANT)
+    Q_PROPERTY(QString category READ category NOTIFY categoryChanged)
     Q_PROPERTY(QString filePath READ filePath CONSTANT)
     Q_PROPERTY(QStringList synthSlotsData READ synthSlotsData CONSTANT)
     Q_PROPERTY(QStringList sampleSlotsData READ sampleSlotsData CONSTANT)
@@ -84,6 +84,16 @@ public:
         fetchAndParseMetadata();
         return m_sampleSnapshot;
     }
+
+    void setCategory(QString category) {
+        if (m_category != category) {
+            m_category = category;
+            Q_EMIT categoryChanged();
+        }
+    }
+
+signals:
+    void categoryChanged();
 
 private:
     /**
