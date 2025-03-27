@@ -1,4 +1,6 @@
 #include "SndLibrary.h"
+#include "AudioTagHelper.h"
+
 #include <QDir>
 #include <QDebug>
 #include <QFileInfo>
@@ -252,4 +254,43 @@ SndLibraryModel *SndLibrary::sourceModel()
 QString SndLibrary::sndIndexPath()
 {
     return m_sndIndexPath;
+}
+
+void SndLibrary::updateSndFileCategory(SndFileInfo *sndFile, QString newCategory)
+{
+    QString oldCategory = sndFile->category();
+    m_soundsModel->removeSndFileInfo(sndFile);
+
+    // Update metadata in snd file
+    auto tags = AudioTagHelper::instance()->readWavMetadata(sndFile->filePath());
+    tags["ZYNTHBOX_SOUND_CATEGORY"] = newCategory;
+    AudioTagHelper::instance()->saveWavMetadata(sndFile->filePath(), tags);
+
+    // Update sndfile category property
+    sndFile->setCategory(newCategory);
+
+    // Remove symlink from old category
+    QFile(m_sndIndexPath + "/" + oldCategory + "/" + sndFile->fileIdentifierBase64Encoded()).remove();
+    // Create symlink to new category
+    QFile(sndFile->filePath()).link(m_sndIndexPath + "/" + newCategory + "/" + sndFile->fileIdentifierBase64Encoded());
+
+    // Decrease old category file count by 1
+    QObject *obj = m_categories.value(oldCategory).value<QObject*>();
+    if (obj != nullptr) {
+        auto catObj = qobject_cast<SndCategoryInfo*>(obj);
+        if (catObj != nullptr) {
+            catObj->setFileCount(catObj->m_fileCount - 1);
+        }
+    }
+
+    // Increase new category file count by 1
+    obj = m_categories.value(newCategory).value<QObject*>();
+    if (obj != nullptr) {
+        auto catObj = qobject_cast<SndCategoryInfo*>(obj);
+        if (catObj != nullptr) {
+            catObj->setFileCount(catObj->m_fileCount + 1);
+        }
+    }
+
+    m_soundsModel->addSndFileInfo(sndFile);
 }

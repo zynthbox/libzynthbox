@@ -87,6 +87,14 @@ public:
      */
     Q_SIGNAL void sndFileAdded(const QString &fileIdentifier);
 
+    /**
+     * @brief Update an snd file's category
+     * This method will update the category metadata of the snd file, re-index the snd file and update the model
+     * @param sndFile SndFileInfo instance of the snd file to be updated
+     * @param newCategory New category of the snd file
+     */
+    Q_INVOKABLE void updateSndFileCategory(SndFileInfo *sndFile, QString newCategory);
+
 private:
     explicit SndLibrary(QObject *parent = nullptr);
     SndLibraryModel *m_soundsModel{nullptr};
