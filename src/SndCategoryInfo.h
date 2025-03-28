@@ -8,7 +8,8 @@ class SndCategoryInfo : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString name MEMBER m_name CONSTANT)
     Q_PROPERTY(QString value MEMBER m_value CONSTANT)
-    Q_PROPERTY(int fileCount MEMBER m_fileCount NOTIFY fileCountChanged)
+    Q_PROPERTY(int myFileCount MEMBER m_myFileCount NOTIFY myFileCountChanged)
+    Q_PROPERTY(int communityFileCount MEMBER m_communityFileCount NOTIFY communityFileCountChanged)
     
 public:
     explicit SndCategoryInfo(
@@ -19,21 +20,31 @@ public:
         : QObject(parent)
         , m_name(name)
         , m_value(value)
-        , m_fileCount(0)
+        , m_myFileCount(0)
+        , m_communityFileCount(0)
     {}
     
     QString m_name;
     QString m_value;
-    int m_fileCount;
+    int m_myFileCount;
+    int m_communityFileCount;
 
-    Q_INVOKABLE void setFileCount(int fileCount) {
-        if (m_fileCount != fileCount) {
-            m_fileCount = fileCount;
-            Q_EMIT fileCountChanged();
+    Q_INVOKABLE void setMyFileCount(int fileCount) {
+        if (m_myFileCount != fileCount) {
+            m_myFileCount = fileCount;
+            Q_EMIT myFileCountChanged();
+        }
+    }
+
+    Q_INVOKABLE void setCommunityFileCount(int fileCount) {
+        if (m_communityFileCount != fileCount) {
+            m_communityFileCount = fileCount;
+            Q_EMIT communityFileCountChanged();
         }
     }
 
 signals:
-    void fileCountChanged();
+    void myFileCountChanged();
+    void communityFileCountChanged();
 };
 Q_DECLARE_METATYPE(SndCategoryInfo*)

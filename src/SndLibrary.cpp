@@ -76,7 +76,8 @@ SndLibrary::SndLibrary(QObject *parent)
     m_updateAllFilesCountTimer->setInterval(0);
     m_updateAllFilesCountTimer->setSingleShot(true);
     connect(m_updateAllFilesCountTimer, &QTimer::timeout, this, [=]() {
-        int count = 0;
+        int myCount = 0;
+        int communityCount = 0;
         for (auto entry = m_categories.begin(); entry != m_categories.end(); ++entry) {
             // Add up filecount for all categories except `*` which represents all categories
             if (entry.key() != "*") {
@@ -84,7 +85,8 @@ SndLibrary::SndLibrary(QObject *parent)
                 if (obj != nullptr) {
                     auto catObj = qobject_cast<SndCategoryInfo*>(obj);
                     if (catObj != nullptr) {
-                        count += catObj->m_fileCount;
+                        myCount += catObj->m_myFileCount;
+                        communityCount += catObj->m_communityFileCount;
                     }
                 }
             }
@@ -93,7 +95,8 @@ SndLibrary::SndLibrary(QObject *parent)
         if (obj != nullptr) {
             auto catObj = qobject_cast<SndCategoryInfo*>(obj);
             if (catObj != nullptr) {
-                catObj->setFileCount(count);
+                catObj->setMyFileCount(myCount);
+                catObj->setCommunityFileCount(communityCount);
             } else {
                 if (DEBUG) qDebug() << "Error updating fileCount for category *";
             }
@@ -112,20 +115,22 @@ SndLibrary::SndLibrary(QObject *parent)
     // Update all files count when any category file count changes
     connect(m_soundsModel, &SndLibraryModel::categoryFilesCountChanged, this, [=](QString category, QString origin, int count) {
         // TODO : Check what to do with community-sounds
-        if (origin == "my-sounds") {
-            QObject *obj = m_categories.value(category).value<QObject*>();
-            if (obj != nullptr) {
-                auto catObj = qobject_cast<SndCategoryInfo*>(obj);
-                if (catObj != nullptr) {
-                    catObj->setFileCount(count);
-                    // Start timer to update all files count
-                    m_updateAllFilesCountTimer->start();
-                } else {
-                    if (DEBUG) qDebug() << "Error updating fileCount for category" << category;
+        QObject *obj = m_categories.value(category).value<QObject*>();
+        if (obj != nullptr) {
+            auto catObj = qobject_cast<SndCategoryInfo*>(obj);
+            if (catObj != nullptr) {
+                if (origin == "my-sounds") {
+                    catObj->setMyFileCount(count);
+                } else if (origin == "community-sounds") {
+                    catObj->setCommunityFileCount(count);
                 }
+                // Start timer to update all files count
+                m_updateAllFilesCountTimer->start();
             } else {
                 if (DEBUG) qDebug() << "Error updating fileCount for category" << category;
             }
+        } else {
+            if (DEBUG) qDebug() << "Error updating fileCount for category" << category;
         }
     }, Qt::QueuedConnection);
 
@@ -279,7 +284,7 @@ void SndLibrary::updateSndFileCategory(SndFileInfo *sndFile, QString newCategory
     if (obj != nullptr) {
         auto catObj = qobject_cast<SndCategoryInfo*>(obj);
         if (catObj != nullptr) {
-            catObj->setFileCount(catObj->m_fileCount - 1);
+            catObj->setMyFileCount(catObj->m_myFileCount - 1);
         }
     }
 
@@ -288,7 +293,7 @@ void SndLibrary::updateSndFileCategory(SndFileInfo *sndFile, QString newCategory
     if (obj != nullptr) {
         auto catObj = qobject_cast<SndCategoryInfo*>(obj);
         if (catObj != nullptr) {
-            catObj->setFileCount(catObj->m_fileCount + 1);
+            catObj->setMyFileCount(catObj->m_myFileCount + 1);
         }
     }
 
