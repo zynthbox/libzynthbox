@@ -10,6 +10,7 @@ set(generated_sources
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/clipaudiosourceslicesettings_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/clipaudiosourcesubvoicesettings_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/cuiahelper_wrapper.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/fifohandler_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/gainhandler_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/jackconnectionhandler_wrapper.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/${bindings_library}/jackpassthrough_wrapper.cpp

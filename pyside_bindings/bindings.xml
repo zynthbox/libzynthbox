@@ -111,4 +111,7 @@
         <enum-type name="Track" />
         <enum-type name="Slot" />
     </object-type>
+    <object-type name="FifoHandler">
+        <enum-type name="Direction" />
+    </object-type>
 </typesystem>

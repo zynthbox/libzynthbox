@@ -14,6 +14,7 @@
 #include <ClipAudioSourceSliceSettings.h>
 #include <ClipAudioSourceSubvoiceSettings.h>
 #include <CUIAHelper.h>
+#include <FifoHandler.h>
 #include <GainHandler.h>
 #include <JackConnectionHandler.h>
 #include <JackPassthrough.h>

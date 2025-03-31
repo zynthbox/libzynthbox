@@ -17,6 +17,7 @@ target_sources(libzynthbox
         ClipAudioSourceSubvoiceSettings.cpp
         CUIAHelper.cpp
         DiskWriter.cpp
+        FifoHandler.cpp
         FilterProxy.cpp
         GainHandler.cpp
         Helper.cpp
