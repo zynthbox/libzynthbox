@@ -8,7 +8,6 @@
 #include <QJsonArray>
 #include <QJsonValue>
 #include <QVariant>
-#include <QDir>
 #include <QDirIterator>
 #include <QFileInfo>
 
@@ -71,7 +70,6 @@ void SndLibraryModel::refresh()
     m_sounds.clear();
     endRemoveRows();
 
-    QDir baseSoundsDir("/zynthian/zynthian-my-data/sounds/");
     QDirIterator it(m_sndLibrary->sndIndexPath(), QDir::Files, QDirIterator::Subdirectories);
     while (it.hasNext()) {
         const QFileInfo fileInfo = QFileInfo(it.next());
@@ -129,4 +127,40 @@ bool SndLibraryModel::removeSndFileInfo(SndFileInfo *sound)
     } else {
         return false;
     }
+}
+
+QObject * SndLibraryModel::getSound(const QString& absolutePath)
+{
+    QObject* foundFile{nullptr};
+    // First, let's see if we've already indexed that file
+    for (SndFileInfo *sndFile : qAsConst(m_sounds)) {
+        if (sndFile->filePath() == absolutePath) {
+            foundFile = sndFile;
+            break;
+        }
+    }
+    // If the file wasn't found, first see if the path is inside the sounds dir
+    if (absolutePath.startsWith(baseSoundsDir.absolutePath())) {
+        m_sndLibrary->processSndFiles({absolutePath});
+        // Let's try and see if that helped
+        for (SndFileInfo *sndFile : qAsConst(m_sounds)) {
+            if (sndFile->filePath() == absolutePath) {
+                foundFile = sndFile;
+                break;
+            }
+        }
+    } else {
+        // If it for some reason is outside of the usual location... let's just create a container for it, which will be dangling, but...
+        const QFileInfo sndFileInfo = QFileInfo(absolutePath);
+        const QString fileIdentifier = sndFileInfo.filePath();
+        const QString sndFileName = sndFileInfo.baseName();
+        const QString origin = fileIdentifier.split("/")[0];
+        foundFile = new SndFileInfo(
+            fileIdentifier,
+            sndFileName,
+            origin,
+            QString{},
+            this);
+    }
+    return foundFile;
 }
