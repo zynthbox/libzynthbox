@@ -17,6 +17,8 @@
 #include <QAbstractListModel>
 #include <QDirIterator>
 #include <QtGlobal>
+#include <QRegularExpression>
+#include <QAbstractProxyModel>
 #include <taglib/taglib.h>
 #include <taglib/wavfile.h>
 #include <taglib/tpropertymap.h>
@@ -27,7 +29,7 @@ SndLibrary::SndLibrary(QObject *parent)
     : QObject(parent)
     , m_soundsModel(new SndLibraryModel(this))
     , m_soundsByOriginModel(new QSortFilterProxyModel(this))
-    , m_soundsByCategoryModel(new QSortFilterProxyModel(this))
+    , m_soundsByCategoryModel(new CategoryFilterProxyModel(this))
     , m_soundsByNameModel(new QSortFilterProxyModel(this))
     , m_updateAllFilesCountTimer(new QTimer(this))
     , m_sortModelByNameTimer(new QTimer(this))
@@ -43,6 +45,7 @@ SndLibrary::SndLibrary(QObject *parent)
     m_soundsByCategoryModel->setSourceModel(m_soundsByOriginModel);
     m_soundsByCategoryModel->setFilterRole(SndLibraryModel::CategoryRole);
     m_soundsByCategoryModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+    m_soundsByCategoryModel->setFilterRegularExpression(".*");
     m_soundsByCategoryModel->setDynamicSortFilter(false);
 
     m_soundsByNameModel->setSourceModel(m_soundsByCategoryModel);
@@ -79,8 +82,8 @@ SndLibrary::SndLibrary(QObject *parent)
         int myCount = 0;
         int communityCount = 0;
         for (auto entry = m_categories.begin(); entry != m_categories.end(); ++entry) {
-            // Add up filecount for all categories except `*` which represents all categories
-            if (entry.key() != "*") {
+            // Add up filecount for all categories except `*` which represents all categories and except `100` which represents "Best Of" category
+            if (entry.key() != "*" && entry.key() != "100") {
                 QObject *obj = entry.value().value<QObject*>();
                 if (obj != nullptr) {
                     auto catObj = qobject_cast<SndCategoryInfo*>(obj);
@@ -149,7 +152,6 @@ SndLibrary::SndLibrary(QObject *parent)
 void SndLibrary::processSndFiles(const QStringList sources)
 {
     auto t_start = std::chrono::high_resolution_clock::now();
-    QDir baseSoundsDir("/zynthian/zynthian-my-data/sounds/");
     refreshSndIndexLookupTable();
     for (auto source : sources) {
         const QFileInfo sourceInfo(source);
@@ -165,7 +167,7 @@ void SndLibrary::processSndFiles(const QStringList sources)
             }
         } else {
             // Source file removed. Remove symlinks
-            const QString fileIdentifier = baseSoundsDir.relativeFilePath(source);
+            const QString fileIdentifier = m_baseSoundsDir.relativeFilePath(source);
             const QString fileIdentifierBase64Encoded = fileIdentifier.toUtf8().toBase64(QByteArray::Base64Encoding | QByteArray::OmitTrailingEquals);
             if (DEBUG) qDebug() << "Snd file removed :" << fileIdentifier << fileIdentifierBase64Encoded;
             if (m_sndIndexLookupTable->contains(fileIdentifierBase64Encoded)) {
@@ -183,9 +185,16 @@ void SndLibrary::processSndFiles(const QStringList sources)
     m_soundsModel->refresh();
 }
 
-void SndLibrary::processSndFile(const QString source)
+void SndLibrary::processSndFile(const QString absolutePath)
+{    
+    TagLib::RIFF::WAV::File tagLibFile(qPrintable(absolutePath));
+    TagLib::PropertyMap tags = tagLibFile.properties();
+    const QString category = TStringToQString(tags["ZYNTHBOX_SOUND_CATEGORY"].front());
+    processSndFile(absolutePath, category);
+}
+
+void SndLibrary::processSndFile(const QString absolutePath, const QString category)
 {
-    QDir baseSoundsDir("/zynthian/zynthian-my-data/sounds/");
     /**
      * @brief fileIdentifier is the unique string for a file that has the sound origin and username
      * For example, if a user named `user1` has a sound file named `sound1.snd` then the fileIdentifier
@@ -193,16 +202,13 @@ void SndLibrary::processSndFile(const QString source)
      * and used as the symlink file name so when checking if a file is already processed, a snd file can be mapped
      * to its symlink file without keeping any database.
      */
-    const QString fileIdentifier = baseSoundsDir.relativeFilePath(source);
+    const QString fileIdentifier = m_baseSoundsDir.relativeFilePath(absolutePath);
     const QString fileIdentifierBase64Encoded = fileIdentifier.toUtf8().toBase64(QByteArray::Base64Encoding | QByteArray::OmitTrailingEquals);
     // const bool isAlreadyProcessed = m_sndIndexLookupTable->contains(fileIdentifierBase64Encoded);
     if (DEBUG) qDebug() << "Processing file" << fileIdentifier;
     // if (!isAlreadyProcessed) {
-        TagLib::RIFF::WAV::File tagLibFile(qPrintable(source));
-        TagLib::PropertyMap tags = tagLibFile.properties();
-        const QString category = TStringToQString(tags["ZYNTHBOX_SOUND_CATEGORY"].front());
-        const QString symlinkFilePath = m_sndIndexPath + "/" + category + "/" + fileIdentifierBase64Encoded;
-        QFile(source).link(symlinkFilePath);
+    const QString symlinkFilePath = m_sndIndexPath + "/" + category + "/" + fileIdentifierBase64Encoded;
+    QFile(absolutePath).link(symlinkFilePath);
     // }
     Q_EMIT sndFileAdded(fileIdentifier);
 }
@@ -234,9 +240,9 @@ void SndLibrary::setOriginFilter(const QString origin)
 void SndLibrary::setCategoryFilter(const QString category)
 {
     if (category == "*") {
-        m_soundsByCategoryModel->setFilterRegExp("");
+        m_soundsByCategoryModel->setFilterRegularExpression(".*");
     } else {
-        m_soundsByCategoryModel->setFilterFixedString(category);
+        m_soundsByCategoryModel->setFilterRegularExpression(category);
     }
     m_sortModelByNameTimer->start();
 }
@@ -298,4 +304,70 @@ void SndLibrary::updateSndFileCategory(SndFileInfo *sndFile, QString newCategory
     }
 
     m_soundsModel->addSndFileInfo(sndFile);
+}
+
+void SndLibrary::addToBestOf(QString absolutePath)
+{
+    addToBestOf(qobject_cast<SndFileInfo*>(sourceModel()->getSound(absolutePath)));
+}
+
+void SndLibrary::addToBestOf(SndFileInfo *sndFileInfo)
+{
+    if (sndFileInfo != nullptr) {
+        processSndFile(sndFileInfo->filePath(), "100");
+        sourceModel()->addSndFileInfo(new SndFileInfo(sndFileInfo->fileIdentifier(), sndFileInfo->name(), sndFileInfo->origin(), "100", this));
+        QObject *obj = m_categories.value("100").value<QObject*>();
+        if (obj != nullptr) {
+            auto catObj = qobject_cast<SndCategoryInfo*>(obj);
+            if (catObj != nullptr) {
+                if (sndFileInfo->origin() == "my-sounds") {
+                    catObj->setMyFileCount(catObj->m_myFileCount + 1);
+                } else if (sndFileInfo->origin() == "community-sounds") {
+                    catObj->setCommunityFileCount(catObj->m_communityFileCount + 1);
+                }
+            }
+        }
+    }
+}
+
+void SndLibrary::removeFromBestOf(QString absolutePath)
+{
+    removeFromBestOf(qobject_cast<SndFileInfo*>(sourceModel()->getSound(absolutePath)));
+}
+
+void SndLibrary::removeFromBestOf(SndFileInfo *sndFileInfo)
+{
+    if (sndFileInfo != nullptr) {
+        QFile::remove(m_sndIndexPath + "/100/" + sndFileInfo->fileIdentifierBase64Encoded());
+        sourceModel()->removeSndFileInfo(sndFileInfo);
+        QObject *obj = m_categories.value("100").value<QObject*>();
+        if (obj != nullptr) {
+            auto catObj = qobject_cast<SndCategoryInfo*>(obj);
+            if (catObj != nullptr) {
+                if (sndFileInfo->origin() == "my-sounds") {
+                    catObj->setMyFileCount(catObj->m_myFileCount - 1);
+                } else if (sndFileInfo->origin() == "community-sounds") {
+                    catObj->setCommunityFileCount(catObj->m_communityFileCount - 1);
+                }
+            }
+        }
+    }
+}
+
+CategoryFilterProxyModel::CategoryFilterProxyModel(QObject *parent)
+    : QSortFilterProxyModel(parent)
+{}
+
+bool CategoryFilterProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const
+{
+    const QString category = sourceModel()->data(sourceModel()->index(source_row, 0, source_parent), SndLibraryModel::CategoryRole).toString();
+    if (filterRegularExpression().match("\.\*").hasMatch()) {
+        /**
+         * If category filter is set to "*", filter out any sounds from "Best Of" category. "Best Of" will be displayed when "Best Of" button is checked
+         * For other categories, it will get filtered implicitly.
+         */
+        return category != "100";
+    } else {
+        return filterRegularExpression().match(category).hasMatch();
+    }
 }

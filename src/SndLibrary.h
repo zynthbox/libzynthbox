@@ -11,9 +11,19 @@
 #include <QMap>
 #include <QVariantMap>
 #include <QTimer>
+#include <QDir>
 
 
 class SndLibraryModel;
+
+
+class CategoryFilterProxyModel : public QSortFilterProxyModel {
+public:
+    CategoryFilterProxyModel(QObject *parent = nullptr);
+
+protected:
+    bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override;
+};
 
 
 /**
@@ -43,7 +53,7 @@ public:
      * when processing an snd file. Indexing location can be set by setting the ENV variable `ZYNTHBOX_SND_INDEX_PATH`
      * - If the elements in the sources are newly added, the method will index them by categories and create symlinks.
      * - If the elements in the sources are removed, the method will remove them from the index and delete the symlinks
-     * @param sources Sources can be a list of snd files or a list of directories or a cobination of both
+     * @param sources Sources can be a list of snd files absolute paths or a list of directories or a cobination of both
      * If any element in the sources list is a snd file it will process it and index it by category.
      * If any element in the sources list is a directory then it will process all the snd files in that directory and index it by category
      */
@@ -95,11 +105,33 @@ public:
      */
     Q_INVOKABLE void updateSndFileCategory(SndFileInfo *sndFile, QString newCategory);
 
+    /**
+     * @brief Add snd file to "Best Of" category index
+     * @param absolutePath Absolute path of the snd file to add to "Best Of"
+     */
+    Q_INVOKABLE void addToBestOf(QString absolutePath);
+    /**
+     * @brief Overloaded method to allow adding snd file to "Best Of" by its SndFileInfo instance
+     * @param sndFileInfo SndFileInfo instance reference of the snd file to add to "Best Of"
+     */
+    Q_INVOKABLE void addToBestOf(SndFileInfo *sndFileInfo);
+
+    /**
+     * @brief Remove snd file from "Best Of" category index
+     * @param absolutePath Absolute path of the snd file to add to "Best Of"
+     */
+    Q_INVOKABLE void removeFromBestOf(QString absolutePath);
+    /**
+     * @brief Overloaded method to allow removing snd file from "Best Of" by its SndFileInfo instance
+     * @param sndFileInfo SndFileInfo instance reference of the snd file to remove from "Best Of"
+     */
+    Q_INVOKABLE void removeFromBestOf(SndFileInfo *sndFileInfo);
+
 private:
     explicit SndLibrary(QObject *parent = nullptr);
     SndLibraryModel *m_soundsModel{nullptr};
     QSortFilterProxyModel *m_soundsByOriginModel{nullptr};
-    QSortFilterProxyModel *m_soundsByCategoryModel{nullptr};
+    CategoryFilterProxyModel *m_soundsByCategoryModel{nullptr};
     QSortFilterProxyModel *m_soundsByNameModel{nullptr};
     QJsonObject m_pluginsObj;
     QVariantMap m_categories;
@@ -107,17 +139,25 @@ private:
     QTimer *m_sortModelByNameTimer{nullptr};
     QString m_sndIndexPath;
     QMap<QString, QStringList*> *m_sndIndexLookupTable{nullptr};
+    QDir m_baseSoundsDir{"/zynthian/zynthian-my-data/sounds/"};
 
     /**
      * @brief Process single snd files to create an index of snd files by category. This method is meant to be used internally by SndLibrary::processSndFiles
      * Indexing location can be set by setting the ENV variable `ZYNTHBOX_SND_INDEX_PATH`
      * - If the elements in the sources are newly added, the method will index them by categories and create symlinks.
      * - If the elements in the sources are removed, the method will remove them from the index and delete the symlinks
-     * @param sources Sources can be a list of snd files or a list of directories or a cobination of both
-     * If any element in the sources list is a snd file it will process it and index it by category.
-     * If any element in the sources list is a directory then it will process all the snd files in that directory and index it by category
+     * @param absolutePath Absolute filepath of the snd file to process
      */
-    void processSndFile(const QString source);
+    void processSndFile(const QString absolutePath);
+    /**
+     * @brief Overloaded method to allow forcing a category while processing an snd file instead of reading from metadata. This will allow
+     * us to add/remove snd files to custom user categories like "Best Of" where the snd files do not have the user categories set in the metadata and
+     * is passed from UI
+     * @param absolutePath Absolute filepath of the snd file to process
+     * @param category Forced category when indexing snd file. When this overloaded method is used, the passed category will be used instead of
+     * reading from metadata. This will allow the indexer to index snd files to user created categories
+     */
+    void processSndFile(const QString absolutePath, const QString category);
 
     /**
      * @brief Refresh the lookup table that will be used to check if an snd file is already processed or not
