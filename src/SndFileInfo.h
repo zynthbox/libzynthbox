@@ -29,6 +29,15 @@ class SndFileInfo : public QObject {
     Q_PROPERTY(QString sampleSnapshot READ sampleSnapshot CONSTANT)
     
 public:
+    /**
+     * \brief Constructs a new SndFileInfo with the given fields
+     * @param fileIdentifier A relative path for sounds under our base dir, and an absolute path for everything else
+     * @param name A human-readable name for this sound
+     * @param origin (unsure... help please?)
+     * @param category The file system name for the sound's category
+     * @param parent The parent object for this object (usually SndLibraryModel, but this class does not depend on that)
+     * @return An instance of SndFileInfo with the given fields
+     */
     explicit SndFileInfo(
         QString fileIdentifier,
         QString name,
@@ -62,7 +71,12 @@ public:
         return m_category;
     }
     Q_INVOKABLE QString filePath() {
-        return m_baseSoundsDir + m_fileIdentifier;
+        // If the file identifier has a / at the start, it means this file is an "orphan", or simply constructed using an absolute path
+        if (m_fileIdentifier.startsWith('/')) {
+            return m_fileIdentifier;
+        } else {
+            return m_baseSoundsDir + m_fileIdentifier;
+        }
     }
     Q_INVOKABLE QStringList synthSlotsData() {
         fetchAndParseMetadata();
