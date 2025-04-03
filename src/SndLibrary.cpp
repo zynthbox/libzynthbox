@@ -39,14 +39,14 @@ SndLibrary::SndLibrary(QObject *parent)
     m_soundsByOriginModel->setSourceModel(m_soundsModel);
     m_soundsByOriginModel->setFilterRole(SndLibraryModel::OriginRole);
     m_soundsByOriginModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
-    m_soundsByOriginModel->setFilterFixedString("my-sounds");
     m_soundsByOriginModel->setDynamicSortFilter(false);
+    setOriginFilter(m_originFilter); // Set default origin filter
 
     m_soundsByCategoryModel->setSourceModel(m_soundsByOriginModel);
     m_soundsByCategoryModel->setFilterRole(SndLibraryModel::CategoryRole);
     m_soundsByCategoryModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
-    m_soundsByCategoryModel->setFilterRegularExpression(".*");
     m_soundsByCategoryModel->setDynamicSortFilter(false);
+    setCategoryFilter(m_categoryFilter); // Set default category filter
 
     m_soundsByNameModel->setSourceModel(m_soundsByCategoryModel);
     m_soundsByNameModel->setFilterRole(SndLibraryModel::NameRole);
@@ -233,18 +233,26 @@ void SndLibrary::refreshSndIndexLookupTable()
 
 void SndLibrary::setOriginFilter(const QString origin)
 {
-    m_soundsByOriginModel->setFilterFixedString(origin);
-    m_sortModelByNameTimer->start();
+    if (m_originFilter != origin) {
+        m_originFilter = origin;
+        m_soundsByOriginModel->setFilterFixedString(origin);
+        m_sortModelByNameTimer->start();
+        Q_EMIT originFilterChanged();
+    }
 }
 
 void SndLibrary::setCategoryFilter(const QString category)
 {
-    if (category == "*") {
-        m_soundsByCategoryModel->setFilterRegularExpression(".*");
-    } else {
-        m_soundsByCategoryModel->setFilterRegularExpression(category);
+    if (m_categoryFilter != category) {
+        m_categoryFilter = category;
+        if (category == "*") {
+            m_soundsByCategoryModel->setFilterRegularExpression(".*");
+        } else {
+            m_soundsByCategoryModel->setFilterRegularExpression(category);
+        }
+        m_sortModelByNameTimer->start();
+        Q_EMIT categoryFilterChanged();
     }
-    m_sortModelByNameTimer->start();
 }
 
 QVariantMap SndLibrary::categories()
@@ -265,6 +273,16 @@ SndLibraryModel *SndLibrary::sourceModel()
 QString SndLibrary::sndIndexPath()
 {
     return m_sndIndexPath;
+}
+
+QString SndLibrary::originFilter()
+{
+    return m_originFilter;
+}
+
+QString SndLibrary::categoryFilter()
+{
+    return m_categoryFilter;
 }
 
 void SndLibrary::updateSndFileCategory(SndFileInfo *sndFile, QString newCategory)
@@ -354,18 +372,17 @@ void SndLibrary::removeFromBestOf(SndFileInfo *sndFileInfo)
     }
 }
 
-CategoryFilterProxyModel::CategoryFilterProxyModel(QObject *parent)
+CategoryFilterProxyModel::CategoryFilterProxyModel(SndLibrary *parent)
     : QSortFilterProxyModel(parent)
+    , m_sndLibrary(parent)
 {}
 
 bool CategoryFilterProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const
 {
     const QString category = sourceModel()->data(sourceModel()->index(source_row, 0, source_parent), SndLibraryModel::CategoryRole).toString();
-    if (filterRegularExpression().match("\.\*").hasMatch()) {
-        /**
-         * If category filter is set to "*", filter out any sounds from "Best Of" category. "Best Of" will be displayed when "Best Of" button is checked
-         * For other categories, it will get filtered implicitly.
-         */
+    if (m_sndLibrary->categoryFilter() == "*") {
+        // If category filter is set to "*", filter out any sounds from "Best Of" category. "Best Of" will be displayed when "Best Of" button is checked
+        // For other categories, it will get filtered implicitly
         return category != "100";
     } else {
         return filterRegularExpression().match(category).hasMatch();
