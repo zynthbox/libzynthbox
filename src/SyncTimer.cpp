@@ -66,14 +66,13 @@ struct alignas(64) StepData {
             for (TimerCommand* command : timerCommands) {
                 delete command;
             }
-            // The clip commands, once sent out, become owned by SampelerSynth, so leave them alone
+            // The clip commands, once sent out, become owned by SamplerSynth, so leave them alone
             timerCommands.clear();
             clipCommands.clear();
             for (int track = 0; track < ZynthboxTrackCount + 1; ++track) {
                 trackBufferSequencer[track].clear();
                 trackBufferController[track].clear();
             }
-            // midiBuffer.clear();
         }
     }
     void insertMidiBuffer(const juce::MidiBuffer &buffer, int sketchpadTrack, StepData::BufferType bufferType);
@@ -1225,6 +1224,19 @@ void SyncTimer::stop() {
                 clipCommand->changeVolume = true;
                 clipCommand->volume = 0;
                 clipCommands << clipCommand;
+            }
+            // Finally, let's ensure that timer commands are still fired as required
+            // - If there are any, reset step to be not played, so it still gets handled
+            // - Then clear out whatever else is there (yes, expensive operation during process, but needs must, and clear() specifically doesn't resize a QList, so...)
+            // - Note: This is only safe, because we generally call this from SyncTimerPrivate::stopPlayback
+            // - We also call it from MidiRecorder::stopPlayback, but this is itself called from SyncTimerPrivate::stopPlayback
+            if (stepData->timerCommands.length() > 0) {
+                stepData->played = false;
+                stepData->clipCommands.clear();
+                for (int track = 0; track < ZynthboxTrackCount + 1; ++track) {
+                    stepData->trackBufferSequencer[track].clear();
+                    stepData->trackBufferController[track].clear();
+                }
             }
         }
     }
