@@ -59,6 +59,10 @@ class Plugin : public QObject {
      */
     Q_PROPERTY(QList<QList<JackPassthrough*>> fxPassthroughClients READ fxPassthroughClients CONSTANT)
     /**
+     * \brief A list of the 10 lists. Each list contains 5 JackPasstrough clients to be used by each sketch fx lane of a channel
+     */
+    Q_PROPERTY(QList<QList<JackPassthrough*>> sketchFxPassthroughClients READ sketchFxPassthroughClients CONSTANT)
+    /**
      * \brief The amount of Songs in a Zynthbox Sketchpad
      */
     Q_PROPERTY(int sketchpadSongCount READ sketchpadSongCount CONSTANT)
@@ -104,6 +108,7 @@ public:
     QList<JackPassthrough*> synthPassthroughClients() const;
     QList<JackPassthrough*> trackPassthroughClients() const;
     QList<QList<JackPassthrough*>> fxPassthroughClients() const;
+    QList<QList<JackPassthrough*>> sketchFxPassthroughClients() const;
     int sketchpadSongCount() const;
     int sketchpadTrackCount() const;
     int sketchpadSlotCount() const;
@@ -122,6 +127,7 @@ private:
     QList<JackPassthrough*> m_synthPassthroughClients;
     QList<JackPassthrough*> m_trackPassthroughClients;
     QList<QList<JackPassthrough*>> m_fxPassthroughClients;
+    QList<QList<JackPassthrough*>> m_sketchFxPassthroughClients;
 
     static std::atomic<Plugin*> singletonInstance;
     static std::mutex singletonMutex;
