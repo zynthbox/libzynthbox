@@ -107,6 +107,14 @@ public:
     JackPassthrough* globalPlaybackClient() const;
     QList<JackPassthrough*> synthPassthroughClients() const;
     QList<JackPassthrough*> trackPassthroughClients() const;
+    /**
+     * \brief Fetch the specific track passthrough client indicated by the given values
+     * @param trackIndex The specific track you wish to fetch a passthrough on
+     * @param slotType The type of lane to get the passthrough for: 0 for the synth and sample lanes, 1 for the sketch lanes
+     * @param laneIndex The specific lane you wish to fetch a passthrough for: 0 through 4
+     * @return The passthrough client for the given values, or null for invalid positions
+     */
+    JackPassthrough* trackPassthroughClient(const int &trackIndex, const int &slotType, const int &laneIndex) const;
     QList<QList<JackPassthrough*>> fxPassthroughClients() const;
     QList<QList<JackPassthrough*>> sketchFxPassthroughClients() const;
     int sketchpadSongCount() const;

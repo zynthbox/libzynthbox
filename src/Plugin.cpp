@@ -230,38 +230,37 @@ void Plugin::initialize()
         m_synthPassthroughClients << passthrough;
     }
     qDebug() << "Creating 10 Track Passthrough Clients";
-    // Create a TrackPassthrough client for each of five lanes on each of the ten channels
+    // Create a TrackPassthrough client for each of two types of each five lanes on each of the ten channels
+    m_trackPassthroughClients.reserve(100);
     for (int channelNumber = 0; channelNumber < 10; ++channelNumber) {
-        for (int laneNumber = 0; laneNumber < 5; ++laneNumber) {
-            JackPassthrough* client = new JackPassthrough(QString("TrackPassthrough:Channel%1-lane%2").arg(channelNumber+1).arg(laneNumber+1), QCoreApplication::instance(), true, true, true, -40.0f, 20.0f);
+        for (int laneNumber = 0; laneNumber < 10; ++laneNumber) {
+            JackPassthrough* client{nullptr};
+            if (laneNumber < 5) {
+                client = new JackPassthrough(QString("TrackPassthrough:Channel%1-lane%2").arg(channelNumber+1).arg(laneNumber+1), QCoreApplication::instance(), true, true, true, -40.0f, 20.0f);
+            } else {
+                client = new JackPassthrough(QString("TrackPassthrough:Channel%1-sketch%2").arg(channelNumber+1).arg(laneNumber-4), QCoreApplication::instance(), true, true, true, -40.0f, 20.0f);
+            }
             client->setWetFx1Amount(0.0f);
             client->setWetFx2Amount(0.0f);
             m_trackPassthroughClients << client;
         }
     }
-    // Create FX Passthrough clients for the 5 lanes, with 10 tracks each, for each fx slot in a channel
+    // Create FX Passthrough clients for the 5 lanes, with 10 tracks each, for each fx slot in a channel (that is, an fx for each sound slot, and for each sketch)
     // The lanes have individual clients, ensuring we can avoid loops when routing the sketchpad track' slots in serial mode
-    qDebug() << "Creating 10*5 FX Passthrough Clients";
+    qDebug() << "Creating 10*5*2 FX Passthrough Clients";
     for (int channelNumber = 0; channelNumber < 10; ++channelNumber) {
-        QList<JackPassthrough*> lanes;
+        QList<JackPassthrough*> soundLanes;
+        QList<JackPassthrough*> sketchLanes;
         for (int laneNumber = 0; laneNumber < 5; ++laneNumber) {
-            JackPassthrough* fxPassthrough = new JackPassthrough(QString("FXPassthrough-lane%1:Channel%2").arg(laneNumber+1).arg(channelNumber+1), QCoreApplication::instance(), true, true, false, -24.0f, 24.0f);
+            JackPassthrough* fxPassthrough = new JackPassthrough(QString("FXPassthrough-lane%1:Channel%2-sound").arg(laneNumber+1).arg(channelNumber+1), QCoreApplication::instance(), true, true, false, -24.0f, 24.0f);
             fxPassthrough->setDryWetMixAmount(1.0f);
-            lanes << fxPassthrough;
-        }
-        m_fxPassthroughClients << lanes;
-    }
-    // Create Sketch FX Passthrough clients for the 5 sketch lanes, with 10 tracks each, for each fx slot in a channel
-    // The lanes have individual clients, ensuring we can avoid loops when routing the sketchpad track' slots in serial mode
-    qDebug() << "Creating 10*5 SketchFX Passthrough Clients";
-    for (int channelNumber = 0; channelNumber < 10; ++channelNumber) {
-        QList<JackPassthrough*> lanes;
-        for (int laneNumber = 0; laneNumber < 5; ++laneNumber) {
-            JackPassthrough* sketchFxPassthrough = new JackPassthrough(QString("FXPassthrough-sketch%1:Channel%2").arg(laneNumber+1).arg(channelNumber+1), QCoreApplication::instance(), true, true, false, -24.0f, 24.0f);
+            soundLanes << fxPassthrough;
+            JackPassthrough* sketchFxPassthrough = new JackPassthrough(QString("FXPassthrough-lane%1:Channel%2-sketch").arg(laneNumber+1).arg(channelNumber+1), QCoreApplication::instance(), true, true, false, -24.0f, 24.0f);
             sketchFxPassthrough->setDryWetMixAmount(1.0f);
-            lanes << sketchFxPassthrough;
+            sketchLanes << sketchFxPassthrough;
         }
-        m_sketchFxPassthroughClients << lanes;
+        m_fxPassthroughClients << soundLanes;
+        m_sketchFxPassthroughClients << sketchLanes;
     }
 
     qDebug() << "Registering Qt meta types";
@@ -525,6 +524,14 @@ QList<JackPassthrough *> Plugin::synthPassthroughClients() const
 QList<JackPassthrough *> Plugin::trackPassthroughClients() const
 {
     return m_trackPassthroughClients;
+}
+
+JackPassthrough * Plugin::trackPassthroughClient(const int &trackIndex, const int &slotType, const int &laneIndex) const
+{
+    if (-1 < trackIndex && trackIndex < ZynthboxTrackCount && -1 < slotType && slotType < 2 && -1 < laneIndex && laneIndex < ZynthboxSlotCount) {
+        return m_trackPassthroughClients[(trackIndex * 10) + (slotType * 5) + laneIndex];
+    }
+    return nullptr;
 }
 
 QList<QList<JackPassthrough *>> Plugin::fxPassthroughClients() const
