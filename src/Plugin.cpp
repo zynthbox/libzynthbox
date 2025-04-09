@@ -257,7 +257,7 @@ void Plugin::initialize()
     for (int channelNumber = 0; channelNumber < 10; ++channelNumber) {
         QList<JackPassthrough*> lanes;
         for (int laneNumber = 0; laneNumber < 5; ++laneNumber) {
-            JackPassthrough* sketchFxPassthrough = new JackPassthrough(QString("SketchFXPassthrough-lane%1:Channel%2").arg(laneNumber+1).arg(channelNumber+1), QCoreApplication::instance(), true, true, false, -24.0f, 24.0f);
+            JackPassthrough* sketchFxPassthrough = new JackPassthrough(QString("FXPassthrough-sketch%1:Channel%2").arg(laneNumber+1).arg(channelNumber+1), QCoreApplication::instance(), true, true, false, -24.0f, 24.0f);
             sketchFxPassthrough->setDryWetMixAmount(1.0f);
             lanes << sketchFxPassthrough;
         }
