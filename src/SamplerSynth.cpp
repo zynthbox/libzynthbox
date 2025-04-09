@@ -32,7 +32,7 @@ public:
     SubChannel() {};
     jack_port_t *leftPort{nullptr};
     jack_port_t *rightPort{nullptr};
-    SamplerSynthVoice *firstActiveVoice;
+    SamplerSynthVoice *firstActiveVoice{nullptr};
 };
 
 class SamplerChannel
@@ -573,7 +573,7 @@ public:
     // Channel 2 (midi channel 1)
     // ...
     // Channel 10 (midi channel 9)
-    QList<SamplerChannel *> channels;
+    QList<SamplerChannel *> channels{nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
 };
 
 int SamplerSynthPrivate::process(jack_nframes_t nframes)
@@ -773,7 +773,7 @@ void SamplerSynth::initialize(tracktion_engine::Engine *engine)
                     // Funny story, the actual channels have midi channels equivalent to their name, minus one. The others we can cheat with
                     SamplerChannel *channel = new SamplerChannel(&d->voicePool, d->jackClient, channelName, channelIndex - 1);
                     channel->d = d;
-                    d->channels << channel;
+                    d->channels.replace(channelIndex, channel);
                 }
                 d->initialized = true;
                 // The global channel should always be enabled, so let's do that here
