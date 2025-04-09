@@ -76,10 +76,10 @@ class ClipAudioSource : public QObject {
      */
     Q_PROPERTY(int sketchpadTrack READ sketchpadTrack WRITE setSketchpadTrack NOTIFY sketchpadTrackChanged)
     /**
-     * \brief The lane the clip should be played one (equivalent to the sample slot in SketchPad)
+     * \brief The lane the clip should be played one (for samples, the sample slot index in SketchPad, for sketch slots add 5 to the index)
      * @default 0
      * @minimum 0
-     * @maximum 4
+     * @maximum 9
      */
     Q_PROPERTY(int laneAffinity READ laneAffinity WRITE setLaneAffinity NOTIFY laneAffinityChanged)
 

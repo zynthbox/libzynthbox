@@ -25,7 +25,7 @@
 
 using namespace juce;
 
-#define SubChannelCount 5
+#define SubChannelCount 10 // One for each sample slot, and one for each sketch slot
 class Grainerator;
 struct SubChannel {
 public:
@@ -355,8 +355,15 @@ SamplerChannel::SamplerChannel(SamplerVoicePoolRing *voicePool, jack_client_t *c
     jackClient = client;
     midiInPort = jack_port_register(jackClient, QString("%1-midiIn").arg(clientName).toUtf8(), JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
     for (int subChannelIndex = 0; subChannelIndex < SubChannelCount; ++subChannelIndex) {
-        subChannels[subChannelIndex].leftPort = jack_port_register(jackClient, QString("%1-lane%2-left").arg(clientName).arg(QString::number(subChannelIndex + 1)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-        subChannels[subChannelIndex].rightPort = jack_port_register(jackClient, QString("%1-lane%2-right").arg(clientName).arg(QString::number(subChannelIndex + 1)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+        if (subChannelIndex < 5) {
+            // Naming the first five ports laneX (where X is the slot number of the sample that goes into it)
+            subChannels[subChannelIndex].leftPort = jack_port_register(jackClient, QString("%1-lane%2-left").arg(clientName).arg(QString::number(subChannelIndex + 1)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+            subChannels[subChannelIndex].rightPort = jack_port_register(jackClient, QString("%1-lane%2-right").arg(clientName).arg(QString::number(subChannelIndex + 1)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+        } else {
+            // Naming the second set of five ports sketchX (where X is the slot number of the sketch that goes into it)
+            subChannels[subChannelIndex].leftPort = jack_port_register(jackClient, QString("%1-sketch%2-left").arg(clientName).arg(QString::number(subChannelIndex - 4)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+            subChannels[subChannelIndex].rightPort = jack_port_register(jackClient, QString("%1-sketch%2-right").arg(clientName).arg(QString::number(subChannelIndex - 4)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+        }
     }
     if (midiChannel < 0) {
         jackConnect(jackClient, QLatin1String("ZLRouter:PassthroughOut"), QString("SamplerSynth:%1-midiIn").arg(clientName));
@@ -596,8 +603,8 @@ int SamplerSynthPrivate::process(jack_nframes_t nframes)
             }
         }
         // Process each of the channels in turn
-        jack_default_audio_sample_t *leftBuffers[11][SubChannelCount]{{nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}};
-        jack_default_audio_sample_t *rightBuffers[11][SubChannelCount]{{nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr}};
+        jack_default_audio_sample_t *leftBuffers[11][SubChannelCount]{{nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}};
+        jack_default_audio_sample_t *rightBuffers[11][SubChannelCount]{{nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}};
         int channelIndex{0};
         for(SamplerChannel *channel : qAsConst(channels)) {
             int subChannelIndex{0};

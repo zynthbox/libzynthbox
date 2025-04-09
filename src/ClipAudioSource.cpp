@@ -502,7 +502,8 @@ int ClipAudioSource::laneAffinity() const
 
 void ClipAudioSource::setLaneAffinity(const int& newValue)
 {
-  const int adjusted{std::clamp(newValue, 0, 4)};
+  // Samples go into lanes 0 through 4, sketches go into lanes 5 through 9
+  const int adjusted{std::clamp(newValue, 0, 9)};
   if (d->laneAffinity != adjusted) {
     d->laneAffinity = adjusted;
     Q_EMIT laneAffinityChanged();
