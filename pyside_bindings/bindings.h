@@ -9,6 +9,7 @@
 #include <AdjectiveNoun.h>
 #include <AppImageHelper.h>
 #include <AudioLevels.h>
+#include <AudioLevelsChannel.h>
 #include <AudioTagHelper.h>
 #include <ClipAudioSource.h>
 #include <ClipAudioSourceSliceSettings.h>

@@ -8,6 +8,7 @@
     <object-type name="AdjectiveNoun"></object-type>
     <object-type name="AppImageHelper"></object-type>
     <object-type name="AudioLevels"></object-type>
+    <object-type name="AudioLevelsChannel"></object-type>
     <object-type name="AudioTagHelper"></object-type>
     <object-type name="ClipAudioSource">
         <enum-type name="LoopStyle" />
