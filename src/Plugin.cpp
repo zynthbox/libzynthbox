@@ -245,12 +245,6 @@ void Plugin::initialize()
             m_trackPassthroughClients << client;
         }
     }
-    qDebug() << "Creating 10 Track Mixer Clients";
-    // Create a JackPassthrough client for each track, for core mixer purposes
-    m_trackPassthroughClients.reserve(10);
-    for (int channelNumber = 0; channelNumber < 10; ++channelNumber) {
-        m_trackMixerClients << new JackPassthrough(QString("TrackMixer:Track%1").arg(channelNumber+1), QCoreApplication::instance(), true, false, false, -40.0f, 20.0f);
-    }
     // Create FX Passthrough clients for the 5 lanes, with 10 tracks each, for each fx slot in a channel (that is, an fx for each sound slot, and for each sketch)
     // The lanes have individual clients, ensuring we can avoid loops when routing the sketchpad track' slots in serial mode
     qDebug() << "Creating 10*5*2 FX Passthrough Clients";
@@ -520,11 +514,6 @@ void Plugin::setTimeStampFormat(const QString& timeStampFormat)
 JackPassthrough *Plugin::globalPlaybackClient() const
 {
     return m_globalPlaybackClient;
-}
-
-QList<JackPassthrough *> Plugin::trackMixerClients() const
-{
-    return m_trackMixerClients;
 }
 
 QList<JackPassthrough *> Plugin::synthPassthroughClients() const

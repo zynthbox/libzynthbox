@@ -43,13 +43,9 @@ class Plugin : public QObject {
      */
     Q_PROPERTY(QString timeStampFormat READ timeStampFormat WRITE setTimeStampFormat NOTIFY timeStampFormatChanged)
     /**
-     * \brief A JackPassthrough client used as a global playback client
+     * \brief A JackPassthrough clients used as a global playback client
      */
     Q_PROPERTY(JackPassthrough* globalPlaybackClient READ globalPlaybackClient CONSTANT)
-    /**
-     * \brief A list of the 10 JackPassthrough clients used as the post-fx mixer for the SketchPad tracks
-     */
-    Q_PROPERTY(QList<JackPassthrough*> trackMixerClients READ trackMixerClients CONSTANT)
     /**
      * \brief A list of the 16 JackPassthrough clients used by each of the synth engines
      */
@@ -109,7 +105,6 @@ public:
     void setTimeStampFormat(const QString &timeStampFormat);
     Q_SIGNAL void timeStampFormatChanged();
     JackPassthrough* globalPlaybackClient() const;
-    QList<JackPassthrough*> trackMixerClients() const;
     QList<JackPassthrough*> synthPassthroughClients() const;
     QList<JackPassthrough*> trackPassthroughClients() const;
     /**
@@ -136,8 +131,7 @@ private:
     QHash<int, ClipAudioSource *> createdClipsMap;
     int lastCreatedClipId{-1};
     QString m_timeStampFormat{"yyyyMMdd-HHmm"};
-    JackPassthrough* m_globalPlaybackClient{nullptr};
-    QList<JackPassthrough*> m_trackMixerClients;
+    JackPassthrough* m_globalPlaybackClient;
     QList<JackPassthrough*> m_synthPassthroughClients;
     QList<JackPassthrough*> m_trackPassthroughClients;
     QList<QList<JackPassthrough*>> m_fxPassthroughClients;
