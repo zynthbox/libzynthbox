@@ -6,14 +6,20 @@
 #include <QDebug>
 #include <QVariantList>
 
-AudioLevelsChannel::AudioLevelsChannel(jack_client_t *client, const QString &clientName, juce::AudioFormatManager& formatManagerToUse, juce::AudioThumbnailCache& cacheToUse)
-    : clientName(clientName)
+AudioLevelsChannel::AudioLevelsChannel(jack_client_t *client, const QString &clientName, juce::AudioFormatManager& formatManagerToUse, juce::AudioThumbnailCache& cacheToUse, QObject *parent)
+    : QObject(parent)
+    , clientName(clientName)
     , m_diskRecorder(new DiskWriter(this))
     , m_thumbnail(512, formatManagerToUse, cacheToUse)
 {
     jackClient = client;
-    leftPort = jack_port_register(jackClient, QString("%1-left_in").arg(clientName).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput | JackPortIsTerminal, 0);
-    rightPort = jack_port_register(jackClient, QString("%1-right_in").arg(clientName).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput | JackPortIsTerminal, 0);
+    leftPort = jack_port_register(jackClient, QString("%1-left_in").arg(clientName).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+    rightPort = jack_port_register(jackClient, QString("%1-right_in").arg(clientName).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+    leftOutPort = jack_port_register(jackClient, QString("%1-left_out").arg(clientName).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+    rightOutPort = jack_port_register(jackClient, QString("%1-right_out").arg(clientName).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+    m_gainHandler = new GainHandler(this);
+    m_gainHandler->setMinimumDecibel(-40.0);
+    m_gainHandler->setMaximumDecibel(20.0);
     qInfo() << Q_FUNC_INFO << "Successfully created and set up" << clientName;
 }
 
@@ -50,6 +56,23 @@ int AudioLevelsChannel::process(jack_nframes_t nframes, jack_nframes_t current_f
                 doRecordingHandling(nframes, current_frames, next_frames);
             }
             bufferReadSize = nframes;
+
+            // Send all the data from the input buffers into the output buffers
+            leftOutBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(leftOutPort, nframes);
+            rightOutBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(rightOutPort, nframes);
+            const float gainAmount{m_gainHandler->gain()};
+            if (m_muted || m_gainHandler->gainAbsolute() == 0) {
+                memset(leftOutBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                memset(rightOutBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+            } else if (m_panAmount == 0 && gainAmount == 1) {
+                memcpy(leftOutBuffer, leftBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                memcpy(rightOutBuffer, rightBuffer, nframes * sizeof(jack_default_audio_sample_t));
+            } else {
+                const float amountLeft{gainAmount * std::min(1 - m_panAmount, 1.0f)};
+                const float amountRight{gainAmount * std::min(1 + m_panAmount, 1.0f)};
+                juce::FloatVectorOperations::multiply(leftOutBuffer, leftBuffer, amountLeft, int(nframes));
+                juce::FloatVectorOperations::multiply(rightOutBuffer, rightBuffer, amountRight, int(nframes));
+            }
         }
     }
     return 0;
@@ -83,6 +106,37 @@ void AudioLevelsChannel::removeChangeListener(ChangeListener* listener)
 bool AudioLevelsChannel::thumbnailHAnyListeners() const
 {
     return m_thumbnailListenerCount > 0;
+}
+
+QObject * AudioLevelsChannel::gainHandler() const
+{
+    return m_gainHandler;
+}
+
+float AudioLevelsChannel::panAmount() const
+{
+    return m_panAmount;
+}
+
+void AudioLevelsChannel::setPanAmount(const float& newValue)
+{
+    if (m_panAmount != newValue) {
+        m_panAmount = newValue;
+        Q_EMIT panAmountChanged();
+    }
+}
+
+bool AudioLevelsChannel::muted() const
+{
+    return m_muted;
+}
+
+void AudioLevelsChannel::setMuted(const bool& newValue)
+{
+    if (m_muted != newValue) {
+        m_muted = newValue;
+        Q_EMIT mutedChanged();
+    }
 }
 
 void AudioLevelsChannel::doRecordingHandling(jack_nframes_t nframes, jack_nframes_t current_frames, jack_nframes_t next_frames)
