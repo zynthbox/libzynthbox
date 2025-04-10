@@ -43,6 +43,7 @@ public:
         qDeleteAll(audioLevelsChannels);
     }
     QList<AudioLevelsChannel*> audioLevelsChannels;
+    QVariantList tracks;
     DiskWriter* globalPlaybackWriter{nullptr};
     DiskWriter* portsRecorder{nullptr};
     QList<RecordPort> recordPorts;
@@ -165,6 +166,7 @@ AudioLevels::AudioLevels(QObject *parent)
                         d->portsRecorder = channel->diskRecorder();
                     } else {
                         const int sketchpadChannelIndex{channelIndex - 3};
+                        d->tracks << QVariant::fromValue<QObject*>(channel);
                         /**
                         * Do not assign items by index like this : d->channelWriters[sketchpadChannelIndex] = channel->diskRecorder;
                         * Assigning items by index causes size() to report 0 even though items are added.
@@ -221,6 +223,11 @@ float AudioLevels::add(float db1, float db2) {
     return addFloat(db1, db2);
 }
 
+QVariantList AudioLevels::tracks() const
+{
+    return d->tracks;
+}
+
 void AudioLevels::timerCallback() {
     // 0.2/131072 = 0.00000152587
     static const float intToFloatMultiplier{0.00000152587};
@@ -236,8 +243,8 @@ void AudioLevels::timerCallback() {
             channel->peakA = qMin(qMax(0, channel->peakA - 10000), int(floatToIntMultiplier));
             channel->peakB = qMin(qMax(0, channel->peakB - 10000), int(floatToIntMultiplier));
             if (channel->bufferReadSize > 0) {
-                // Peak checkery for the left channel
-                portBuffer = channel->leftBuffer;
+                // Peak checkery for the left output channel
+                portBuffer = channel->leftOutBuffer;
                 portBufferEnd = portBuffer + channel->bufferReadSize;
                 for (const float* channelSample = portBuffer; channelSample < portBufferEnd; channelSample += quarterSpot) {
                     if (channelSample == nullptr || channelSample >= portBufferEnd) { break; }
@@ -247,8 +254,8 @@ void AudioLevels::timerCallback() {
                     }
                 }
 
-                // Peak checkery for the right channel
-                portBuffer = channel->rightBuffer;
+                // Peak checkery for the right output channel
+                portBuffer = channel->rightOutBuffer;
                 portBufferEnd = portBuffer + channel->bufferReadSize;
                 for (const float* channelSample = portBuffer; channelSample < portBufferEnd; channelSample += quarterSpot) {
                     if (channelSample == nullptr || channelSample >= portBufferEnd) { break; }

@@ -80,6 +80,10 @@ Q_OBJECT
     Q_PROPERTY(float recordingB MEMBER recordingB NOTIFY audioLevelsChanged)
 
     /**
+     * \brief A list of AudioLevelsChannel objects for each of the Sketchpad tracks
+     */
+    Q_PROPERTY(QVariantList tracks READ tracks CONSTANT)
+    /**
      * \brief Channels audio level in decibels as an array of 10 elements
      */
     Q_PROPERTY(QVariantList channels READ getChannelsAudioLevels NOTIFY audioLevelsChanged)
@@ -117,6 +121,8 @@ public:
      * @return db1+db2
      */
     Q_INVOKABLE float add(float db1, float db2);
+
+    QVariantList tracks() const;
 
     Q_INVOKABLE void setRecordGlobalPlayback(bool shouldRecord = true);
     Q_INVOKABLE bool recordGlobalPlayback() const;
