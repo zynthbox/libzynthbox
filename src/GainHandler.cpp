@@ -54,7 +54,7 @@ void GainHandler::setMaximumDecibel(const float& maximumDecibel)
 {
     if (d->maximumDecibel != maximumDecibel) {
         d->maximumDecibel = maximumDecibel;
-        d->maximumGain = juce::Decibels::decibelsToGain(maximumDecibel);
+        d->maximumGain = juce::Decibels::decibelsToGain(maximumDecibel, d->minimumDecibel);
         Q_EMIT maximumDecibelChanged();
         d->setGain(d->gain);
     }
@@ -72,7 +72,7 @@ float GainHandler::gain() const
 
 float GainHandler::gainDb() const
 {
-    return juce::Decibels::gainToDecibels(d->gain);
+    return juce::Decibels::gainToDecibels(d->gain, d->minimumDecibel);
 }
 
 float GainHandler::gainAbsolute() const
