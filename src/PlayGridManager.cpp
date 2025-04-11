@@ -101,7 +101,9 @@ public Q_SLOTS:
         if (zlSketchpad) {
             const int selectedTrackId = zlSketchpad->property("selectedTrackId").toInt();
             q->setCurrentSketchpadTrack(selectedTrackId);
-            SyncTimer::instance()->sendProgramChangeImmediately(MidiRouter::instance()->masterChannel(), 64);
+            // Do not set program change command when track changes. This causes all kind of wrong behaviour like
+            // automatically changing preset on fluidsynth engines when switching to some other track and back to fluidsynth
+            // SyncTimer::instance()->sendProgramChangeImmediately(MidiRouter::instance()->masterChannel(), 64);
         }
     }
 };
