@@ -1693,7 +1693,11 @@ ClipCommand * SyncTimer::getClipCommand()
 
 void SyncTimer::deleteClipCommand(ClipCommand* command)
 {
-    d->clipCommandsToDelete.write(command, d->refreshThingsAfter);
+    if (command) {
+        d->clipCommandsToDelete.write(command, d->refreshThingsAfter);
+    } else {
+        qDebug() << Q_FUNC_INFO << "Asked to delete a null clip command";
+    }
 }
 
 TimerCommand * SyncTimer::getTimerCommand()
