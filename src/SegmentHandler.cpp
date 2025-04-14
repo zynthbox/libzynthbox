@@ -85,7 +85,7 @@ public:
             // Instead of using cumulative beat, we keep this one in hand so we don't have to juggle offsets of we start somewhere uneven
             if (playlist.contains(playhead)) {
                 // qDebug() << Q_FUNC_INFO << "Playhead is now at" << playhead << "and we have things to do";
-                const QList<TimerCommand*> commands = playlist[playhead];
+                const QList<TimerCommand*> &commands = playlist[playhead];
                 for (TimerCommand* command : commands) {
                     if (command->operation == TimerCommand::StartClipLoopOperation || command->operation == TimerCommand::StopClipLoopOperation) {
                         if (command->parameter2 < 1) {
@@ -163,6 +163,11 @@ public:
                                     }
                                     ensureTimerClipCommand(clonedCommand);
                                     syncTimer->scheduleTimerCommand(0, clonedCommand);
+                                }
+                            } else if (command->operation == TimerCommand::ChannelRecorderStartOperation || command->operation == TimerCommand::ChannelRecorderStopOperation) {
+                                // TODO Ensure that we don't scroll back past channel recorder operations like this and leave the state weird
+                                if (direction == 1) {
+                                    syncTimer->scheduleTimerCommand(0, TimerCommand::cloneTimerCommand(command));
                                 }
                             } else {
                                 if (direction == -1) {
@@ -292,6 +297,14 @@ public Q_SLOTS:
     }
     void updateSegments(qint64 stopAfter) {
         static const QLatin1String sampleLoopedType{"sample-loop"};
+        static const QLatin1String operationKey{"operation"};
+        static const QLatin1String parameterKey{"parameter"};
+        static const QLatin1String parameter2Key{"parameter2"};
+        static const QLatin1String parameter3Key{"parameter3"};
+        static const QLatin1String parameter4Key{"parameter4"};
+        static const QLatin1String bigParameterKey{"bigParameter"};
+        // static const QLatin1String dataParameterKey{"dataParameter"};
+        static const QLatin1String variantParameterKey{"variantParameter"};
         QHash<qint64, QList<TimerCommand*> > playlist;
         if (d->songMode && zLSegmentsModel && zlChannels.count() > 0) {
             // The position of the next set of commands to be added to the hash
@@ -305,6 +318,27 @@ public Q_SLOTS:
                 if (segment) {
                     // qDebug() << Q_FUNC_INFO <<  "Working on segment at index" << segmentIndex;
                     QList<TimerCommand*> commands;
+                    // If there's a previous segment, check and see whether there are any explicit timer commands defined to run before this one
+                    const QVariantList timerCommandDetailsBefore = segment->property("timerCommandDetailsBefore").toList();
+                    qDebug() << Q_FUNC_INFO << timerCommandDetailsBefore.count() << timerCommandDetailsBefore << segment->property("timerCommandDetailsBefore") << segment->property("timerCommandDetailsBefore").typeName();
+                    for (const QVariant &commandData : qAsConst(timerCommandDetailsBefore)) {
+                        // The commandData entries in the list should (but being user provided are not guaranteed to) be QVariantHash instances with the same data as a TimerCommand, so...
+                        qDebug() << Q_FUNC_INFO<< commandData << commandData.typeName();
+                        const QVariantMap commandMap = commandData.toMap();
+                        if (commandMap.contains(operationKey)) {
+                            TimerCommand* timerCommand = new TimerCommand;
+                            timerCommand->operation = TimerCommand::Operation(commandMap.value(operationKey, 0).toInt());
+                            timerCommand->parameter = commandMap.value(parameterKey, 0).toInt();
+                            timerCommand->parameter2 = commandMap.value(parameter2Key, 0).toInt();
+                            timerCommand->parameter3 = commandMap.value(parameter3Key, 0).toInt();
+                            timerCommand->parameter4 = commandMap.value(parameter4Key, 0).toInt();
+                            timerCommand->bigParameter = commandMap.value(bigParameterKey, 0).toULongLong();
+                            // timerCommand->dataParameter = commandMap.value(dataParameterKey, 0).toInt(); // This fairly obviously is not likely to work super great, so... not going to worry about it too much for now
+                            timerCommand->variantParameter = commandMap.value(variantParameterKey, QVariant());
+                            commands << timerCommand;
+                            qDebug() << Q_FUNC_INFO << "Added timer command" << timerCommand->operation << timerCommand->parameter << timerCommand->parameter2 << timerCommand->parameter3 << timerCommand->variantParameter;
+                        }
+                    }
                     QList<const QObject*> includedChannels;
                     QVariantList clips = segment->property("clips").toList();
                     const QVariantList restartClipsData = segment->property("restartClips").toList();
@@ -364,6 +398,24 @@ public Q_SLOTS:
                                 command->parameter3 = clip->property("id").toInt();
                             }
                             commands << command;
+                        }
+                    }
+                    // Check and see whether there are any explicit timer commands defined to run after this segment
+                    const QVariantList timerCommandDataAfter = segment->property("timerCommandDetailsAfter").toList();
+                    for (const QVariant &commandData : qAsConst(timerCommandDataAfter)) {
+                        // The commandData entries in the list should (but being user provided are not guaranteed to) be QVariantHash instances with the same data as a TimerCommand, so...
+                        const QVariantMap commandMap = commandData.toMap();
+                        if (commandMap.contains(operationKey)) {
+                            TimerCommand* timerCommand = new TimerCommand;
+                            timerCommand->operation = TimerCommand::Operation(commandMap.value(operationKey, 0).toInt());
+                            timerCommand->parameter = commandMap.value(parameterKey, 0).toInt();
+                            timerCommand->parameter2 = commandMap.value(parameter2Key, 0).toInt();
+                            timerCommand->parameter3 = commandMap.value(parameter3Key, 0).toInt();
+                            timerCommand->parameter4 = commandMap.value(parameter4Key, 0).toInt();
+                            timerCommand->bigParameter = commandMap.value(bigParameterKey, 0).toULongLong();
+                            // timerCommand->dataParameter = commandMap.value(dataParameterKey, 0).toInt(); // This fairly obviously is not likely to work super great, so... not going to worry about it too much for now
+                            timerCommand->variantParameter = commandMap.value(variantParameterKey, QVariant());
+                            commands << timerCommand;
                         }
                     }
                     clipsInPrevious = includedClips;
