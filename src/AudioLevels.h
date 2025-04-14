@@ -204,6 +204,14 @@ public:
     Q_INVOKABLE bool shouldRecordPorts() const;
 
     /**
+     * \brief Returns a timestamped filename for the given prefix
+     * @param prefix The filename prefix to be timestamped
+     * @param suffix The file suffix for the timestamped file
+     * @return The full filename that for the given prefix and suffix
+     */
+    Q_INVOKABLE QString getTimestampedFilename(const QString &prefix, const QString &suffix);
+
+    /**
      * \brief Start the recording process on all enabled channels
      *
      * The logical progression of doing semi-automated multi-channeled recording is:

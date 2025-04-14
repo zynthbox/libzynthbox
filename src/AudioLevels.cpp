@@ -413,6 +413,12 @@ bool AudioLevels::shouldRecordPorts() const
     return d->portsRecorder->shouldRecord();
 }
 
+QString AudioLevels::getTimestampedFilename(const QString& prefix, const QString& suffix)
+{
+    const QString timestamp{QDateTime::currentDateTime().toString(Qt::ISODate)};
+    return QString("%1-%2%3").arg(prefix).arg(timestamp).arg(suffix);
+}
+
 void AudioLevels::startRecording(quint64 startTimestamp)
 {
     // If we've been passed a timestamp, use that, otherwise just set to the most recent jack playhead timestamp
