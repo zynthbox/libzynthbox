@@ -251,11 +251,6 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
   // Slices
   d->rootSlice = new ClipAudioSourceSliceSettings(-1, this);
   d->rootSlice->setLengthSamples(d->audioFile->getLengthInSamples());
-  for (int sliceIndex = 0; sliceIndex < SLICE_COUNT; ++sliceIndex) {
-    ClipAudioSourceSliceSettings *newSlice = new ClipAudioSourceSliceSettings(sliceIndex, this);
-    d->sliceSettings << QVariant::fromValue<QObject*>(newSlice);
-    d->sliceSettingsActual << newSlice;
-  }
 
   if (muted) {
     IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Clip marked to be muted";
@@ -563,7 +558,15 @@ int ClipAudioSource::sliceCount() const
 void ClipAudioSource::setSliceCount(const int& sliceCount)
 {
   if (d->sliceCount != sliceCount) {
+    const int oldSliceCount{d->sliceCount};
     d->sliceCount = std::clamp(sliceCount, 0, SLICE_COUNT);
+    if (oldSliceCount < d->sliceCount) {
+      for (int sliceIndex = oldSliceCount; sliceIndex < d->sliceCount; ++sliceIndex) {
+        ClipAudioSourceSliceSettings *newSlice = new ClipAudioSourceSliceSettings(sliceIndex, this);
+        d->sliceSettings << QVariant::fromValue<QObject*>(newSlice);
+        d->sliceSettingsActual << newSlice;
+      }
+    }
     Q_EMIT sliceCountChanged();
     if (d->selectedSlice >= d->sliceCount) {
       setSelectedSlice(d->sliceCount - 1);
