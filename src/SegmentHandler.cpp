@@ -317,7 +317,10 @@ public Q_SLOTS:
                 QMetaObject::invokeMethod(zLSegmentsModel, "get_segment", Qt::DirectConnection, Q_RETURN_ARG(QObject*, segment), Q_ARG(int, segmentIndex));
                 if (segment) {
                     // qDebug() << Q_FUNC_INFO <<  "Working on segment at index" << segmentIndex;
-                    QList<TimerCommand*> commands;
+                    if (playlist.contains(segmentPosition) == false) {
+                        playlist[segmentPosition] = QList<TimerCommand*>{};
+                    }
+                    QList<TimerCommand*> &commands = playlist[segmentPosition];
                     // If there's a previous segment, check and see whether there are any explicit timer commands defined to run before this one
                     const QVariantList timerCommandDetailsBefore = segment->property("timerCommandDetailsBefore").toList();
                     qDebug() << Q_FUNC_INFO << timerCommandDetailsBefore.count() << timerCommandDetailsBefore << segment->property("timerCommandDetailsBefore") << segment->property("timerCommandDetailsBefore").typeName();
@@ -400,30 +403,36 @@ public Q_SLOTS:
                             commands << command;
                         }
                     }
-                    // Check and see whether there are any explicit timer commands defined to run after this segment
-                    const QVariantList timerCommandDataAfter = segment->property("timerCommandDetailsAfter").toList();
-                    for (const QVariant &commandData : qAsConst(timerCommandDataAfter)) {
-                        // The commandData entries in the list should (but being user provided are not guaranteed to) be QVariantHash instances with the same data as a TimerCommand, so...
-                        const QVariantMap commandMap = commandData.toMap();
-                        if (commandMap.contains(operationKey)) {
-                            TimerCommand* timerCommand = new TimerCommand;
-                            timerCommand->operation = TimerCommand::Operation(commandMap.value(operationKey, 0).toInt());
-                            timerCommand->parameter = commandMap.value(parameterKey, 0).toInt();
-                            timerCommand->parameter2 = commandMap.value(parameter2Key, 0).toInt();
-                            timerCommand->parameter3 = commandMap.value(parameter3Key, 0).toInt();
-                            timerCommand->parameter4 = commandMap.value(parameter4Key, 0).toInt();
-                            timerCommand->bigParameter = commandMap.value(bigParameterKey, 0).toULongLong();
-                            // timerCommand->dataParameter = commandMap.value(dataParameterKey, 0).toInt(); // This fairly obviously is not likely to work super great, so... not going to worry about it too much for now
-                            timerCommand->variantParameter = commandMap.value(variantParameterKey, QVariant());
-                            commands << timerCommand;
-                        }
-                    }
                     clipsInPrevious = includedClips;
                     // TODO Sort commands before adding - we really kind of want stop things before the start things, for when we have restarting added
                     playlist[segmentPosition] = commands;
                     // Finally, make sure the next step is covered
                     qint64 segmentDuration = ((segment->property("barLength").toInt() * 4) + segment->property("beatLength").toInt()) * d->syncTimer->getMultiplier();
                     segmentPosition += segmentDuration;
+                    // Check and see whether there are any explicit timer commands defined to run after this segment
+                    const QVariantList timerCommandDataAfter = segment->property("timerCommandDetailsAfter").toList();
+                    if (timerCommandDataAfter.count() > 0) {
+                        if (playlist.contains(segmentPosition) == false) {
+                            playlist[segmentPosition] = QList<TimerCommand*>{};
+                        }
+                        QList<TimerCommand*> &commands = playlist[segmentPosition];
+                        for (const QVariant &commandData : qAsConst(timerCommandDataAfter)) {
+                            // The commandData entries in the list should (but being user provided are not guaranteed to) be QVariantHash instances with the same data as a TimerCommand, so...
+                            const QVariantMap commandMap = commandData.toMap();
+                            if (commandMap.contains(operationKey)) {
+                                TimerCommand* timerCommand = new TimerCommand;
+                                timerCommand->operation = TimerCommand::Operation(commandMap.value(operationKey, 0).toInt());
+                                timerCommand->parameter = commandMap.value(parameterKey, 0).toInt();
+                                timerCommand->parameter2 = commandMap.value(parameter2Key, 0).toInt();
+                                timerCommand->parameter3 = commandMap.value(parameter3Key, 0).toInt();
+                                timerCommand->parameter4 = commandMap.value(parameter4Key, 0).toInt();
+                                timerCommand->bigParameter = commandMap.value(bigParameterKey, 0).toULongLong();
+                                // timerCommand->dataParameter = commandMap.value(dataParameterKey, 0).toInt(); // This fairly obviously is not likely to work super great, so... not going to worry about it too much for now
+                                timerCommand->variantParameter = commandMap.value(variantParameterKey, QVariant());
+                                commands << timerCommand;
+                            }
+                        }
+                    }
                 } else {
                     qWarning() << Q_FUNC_INFO << "Failed to get segment" << segmentIndex;
                 }
@@ -434,7 +443,10 @@ public Q_SLOTS:
             }
             // qDebug() << Q_FUNC_INFO << "Done processing segments, adding the final stops for any ongoing clips, and the timer stop command";
             // Run through the clipsInPrevious segment and add commands to stop them all
-            QList<TimerCommand*> commands;
+            if (playlist.contains(segmentPosition) == false) {
+                playlist[segmentPosition] = QList<TimerCommand*>{};
+            }
+            QList<TimerCommand*> &commands = playlist[segmentPosition];
             for (QObject *clip : clipsInPrevious) {
                 // qDebug() << Q_FUNC_INFO << "The clip" << clip << "was in the final segment, so we should stop playing that clip at the end of playback";
                 TimerCommand* command = new TimerCommand; // This does not need to use the pool, as we might make a LOT of these, and also don't do so during playback time.
