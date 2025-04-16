@@ -106,6 +106,7 @@ public:
   float processingProgress{-1.0f};
   QString processingDescription;
   int sketchpadTrack{-1};
+  bool registerForPolyphonicPlayback{true};
   int laneAffinity{0};
   ClipAudioSourcePositionsModel *positionsModel{nullptr};
 
@@ -230,7 +231,7 @@ private:
   }
 };
 
-ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *parent)
+ClipAudioSource::ClipAudioSource(const char *filepath, const int &sketchpadTrack, const bool &registerForPolyphonicPlayback, bool muted, QObject *parent)
     : QObject(parent)
     , d(new Private(this))
 {
@@ -238,6 +239,8 @@ ClipAudioSource::ClipAudioSource(const char *filepath, bool muted, QObject *pare
   d->syncTimer = SyncTimer::instance();
   d->engine = Plugin::instance()->getTracktionEngine();
   d->id = Plugin::instance()->nextClipId();
+  d->sketchpadTrack = sketchpadTrack;
+  d->registerForPolyphonicPlayback = registerForPolyphonicPlayback;
   Plugin::instance()->addCreatedClipToMap(this);
 
   IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Opening file:" << filepath;
@@ -488,6 +491,11 @@ void ClipAudioSource::setSketchpadTrack(const int& newValue)
     d->sketchpadTrack = adjusted;
     Q_EMIT sketchpadTrackChanged();
   }
+}
+
+bool ClipAudioSource::registerForPolyphonicPlayback() const
+{
+  return d->registerForPolyphonicPlayback;
 }
 
 int ClipAudioSource::laneAffinity() const
