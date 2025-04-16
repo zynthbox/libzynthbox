@@ -388,12 +388,14 @@ SamplerChannel::~SamplerChannel() {
 
 void SamplerChannel::midiMessageToClipCommands(ClipCommandRing* listToPopulate, const int& byte1, const int& byte2, const int& byte3) const
 {
+    // qDebug() << Q_FUNC_INFO << midiChannel << byte1 << byte2 << byte3;
     const bool stopPlayback{byte1 < 0x90 || byte3 == 0};
     const float velocity{float(byte3) / float(127)};
     const int midiChannel{(byte1 & 0xf)};
     for (ClipAudioSource *clip : qAsConst(trackSamples)) {
         // There must be a clip or it just doesn't matter, and then the note must fit inside the clip's keyzone
         if (clip) {
+            // qDebug() << Q_FUNC_INFO << clip->getFilePath();
             const QList<ClipAudioSourceSliceSettings*> slices{clip->sliceSettingsActual()};
             const int &sliceCount{clip->sliceCount()};
             const int extraSliceCount{sliceCount + 1};
@@ -497,6 +499,7 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                         while (commandRing.readHead->processed == false) {
                             ClipCommand *command = commandRing.read();
                             const ClipAudioSourceSliceSettings *slice{command->clip->sliceFromIndex(command->slice)};
+                            // qDebug() << Q_FUNC_INFO << command->stopPlayback << command->startPlayback << command->clip->getFilePath();
                             if (slice->granular()) {
                                 if (command->stopPlayback) {
                                     grainerator->stop(command);
@@ -744,12 +747,14 @@ void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick
     }
     bool needsHandling{true};
     if (clipCommand->stopPlayback || clipCommand->startPlayback) {
+        const int laneAffinity{clipCommand->clip->laneAffinity()};
         // If the clip had nothing to stop for restarting, we still need to start it, so let's handle that
         if (clipCommand->stopPlayback) {
-            SamplerSynthVoice *voice = subChannels[clipCommand->clip->laneAffinity()].firstActiveVoice;
+            SamplerSynthVoice *voice = subChannels[laneAffinity].firstActiveVoice;
             while (voice) {
                 const ClipCommand *currentVoiceCommand = voice->mostRecentStartCommand;
                 if (voice->isTailingOff == false && currentVoiceCommand && currentVoiceCommand->equivalentTo(clipCommand)) {
+                    // qDebug() << Q_FUNC_INFO << voice << currentVoiceCommand->clip << clipCommand->clip;
                     voice->handleCommand(clipCommand, currentTick);
                     needsHandling = false;
                     // Since we may have more than one going at the same time (since we allow long releases), just stop the first one
@@ -760,7 +765,6 @@ void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick
         }
         if (needsHandling && clipCommand->startPlayback) {
             bool needNewVoice{true};
-            const int laneAffinity{clipCommand->clip->laneAffinity()};
             SamplerSynthVoice *voice = subChannels[laneAffinity].firstActiveVoice;
             while (voice) {
                 if (voice->availableAfter < currentTick) {
