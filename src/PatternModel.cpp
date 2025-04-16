@@ -92,6 +92,7 @@ public:
     QObject *zlScene{nullptr};
 
     bool channelMuted{false};
+    int channelSelectedClip{0};
     ClipAudioSource::SamplePickingStyle samplePickingStyle{ClipAudioSource::SameOrFirstPickingStyle};
     void setZlChannel(QObject *newZlChannel)
     {
@@ -191,6 +192,7 @@ public Q_SLOTS:
         SequenceModel *sequence = qobject_cast<SequenceModel*>(q->sequence());
         if (sequence && zlChannel) {
             const int selectedClip{zlChannel->property("selectedClip").toInt()};
+            channelSelectedClip = selectedClip;
             sequence->setActiveChannel(PlayGridManager::instance()->currentSketchpadTrack(), selectedClip);
         }
     }
@@ -2513,7 +2515,7 @@ void PatternModel::handleMidiMessage(const MidiRouter::ListenerPort &port, const
 
 void PatternModel::midiMessageToClipCommands(ClipCommandRing *listToPopulate, const int &samplerIndex, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3) const
 {
-    if (samplerIndex == d->sketchpadTrack && (!d->sequence || (d->sequence->shouldMakeSounds() && (d->sequence->soloPatternObject() == this || d->enabled)))
+    if (samplerIndex == d->sketchpadTrack && (!d->sequence || (d->sequence->shouldMakeSounds() && (d->sequence->soloPatternObject() == this || d->zlSyncManager->channelSelectedClip == d->clipIndex)))
         // But also, only send notes there if we're in one of the internal-midi-triggered-sounds modes (essentially meaning "not external" but also let's honour no destination, so just be explicit about which the accepted ones are)
         && (d->noteDestination == SampleTriggerDestination || d->noteDestination == SynthDestination || d->noteDestination == SampleLoopedDestination)) {
             d->midiMessageToClipCommands(listToPopulate, byte1, byte2, byte3);
