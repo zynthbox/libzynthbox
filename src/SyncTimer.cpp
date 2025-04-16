@@ -955,10 +955,7 @@ public:
                 pgm->stopMetronome();
                 q->stop();
                 PlayfieldManager::instance()->stopPlayback();
-                for (int chan = 0; chan < 10; ++chan) {
-                    // One All Notes Off message for each track (not midi channel)
-                    q->sendMidiMessageImmediately(3, 176 + chan, 123, 0);
-                }
+                q->sendAllNotesOffEverywhereImmediately();
                 qDebug() << Q_FUNC_INFO << "Metronome and playback stopped";
             }
             return true;
