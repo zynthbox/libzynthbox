@@ -809,7 +809,18 @@ void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick
     }
     if (needsHandling) {
         // This is likely to keep happening until we move the note-on logic to here and stop doing sample selection style stuff...
-        qWarning() << Q_FUNC_INFO << "Failed to handle command for" << clipCommand->clip << "- marking for deletion";
+        if (clipCommand->clip) {
+            if (clipCommand->stopPlayback) {
+                // This is going to happen regularly when stopping playback (that is, expected), so let's not be too noisy
+                // qWarning() << Q_FUNC_INFO << "Failed to handle stop command for" << clipCommand->clip << clipCommand->clip->getFilePath() << "- marking for deletion";
+            } else if (clipCommand->startPlayback) {
+                qWarning() << Q_FUNC_INFO << "Failed to handle start command for" << clipCommand->clip << clipCommand->clip->getFilePath() << "- marking for deletion";
+            } else {
+                qWarning() << Q_FUNC_INFO << "Failed to handle command for" << clipCommand->clip << clipCommand->clip->getFilePath() << "- marking for deletion";
+            }
+        } else {
+            qWarning() << Q_FUNC_INFO << "Attempted to handle command for a null clip for some reason - marking for deletion";
+        }
         SyncTimer::instance()->deleteClipCommand(clipCommand);
     }
 }
