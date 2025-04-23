@@ -21,6 +21,8 @@
 
 #include "Note.h"
 #include "SyncTimer.h"
+#include "MidiRouter.h"
+#include "SketchpadTrackInfo.h"
 
 class Note::Private {
 public:
@@ -38,6 +40,7 @@ public:
     int activations[16]{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
     SyncTimer *syncTimer{nullptr};
+    SketchpadTrackInfo* sketchpadTrackInfo{nullptr};
 };
 
 Note::Note(PlayGridManager* parent)
@@ -88,6 +91,7 @@ void Note::setSketchpadTrack(const int& sketchpadTrack)
     if (d->sketchpadTrack != sketchpadTrack) {
         d->sketchpadTrack = sketchpadTrack;
         Q_EMIT sketchpadTrackChanged();
+        d->sketchpadTrackInfo = qobject_cast<SketchpadTrackInfo*>(MidiRouter::instance()->getSketchpadTrackInfo(ZynthboxBasics::Track(d->sketchpadTrack)));
     }
 }
 
@@ -202,7 +206,11 @@ void Note::setSubnotesOn(const QVariantList &velocities)
 
 void Note::setOn(int velocity)
 {
-    d->internalOnChannel = d->syncTimer->nextAvailableChannel(d->sketchpadTrack);
+    if (d->sketchpadTrackInfo && d->sketchpadTrackInfo->slotSelectionStyle == ClipAudioSource::SamePickingStyle) {
+        d->internalOnChannel = d->sketchpadTrackInfo->currentlySelectedPatternIndex;
+    } else {
+        d->internalOnChannel = d->syncTimer->nextAvailableChannel(d->sketchpadTrack);
+    }
     registerOn(d->internalOnChannel);
     if (d->midiNote < 128) {
         d->syncTimer->sendNoteImmediately(d->midiNote, d->internalOnChannel, true, std::clamp(velocity, 1, 127), d->sketchpadTrack);
