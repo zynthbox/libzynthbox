@@ -209,6 +209,21 @@ public:
     const int &noteActivationTrack(const int &channel, const int &note) const;
 
     /**
+     * \brief Sets the channel events on a given track were rewritten to
+     * @param sketchpadTrack The track to look at (0 through 9)
+     * @param eventChannel The channel the event arrived on
+     * @param rewriteChannel The channel the event was rewritten onto
+     */
+    const void setTrackActivationRewriteChannel(const int &sketchpadTrack, const int &eventChannel, const int &rewriteChannel) const;
+    /**
+     * \brief Retrieves the channel events on a given track should be rewritten to
+     * @param sketchpadTrack The track to look at (0 through 9)
+     * @param eventChannel The channel the event arrived on
+     * @return The channel the event was rewritten onto, or -1 if no rewriting was done
+     */
+    const int &trackActivationRewriteChannel(const int &sketchpadTrack, const int &eventChannel) const;
+
+    /**
      * \brief Fetch the given control change value of the given midi channel
      * To set the value, you should send a cc change via the functions available on SyncTimer
      * @param midiChannel The midi channel to fetch the value on

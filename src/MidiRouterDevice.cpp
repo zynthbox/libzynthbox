@@ -81,6 +81,10 @@ public:
             receiveFromChannel[channel] = true;
             sendToChannel[channel] = true;
             masterChannel[channel] = -1;
+            for (int sketchpadTrack = 0; sketchpadTrack < ZynthboxTrackCount; ++sketchpadTrack) {
+                trackActivationRewrites[sketchpadTrack][channel] = 0;
+                trackActivationRewrites[sketchpadTrack][channel] = -1;
+            }
             for (int note = 0; note < 128; ++note) {
                 noteState[channel][note] = 0;
                 noteActivationTrack[channel][note] = -1;
@@ -114,6 +118,8 @@ public:
     int lastAcceptedChannel{15};
     int noteState[16][128];
     int noteActivationTrack[16][128];
+    int trackActivationRewriteCount[ZynthboxTrackCount][16];
+    int trackActivationRewrites[ZynthboxTrackCount][16];
     int midiChannelTargetTrack[16];
     int ccValues[16][128];
     MidiRouterDeviceCCValueRing ccValueUpdates;
@@ -372,6 +378,10 @@ void MidiRouterDevice::writeEventToOutput(jack_midi_event_t& event, const MidiRo
             d->zynthboxToDevice(&event);
             const int eventChannel{event.buffer[0] & 0xf};
             if (event.size == 3 && 0xAF < event.buffer[0] && event.buffer[0] < 0xC0 && event.buffer[1] == 0x78) {
+                for (int sketchpadTrack = 0; sketchpadTrack < ZynthboxTrackCount; ++sketchpadTrack) {
+                    d->trackActivationRewriteCount[sketchpadTrack][eventChannel] = 0;
+                    d->trackActivationRewrites[sketchpadTrack][eventChannel] = -1;
+                }
                 for (int note = 0; note < 128; ++note) {
                     d->noteState[eventChannel][note] = 0;
                 }
@@ -513,6 +523,32 @@ const int & MidiRouterDevice::noteActivationTrack(const int& channel, const int&
 {
     return d->noteActivationTrack[channel][note];
 }
+
+const void MidiRouterDevice::setTrackActivationRewriteChannel(const int& sketchpadTrack, const int& eventChannel, const int& rewriteChannel) const
+{
+    if (rewriteChannel == -1) {
+        // When asked to set the rewrite channel to -1, it means we're logically identifying an off note, so count down our activations
+        d->trackActivationRewriteCount[std::clamp(sketchpadTrack, 0, ZynthboxTrackCount - 1)][std::clamp(eventChannel, 0, 15)]--;
+        if (d->trackActivationRewriteCount[std::clamp(sketchpadTrack, 0, ZynthboxTrackCount - 1)][std::clamp(eventChannel, 0, 15)] < 0) {
+            // This may happen if we're being given off notes after having also been given an all-notes-off, so handle that gracefully
+            d->trackActivationRewriteCount[std::clamp(sketchpadTrack, 0, ZynthboxTrackCount - 1)][std::clamp(eventChannel, 0, 15)] = 0;
+        }
+    } else {
+        // When asked to set the rewrite channel to other than -1, it means we're logically identifying an on note, so count down our activations
+        d->trackActivationRewriteCount[std::clamp(sketchpadTrack, 0, ZynthboxTrackCount - 1)][std::clamp(eventChannel, 0, 15)]++;
+    }
+    if (d->trackActivationRewriteCount[std::clamp(sketchpadTrack, 0, ZynthboxTrackCount - 1)][std::clamp(eventChannel, 0, 15)] == 0) {
+        d->trackActivationRewrites[std::clamp(sketchpadTrack, 0, ZynthboxTrackCount - 1)][std::clamp(eventChannel, 0, 15)] = -1;
+    } else {
+        d->trackActivationRewrites[std::clamp(sketchpadTrack, 0, ZynthboxTrackCount - 1)][std::clamp(eventChannel, 0, 15)] = std::clamp(rewriteChannel, -1, 15);
+    }
+}
+
+const int & MidiRouterDevice::trackActivationRewriteChannel(const int& sketchpadTrack, const int& eventChannel) const
+{
+    return d->trackActivationRewrites[std::clamp(sketchpadTrack, 0, ZynthboxTrackCount - 1)][std::clamp(eventChannel, 0, 15)];
+}
+
 
 int MidiRouterDevice::ccValue(const int& midiChannel, const int& ccControl) const
 {
