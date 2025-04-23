@@ -2,6 +2,7 @@
 #include "SamplerSynth.h"
 
 #include "Helper.h"
+#include "PatternModel.h"
 #include "PlayGridManager.h"
 #include "SamplerSynthSound.h"
 #include "SamplerSynthVoice.h"
@@ -56,6 +57,7 @@ public:
     SubChannel subChannels[SubChannelCount];
     SamplerVoicePoolRing *voicePool{nullptr};
     QList<ClipAudioSource*> trackSamples;
+    ClipAudioSource::SamplePickingStyle samplePickingStyle{ClipAudioSource::AllPickingStyle};
     /**
      * Writes any ClipCommands which match the midi message passed to the function to the list also passed in
      * @param listToPopulate The command ring that should have commands written to it
@@ -64,6 +66,7 @@ public:
      * @param byte3 The third byte of a midi message
      */
     void midiMessageToClipCommands(ClipCommandRing *listToPopulate, const int &byte1, const int &byte2, const int &byte3) const;
+    void resortSamples();
     SamplerSynthPrivate* d{nullptr};
     int midiChannel{-1};
     int modwheelValue{0};
@@ -388,63 +391,84 @@ SamplerChannel::~SamplerChannel() {
 
 void SamplerChannel::midiMessageToClipCommands(ClipCommandRing* listToPopulate, const int& byte1, const int& byte2, const int& byte3) const
 {
-    // qDebug() << Q_FUNC_INFO << midiChannel << byte1 << byte2 << byte3;
+    // qDebug() << Q_FUNC_INFO << byte1 << byte2 << byte3;
+    bool matchedClip{false};
     const bool stopPlayback{byte1 < 0x90 || byte3 == 0};
     const float velocity{float(byte3) / float(127)};
     const int midiChannel{(byte1 & 0xf)};
     for (ClipAudioSource *clip : qAsConst(trackSamples)) {
         // There must be a clip or it just doesn't matter, and then the note must fit inside the clip's keyzone
         if (clip) {
-            // qDebug() << Q_FUNC_INFO << clip->getFilePath();
-            const QList<ClipAudioSourceSliceSettings*> slices{clip->sliceSettingsActual()};
-            const int &sliceCount{clip->sliceCount()};
-            const int extraSliceCount{sliceCount + 1};
-            bool matchedSlice{false};
-            // This little trick (going to slice count + 1) ensures that we run through the slices in defined order, and also process the root slice last
-            for (int sliceIndex = 0; sliceIndex < extraSliceCount; ++sliceIndex) {
-                const ClipAudioSourceSliceSettings *slice{sliceIndex == sliceCount ? clip->rootSliceActual() : slices.at(sliceIndex)};
-                if (slice->keyZoneStart() <= byte2 && byte2 <= slice->keyZoneEnd()) {
-                    // Since the stop velocity is actually "lift", we can't count on it to match whatever the start velocity was, so... let's stop all notes that match
-                    if (stopPlayback || (slice->velocityMinimum() <= byte3 && byte3 <= slice->velocityMaximum())) {
-                        if (slice->effectivePlaybackStyle() == ClipAudioSource::OneshotPlaybackStyle && stopPlayback) {
-                            // if stop command and clip playback style is Oneshot, don't submit the stop command - just let it run out
-                            // to force one-shots to stop, all-notes-off is handled by SamplerSynth directly
-                        } else {
-                            // subvoice -1 is conceptually the prime voice, anything from 0 inclusive to the amount non-inclusive are the subvoices
-                            for (int subvoice = -1; subvoice < slice->subvoiceCountPlayback(); ++subvoice) {
-                                ClipCommand *command = ClipCommand::channelCommand(clip, midiChannel);
-                                command->startPlayback = !stopPlayback;
-                                command->stopPlayback = stopPlayback;
-                                command->subvoice = subvoice;
-                                command->slice = slice->index();
-                                command->exclusivityGroup = slice->exclusivityGroup();
-                                if (command->startPlayback) {
-                                    command->changeVolume = true;
-                                    command->volume = velocity;
-                                }
-                                if (command->stopPlayback) {
-                                    // Don't actually set volume, just store the volume for velocity purposes... yes this is kind of a hack
-                                    command->volume = velocity;
-                                }
+            // qDebug() << Q_FUNC_INFO << samplePickingStyle << midiChannel << clip->sketchpadSlot() << clip->getFilePath();
+            // If the picking style is Same, we require that the midi channel matches the slot of the clip we're playing
+            if (samplePickingStyle != ClipAudioSource::SamePickingStyle || clip->sketchpadSlot() == midiChannel) {
+                const QList<ClipAudioSourceSliceSettings*> slices{clip->sliceSettingsActual()};
+                const int &sliceCount{clip->sliceCount()};
+                const int extraSliceCount{sliceCount + 1};
+                bool matchedSlice{false};
+                // This little trick (going to slice count + 1) ensures that we run through the slices in defined order, and also process the root slice last
+                for (int sliceIndex = 0; sliceIndex < extraSliceCount; ++sliceIndex) {
+                    const ClipAudioSourceSliceSettings *slice{sliceIndex == sliceCount ? clip->rootSliceActual() : slices.at(sliceIndex)};
+                    if (slice->keyZoneStart() <= byte2 && byte2 <= slice->keyZoneEnd()) {
+                        // Since the stop velocity is actually "lift", we can't count on it to match whatever the start velocity was, so... let's stop all notes that match
+                        if (stopPlayback || (slice->velocityMinimum() <= byte3 && byte3 <= slice->velocityMaximum())) {
+                            if (slice->effectivePlaybackStyle() == ClipAudioSource::OneshotPlaybackStyle && stopPlayback) {
+                                // if stop command and clip playback style is Oneshot, don't submit the stop command - just let it run out
+                                // to force one-shots to stop, all-notes-off is handled by SamplerSynth directly
+                            } else {
+                                // subvoice -1 is conceptually the prime voice, anything from 0 inclusive to the amount non-inclusive are the subvoices
+                                for (int subvoice = -1; subvoice < slice->subvoiceCountPlayback(); ++subvoice) {
+                                    ClipCommand *command = ClipCommand::channelCommand(clip, midiChannel);
+                                    command->startPlayback = !stopPlayback;
+                                    command->stopPlayback = stopPlayback;
+                                    command->subvoice = subvoice;
+                                    command->slice = slice->index();
+                                    command->exclusivityGroup = slice->exclusivityGroup();
+                                    if (command->startPlayback) {
+                                        command->changeVolume = true;
+                                        command->volume = velocity;
+                                    }
+                                    if (command->stopPlayback) {
+                                        // Don't actually set volume, just store the volume for velocity purposes... yes this is kind of a hack
+                                        command->volume = velocity;
+                                    }
                                     command->midiNote = byte2;
                                     command->changeLooping = true;
                                     command->looping = slice->looping();
-                                // }
-                                matchedSlice = true;
-                                listToPopulate->write(command, 0);
-                                // qDebug() << Q_FUNC_INFO << "Wrote command to list for" << clip << "slice" << slice << "subvoice" << subvoice;
+                                    matchedClip = matchedSlice = true;
+                                    listToPopulate->write(command, 0);
+                                    // qDebug() << Q_FUNC_INFO << "Wrote command to list for" << clip << "slice" << slice << "subvoice" << subvoice;
+                                }
+                            }
+                            // If our selection mode is a one-slice-only mode, bail now (that is,
+                            // only AllPickingStyle wants us to pick more than one slice)
+                            if (matchedSlice && clip->slicePickingStyle() != ClipAudioSource::AllPickingStyle) {
+                                break;
                             }
                         }
-                        // If our selection mode is a one-slice-only mode, bail now (that is,
-                        // only AllPickingStyle wants us to pick more than one slice)
-                        if (matchedSlice && clip->slicePickingStyle() != ClipAudioSource::AllPickingStyle) {
-                            break;
-                        }
                     }
+                }
+                // If our selection mode is a one-sample-only mode, bail now (that is,
+                // only AllPickingStyle wants us to pick more than one sample)
+                if (matchedClip && samplePickingStyle != ClipAudioSource::AllPickingStyle) {
+                    break;
                 }
             }
         }
     }
+}
+
+bool compareSampleSlots(ClipAudioSource* first, ClipAudioSource* second)
+{
+    return first->sketchpadSlot() < second->sketchpadSlot();
+}
+
+void SamplerChannel::resortSamples()
+{
+    // TODO Resorting samples could cause some amount of havoc on the system, so first we need to ensure that we stop all active voices on this channel
+    QList<ClipAudioSource*> newList = trackSamples;
+    std::sort(newList.begin(), newList.end(), &compareSampleSlots);
+    trackSamples = newList;
 }
 
 int SamplerChannel::process(jack_nframes_t nframes) {
@@ -489,13 +513,7 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                         // Note Off or On message
                         const int note{event.buffer[1]};
                         const int velocity{event.buffer[2]};
-                        if (byte1 < 0x90 || velocity == 0) {
-                            // Note off message
-                            midiMessageToClipCommands(&commandRing, byte1, note, velocity);
-                        } else {
-                            // Note on message
-                            playGridManager()->midiMessageToClipCommands(&commandRing, midiChannel, byte1, note, velocity);
-                        }
+                        midiMessageToClipCommands(&commandRing, byte1, note, velocity);
                         while (commandRing.readHead->processed == false) {
                             ClipCommand *command = commandRing.read();
                             const ClipAudioSourceSliceSettings *slice{command->clip->sliceFromIndex(command->slice)};
@@ -914,8 +932,18 @@ void SamplerSynth::registerClip(ClipAudioSource *clip)
         if (clip->registerForPolyphonicPlayback()) {
             SamplerChannel * channel = d->channels[clip->sketchpadTrack() + 1];
             QList<ClipAudioSource*> newTrackSamples = channel->trackSamples;
-            newTrackSamples << clip;
+            // Insert into the list according to the sample's slot position
+            int insertionIndex = 0;
+            for (; insertionIndex < newTrackSamples.count(); ++insertionIndex) {
+                if (newTrackSamples[insertionIndex]->sketchpadSlot() > clip->sketchpadSlot()) {
+                    break;
+                }
+            }
+            newTrackSamples.insert(insertionIndex, clip);
+            // qDebug() << Q_FUNC_INFO << newTrackSamples << insertionIndex << clip;
             channel->trackSamples = newTrackSamples;
+            // If the slot changes, we'll need to re-sort our list
+            connect(clip, &ClipAudioSource::sketchpadSlotChanged, this, [channel](){ channel->resortSamples(); });
         }
     } else {
         qDebug() << "Clip list already contains the clip up for registration" << clip << clip->getFilePath();
@@ -956,6 +984,13 @@ SamplerSynthSound * SamplerSynth::clipToSound(ClipAudioSource* clip) const
     return nullptr;
 }
 
+void SamplerSynth::setSamplePickingStyle(const int& channel, const ClipAudioSource::SamplePickingStyle& samplePickingStyle) const
+{
+    if (-2 < channel  && channel < ZynthboxTrackCount) {
+        d->channels[channel + 1]->samplePickingStyle = samplePickingStyle;
+    }
+}
+
 void SamplerSynth::handleClipCommand(ClipCommand *clipCommand, quint64 currentTick)
 {
     if (d->clipSounds.contains(clipCommand->clip) && clipCommand->midiChannel + 1 < d->channels.count()) {
@@ -974,7 +1009,7 @@ void SamplerSynth::handleClipCommand(ClipCommand *clipCommand, quint64 currentTi
 
 void SamplerSynth::setChannelEnabled(const int &channel, const bool &enabled) const
 {
-    if (channel > -2 && channel < 10) {
+    if (-2 < channel && channel < ZynthboxTrackCount) {
         if (d->channels[channel + 1]->enabled != enabled) {
             // qDebug() << "Setting SamplerSynth channel" << channel << "to" << (enabled ? "enabled" : "disabled");
             d->channels[channel + 1]->enabled = enabled;
