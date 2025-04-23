@@ -2,6 +2,7 @@
 
 #include "JackPassthrough.h"
 #include "ZynthboxBasics.h"
+#include "ClipAudioSource.h"
 
 #include <QObject>
 #include <QCoreApplication>
@@ -114,6 +115,23 @@ public:
     // Same exclusion rules as setSketchpadTrackTargetTrack (AnyTrack is not valid and will be ignored)
     Q_INVOKABLE void setCurrentSketchpadTrackTargetTrack(const ZynthboxBasics::Track &targetTrack);
     Q_SIGNAL void currentSketchpadTrackTargetTracksChanged();
+    /**
+     * \brief Sets the style of slot picking used for the given track
+     * Usually called by PatternModel's zl sync manager
+     * @param sketchpadTrack The track you wish to set the picking style for (AnyTrack and NoTrack are not valid and will result in the function being ignored)
+     * @param pickingStyle The slot picking style to use for the given track
+     */
+    Q_INVOKABLE void setSketchpadTrackSlotPickingStyle(const ZynthboxBasics::Track &sketchpadTrack, const ClipAudioSource::SamplePickingStyle &pickingStyle);
+    /**
+     * \brief Sets whether or not to trust the midi channel from external input devices on the given track (only used when in SamePickingStyle)
+     * When a track is set to SamePickingStyle, this setting defines whether we use the midi channel an external device gives us (true),
+     * or whether we will use the currently selected clip's index as the midi channel (false, the default)
+     * Usually called directly by sketchpad.channel
+     * @param sketchpadTrack The track you wish to set the picking style for (AnyTrack and NoTrack are not valid and will result in the function being ignored)
+     * @param trustExternalInputChannel Whether to use the midi channel in events from external devices, or redirect them to the currently set one
+     * @see setSketchpadTrackSlotPickingStyle
+     */
+    Q_INVOKABLE void setSketchpadTrackTrustExternalInputChannel(const ZynthboxBasics::Track &sketchpadTrack, const bool &trustExternalInputChannel);
 
     void setCurrentSketchpadTrack(int currentSketchpadTrack);
     int currentSketchpadTrack() const;

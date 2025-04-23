@@ -393,7 +393,29 @@ public:
                                 currentTrack = sketchpadTracks[sketchpadTrack];
                                 // Before we send things out, ensure that any note message is rewritten or blocked as required for the destination track's currently selected clip
                                 if (currentTrack->applyKeyScale(*event)) {
-                                    currentTrack->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                    // Ensure that, for hardware events, we squeeze the event onto whatever matches the current output setting for the track
+                                    // - If the selection mode is Same (that is, a clip plays into only the matching slot)
+                                    // - And also we do not trust the external input channel
+                                    // - Then we want to squeeze the event onto the channel matching the currently selected clip (translating to the selected pattern index)
+                                    // qDebug() << Q_FUNC_INFO << inputDeviceIsHardware << currentTrack->slotSelectionStyle << currentTrack->currentlySelectedPatternIndex;
+                                    if (inputDeviceIsHardware && currentTrack->slotSelectionStyle == ClipAudioSource::SamePickingStyle && currentTrack->trustExternalInputChannel == false) {
+                                        // We need to ensure we track activations here, so we can avoid sending off events to the wrong place
+                                        int rewriteChannel = eventDevice->trackActivationRewriteChannel(sketchpadTrack, eventChannel);
+                                        if (rewriteChannel == -1) {
+                                            rewriteChannel = currentTrack->currentlySelectedPatternIndex;
+                                        }
+                                        currentTrack->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry, rewriteChannel);
+                                        // Now let's ensure our device knows what to do with the event
+                                        if (byte0 < 0x90 || event->buffer[2] == 0) {
+                                            // This is an off note, so let's reset activation and allow sending things elsewhere
+                                            eventDevice->setTrackActivationRewriteChannel(sketchpadTrack, eventChannel, -1);
+                                        } else if (0x8F < byte0 && byte0 < 0xA0) {
+                                            // This is an on note, so let's register to push things onto the appropriate channel
+                                            eventDevice->setTrackActivationRewriteChannel(sketchpadTrack, eventChannel, rewriteChannel);
+                                        }
+                                    } else {
+                                        currentTrack->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                    }
                                     switch (currentTrack->destination) {
                                         // Functionally, these two are the same thing, the distinction is only really informational
                                         case MidiRouter::ZynthianDestination:
@@ -1176,6 +1198,24 @@ ZynthboxBasics::Track MidiRouter::currentSketchpadTrackTargetTrack() const
 void MidiRouter::setCurrentSketchpadTrackTargetTrack(const ZynthboxBasics::Track& targetTrack)
 {
     setSketchpadTrackTargetTrack(ZynthboxBasics::CurrentTrack, targetTrack);
+}
+
+void MidiRouter::setSketchpadTrackSlotPickingStyle(const ZynthboxBasics::Track& sketchpadTrack, const ClipAudioSource::SamplePickingStyle& pickingStyle)
+{
+    int track{sketchpadTrack};
+    if (0 > track || track > ZynthboxTrackCount) {
+        track = d->currentSketchpadTrack;
+    }
+    d->sketchpadTracks[track]->slotSelectionStyle = pickingStyle;
+}
+
+void MidiRouter::setSketchpadTrackTrustExternalInputChannel(const ZynthboxBasics::Track& sketchpadTrack, const bool& trustExternalInputChannel)
+{
+    int track{sketchpadTrack};
+    if (0 > track || track > ZynthboxTrackCount) {
+        track = d->currentSketchpadTrack;
+    }
+    d->sketchpadTracks[track]->trustExternalInputChannel = trustExternalInputChannel;
 }
 
 void MidiRouter::setCurrentSketchpadTrack(int sketchpadTrack)
