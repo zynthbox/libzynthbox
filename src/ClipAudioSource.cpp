@@ -106,6 +106,7 @@ public:
   float processingProgress{-1.0f};
   QString processingDescription;
   int sketchpadTrack{-1};
+  int sketchpadSlot{0};
   bool registerForPolyphonicPlayback{true};
   int laneAffinity{0};
   ClipAudioSourcePositionsModel *positionsModel{nullptr};
@@ -231,7 +232,7 @@ private:
   }
 };
 
-ClipAudioSource::ClipAudioSource(const char *filepath, const int &sketchpadTrack, const bool &registerForPolyphonicPlayback, bool muted, QObject *parent)
+ClipAudioSource::ClipAudioSource(const char *filepath, const int &sketchpadTrack, const int &sketchpadSlot, const bool &registerForPolyphonicPlayback, bool muted, QObject *parent)
     : QObject(parent)
     , d(new Private(this))
 {
@@ -240,6 +241,7 @@ ClipAudioSource::ClipAudioSource(const char *filepath, const int &sketchpadTrack
   d->engine = Plugin::instance()->getTracktionEngine();
   d->id = Plugin::instance()->nextClipId();
   d->sketchpadTrack = sketchpadTrack;
+  d->sketchpadSlot = sketchpadSlot;
   d->registerForPolyphonicPlayback = registerForPolyphonicPlayback;
   Plugin::instance()->addCreatedClipToMap(this);
 
@@ -264,7 +266,7 @@ ClipAudioSource::ClipAudioSource(const char *filepath, const int &sketchpadTrack
   d->positionsModel->moveToThread(Plugin::instance()->qmlEngine()->thread());
   // We don't connect to this, as we are already syncing explicitly in timerCallback
   // connect(d->positionsModel, &ClipAudioSourcePositionsModel::peakGainChanged, this, [&](){ d->syncAudioLevel(); });
-  connect(d->positionsModel, &QAbstractItemModel::dataChanged, this, [&](const QModelIndex& topLeft, const QModelIndex& /*bottomRight*/, const QVector< int >& roles = QVector<int>()){
+  connect(d->positionsModel, &QAbstractItemModel::dataChanged, this, [&](const QModelIndex& /*topLeft*/, const QModelIndex& /*bottomRight*/, const QVector< int >& /*roles = QVector<int>()*/){
     d->shouldSyncProgress = true;
   });
   SamplerSynth::instance()->registerClip(this);
@@ -490,6 +492,20 @@ void ClipAudioSource::setSketchpadTrack(const int& newValue)
   if (d->sketchpadTrack != adjusted) {
     d->sketchpadTrack = adjusted;
     Q_EMIT sketchpadTrackChanged();
+  }
+}
+
+int ClipAudioSource::sketchpadSlot() const
+{
+  return d->sketchpadSlot;
+}
+
+void ClipAudioSource::setSketchpadSlot(const int& newValue)
+{
+  const int adjusted{std::clamp(newValue, 0, 4)};
+  if (d->sketchpadSlot != adjusted) {
+    d->sketchpadSlot = adjusted;
+    Q_EMIT sketchpadSlotChanged();
   }
 }
 
