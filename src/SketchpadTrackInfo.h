@@ -24,6 +24,7 @@
 #include "MidiRouter.h"
 #include "KeyScales.h"
 #include "PatternModel.h"
+#include "ClipAudioSource.h"
 
 #include <jack/midiport.h>
 
@@ -56,6 +57,8 @@ public:
     MidiRouter::RoutingDestination destination{MidiRouter::ZynthianDestination};
     int currentlySelectedPatternIndex{-1};
     PatternModel *currentlySelectedPattern{nullptr};
+    ClipAudioSource::SamplePickingStyle slotSelectionStyle{ClipAudioSource::AllPickingStyle};
+    bool trustExternalInputChannel{false};
     KeyScales::Octave octave{KeyScales::Octave4};
     KeyScales::Pitch pitch{KeyScales::PitchC};
     KeyScales::Scale scale{KeyScales::ScaleChromatic};
