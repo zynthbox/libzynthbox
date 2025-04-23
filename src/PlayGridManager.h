@@ -291,7 +291,6 @@ public:
     Q_INVOKABLE QVariantList mostRecentlyChangedNotes() const;
     Q_SIGNAL void mostRecentlyChangedNotesChanged();
     Q_INVOKABLE void updateNoteState(QVariantMap metadata);
-    void midiMessageToClipCommands(ClipCommandRing *listToPopulate, const int &samplerIndex, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3) const;
 
     QStringList activeNotes() const;
     Q_SIGNAL void activeNotesChanged();
