@@ -721,7 +721,6 @@ public:
     void handleSequenceStop();
 
     Q_SLOT void handleMidiMessage(const MidiRouter::ListenerPort &port, const quint64 &timestamp, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const int& sketchpadTrack, const QString& hardwareDeviceId);
-    void midiMessageToClipCommands(ClipCommandRing* listToPopulate, const int& samplerIndex, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3) const;
 private:
     explicit PatternModel(PatternModel* parent);
     friend class ZLPatternSynchronisationManager;

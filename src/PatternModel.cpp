@@ -41,6 +41,7 @@
 #include "ClipAudioSource.h"
 #include "ClipAudioSourceSliceSettings.h"
 #include "MidiRouter.h"
+#include "SamplerSynth.h"
 #include "SyncTimer.h"
 #include "TimerCommand.h"
 #include "Plugin.h"
@@ -93,7 +94,8 @@ public:
 
     bool channelMuted{false};
     int channelSelectedClip{0};
-    ClipAudioSource::SamplePickingStyle samplePickingStyle{ClipAudioSource::SameOrFirstPickingStyle};
+    ClipAudioSource::SamplePickingStyle samplePickingStyle{ClipAudioSource::AllPickingStyle};
+    Q_SIGNAL void samplePickingStyleChanged();
     void setZlChannel(QObject *newZlChannel)
     {
         if (zlChannel != newZlChannel) {
@@ -201,20 +203,20 @@ public Q_SLOTS:
         // qDebug() << Q_FUNC_INFO << q->sketchpadTrack() << q->clipName();
         if (zlChannel) {
             const QString zlSamplePickingStyle = zlChannel->property("samplePickingStyle").toString();
-            // static const QLatin1String sameOrFirstStyle{"same-or-first"};
             static const QLatin1String sameStyle{"same"};
             static const QLatin1String firstStyle{"first"};
-            static const QLatin1String allStyle{"all"};
-            if (zlSamplePickingStyle == allStyle) {
-                samplePickingStyle = ClipAudioSource::AllPickingStyle;
-            } else if (zlSamplePickingStyle == firstStyle) {
+            // static const QLatin1String allStyle{"all"};
+            if (zlSamplePickingStyle == firstStyle) {
                 samplePickingStyle = ClipAudioSource::FirstPickingStyle;
             } else if (zlSamplePickingStyle == sameStyle) {
                 samplePickingStyle = ClipAudioSource::SamePickingStyle;
             } else {
-                // Default is same-or-first, so on real need to check here, and it's our delegated fallback option
-                samplePickingStyle = ClipAudioSource::SameOrFirstPickingStyle;
+                // Default is all matching, so on real need to check here, and it's our delegated fallback option
+                samplePickingStyle = ClipAudioSource::AllPickingStyle;
             }
+            Q_EMIT samplePickingStyleChanged();
+            SamplerSynth::instance()->setSamplePickingStyle(q->sketchpadTrack(), samplePickingStyle);
+            MidiRouter::instance()->setSketchpadTrackSlotPickingStyle(ZynthboxBasics::Track(q->sketchpadTrack()), samplePickingStyle);
             const QVariantList channelSamples = zlChannel->property("samples").toList();
             QList<int> slotIndices{0, 1, 2, 3, 4};
             switch(samplePickingStyle) {
@@ -226,12 +228,6 @@ public Q_SLOTS:
                     // Only use the equivalent slot to our own position
                     slotIndices = {q->clipIndex()};
                     break;
-                case ClipAudioSource::SameOrFirstPickingStyle:
-                default:
-                    // Try our own slot first, and then try the others in order
-                    slotIndices.removeAll(q->clipIndex());
-                    slotIndices.insert(0, q->clipIndex());
-                    break;
             }
 
             for (const int &slotIndex : qAsConst(slotIndices)) {
@@ -239,12 +235,6 @@ public Q_SLOTS:
                 if (sample) {
                     const int cppObjId{sample->property("cppObjId").toInt()};
                     clipIds << cppObjId;
-                    // qDebug() << Q_FUNC_INFO << "Sample in slot" << slotIndex << "has cppObjId" << cppObjId;
-                    if (samplePickingStyle == ClipAudioSource::SameOrFirstPickingStyle && cppObjId > -1 && slotIndex == q->clipIndex()) {
-                        // In SameOrFirst, if there is a sample in the matches-me slot, ignore any sample that isn't that one
-                        // If there is no sample in that slot, we want to try all the others in order
-                        break;
-                    }
                 }
             }
         }
@@ -639,7 +629,6 @@ public:
     NotesModel *gridModel{nullptr};
     NotesModel *clipSliceNotes{nullptr};
     QList<ClipAudioSource*> clips;
-    ClipCommandRing commandRing;
     /**
      * This function will return all clip sin the list which has a
      * keyZoneStart higher or equal to the given midi note and a keyZoneEnd
@@ -656,76 +645,6 @@ public:
             }
         }
         return found;
-    }
-    /**
-     * Writes any ClipCommands which match the midi message passed to the function to the list also passed in
-     * @param listToPopulate The command ring that should have commands written to it
-     * @param byte1 The first byte of a midi message (this is expected to be a channel message)
-     * @param byte2 The seconds byte of a midi message
-     * @param byte3 The third byte of a midi message
-     */
-    void midiMessageToClipCommands(ClipCommandRing *listToPopulate, const int &byte1, const int &byte2, const int &byte3) const {
-        bool matchedClip{false};
-        const bool stopPlayback{byte1 < 0x90 || byte3 == 0};
-        const float velocity{float(byte3) / float(127)};
-        const int midiChannel{(byte1 & 0xf)};
-        for (ClipAudioSource *clip : qAsConst(clips)) {
-            // There must be a clip or it just doesn't matter, and then the note must fit inside the clip's keyzone
-            if (clip) {
-                const QList<ClipAudioSourceSliceSettings*> slices{clip->sliceSettingsActual()};
-                const int &sliceCount{clip->sliceCount()};
-                const int extraSliceCount{sliceCount + 1};
-                bool matchedSlice{false};
-                // This little trick (going to slice count + 1) ensures that we run through the slices in defined order, and also process the root slice last
-                for (int sliceIndex = 0; sliceIndex < extraSliceCount; ++sliceIndex) {
-                    const ClipAudioSourceSliceSettings *slice{sliceIndex == sliceCount ? clip->rootSliceActual() : slices.at(sliceIndex)};
-                    if (slice->keyZoneStart() <= byte2 && byte2 <= slice->keyZoneEnd()) {
-                        // Since the stop velocity is actually "lift", we can't count on it to match whatever the start velocity was, so... let's stop all notes that match
-                        if (stopPlayback || (slice->velocityMinimum() <= byte3 && byte3 <= slice->velocityMaximum())) {
-                            if (slice->effectivePlaybackStyle() == ClipAudioSource::OneshotPlaybackStyle && stopPlayback) {
-                                // if stop command and clip playback style is Oneshot, don't submit the stop command - just let it run out
-                                // to force one-shots to stop, all-notes-off is handled by SamplerSynth directly
-                            } else {
-                                // subvoice -1 is conceptually the prime voice, anything from 0 inclusive to the amount non-inclusive are the subvoices
-                                for (int subvoice = -1; subvoice < slice->subvoiceCountPlayback(); ++subvoice) {
-                                    ClipCommand *command = ClipCommand::channelCommand(clip, midiChannel);
-                                    command->startPlayback = !stopPlayback;
-                                    command->stopPlayback = stopPlayback;
-                                    command->subvoice = subvoice;
-                                    command->slice = slice->index();
-                                    command->exclusivityGroup = slice->exclusivityGroup();
-                                    if (command->startPlayback) {
-                                        command->changeVolume = true;
-                                        command->volume = velocity;
-                                    }
-                                    if (command->stopPlayback) {
-                                        // Don't actually set volume, just store the volume for velocity purposes... yes this is kind of a hack
-                                        command->volume = velocity;
-                                    }
-                                        command->midiNote = byte2;
-                                        command->changeLooping = true;
-                                        command->looping = slice->looping();
-                                    // }
-                                    matchedClip = matchedSlice = true;
-                                    listToPopulate->write(command, 0);
-                                    // qDebug() << Q_FUNC_INFO << "Wrote command to list for" << clip << "slice" << slice << "subvoice" << subvoice;
-                                }
-                            }
-                            // If our selection mode is a one-sample-only mode, bail now (that is,
-                            // as with samples, only AllPickingStyle wants us to pick more than one slice)
-                            if (matchedSlice && clip->slicePickingStyle() != ClipAudioSource::AllPickingStyle) {
-                                break;
-                            }
-                        }
-                    }
-                }
-                // If our selection mode is a one-sample-only mode, bail now (that is,
-                // only AllPickingStyle wants us to pick more than one sample)
-                if (matchedClip && zlSyncManager->samplePickingStyle != ClipAudioSource::AllPickingStyle) {
-                    break;
-                }
-            }
-        }
     }
 };
 
@@ -1446,6 +1365,7 @@ void PatternModel::setDefaultNoteDuration(int defaultNoteDuration)
 {
     if (d->defaultNoteDuration != defaultNoteDuration) {
         d->defaultNoteDuration = defaultNoteDuration;
+        d->invalidatePosition();
         Q_EMIT defaultNoteDurationChanged();
     }
 }
@@ -2000,6 +1920,7 @@ QObject *PatternModel::gridModel() const
         connect(this, &PatternModel::sketchpadTrackChanged, refilTimer, QOverload<>::of(&QTimer::start));
         connect(this, &PatternModel::gridModelStartNoteChanged, refilTimer, QOverload<>::of(&QTimer::start));
         connect(this, &PatternModel::gridModelEndNoteChanged, refilTimer, QOverload<>::of(&QTimer::start));
+        connect(d->zlSyncManager, &ZLPatternSynchronisationManager::samplePickingStyleChanged, refilTimer, QOverload<>::of(&QTimer::start));
         // To ensure we also update when the clips for each position change
         connect(this, &PatternModel::noteDestinationChanged, refilTimer, QOverload<>::of(&QTimer::start));
         auto updateClips = [this,refilTimer](){
@@ -2211,6 +2132,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
             d->updateMostRecentStartTimestamp = false;
             d->mostRecentStartTimestamp = sequencePosition;
         }
+        const bool lockMidiChannelToClipIndex{d->zlSyncManager->samplePickingStyle == ClipAudioSource::SamePickingStyle};
         qint64 noteDuration{0};
         bool relevantToUs{false};
         for (int progressionIncrement = 0; progressionIncrement <= progressionLength; ++progressionIncrement) {
@@ -2234,7 +2156,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
 
                 StepData &stepData = d->getOrCreateStepData(nextPosition + (d->bankOffset * d->width));
                 if (stepData.isValid == false) {
-                    auto subnoteSender = [this, nextPosition, &invalidateNoteBuffersImmediately, noteDuration, schedulingIncrement, &stepData](const Note* subnote, const QVariantHash &metaHash, const qint64 &delay, StepData &noteStepData, int subnoteIndex) {
+                    auto subnoteSender = [this, lockMidiChannelToClipIndex, nextPosition, &invalidateNoteBuffersImmediately, noteDuration, schedulingIncrement, &stepData](const Note* subnote, const QVariantHash &metaHash, const qint64 &delay, StepData &noteStepData, int subnoteIndex) {
                         bool sendNotes{true};
                         // qDebug() << Q_FUNC_INFO << "Preparing note" << subnote << "at index" << subnoteIndex << "with meta hash" << metaHash;
                         const int probability{metaHash.value(probabilityString, 0).toInt()};
@@ -2262,9 +2184,13 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                 sendNotes = false;
                             }
                             if (sendNotes) {
-                                int duration{metaHash.value(durationString, noteDuration / d->patternTickToSyncTimerTick).toInt() * d->patternTickToSyncTimerTick};
-                                if (duration < 1) {
+                                int duration{metaHash.value(durationString, 0).toInt() * d->patternTickToSyncTimerTick};
+                                if (duration == 0) {
+                                    // If the duration is 0, duration should be the size of a step
                                     duration = noteDuration;
+                                } else if (duration < 0) {
+                                    // If the duration is less than 0, and we have a default note duration given, use that, otherwise use the step length
+                                    duration = (d->defaultNoteDuration + 1) < PatternModelDefaults::defaultNoteDuration ? noteDuration : d->defaultNoteDuration * d->patternTickToSyncTimerTick;
                                 }
                                 const int ratchetCount{metaHash.value(ratchetCountString, 0).toInt()};
                                 if (ratchetCount > 0) {
@@ -2315,7 +2241,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                                         }
                                     }
                                 } else {
-                                    const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->sketchpadTrack, quint64(schedulingIncrement));
+                                    const int avaialbleChannel = lockMidiChannelToClipIndex ? d->clipIndex : d->syncTimer->nextAvailableChannel(d->sketchpadTrack, quint64(schedulingIncrement));
                                     addNoteToBuffer(stepData.getOrCreateBuffer(delay), subnote, velocity, true, avaialbleChannel);
                                     addNoteToBuffer(stepData.getOrCreateBuffer(delay + duration), subnote, velocity, false, avaialbleChannel);
                                 }
@@ -2392,23 +2318,10 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                     case PatternModel::SampleLoopedDestination:
                         // If this channel is supposed to loop its sample, we are not supposed to be making patterny sounds
                         break;
-                    case PatternModel::SampleTriggerDestination:
-                    {
-                        const StepData &stepData = d->getOrCreateStepData(nextPosition + (d->bankOffset * d->width));
-                        QHash<int, juce::MidiBuffer>::const_iterator position;
-                        for (position = stepData.positionBuffers.constBegin(); position != stepData.positionBuffers.constEnd(); ++position) {
-                            for (const juce::MidiMessageMetadata &juceMessage : qAsConst(position.value())) {
-                                d->midiMessageToClipCommands(&d->commandRing, juceMessage.data[0], juceMessage.data[1], juceMessage.data[2]);
-                                while (d->commandRing.readHead->processed == false) {
-                                    d->syncTimer->scheduleClipCommand(d->commandRing.read(), quint64(qMax(0, schedulingIncrement + position.key())));
-                                }
-                            }
-                        }
-                        break;
-                    }
                     case PatternModel::ExternalDestination:
                         // While external destination /is/ somewhere else, libzl's MidiRouter does the actual work of the somewhere-else-ness
                         // We set this up in the midiChannelUpdater timeout handler (see PatternModel's ctor)
+                    case PatternModel::SampleTriggerDestination:
                     case PatternModel::SynthDestination:
                     default:
                     {
@@ -2510,15 +2423,6 @@ void PatternModel::handleMidiMessage(const MidiRouter::ListenerPort &port, const
                 }
             }
         }
-    }
-}
-
-void PatternModel::midiMessageToClipCommands(ClipCommandRing *listToPopulate, const int &samplerIndex, const unsigned char& byte1, const unsigned char& byte2, const unsigned char& byte3) const
-{
-    if (samplerIndex == d->sketchpadTrack && (!d->sequence || (d->sequence->shouldMakeSounds() && (d->sequence->soloPatternObject() == this || d->zlSyncManager->channelSelectedClip == d->clipIndex)))
-        // But also, only send notes there if we're in one of the internal-midi-triggered-sounds modes (essentially meaning "not external" but also let's honour no destination, so just be explicit about which the accepted ones are)
-        && (d->noteDestination == SampleTriggerDestination || d->noteDestination == SynthDestination || d->noteDestination == SampleLoopedDestination)) {
-            d->midiMessageToClipCommands(listToPopulate, byte1, byte2, byte3);
     }
 }
 
