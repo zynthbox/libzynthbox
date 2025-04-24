@@ -10,6 +10,7 @@
 
 class MidiRouterPrivate;
 class MidiRouterDevice;
+class SketchpadTrackInfo;
 /**
  * \brief System for routing midi messages from one jack input port (ZLRouter:MidiIn) to a set of output ports (ZLRouter::Channel0 through 15) based on their input channel settings
  *
@@ -102,7 +103,7 @@ public:
      * @param sketchpadTrack The track you wish to retrieve the target track for
      * @return The target track for the given sketchpad track
      */
-    ZynthboxBasics::Track sketchpadTrackTargetTrack(const ZynthboxBasics::Track &sketchpadTrack) const;
+    Q_INVOKABLE ZynthboxBasics::Track sketchpadTrackTargetTrack(const ZynthboxBasics::Track &sketchpadTrack) const;
     /**
      * \brief Set the track which should receive the midi events on the given track
      * @param sketchpadTrack The track that you wish to set the target track for (AnyTrack and NoTrack are not valid and will result in the function being ignored)
@@ -116,9 +117,15 @@ public:
     Q_INVOKABLE void setCurrentSketchpadTrackTargetTrack(const ZynthboxBasics::Track &targetTrack);
     Q_SIGNAL void currentSketchpadTrackTargetTracksChanged();
     /**
+     * \brief Retrieve the slot picking style for the given track
+     * @param sketchpadTrack The track you wish to fetch the picking style for (AnyTrack and NoTrack will be interpreted as CurrentTrack)
+     * @return The slot picking style for the given track, or All for an invalid track designation
+     */
+    Q_INVOKABLE const ClipAudioSource::SamplePickingStyle sketchpadTrackSlotPickingStyle(const ZynthboxBasics::Track &sketchpadTrack) const;
+    /**
      * \brief Sets the style of slot picking used for the given track
      * Usually called by PatternModel's zl sync manager
-     * @param sketchpadTrack The track you wish to set the picking style for (AnyTrack and NoTrack are not valid and will result in the function being ignored)
+     * @param sketchpadTrack The track you wish to set the picking style for (AnyTrack and NoTrack will be interpreted as CurrentTrack)
      * @param pickingStyle The slot picking style to use for the given track
      */
     Q_INVOKABLE void setSketchpadTrackSlotPickingStyle(const ZynthboxBasics::Track &sketchpadTrack, const ClipAudioSource::SamplePickingStyle &pickingStyle);
@@ -127,7 +134,7 @@ public:
      * When a track is set to SamePickingStyle, this setting defines whether we use the midi channel an external device gives us (true),
      * or whether we will use the currently selected clip's index as the midi channel (false, the default)
      * Usually called directly by sketchpad.channel
-     * @param sketchpadTrack The track you wish to set the picking style for (AnyTrack and NoTrack are not valid and will result in the function being ignored)
+     * @param sketchpadTrack The track you wish to set the picking style for (AnyTrack and NoTrack will be interpreted as CurrentTrack)
      * @param trustExternalInputChannel Whether to use the midi channel in events from external devices, or redirect them to the currently set one
      * @see setSketchpadTrackSlotPickingStyle
      */
@@ -198,6 +205,10 @@ public:
      * @returns A SketchpadTrackInfo instance for the given track
      */
     Q_INVOKABLE QObject *getSketchpadTrackInfo(const ZynthboxBasics::Track &track) const;
+    /**
+     * \brief Equivalent to getSketchpadTrackInfo, except returns the actual type
+     */
+    Q_INVOKABLE SketchpadTrackInfo *getSketchpadTrackInfoActual(const ZynthboxBasics::Track &track) const;
 
     Q_SIGNAL void addedHardwareDevice(const QString &deviceId, const QString &humanReadableName);
     Q_SIGNAL void removedHardwareDevice(const QString &deviceId, const QString &humanReadableName);

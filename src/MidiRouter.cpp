@@ -1114,6 +1114,16 @@ QObject * MidiRouter::getSketchpadTrackInfo(const ZynthboxBasics::Track& track) 
     return d->sketchpadTracks[track];
 }
 
+SketchpadTrackInfo * MidiRouter::getSketchpadTrackInfoActual(const ZynthboxBasics::Track& track) const
+{
+    if (track == ZynthboxBasics::CurrentTrack || track == ZynthboxBasics::AnyTrack) {
+        return d->sketchpadTracks[d->currentSketchpadTrack];
+    } else if (track == ZynthboxBasics::NoTrack) {
+        return nullptr;
+    }
+    return d->sketchpadTracks[track];
+}
+
 void MidiRouter::markAsDone() {
     d->done = true;
 }
@@ -1198,6 +1208,15 @@ ZynthboxBasics::Track MidiRouter::currentSketchpadTrackTargetTrack() const
 void MidiRouter::setCurrentSketchpadTrackTargetTrack(const ZynthboxBasics::Track& targetTrack)
 {
     setSketchpadTrackTargetTrack(ZynthboxBasics::CurrentTrack, targetTrack);
+}
+
+const ClipAudioSource::SamplePickingStyle MidiRouter::sketchpadTrackSlotPickingStyle(const ZynthboxBasics::Track& sketchpadTrack) const
+{
+    int track{sketchpadTrack};
+    if (0 > track || track > ZynthboxTrackCount) {
+        track = d->currentSketchpadTrack;
+    }
+    return d->sketchpadTracks[track]->slotSelectionStyle;
 }
 
 void MidiRouter::setSketchpadTrackSlotPickingStyle(const ZynthboxBasics::Track& sketchpadTrack, const ClipAudioSource::SamplePickingStyle& pickingStyle)
