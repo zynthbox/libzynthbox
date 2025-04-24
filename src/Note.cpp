@@ -206,7 +206,11 @@ void Note::setSubnotesOn(const QVariantList &velocities)
 
 void Note::setOn(int velocity)
 {
-    if (d->sketchpadTrackInfo && d->sketchpadTrackInfo->slotSelectionStyle == ClipAudioSource::SamePickingStyle) {
+    // For notes started on tracks set to target other tracks, we need to use that track's targeting settings, not our own
+    const ZynthboxBasics::Track thisTrack{ZynthboxBasics::Track(d->sketchpadTrack)};
+    const ZynthboxBasics::Track targetTrack{MidiRouter::instance()->sketchpadTrackTargetTrack(thisTrack)};
+    const SketchpadTrackInfo *targetTrackInfo{MidiRouter::instance()->getSketchpadTrackInfoActual(targetTrack)};
+    if (targetTrackInfo->slotSelectionStyle == ClipAudioSource::SamePickingStyle) {
         d->internalOnChannel = d->sketchpadTrackInfo->currentlySelectedPatternIndex;
     } else {
         d->internalOnChannel = d->syncTimer->nextAvailableChannel(d->sketchpadTrack);

@@ -2132,7 +2132,12 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
             d->updateMostRecentStartTimestamp = false;
             d->mostRecentStartTimestamp = sequencePosition;
         }
-        const bool lockMidiChannelToClipIndex{d->zlSyncManager->samplePickingStyle == ClipAudioSource::SamePickingStyle};
+        // For a pattern on tracks set to target other tracks, we need to use that track's targeting settings, not our own
+        const ZynthboxBasics::Track targetTrack{MidiRouter::instance()->sketchpadTrackTargetTrack(ZynthboxBasics::Track(d->sketchpadTrack))};
+        const bool lockMidiChannelToClipIndex{targetTrack == ZynthboxBasics::Track(d->sketchpadTrack)
+            ? d->zlSyncManager->samplePickingStyle == ClipAudioSource::SamePickingStyle
+            : MidiRouter::instance()->sketchpadTrackSlotPickingStyle(targetTrack) == ClipAudioSource::SamePickingStyle ? true : false
+        };
         qint64 noteDuration{0};
         bool relevantToUs{false};
         for (int progressionIncrement = 0; progressionIncrement <= progressionLength; ++progressionIncrement) {
