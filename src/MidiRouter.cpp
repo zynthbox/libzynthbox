@@ -1290,6 +1290,44 @@ void MidiRouter::setZynthianSynthKeyzones(int zynthianChannel, int keyZoneStart,
     }
 }
 
+void MidiRouter::sendMidiMessageToZynthianSynth(const int& zynthianChannel, const int& byteCount, const int& byte0, const int& byte1, const int& byte2) const
+{
+    if (-1 < zynthianChannel && zynthianChannel < 16) {
+        MidiRouterDevice *routerDevice{d->zynthianOutputs[zynthianChannel]};
+        if (byteCount ==1) {
+            routerDevice->midiOutputRing.write(juce::MidiBuffer(juce::MidiMessage(byte0)));
+        } else if (byteCount == 2) {
+            routerDevice->midiOutputRing.write(juce::MidiBuffer(juce::MidiMessage(byte0, byte1)));
+        } else if (byteCount == 3) {
+            routerDevice->midiOutputRing.write(juce::MidiBuffer(juce::MidiMessage(byte0, byte1, byte2)));
+        } else {
+            qWarning() << Q_FUNC_INFO << "Midi event is outside of bounds" << byteCount;
+        }
+    }
+}
+
+void MidiRouter::sendMidiMessageToControllers(const int& byteCount, const int& byte0, const int& byte1, const int& byte2) const
+{
+    juce::MidiBuffer midiBuffer;
+    if (byteCount ==1) {
+        midiBuffer.addEvent(juce::MidiMessage(byte0), 0);
+    } else if (byteCount == 2) {
+        midiBuffer.addEvent(juce::MidiMessage(byte0, byte1), 0);
+    } else if (byteCount == 3) {
+        midiBuffer.addEvent(juce::MidiMessage(byte0, byte1, byte2), 0);
+    } else {
+        qWarning() << Q_FUNC_INFO << "Midi event is outside of bounds" << byteCount;
+    }
+    if (midiBuffer.getNumEvents() > 0) {
+        // Only write the buffer to our devices, if it was valid
+        for (MidiRouterDevice *routerDevice : d->allEnabledOutputs) {
+            if (routerDevice->deviceType(MidiRouterDevice::HardwareDeviceType)) {
+                routerDevice->midiOutputRing.write(midiBuffer);
+            }
+        }
+    }
+}
+
 void MidiRouter::setExpressiveSplitPoint(const int& splitPoint)
 {
     if (d->expressiveSplitPoint != std::clamp(splitPoint, -1, 15)) {

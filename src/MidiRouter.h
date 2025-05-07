@@ -156,7 +156,6 @@ public:
      * @param acceptedMidiChannels A list of all channels accepted by the given synth
      */
     void setZynthianSynthAcceptedChannels(int zynthianChannel, const QList<int> &acceptedMidiChannels);
-
     /**
      * \brief Set the keyzone information for the Zynthian synth at the given index
      * @param zynthianChannel The index of the Zynthian synth to set up the keyzone for
@@ -165,6 +164,25 @@ public:
      * @param rootNote The note that should be considered C4 by this synth (that is, how much notes will be transposed by, compared to the default value of 60)
      */
     Q_INVOKABLE void setZynthianSynthKeyzones(int zynthianChannel, int keyZoneStart = 0, int keyZoneEnd = 127, int rootNote = 60);
+    /**
+     * \brief Write the given midi message directly to the synth on the given channel
+     * @note If autoconnect has not completed, the message will likely not be consumed correctly
+     * @param zynthianChannel The index of the Zynthian synth to write the message to
+     * @param byteCount The number of bytes which make up the message
+     * @param byte0 The first byte (will be clamped to 0-127)
+     * @param byte1 The second byte (will be clamped to 0-127)
+     * @param byte2 The third byte (will be clamped to 0-127)
+     */
+    void sendMidiMessageToZynthianSynth(const int &zynthianChannel, const int &byteCount, const int &byte0, const int &byte1, const int &byte2) const;
+
+    /**
+     * \brief Write the given midi message directly to all output-enabled hardware controllers
+     * @param byteCount The number of bytes which make up the message
+     * @param byte0 The first byte (will be clamped to 0-127)
+     * @param byte1 The second byte (will be clamped to 0-127)
+     * @param byte2 The third byte (will be clamped to 0-127)
+     */
+    void sendMidiMessageToControllers(const int &byteCount, const int &byte0, const int &byte1, const int &byte2) const;
 
     /**
      * \brief Call this function to reload the midi routing configuration and set ports back up
