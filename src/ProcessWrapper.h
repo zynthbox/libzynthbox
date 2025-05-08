@@ -72,7 +72,7 @@ public:
      * @see waitForOutput(QString, int)
      * @return The resulting output from that call
      */
-    Q_INVOKABLE QString call(const QByteArray &function, const QString &expectedOutput = {}, const int timeout = -1);
+    Q_INVOKABLE QString call(const QString &function, const QString &expectedOutput = {}, const int timeout = -1);
     /**
      * \brief Send some data to the process in a non-blocking manner
      * @param data The data to send to the process

@@ -154,7 +154,7 @@ void ProcessWrapper::stop(const int& timeout)
     }
 }
 
-QString ProcessWrapper::call(const QByteArray& function, const QString &expectedOutput, const int timeout)
+QString ProcessWrapper::call(const QString& function, const QString &expectedOutput, const int timeout)
 {
     if (d->process) {
         d->blockingCallInProgress = true;
@@ -165,7 +165,11 @@ QString ProcessWrapper::call(const QByteArray& function, const QString &expected
         Q_EMIT standardErrorChanged(d->standardError);
         // Not emitting the received signals (as nothing has been received yet...)
         // qDebug() << Q_FUNC_INFO << "Writing" << function << "to the process";
-        d->process->pty()->write(function);
+        if (function.endsWith("\n")) {
+            d->process->pty()->write(function.toUtf8());
+        } else {
+            d->process->pty()->write(QString("%1\n").arg(function).toUtf8());
+        }
         // qDebug() << Q_FUNC_INFO << "Write completed, now waiting for that to be acknowledged";
         // d->process->waitForBytesWritten();
         // can't use waitForReadyRead as we're capturing the data elsewhere which breaks that call
