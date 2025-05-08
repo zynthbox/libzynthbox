@@ -13,7 +13,7 @@ def talkToProcess():
     print("--- Call a couple of functions - first a non-blocking one: set 15 1")
     p.send(QByteArray(b"set 15 1\n"))
     print("--- Non-blocking function (without output) called - now calling a blocking function (which must return some output)")
-    theResult = p.call(QByteArray(b"preset file:///zynthian/zynthian-data/presets/lv2/synthv1_392Synthv1Patches.presets.lv2/392Synthv1Patches_NoizeExport01.ttl\n"))
+    theResult = p.call(b"preset file:///zynthian/zynthian-data/presets/lv2/synthv1_392Synthv1Patches.presets.lv2/392Synthv1Patches_NoizeExport01.ttl")
     print(f"--- The result data from the blocking call was:\n--- START RESULT ---\n{theResult}\n--- END RESULT ---")
     p.stop()
 
