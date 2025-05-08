@@ -3,6 +3,8 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDebug>
+#include <QMutex>
+#include <QMutexLocker>
 #include <QProcess>
 #include <QRegularExpression>
 
@@ -65,7 +67,7 @@ public:
     }
 
     QString awaitedOutput;
-    bool blockingCallInProgress{false};
+    QMutex blockingCallInProgress;
     bool dataReceivedAfterBlockingWrite{true};
     QString standardError;
     void handleReadyReadError() {
@@ -157,7 +159,7 @@ void ProcessWrapper::stop(const int& timeout)
 QString ProcessWrapper::call(const QString& function, const QString &expectedOutput, const int timeout)
 {
     if (d->process) {
-        d->blockingCallInProgress = true;
+        QMutexLocker locker(&d->blockingCallInProgress);
         d->dataReceivedAfterBlockingWrite = false;
         d->standardOutput = QString("\n");
         Q_EMIT standardOutputChanged(d->standardOutput);
@@ -191,7 +193,6 @@ QString ProcessWrapper::call(const QString& function, const QString &expectedOut
         d->dataReceivedAfterBlockingWrite = true; // just in case we've bailed out
         // qDebug() << Q_FUNC_INFO << "Waited (or timed out) and now have the following standard output:\n" << d->standardOutput;
         // qDebug() << Q_FUNC_INFO << "And the following standard error:\n" << d->standardError;
-        d->blockingCallInProgress = false;
         return d->standardOutput;
     }
     return {};
