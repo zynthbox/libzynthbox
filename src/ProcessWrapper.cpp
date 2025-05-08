@@ -70,7 +70,7 @@ public:
     QString standardError;
     void handleReadyReadError() {
         if (process) {
-            const QString newData{QString::fromLocal8Bit(process->readAllStandardError())};
+            const QString newData{QString::fromUtf8(process->readAllStandardError())};
             if (newData.isEmpty() == false) {
                 standardError.append(newData);
                 dataReceivedAfterBlockingWrite = true;
@@ -82,7 +82,7 @@ public:
     QString standardOutput;
     void handleReadyReadOutput() {
         if (process) {
-            const QString newData{QString::fromLocal8Bit(process->pty()->readAll())};
+            const QString newData{QString::fromUtf8(process->pty()->readAll())};
             if (newData.isEmpty() == false) {
                 standardOutput.append(newData);
                 dataReceivedAfterBlockingWrite = true;
