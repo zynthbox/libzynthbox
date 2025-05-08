@@ -67,7 +67,7 @@ public:
     }
 
     QString awaitedOutput;
-    QMutex blockingCallInProgress;
+    QRecursiveMutex blockingCallInProgress;
     bool dataReceivedAfterBlockingWrite{true};
     QString standardError;
     void handleReadyReadError() {
@@ -168,9 +168,13 @@ QString ProcessWrapper::call(const QString& function, const QString &expectedOut
         // Not emitting the received signals (as nothing has been received yet...)
         // qDebug() << Q_FUNC_INFO << "Writing" << function << "to the process";
         if (function.endsWith("\n")) {
-            d->process->pty()->write(function.toUtf8());
+            if (d->process->pty()->write(function.toUtf8()) == -1) {
+                qWarning() << Q_FUNC_INFO << "Error occurred while writing function";
+            }
         } else {
-            d->process->pty()->write(QString("%1\n").arg(function).toUtf8());
+            if (d->process->pty()->write(QString("%1\n").arg(function).toUtf8()) == -1) {
+                qWarning() << Q_FUNC_INFO << "Error occurred while writing function (with added newline)";
+            }
         }
         // qDebug() << Q_FUNC_INFO << "Write completed, now waiting for that to be acknowledged";
         // d->process->waitForBytesWritten();
@@ -182,7 +186,7 @@ QString ProcessWrapper::call(const QString& function, const QString &expectedOut
                 if (timeout > -1 && (QDateTime::currentMSecsSinceEpoch() - startTime) > timeout) {
                     break;
                 }
-                qApp->processEvents();
+                qApp->processEvents(QEventLoop::AllEvents, 50);
             }
         } else {
             // qDebug() << Q_FUNC_INFO << "Function was written, now waiting the output" << expectedOutput << "or the timeout" << timeout;
@@ -201,10 +205,11 @@ QString ProcessWrapper::call(const QString& function, const QString &expectedOut
 void ProcessWrapper::send(const QByteArray& data)
 {
     if (d->process) {
+        QMutexLocker locker(&d->blockingCallInProgress);
         d->standardOutput = QString("\n");
         Q_EMIT standardOutputChanged(d->standardOutput);
         d->standardError = QString("\n");
-        Q_EMIT standardOutputChanged(d->standardOutput);
+        Q_EMIT standardErrorChanged(d->standardError);
         // Not emitting the received signals (as nothing has been received yet...)
         d->process->pty()->write(data);
     }
@@ -229,16 +234,17 @@ ProcessWrapper::WaitForOutputResult ProcessWrapper::waitForOutput(const QString&
     WaitForOutputResult result{ProcessWrapper::WaitForOutputFailure};
     qint64 startTime = QDateTime::currentMSecsSinceEpoch();
     QRegularExpression regularExpectedOutput{expectedOutput};
+    // qDebug() << Q_FUNC_INFO << "Waiting for output" << expectedOutput;
     while (true) {
-        d->handleReadyReadError();
-        d->handleReadyReadOutput();
         if (timeout > -1 && (QDateTime::currentMSecsSinceEpoch() - startTime) > timeout) {
             result = ProcessWrapper::WaitForOutputTimeout;
             break;
         }
         if (stream == StandardOutputStream || stream == StandardOutputAndErrorStream || stream == CombinedStreams) {
+            d->handleReadyReadOutput();
             QRegularExpressionMatch match = regularExpectedOutput.match(d->standardOutput);
             if (match.hasMatch()) {
+                // qDebug() << Q_FUNC_INFO << "Found match";
                 d->awaitedOutput = d->standardOutput.left(match.capturedStart(0));
                 if (stream == CombinedStreams) {
                     d->awaitedOutput.append(d->standardError);
@@ -248,6 +254,7 @@ ProcessWrapper::WaitForOutputResult ProcessWrapper::waitForOutput(const QString&
             }
         }
         if (stream == StandardErrorStream || stream == StandardOutputAndErrorStream || stream == CombinedStreams) {
+            d->handleReadyReadError();
             QRegularExpressionMatch match = regularExpectedOutput.match(d->standardError);
             if (match.hasMatch()) {
                 d->awaitedOutput = d->standardError.left(match.capturedStart(0));
@@ -258,7 +265,7 @@ ProcessWrapper::WaitForOutputResult ProcessWrapper::waitForOutput(const QString&
                 break;
             }
         }
-        qApp->processEvents();
+        qApp->processEvents(QEventLoop::AllEvents, 50);
     }
     return result;
 }
