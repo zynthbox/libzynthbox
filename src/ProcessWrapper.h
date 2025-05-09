@@ -66,13 +66,23 @@ public:
 
     /**
      * \brief Send an instruction to the process, and block until the function returns some data, or optionally until a given timeout and/or expected output
+     * @note If there is already a call ongoing, this function will fail immediately and return an empty string! Use callInProgress() to detect this
      * @param function The instruction to send to the process
      * @param expectedOutput Some output to wait for (a regular expression)
      * @param timeout The amount of time to wait in milliseconds
      * @see waitForOutput(QString, int)
-     * @return The resulting output from that call
+     * @see callInProgress()
+     * @return The resulting output from that call, or an empty string if a call was already in progress (see callInProgress())
      */
     Q_INVOKABLE QString call(const QString &function, const QString &expectedOutput = {}, const int timeout = -1);
+    /**
+     * \brief Call this to test whether a blocking call is currently happening
+     * This might seem a little odd, but our problem here is that we may very well end up back in the calling thread
+     * when the call is waiting for stream data. This function allows us to recognise that situation, and return useful
+     * commentary to that effect.
+     * @returns Empty string if there is no call ongoing, or the function which was called if there is one
+     */
+    Q_INVOKABLE const QString &callInProgress() const;
     /**
      * \brief Send some data to the process in a non-blocking manner
      * @param data The data to send to the process
@@ -142,12 +152,12 @@ public:
      * \brief Emitted when output is written to standard output by the process
      * @param output The output received from the process
      */
-    Q_SIGNAL void standardOutputReceived(const QString &output);
+    Q_SIGNAL void standardOutputReceived(const QByteArray &output);
     /**
      * \brief Emitted when output is written to standard error by the process
      * @param output The output received from the process
      */
-    Q_SIGNAL void standardErrorReceived(const QString &output);
+    Q_SIGNAL void standardErrorReceived(const QByteArray &output);
 #endif
 
     enum ProcessState {

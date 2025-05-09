@@ -67,29 +67,34 @@ public:
     }
 
     QString awaitedOutput;
-    QRecursiveMutex blockingCallInProgress;
+    QMutex blockingCallInProgress;
+    QString runningCall;
     bool dataReceivedAfterBlockingWrite{true};
-    QString standardError;
-    void handleReadyReadError() {
+    QByteArray standardError;
+    void handleReadyReadError(bool emitSignals) {
         if (process) {
-            const QString newData{QString::fromUtf8(process->readAllStandardError())};
+            const QByteArray newData{process->readAllStandardError()};
             if (newData.isEmpty() == false) {
                 standardError.append(newData);
                 dataReceivedAfterBlockingWrite = true;
-                Q_EMIT q->standardErrorChanged(standardError);
-                Q_EMIT q->standardErrorReceived(newData);
+                if (emitSignals) {
+                    Q_EMIT q->standardErrorChanged(standardError);
+                    Q_EMIT q->standardErrorReceived(newData);
+                }
             }
         }
     }
-    QString standardOutput;
-    void handleReadyReadOutput() {
+    QByteArray standardOutput;
+    void handleReadyReadOutput(bool emitSignals) {
         if (process) {
-            const QString newData{QString::fromUtf8(process->pty()->readAll())};
+            const QByteArray newData{process->pty()->readAll()};
             if (newData.isEmpty() == false) {
                 standardOutput.append(newData);
                 dataReceivedAfterBlockingWrite = true;
-                Q_EMIT q->standardOutputChanged(standardOutput);
-                Q_EMIT q->standardOutputReceived(newData);
+                if (emitSignals) {
+                    Q_EMIT q->standardOutputChanged(standardOutput);
+                    Q_EMIT q->standardOutputReceived(newData);
+                }
             }
         }
     }
@@ -124,8 +129,8 @@ void ProcessWrapper::start(const QString& executable, const QStringList& paramet
     connect(d->process, &KPtyProcess::errorOccurred, this, [this](const QProcess::ProcessError &error){ d->handleError(error); });
     connect(d->process, QOverload<int, QProcess::ExitStatus>::of(&KPtyProcess::finished), this, [this](const int &exitCode, const QProcess::ExitStatus &exitStatus){ d->handleFinished(exitCode, exitStatus); });
     connect(d->process, &QProcess::stateChanged, this, [this](const QProcess::ProcessState &newState){ d->handleStateChange(newState); });
-    connect(d->process->pty(), &KPtyDevice::readyRead, this, [this]() { d->handleReadyReadOutput(); });
-    connect(d->process, &KPtyProcess::readyReadStandardError, this, [this](){ d->handleReadyReadError(); });
+    connect(d->process->pty(), &KPtyDevice::readyRead, this, [this]() { if (d->runningCall.isEmpty()) { d->handleReadyReadOutput(true); } });
+    connect(d->process, &KPtyProcess::readyReadStandardError, this, [this](){ if (d->runningCall.isEmpty()) { d->handleReadyReadError(true); } });
     d->executable = executable;
     d->parameters = parameters;
     d->process->setProgram(executable, parameters);
@@ -159,56 +164,63 @@ void ProcessWrapper::stop(const int& timeout)
 QString ProcessWrapper::call(const QString& function, const QString &expectedOutput, const int timeout)
 {
     if (d->process) {
-        QMutexLocker locker(&d->blockingCallInProgress);
-        d->dataReceivedAfterBlockingWrite = false;
-        d->standardOutput = QString("\n");
-        Q_EMIT standardOutputChanged(d->standardOutput);
-        d->standardError = QString("\n");
-        Q_EMIT standardErrorChanged(d->standardError);
-        // Not emitting the received signals (as nothing has been received yet...)
-        // qDebug() << Q_FUNC_INFO << "Writing" << function << "to the process";
-        if (function.endsWith("\n")) {
-            if (d->process->pty()->write(function.toUtf8()) == -1) {
-                qWarning() << Q_FUNC_INFO << "Error occurred while writing function";
-            }
-        } else {
-            if (d->process->pty()->write(QString("%1\n").arg(function).toUtf8()) == -1) {
-                qWarning() << Q_FUNC_INFO << "Error occurred while writing function (with added newline)";
-            }
-        }
-        // qDebug() << Q_FUNC_INFO << "Write completed, now waiting for that to be acknowledged";
-        // d->process->waitForBytesWritten();
-        // can't use waitForReadyRead as we're capturing the data elsewhere which breaks that call
-        if (expectedOutput.isEmpty()) {
-            // qDebug() << Q_FUNC_INFO << "Function was written, now waiting for output or the timeout" << timeout;
-            qint64 startTime = QDateTime::currentMSecsSinceEpoch();
-            while (d->dataReceivedAfterBlockingWrite == false) {
-                if (timeout > -1 && (QDateTime::currentMSecsSinceEpoch() - startTime) > timeout) {
-                    break;
+        if (d->blockingCallInProgress.try_lock()) {
+            d->runningCall = function;
+            d->dataReceivedAfterBlockingWrite = false;
+            d->standardOutput = QString("\n").toUtf8();
+            d->standardError = QString("\n").toUtf8();
+            // Not emitting the received signals (as nothing has been received yet...)
+            // qDebug() << Q_FUNC_INFO << "Writing" << function << "to the process";
+            if (function.endsWith("\n")) {
+                if (d->process->pty()->write(function.toUtf8()) == -1) {
+                    qWarning() << Q_FUNC_INFO << "Error occurred while writing function";
                 }
-                qApp->processEvents(QEventLoop::AllEvents, 50);
+            } else {
+                if (d->process->pty()->write(QString("%1\n").arg(function).toUtf8()) == -1) {
+                    qWarning() << Q_FUNC_INFO << "Error occurred while writing function (with added newline)";
+                }
             }
-        } else {
-            // qDebug() << Q_FUNC_INFO << "Function was written, now waiting the output" << expectedOutput << "or the timeout" << timeout;
-            WaitForOutputResult result = waitForOutput(expectedOutput, timeout);
-            Q_UNUSED(result)
-            // qDebug() << Q_FUNC_INFO << "Waited for the output" << expectedOutput << "for" << timeout << "milliseconds, with the result being" << result;
+            // qDebug() << Q_FUNC_INFO << "Write completed, now waiting for that to be acknowledged";
+            // d->process->waitForBytesWritten();
+            // can't use waitForReadyRead as we're capturing the data elsewhere which breaks that call
+            if (expectedOutput.isEmpty()) {
+                // qDebug() << Q_FUNC_INFO << "Function was written, now waiting for output or the timeout" << timeout;
+                qint64 startTime = QDateTime::currentMSecsSinceEpoch();
+                while (d->dataReceivedAfterBlockingWrite == false) {
+                    if (timeout > -1 && (QDateTime::currentMSecsSinceEpoch() - startTime) > timeout) {
+                        break;
+                    }
+                    qApp->processEvents(QEventLoop::AllEvents, 50);
+                }
+            } else {
+                // qDebug() << Q_FUNC_INFO << "Function was written, now waiting the output" << expectedOutput << "or the timeout" << timeout;
+                WaitForOutputResult result = waitForOutput(expectedOutput, timeout);
+                Q_UNUSED(result)
+                // qDebug() << Q_FUNC_INFO << "Waited for the output" << expectedOutput << "for" << timeout << "milliseconds, with the result being" << result;
+            }
+            d->dataReceivedAfterBlockingWrite = true; // just in case we've bailed out
+            // qDebug() << Q_FUNC_INFO << "Waited (or timed out) and now have the following standard output:\n" << d->standardOutput;
+            // qDebug() << Q_FUNC_INFO << "And the following standard error:\n" << d->standardError;
+            d->runningCall.clear();
+            d->blockingCallInProgress.unlock();
+            return d->standardOutput;
         }
-        d->dataReceivedAfterBlockingWrite = true; // just in case we've bailed out
-        // qDebug() << Q_FUNC_INFO << "Waited (or timed out) and now have the following standard output:\n" << d->standardOutput;
-        // qDebug() << Q_FUNC_INFO << "And the following standard error:\n" << d->standardError;
-        return d->standardOutput;
     }
     return {};
+}
+
+const QString &ProcessWrapper::callInProgress() const
+{
+    return d->runningCall;
 }
 
 void ProcessWrapper::send(const QByteArray& data)
 {
     if (d->process) {
         QMutexLocker locker(&d->blockingCallInProgress);
-        d->standardOutput = QString("\n");
+        d->standardOutput = QString("\n").toUtf8();
         Q_EMIT standardOutputChanged(d->standardOutput);
-        d->standardError = QString("\n");
+        d->standardError = QString("\n").toUtf8();
         Q_EMIT standardErrorChanged(d->standardError);
         // Not emitting the received signals (as nothing has been received yet...)
         d->process->pty()->write(data);
@@ -241,7 +253,7 @@ ProcessWrapper::WaitForOutputResult ProcessWrapper::waitForOutput(const QString&
             break;
         }
         if (stream == StandardOutputStream || stream == StandardOutputAndErrorStream || stream == CombinedStreams) {
-            d->handleReadyReadOutput();
+            d->handleReadyReadOutput(false);
             QRegularExpressionMatch match = regularExpectedOutput.match(d->standardOutput);
             if (match.hasMatch()) {
                 // qDebug() << Q_FUNC_INFO << "Found match";
@@ -254,7 +266,7 @@ ProcessWrapper::WaitForOutputResult ProcessWrapper::waitForOutput(const QString&
             }
         }
         if (stream == StandardErrorStream || stream == StandardOutputAndErrorStream || stream == CombinedStreams) {
-            d->handleReadyReadError();
+            d->handleReadyReadError(false);
             QRegularExpressionMatch match = regularExpectedOutput.match(d->standardError);
             if (match.hasMatch()) {
                 d->awaitedOutput = d->standardError.left(match.capturedStart(0));
