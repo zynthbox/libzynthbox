@@ -1,11 +1,108 @@
-#pragma once
+#ifndef PROCESSWRAPPER_H
+#define PROCESSWRAPPER_H
 
 #include <QObject>
 #include <QVariantMap>
 
+class ProcessWrapper;
+class ProcessWrapperTransaction : public QObject {
+    Q_OBJECT
+    Q_PROPERTY(TransactionState state READ state NOTIFY stateChanged)
+    /**
+     * \brief Whether to automatically release the transaction once completed
+     * @note Setting this to true after the operation has completed will immediately release the transaction
+     * @default false
+     */
+    Q_PROPERTY(bool autoRelease READ autoRelease WRITE setAutoRelease NOTIFY autoReleaseChanged)
+public:
+    explicit ProcessWrapperTransaction(const quint64 &transactionId, const QString &command, ProcessWrapper *parent = nullptr);
+    ~ProcessWrapperTransaction() override;
+
+    enum TransactionState {
+        ///@< The command has not yet been called and is waiting for its turn
+        WaitingToStartState,
+        ///@< The command is currently running, and the process is attempting to perform the requested action
+        RunningState,
+        ///@< The command has completed successfully (you would need to introspect the output to determine success or failure)
+        CompletedState,
+    };
+
+    /**
+     * \brief The transaction ID assigned to this by its creator
+     * @note When created by ProcessWrapper, the IDs are assigned in sequential, increasing order,
+     * meaning they can be used for comparison purposes for out-of-order instruction handling
+     */
+    Q_INVOKABLE const quint64 &transactionId() const;
+    /**
+     * \brief The command this transaction represents
+     */
+    Q_INVOKABLE const QString &command() const;
+
+    /**
+     * \brief The current state of this transaction
+     * @return The current state of this transaction
+     */
+    Q_INVOKABLE TransactionState state() const;
+    Q_SIGNAL void stateChanged() const;
+    /**
+     * \brief This will return when the given state is reached
+     * @param state The transaction state you want to wait for (this is commonly the completed state, so that's our default)
+     */
+    Q_INVOKABLE void waitForState(const TransactionState &state = CompletedState) const;
+    /**
+     * \brief The output sent to standard output since the command was initiated
+     */
+    Q_INVOKABLE QString standardOutput() const;
+    Q_SIGNAL void standardOutputChanged();
+    /**
+     * \brief The output sent to standard error since the command was initiated
+     */
+    Q_INVOKABLE QString standardError() const;
+    Q_SIGNAL void standardErrorChanged();
+
+    bool autoRelease() const;
+    Q_INVOKABLE void setAutoRelease(const bool &autoRelease);
+    Q_SIGNAL void autoReleaseChanged();
+    /**
+     * \brief Removes the object from the parent ProcessWrapper, and queues it for deletion
+     */
+    Q_INVOKABLE void release();
+    /**
+     * \brief Whether or not the current standard output contained by this transaction ends with the given string
+     * @param commandPrompt The string to test against
+     * @return True if the current standard output data ends with the given command prompt
+     */
+    bool hasCommandPrompt(const QString &commandPrompt) const;
+    /**
+     * \brief Removes the function from the start of the standard output, and everything from the first occurrence of the given string from the end
+     * @param commandPrompt The string to test against
+     * @return The left over data from the end of the command prompt and forward
+     */
+    QByteArray removeCommandPromptFromStandardOutput(const QString &commandPrompt) const;
+protected:
+    void setState(const TransactionState &state);
+    void setStandardOutput(const QString &standardOut);
+    void appendStandardOutput(const QByteArray &standardOut);
+    void setStandardError(const QString &standardError);
+    void appendStandardError(const QByteArray &standardError);
+private:
+    friend class ProcessWrapper;
+    class Private;
+    Private *d{nullptr};
+};
+
 /**
  * \brief A way to start, stop, and interact with external processes which have a call/output command-line style interface
  * @note As this uses the QProcess asynchronous API primarily, it requires a Qt event loop to be running (such as a QCoreApplication)
+ *
+ * Using the transaction based process handling is done by first setting the command prompt using setCommandPrompt(QString), which
+ * will be the string that is used to detect when a command has completed. As the name implies, this essentially means that you will
+ * be operating using a serial command prompt style interface, where each command is sent out when the command prompt is detected,
+ * signalling the process is ready for more commands. If commands are sent before the process is ready, your instruction will be
+ * queued up and sent to the process in the order of submission. You are not guaranteed that the commands will return in order, if
+ * you somehow manage to send them from other threads.
+ *
+ * See also ProcessWrapperExample.py for an example of how to use the python bindings
  */
 class ProcessWrapper : public QObject {
     Q_OBJECT
@@ -35,14 +132,30 @@ class ProcessWrapper : public QObject {
     Q_PROPERTY(QObject* internalProcess READ internalProcess NOTIFY internalProcessChanged)
 
     /**
-     * \brief The standard output received after the most recent call to call() or send()
+     * \brief All standard output received since process start, however many complete lines fit into 1MiB, or at least one line
      */
     Q_PROPERTY(QString standardOutput READ standardOutput NOTIFY standardOutputChanged)
     /**
-     * \brief The standard error output received after the most recent call to call() or send()
+     * \brief All standard error output received since process start, however many complete lines fit into 1MiB, or at least one line
      */
     Q_PROPERTY(QString standardError READ standardError NOTIFY standardErrorChanged)
+
+    /**
+     * \brief A list of the most recent 10,000 transactions this object has been asked to initiate
+     * We "only" keep track of 10,000 transactions and will ask transactions older than that to be
+     * deleted. It is a number picked essentially out thin air, and if we discover something more
+     * clever is required, we can do that as well, but this should do us to ensure we both have a
+     * decent number of potential commands asked of us, without losing results too fast, and also
+     * not just filling up the memory with ancient command nobody needs any longer.
+     * @note You can manually clear out a transaction once you're done with its data using transaction->release()
+     */
+    Q_PROPERTY(QList<QObject*> transactions READ transactions NOTIFY transactionsChanged)
 public:
+    /**
+     * \brief Constructs a new ProcessWrapper instance
+     * @see setCommandPrompt(QString)
+     * @return A ProcessWrapper instance
+     */
     explicit ProcessWrapper(QObject *parent = nullptr);
     ~ProcessWrapper() override;
 
@@ -54,8 +167,9 @@ public:
      * @param executable An executable as QProcess understands it
      * @param parameters Optionally, parameters to be sent along to the executable (also as QProcess understands it)
      * @param environment Optionally, the environment variables that this process should be given (if none are passed, or an empty list is, the current process environment is inherited)
+     * @return A transaction which, when marked as Completed, indicates that the process has been started successfully
      */
-    Q_INVOKABLE void start(const QString& executable, const QStringList &parameters = {}, const QVariantMap &environment = {});
+    Q_INVOKABLE ProcessWrapperTransaction *start(const QString& executable, const QStringList &parameters = {}, const QVariantMap &environment = {});
 
     /**
      * \brief Stops the process, and will kill the process if it takes too long to shut down
@@ -65,72 +179,33 @@ public:
     Q_INVOKABLE void stop(const int &timeout = 1000);
 
     /**
-     * \brief Send an instruction to the process, and block until the function returns some data, or optionally until a given timeout and/or expected output
-     * @note If there is already a call ongoing, this function will fail immediately and return an empty string! Use callInProgress() to detect this
-     * @param function The instruction to send to the process
-     * @param expectedOutput Some output to wait for (a regular expression)
-     * @param timeout The amount of time to wait in milliseconds
-     * @see waitForOutput(QString, int)
-     * @see callInProgress()
-     * @return The resulting output from that call, or an empty string if a call was already in progress (see callInProgress())
+     * \brief This sets the command prompt used by the transaction based functionality to perform its operations
+     * A command is considered completed when the command prompt is encountered in standard output
+     * @param commandPrompt The command prompt string used to determine when a command has completed
      */
-    Q_INVOKABLE QString call(const QString &function, const QString &expectedOutput = {}, const int timeout = -1);
+    Q_INVOKABLE void setCommandPrompt(const QString &commandPrompt);
     /**
-     * \brief Call this to test whether a blocking call is currently happening
-     * This might seem a little odd, but our problem here is that we may very well end up back in the calling thread
-     * when the call is waiting for stream data. This function allows us to recognise that situation, and return useful
-     * commentary to that effect.
-     * @returns Empty string if there is no call ongoing, or the function which was called if there is one
+     * \brief Starts the "function" command, and returns the transaction object once completed
+     * @note This function cal return a nullptr, if the process is not running
+     * @param function The command or instruction to send to the process
+     * @param timeout How long to wait before forcing a return, in milliseconds (-1 being infinite)
+     * @return The transaction for the call (if we returned before completion due to a timeout, the transaction object will be updated once the function does complete)
      */
-    Q_INVOKABLE const QString &callInProgress() const;
+    Q_INVOKABLE ProcessWrapperTransaction *call(const QString &function, const int timeout = -1);
     /**
-     * \brief Send some data to the process in a non-blocking manner
-     * @param data The data to send to the process
+     * \brief Starts the "function" command, and returns the transaction object immediately
+     * @note This function cal return a nullptr, if the process is not running
+     * @param function The command or instruction to send to the process
+     * @return The transaction for the call (the transaction call may be in any state upon returning)
      */
-    Q_INVOKABLE void send(const QByteArray &data);
-    /**
-     * \brief Helper funcation which is same as ProcessWrapper::send but expects data argument to be QString
-     * @param data The data to send to the process
-     */
-    Q_INVOKABLE void send(const QString &data);
-    /**
-     * \brief Helper funcation which is same as ProcessWrapper::send but expects data argument to be QString and appends a newline
-     * @param data The data to send to the process
-     */
-    Q_INVOKABLE void sendLine(const QString &data);
+    Q_INVOKABLE ProcessWrapperTransaction *send(const QString &function);
 
-    enum WaitForOutputResult {
-        WaitForOutputSuccess,
-        WaitForOutputFailure,
-        WaitForOutputTimeout,
-    };
-    Q_ENUM(WaitForOutputResult)
-    enum WaitForOutputStream {
-        ///@> Specify this to search only stdout
-        StandardOutputStream,
-        ///@> Specify this to search only stderr
-        StandardErrorStream,
-        ///@> Specify this for awaitedOutput to contain only the output stream in which expectedOutput was found
-        StandardOutputAndErrorStream,
-        ///@> Specify this for awaitedOutput to contain both of the output streams (it will contain first stdout, then stderr, with whichever stream the expected output was found in clipped before the given expectedOutput)
-        CombinedStreams,
-    };
-    Q_ENUM(WaitForOutputStream)
+    QList<QObject*> transactions() const;
+    Q_SIGNAL void transactionsChanged();
     /**
-     * \brief Wait for standard output to contain the given expected output
-     * @param expectedOutput The output you expect (a regular expression)
-     * @param timeout The amount of time to wait in milliseconds
-     * @param stream Which of the output streams to search for the expected output
-     * @return What the outcome of the function call was (success, failure, or timeout)
+     * \brief Removes the given transaction from the transactions list and marks it for deletion
      */
-    Q_INVOKABLE WaitForOutputResult waitForOutput(const QString &expectedOutput, const int timeout = -1, WaitForOutputStream stream = StandardOutputAndErrorStream);
-    /**
-     * \brief After a successful waitForOutput call, use this function to retrieve the output leading up to the expected output of the stream in which it was found
-     * @note The result of calling this function for an unsuccessful wait (that is, timeout or failure) is not defined and should be avoided
-     * @see WaitForOutputResult
-     * @return The output leading up to the expected output
-     */
-    Q_INVOKABLE QString awaitedOutput() const;
+    void releaseTransaction(ProcessWrapperTransaction* transaction);
 
     QString standardOutput() const;
     QString standardError() const;
@@ -197,3 +272,5 @@ private:
     Private *d{nullptr};
 };
 Q_DECLARE_METATYPE(ProcessWrapper::ProcessState)
+
+#endif//PROCESSWRAPPER_H
