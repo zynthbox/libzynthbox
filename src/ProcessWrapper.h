@@ -15,7 +15,7 @@ class ProcessWrapperTransaction : public QObject {
      */
     Q_PROPERTY(bool autoRelease READ autoRelease WRITE setAutoRelease NOTIFY autoReleaseChanged)
 public:
-    explicit ProcessWrapperTransaction(const quint64 &transactionId, const QString &command, ProcessWrapper *parent = nullptr);
+    explicit ProcessWrapperTransaction(const quint64 &transactionId, const QString &command, const QString &expectedEnd, ProcessWrapper *parent = nullptr);
     ~ProcessWrapperTransaction() override;
 
     enum TransactionState {
@@ -37,6 +37,11 @@ public:
      * \brief The command this transaction represents
      */
     Q_INVOKABLE const QString &command() const;
+    /**
+     * \brief The text to look for as the end of the command
+     * This will usually be the command prompt set on the process, but might be any string
+     */
+    Q_INVOKABLE const QString &expectedEnd() const;
 
     /**
      * \brief The current state of this transaction
@@ -68,17 +73,15 @@ public:
      */
     Q_INVOKABLE void release();
     /**
-     * \brief Whether or not the current standard output contained by this transaction ends with the given string
-     * @param commandPrompt The string to test against
-     * @return True if the current standard output data ends with the given command prompt
+     * \brief Whether or not the current standard output contained by this transaction ends with the expected end
+     * @return True if the current standard output data ends with the expected end
      */
-    bool hasCommandPrompt(const QString &commandPrompt) const;
+    bool hasExpectedEnd() const;
     /**
-     * \brief Removes the function from the start of the standard output, and everything from the first occurrence of the given string from the end
-     * @param commandPrompt The string to test against
-     * @return The left over data from the end of the command prompt and forward
+     * \brief Removes the function from the start of the standard output, and everything from the first occurrence of the expected end
+     * @return The left over data from the end of the expected end and forward
      */
-    QByteArray removeCommandPromptFromStandardOutput(const QString &commandPrompt) const;
+    QByteArray removeCommandPromptFromStandardOutput() const;
 protected:
     void setState(const TransactionState &state);
     void setStandardOutput(const QString &standardOut);
@@ -188,17 +191,19 @@ public:
      * \brief Starts the "function" command, and returns the transaction object once completed
      * @note This function cal return a nullptr, if the process is not running
      * @param function The command or instruction to send to the process
+     * @param expectedEnd If set, we will use this string as the end of the command's output, instead of the command prompt
      * @param timeout How long to wait before forcing a return, in milliseconds (-1 being infinite)
      * @return The transaction for the call (if we returned before completion due to a timeout, the transaction object will be updated once the function does complete)
      */
-    Q_INVOKABLE ProcessWrapperTransaction *call(const QString &function, const int timeout = -1);
+    Q_INVOKABLE ProcessWrapperTransaction *call(const QString &function, const QString &expectedEnd = {}, const int timeout = -1);
     /**
      * \brief Starts the "function" command, and returns the transaction object immediately
      * @note This function cal return a nullptr, if the process is not running
      * @param function The command or instruction to send to the process
+     * @param expectedEnd If set, we will use this string as the end of the command's output, instead of the command prompt
      * @return The transaction for the call (the transaction call may be in any state upon returning)
      */
-    Q_INVOKABLE ProcessWrapperTransaction *send(const QString &function);
+    Q_INVOKABLE ProcessWrapperTransaction *send(const QString &function, const QString &expectedEnd = {});
 
     QList<QObject*> transactions() const;
     Q_SIGNAL void transactionsChanged();

@@ -21,19 +21,21 @@ public:
     ProcessWrapperTransaction* q{nullptr};
     quint64 transactionId{0};
     QString command;
+    QString expectedEnd;
     TransactionState state{WaitingToStartState};
     QByteArray standardOut;
     QByteArray standardError;
     bool autoRelease{false};
 };
 
-ProcessWrapperTransaction::ProcessWrapperTransaction(const quint64& transactionId, const QString& command, ProcessWrapper* parent)
+ProcessWrapperTransaction::ProcessWrapperTransaction(const quint64& transactionId, const QString& command, const QString &expectedEnd, ProcessWrapper* parent)
     : QObject(parent)
     , d(new Private(this))
 {
     d->processWrapper = parent;
     d->transactionId = transactionId;
     d->command = command;
+    d->expectedEnd = expectedEnd;
 }
 
 ProcessWrapperTransaction::~ProcessWrapperTransaction()
@@ -49,6 +51,11 @@ const quint64 & ProcessWrapperTransaction::transactionId() const
 const QString & ProcessWrapperTransaction::command() const
 {
     return d->command;
+}
+
+const QString & ProcessWrapperTransaction::expectedEnd() const
+{
+    return d->expectedEnd;
 }
 
 ProcessWrapperTransaction::TransactionState ProcessWrapperTransaction::state() const
@@ -126,16 +133,17 @@ void ProcessWrapperTransaction::release()
     d->processWrapper->releaseTransaction(this);
 }
 
-bool ProcessWrapperTransaction::hasCommandPrompt(const QString& commandPrompt) const
+bool ProcessWrapperTransaction::hasExpectedEnd() const
 {
-    return d->standardOut.contains(commandPrompt.toUtf8());
+    // qDebug() << Q_FUNC_INFO << d->transactionId << d->command << d->standardOut;
+    return d->standardOut.contains(d->expectedEnd.toUtf8());
 }
 
-QByteArray ProcessWrapperTransaction::removeCommandPromptFromStandardOutput(const QString& commandPrompt) const
+QByteArray ProcessWrapperTransaction::removeCommandPromptFromStandardOutput() const
 {
-    const int commandPromptStart{d->standardOut.indexOf(commandPrompt.toUtf8())};
-    // qDebug() << Q_FUNC_INFO << "Looking for" << commandPrompt << "which is supposedly at index" << commandPromptStart;
-    QByteArray leftovers{d->standardOut.mid(commandPromptStart + commandPrompt.length())};
+    const int commandPromptStart{d->standardOut.indexOf(d->expectedEnd.toUtf8())};
+    // qDebug() << Q_FUNC_INFO << "Looking for" << d->expectedEnd << "which is supposedly at index" << commandPromptStart;
+    QByteArray leftovers{d->standardOut.mid(commandPromptStart + d->expectedEnd.length())};
     d->standardOut.truncate(commandPromptStart - 1);
     d->standardOut = d->standardOut.mid(d->command.length());
     return leftovers;
@@ -224,8 +232,8 @@ public:
             }
         }
     }
-    ProcessWrapperTransaction *createTransaction(const QString &function) {
-        ProcessWrapperTransaction *transaction = new ProcessWrapperTransaction(nextTransactionId, function, q);
+    ProcessWrapperTransaction *createTransaction(const QString &function, const QString &expectedEnd) {
+        ProcessWrapperTransaction *transaction = new ProcessWrapperTransaction(nextTransactionId, function, expectedEnd, q);
         ++nextTransactionId;
         transactions << transaction;
         transactionsObjects << transaction;
@@ -273,20 +281,20 @@ public:
     void handleReadyReadOutput() {
         if (process) {
             while (true) {
-                const QByteArray newData{process->pty()->read(1024)};
+                const QByteArray newData{process->pty()->readAll()};
                 if (newData.isEmpty()) {
                     // If there is no more data to read, don't try and keep going
                     break;
                 } else {
                     if (currentTransaction) {
                         currentTransaction->appendStandardOutput(newData);
-                        if (currentTransaction->hasCommandPrompt(commandPrompt)) {
+                        if (currentTransaction->hasExpectedEnd()) {
                             // This means we've reached the end of a command, and the process is ready for its next input
                             // Consequently, we mark the current head command as completed
                             currentTransaction->setState(ProcessWrapperTransaction::CompletedState);
                             // Truncate the output at the position of the command prompt (as we don't want to include that in the output)
                             // If there's any leftovers, for now we just warn that out, but perhaps it wants to live on the transaction?
-                            QByteArray leftovers = currentTransaction->removeCommandPromptFromStandardOutput(commandPrompt);
+                            QByteArray leftovers = currentTransaction->removeCommandPromptFromStandardOutput();
                             if (leftovers.isEmpty() == false) {
                                 qWarning() << Q_FUNC_INFO << "Apparently we have more stuff, even though we've not asked for more?" << leftovers;
                             }
@@ -323,7 +331,6 @@ public:
                     Q_EMIT q->standardOutputChanged(standardOutput);
                     Q_EMIT q->standardOutputReceived(newData);
                 }
-                qApp->processEvents(QEventLoop::AllEvents, 10);
             }
         }
     }
@@ -372,7 +379,7 @@ ProcessWrapperTransaction * ProcessWrapper::start(const QString& executable, con
         }
         d->process->setProcessEnvironment(construct);
     }
-    ProcessWrapperTransaction *initTransaction = d->createTransaction("<initial startup>");
+    ProcessWrapperTransaction *initTransaction = d->createTransaction("<initial startup>", d->commandPrompt);
     d->process->start();
     return initTransaction;
 }
@@ -404,19 +411,21 @@ void ProcessWrapper::setCommandPrompt(const QString& commandPrompt)
     d->commandPrompt = commandPrompt;
 }
 
-ProcessWrapperTransaction * ProcessWrapper::call(const QString& function, const int timeout)
+ProcessWrapperTransaction * ProcessWrapper::call(const QString& function, const QString &expectedEnd, const int timeout)
 {
     ProcessWrapperTransaction* transaction{nullptr};
     if (d->commandPrompt.isEmpty()) {
         qWarning() << Q_FUNC_INFO << "You did not set a command prompt before attempting to call the function" << function;
     } else {
         if (d->process) {
-            transaction = d->createTransaction(function);
+            transaction = d->createTransaction(function, expectedEnd.isNull() ? d->commandPrompt : expectedEnd);
             qint64 startTime = QDateTime::currentMSecsSinceEpoch();
             while (transaction->state() != ProcessWrapperTransaction::CompletedState) {
                 if (timeout > -1 && (QDateTime::currentMSecsSinceEpoch() - startTime) > timeout) {
                     break;
                 }
+                d->handleReadyReadError();
+                d->handleReadyReadOutput();
                 qApp->processEvents(QEventLoop::AllEvents, 10);
             }
         }
@@ -424,14 +433,14 @@ ProcessWrapperTransaction * ProcessWrapper::call(const QString& function, const 
     return transaction;
 }
 
-ProcessWrapperTransaction * ProcessWrapper::send(const QString& function)
+ProcessWrapperTransaction * ProcessWrapper::send(const QString& function, const QString &expectedEnd)
 {
     ProcessWrapperTransaction* transaction{nullptr};
     if (d->commandPrompt.isEmpty()) {
         qWarning() << Q_FUNC_INFO << "You did not set a command prompt before attempting to send the instruction" << function;
     } else {
         if (d->process) {
-            transaction = d->createTransaction(function);
+            transaction = d->createTransaction(function, expectedEnd.isNull() ? d->commandPrompt : expectedEnd);
         }
     }
     return transaction;
