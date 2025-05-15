@@ -72,16 +72,21 @@ public:
      * \brief Removes the object from the parent ProcessWrapper, and queues it for deletion
      */
     Q_INVOKABLE void release();
+
+    enum StreamType {
+        StandardOutputStream,
+        StandardErrorStream,
+    };
     /**
      * \brief Whether or not the current standard output contained by this transaction ends with the expected end
      * @return True if the current standard output data ends with the expected end
      */
-    bool hasExpectedEnd() const;
+    bool hasExpectedEnd(const StreamType &stream) const;
     /**
      * \brief Removes the function from the start of the standard output, and everything from the first occurrence of the expected end
      * @return The left over data from the end of the expected end and forward
      */
-    QByteArray removeCommandPromptFromStandardOutput() const;
+    QByteArray removeCommandPromptFromStandardOutput(const StreamType &stream) const;
 protected:
     void setState(const TransactionState &state);
     void setStandardOutput(const QString &standardOut);

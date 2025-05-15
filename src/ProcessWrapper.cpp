@@ -133,20 +133,44 @@ void ProcessWrapperTransaction::release()
     d->processWrapper->releaseTransaction(this);
 }
 
-bool ProcessWrapperTransaction::hasExpectedEnd() const
+bool ProcessWrapperTransaction::hasExpectedEnd(const StreamType &stream) const
 {
-    // qDebug() << Q_FUNC_INFO << d->transactionId << d->command << d->standardOut;
-    return d->standardOut.contains(d->expectedEnd.toUtf8());
+    switch (stream) {
+        case StandardOutputStream:
+            // qDebug() << Q_FUNC_INFO << d->transactionId << d->command << stream << d->standardOut;
+            return d->standardOut.contains(d->expectedEnd.toUtf8());
+            break;
+        case StandardErrorStream:
+            // qDebug() << Q_FUNC_INFO << d->transactionId << d->command << stream << d->standardError;
+            return d->standardError.contains(d->expectedEnd.toUtf8());
+            break;
+    }
 }
 
-QByteArray ProcessWrapperTransaction::removeCommandPromptFromStandardOutput() const
+QByteArray ProcessWrapperTransaction::removeCommandPromptFromStandardOutput(const StreamType &stream) const
 {
-    const int commandPromptStart{d->standardOut.indexOf(d->expectedEnd.toUtf8())};
-    // qDebug() << Q_FUNC_INFO << "Looking for" << d->expectedEnd << "which is supposedly at index" << commandPromptStart;
-    QByteArray leftovers{d->standardOut.mid(commandPromptStart + d->expectedEnd.length())};
-    d->standardOut.truncate(commandPromptStart - 1);
-    d->standardOut = d->standardOut.mid(d->command.length());
-    return leftovers;
+    switch (stream) {
+        case StandardOutputStream:
+        {
+            const int commandPromptStart{d->standardOut.indexOf(d->expectedEnd.toUtf8())};
+            // qDebug() << Q_FUNC_INFO << stream << "Looking for" << d->expectedEnd << "which is supposedly at index" << commandPromptStart;
+            QByteArray leftovers{d->standardOut.mid(commandPromptStart + d->expectedEnd.length())};
+            d->standardOut.truncate(commandPromptStart - 1);
+            d->standardOut = d->standardOut.mid(d->command.length());
+            return leftovers;
+            break;
+        }
+        case StandardErrorStream:
+        {
+            const int commandPromptStart{d->standardError.indexOf(d->expectedEnd.toUtf8())};
+            // qDebug() << Q_FUNC_INFO << stream << "Looking for" << d->expectedEnd << "which is supposedly at index" << commandPromptStart;
+            QByteArray leftovers{d->standardError.mid(commandPromptStart + d->expectedEnd.length())};
+            d->standardError.truncate(commandPromptStart - 1);
+            d->standardError = d->standardError.mid(d->command.length());
+            return leftovers;
+            break;
+        }
+    }
 }
 
 class ProcessWrapper::Private {
@@ -254,26 +278,73 @@ public:
         return transaction;
     }
 
+    void checkTransactions(const ProcessWrapperTransaction::StreamType &stream, const QByteArray &newData) {
+        if (currentTransaction) {
+            switch (stream) {
+                case ProcessWrapperTransaction::StandardOutputStream:
+                    currentTransaction->appendStandardOutput(newData);
+                    // qDebug() << Q_FUNC_INFO << executable << parameters << currentTransaction->transactionId() << currentTransaction->command() << "StdOut:\n" << currentTransaction->standardOutput();
+                    break;
+                case ProcessWrapperTransaction::StandardErrorStream:
+                    currentTransaction->appendStandardError(newData);
+                    // qDebug() << Q_FUNC_INFO << executable << parameters << currentTransaction->transactionId() << currentTransaction->command() << "StdError:\n" << currentTransaction->standardError();
+                    break;
+            }
+            if (currentTransaction->hasExpectedEnd(stream)) {
+                // This means we've reached the end of a command, and the process is ready for its next input
+                // Consequently, we mark the current head command as completed
+                currentTransaction->setState(ProcessWrapperTransaction::CompletedState);
+                // Truncate the output at the position of the command prompt (as we don't want to include that in the output)
+                // If there's any leftovers, for now we just warn that out, but perhaps it wants to live on the transaction?
+                QByteArray leftovers = currentTransaction->removeCommandPromptFromStandardOutput(stream);
+                if (leftovers.isEmpty() == false) {
+                    qWarning() << Q_FUNC_INFO << "Apparently we have more stuff, even though we've not asked for more?" << leftovers;
+                }
+                if (currentTransaction->autoRelease()) {
+                    currentTransaction->release();
+                }
+                if (transactionsToRelease.contains(currentTransaction)) {
+                    // If this transaction was marked for release, ensure that actually happens now that we're done with it
+                    transactionsToRelease.removeAll(currentTransaction);
+                    currentTransaction->release();
+                }
+                if (waitingTransactions.isEmpty()) {
+                    // The queue is empty, so we don't have a current transaction
+                    currentTransaction = nullptr;
+                } else {
+                    // Pick the next transaction in the queue, if there is one, and start it
+                    currentTransaction = waitingTransactions.dequeue();
+                    startTransaction(currentTransaction);
+                }
+            }
+        }
+    }
     QByteArray standardError;
     void handleReadyReadError() {
         if (process) {
-            const QByteArray newData{process->readAllStandardError()};
-            if (newData.isEmpty() == false) {
-                if (currentTransaction) {
-                    currentTransaction->appendStandardError(newData);
-                }
-                standardError.append(newData);
-                // Ensure we only keep some reasonably large amount of global scrollback (a slightly odd logic here: chop at linebreaks, but ensure we keep up to 1MiB around, or at least one full line of output, if it's super crazy long)
-                while (standardError.size() > 1048576) {
-                    const int firstNewline{standardError.indexOf("\n")};
-                    if (firstNewline == -1) {
-                        // Just to be certain if we've got some kind of bonkers output that has 1048576 bytes on a single line
-                        break;
+            while (true) {
+                const QByteArray newData{process->readAllStandardError()};
+                if (newData.isEmpty()) {
+                    // If there is no more data to read, don't try and keep going
+                    break;
+                } else {
+                    // Test whether there's something to be done for our transactions
+                    checkTransactions(ProcessWrapperTransaction::StandardOutputStream, newData);
+                    // Append to the existing standard error list
+                    standardError.append(newData);
+                    // Ensure we only keep some reasonably large amount of global scrollback (a slightly odd logic here: chop at linebreaks, but ensure we keep up to 1MiB around, or at least one full line of output, if it's super crazy long)
+                    while (standardError.size() > 1048576) {
+                        const int firstNewline{standardError.indexOf("\n")};
+                        if (firstNewline == -1) {
+                            // Just to be certain if we've got some kind of bonkers output that has 1048576 bytes on a single line
+                            break;
+                        }
+                        standardError.remove(0, firstNewline + 1);
                     }
-                    standardError.remove(0, firstNewline + 1);
+                    // Finally, emit the relevant signals
+                    Q_EMIT q->standardErrorChanged(standardError);
+                    Q_EMIT q->standardErrorReceived(newData);
                 }
-                Q_EMIT q->standardErrorChanged(standardError);
-                Q_EMIT q->standardErrorReceived(newData);
             }
         }
     }
@@ -286,37 +357,9 @@ public:
                     // If there is no more data to read, don't try and keep going
                     break;
                 } else {
-                    if (currentTransaction) {
-                        currentTransaction->appendStandardOutput(newData);
-                        if (currentTransaction->hasExpectedEnd()) {
-                            // This means we've reached the end of a command, and the process is ready for its next input
-                            // Consequently, we mark the current head command as completed
-                            currentTransaction->setState(ProcessWrapperTransaction::CompletedState);
-                            // Truncate the output at the position of the command prompt (as we don't want to include that in the output)
-                            // If there's any leftovers, for now we just warn that out, but perhaps it wants to live on the transaction?
-                            QByteArray leftovers = currentTransaction->removeCommandPromptFromStandardOutput();
-                            if (leftovers.isEmpty() == false) {
-                                qWarning() << Q_FUNC_INFO << "Apparently we have more stuff, even though we've not asked for more?" << leftovers;
-                            }
-                            if (currentTransaction->autoRelease()) {
-                                currentTransaction->release();
-                            }
-                            if (transactionsToRelease.contains(currentTransaction)) {
-                                // If this transaction was marked for release, ensure that actually happens now that we're done with it
-                                transactionsToRelease.removeAll(currentTransaction);
-                                currentTransaction->release();
-                            }
-                            if (waitingTransactions.isEmpty()) {
-                                // The queue is empty, so we don't have a current transaction
-                                currentTransaction = nullptr;
-                            } else {
-                                // Pick the next transaction in the queue, if there is one, and start it
-                                currentTransaction = waitingTransactions.dequeue();
-                                startTransaction(currentTransaction);
-                            }
-                        }
-                    }
-                    // Finally, append to the existing standard output list, and emit the relevant signals
+                    // Test whether there's something to be done for our transactions
+                    checkTransactions(ProcessWrapperTransaction::StandardOutputStream, newData);
+                    // Append to the existing standard output list
                     standardOutput.append(newData);
                     // Ensure we only keep some reasonably large amount of global scrollback (a slightly odd logic here: chop at linebreaks, but ensure we keep up to 1MiB around, or at least one full line of output, if it's super crazy long)
                     while (standardOutput.size() > 1048576) {
@@ -327,7 +370,7 @@ public:
                         }
                         standardOutput.remove(0, firstNewline + 1);
                     }
-                    // qDebug() << Q_FUNC_INFO << executable << parameters << "\n" << QString(standardOutput);
+                    // Finally, emit the relevant signals
                     Q_EMIT q->standardOutputChanged(standardOutput);
                     Q_EMIT q->standardOutputReceived(newData);
                 }
