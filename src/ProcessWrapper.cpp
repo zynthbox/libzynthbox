@@ -145,6 +145,7 @@ bool ProcessWrapperTransaction::hasExpectedEnd(const StreamType &stream) const
             return d->standardError.contains(d->expectedEnd.toUtf8());
             break;
     }
+    return false;
 }
 
 QByteArray ProcessWrapperTransaction::removeCommandPromptFromStandardOutput(const StreamType &stream) const
@@ -171,6 +172,7 @@ QByteArray ProcessWrapperTransaction::removeCommandPromptFromStandardOutput(cons
             break;
         }
     }
+    return {};
 }
 
 class ProcessWrapper::Private {
@@ -300,6 +302,37 @@ public:
                 if (leftovers.isEmpty() == false) {
                     qWarning() << Q_FUNC_INFO << "Apparently we have more stuff, even though we've not asked for more?" << leftovers;
                 }
+                // Ensure we also read out all remaining data from our opposite stream, before we start the next transaction
+                switch (stream) {
+                    case ProcessWrapperTransaction::StandardOutputStream:
+                    {
+                        while (true) {
+                            const QByteArray newData{process->readAllStandardError()};
+                            if (newData.isEmpty()) {
+                                // If there is no more data to read, don't try and keep going
+                                break;
+                            } else {
+                                currentTransaction->appendStandardError(newData);
+                            }
+                        }
+                        break;
+                    }
+                    case ProcessWrapperTransaction::StandardErrorStream:
+                    {
+                        while (true) {
+                            const QByteArray newData{process->readAllStandardOutput()};
+                            if (newData.isEmpty()) {
+                                // If there is no more data to read, don't try and keep going
+                                break;
+                            } else {
+                                currentTransaction->appendStandardOutput(newData);
+                            }
+                        }
+                        currentTransaction->appendStandardOutput(newData);
+                        break;
+                    }
+                }
+                // Take care of any potential auto-release request
                 if (currentTransaction->autoRelease()) {
                     currentTransaction->release();
                 }
