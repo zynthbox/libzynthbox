@@ -587,6 +587,11 @@ void ClipAudioSource::setSliceCount(const int& sliceCount)
     if (oldSliceCount < d->sliceCount) {
       for (int sliceIndex = oldSliceCount; sliceIndex < d->sliceCount; ++sliceIndex) {
         ClipAudioSourceSliceSettings *newSlice = new ClipAudioSourceSliceSettings(sliceIndex, this);
+        // A quick heuristic thing, so new slices are created with the basic root loop points...
+        newSlice->setStartPositionSamples(d->rootSlice->startPositionSamples());
+        newSlice->setLoopDeltaSamples(d->rootSlice->loopDeltaSamples());
+        newSlice->setLoopDelta2Samples(d->rootSlice->loopDelta2Samples());
+        newSlice->setLengthSamples(d->rootSlice->lengthSamples());
         d->sliceSettings << QVariant::fromValue<QObject*>(newSlice);
         d->sliceSettingsActual << newSlice;
       }
