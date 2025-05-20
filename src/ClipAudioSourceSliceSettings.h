@@ -133,7 +133,6 @@ class ClipAudioSourceSliceSettings : public QObject
     Q_PROPERTY(ClipAudioSource::TimeStretchStyle timeStretchStyle READ timeStretchStyle WRITE setTimeStretchStyle NOTIFY timeStretchStyleChanged)
     /**
      * \brief The pitch adjustment (a floating point number of semitones) to adjust the sample offline
-     * This is orthogonal to the live time stretching done by setting timeStretchLive
      */
     Q_PROPERTY(float pitch READ pitch WRITE setPitch NOTIFY pitchChanged)
 
