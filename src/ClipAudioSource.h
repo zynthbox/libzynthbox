@@ -332,6 +332,7 @@ public:
   bool slicesContiguous() const;
   void setSlicesContiguous(const bool &slicesContiguous);
   Q_SIGNAL void slicesContiguousChanged();
+  Q_SIGNAL void sliceDataChanged();
   QVariantList sliceSettings() const;
   const QList<ClipAudioSourceSliceSettings*> &sliceSettingsActual() const;
   int selectedSlice() const;

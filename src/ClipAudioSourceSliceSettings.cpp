@@ -275,6 +275,7 @@ void ClipAudioSourceSliceSettings::setPlaybackStyle(const ClipAudioSource::Playb
     if (d->playbackStyle != playbackStyle) {
         d->playbackStyle = playbackStyle;
         Q_EMIT playbackStyleChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -282,6 +283,7 @@ void ClipAudioSourceSliceSettings::setLooping(bool looping) {
     if (d->looping != looping) {
         d->looping = looping;
         Q_EMIT loopingChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -306,6 +308,7 @@ void ClipAudioSourceSliceSettings::setLoopDeltaSeconds(const float& newLoopDelta
         d->loopDelta = newLoopDelta;
         d->loopDeltaSamples = newLoopDelta * d->clip->sampleRate();
         Q_EMIT loopDeltaChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -315,6 +318,7 @@ void ClipAudioSourceSliceSettings::setLoopDeltaSamples(const int& newLoopDeltaSa
         d->loopDeltaSamples = newLoopDeltaSamples;
         d->loopDelta = double(newLoopDeltaSamples) / d->clip->sampleRate();
         Q_EMIT loopDeltaChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -334,6 +338,7 @@ void ClipAudioSourceSliceSettings::setLoopDelta2Seconds(const float& newLoopDelt
         d->loopDelta2 = newLoopDelta2;
         d->loopDelta2Samples = newLoopDelta2 * d->clip->sampleRate();
         Q_EMIT loopDelta2Changed();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -343,6 +348,7 @@ void ClipAudioSourceSliceSettings::setLoopDelta2Samples(const int& newLoopDelta2
         d->loopDelta2Samples = newLoopDelta2Samples;
         d->loopDelta2 = double(newLoopDelta2Samples) / d->clip->sampleRate();
         Q_EMIT loopDelta2Changed();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -356,6 +362,7 @@ void ClipAudioSourceSliceSettings::setStartPositionSamples(const int &startPosit
         d->startPositionInSamples = jmax(0, startPositionInSamples);
         d->startPositionInSeconds = double(startPositionInSamples) / d->clip->sampleRate();
         Q_EMIT startPositionChanged();
+        Q_EMIT d->clip->sliceDataChanged();
         IF_DEBUG_SLICE qDebug() << Q_FUNC_INFO << "Setting Start Position to" << d->startPositionInSeconds << "seconds, meaning" << d->startPositionInSamples << "samples of" << d->clip->getDurationSamples();
     }
 }
@@ -385,6 +392,7 @@ void ClipAudioSourceSliceSettings::setTimeStretchStyle(const ClipAudioSource::Ti
     if (d->timeStretchStyle != timeStretchStyle) {
         d->timeStretchStyle = timeStretchStyle;
         Q_EMIT timeStretchStyleChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -398,6 +406,7 @@ void ClipAudioSourceSliceSettings::setPitch(const float &pitchChange) {
     d->pitchChange = pitchChange;
     d->pitchChangePrecalc = std::pow(2.0, d->pitchChange / 12.0) /* * sampleRate() / sampleRate() */; // should this perhaps be a sound sample rate over playback sample rate thing?
     Q_EMIT pitchChanged();
+    Q_EMIT d->clip->sliceDataChanged();
 }
 
 float ClipAudioSourceSliceSettings::pitch() const
@@ -425,6 +434,7 @@ void ClipAudioSourceSliceSettings::setSnapLengthToBeat(const bool& snapLengthToB
     if (d->snapLengthToBeat != snapLengthToBeat) {
         d->snapLengthToBeat = snapLengthToBeat;
         Q_EMIT snapLengthToBeatChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -443,6 +453,7 @@ void ClipAudioSourceSliceSettings::setLengthBeats(const float &beat) {
         d->lengthInSamples = lengthInSeconds * d->clip->sampleRate();
         d->lengthInBeats = beat;
         Q_EMIT lengthChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -453,6 +464,7 @@ void ClipAudioSourceSliceSettings::setLengthSamples(const int &lengthInSamples)
         d->lengthInSeconds = double(lengthInSamples) / d->clip->sampleRate();
         d->lengthInBeats = double(SyncTimer::instance()->secondsToSubbeatCount(d->clip->bpm() == 0 ? SyncTimer::instance()->getBpm() : d->clip->bpm(), d->lengthInSeconds)) / double(SyncTimer::instance()->getMultiplier());
         Q_EMIT lengthChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -480,6 +492,7 @@ void ClipAudioSourceSliceSettings::setLoopCrossfadeAmount(const double& loopCros
   if (d->loopCrossfadeAmount != loopCrossfadeAmount) {
     d->loopCrossfadeAmount = std::clamp(loopCrossfadeAmount, 0.0, 0.5);
     Q_EMIT loopCrossfadeAmountChanged();
+    Q_EMIT d->clip->sliceDataChanged();
   }
 }
 
@@ -493,6 +506,7 @@ void ClipAudioSourceSliceSettings::setLoopStartCrossfadeDirection(const ClipAudi
   if (d->loopStartCrossfadeDirection != loopStartCrossfadeDirection) {
     d->loopStartCrossfadeDirection = loopStartCrossfadeDirection;
     Q_EMIT loopStartCrossfadeDirectionChanged();
+    Q_EMIT d->clip->sliceDataChanged();
   }
 }
 
@@ -506,6 +520,7 @@ void ClipAudioSourceSliceSettings::setStopCrossfadeDirection(const ClipAudioSour
   if (d->stopCrossfadeDirection != stopCrossfadeDirection) {
     d->stopCrossfadeDirection = stopCrossfadeDirection;
     Q_EMIT stopCrossfadeDirectionChanged();
+    Q_EMIT d->clip->sliceDataChanged();
   }
 }
 
@@ -530,6 +545,7 @@ void ClipAudioSourceSliceSettings::setPan(float pan)
         IF_DEBUG_SLICE cerr << "Setting pan : " << pan;
         d->pan = pan;
         Q_EMIT panChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -550,6 +566,7 @@ void ClipAudioSourceSliceSettings::setRootNote(const int &rootNote)
             d->rootNote = std::clamp(rootNote, -1, 127);
         }
         Q_EMIT rootNoteChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -563,8 +580,9 @@ void ClipAudioSourceSliceSettings::setKeyZoneStart(const int &keyZoneStart)
     if (d->keyZoneStart != keyZoneStart) {
         d->keyZoneStart = std::clamp(keyZoneStart, -1, 127);
         Q_EMIT keyZoneStartChanged();
+        Q_EMIT d->clip->sliceDataChanged();
         if (d->keyZoneEnd < d->keyZoneStart) {
-        setKeyZoneEnd(d->keyZoneStart);
+            setKeyZoneEnd(d->keyZoneStart);
         }
     }
 }
@@ -579,6 +597,7 @@ void ClipAudioSourceSliceSettings::setKeyZoneEnd(const int &keyZoneEnd)
   if (d->keyZoneEnd != keyZoneEnd) {
     d->keyZoneEnd = std::clamp(keyZoneEnd, -1, 127);
     Q_EMIT keyZoneEndChanged();
+    Q_EMIT d->clip->sliceDataChanged();
     if (d->keyZoneStart > d->keyZoneEnd) {
       setKeyZoneStart(d->keyZoneEnd);
     }
@@ -595,6 +614,7 @@ void ClipAudioSourceSliceSettings::setVelocityMinimum(const int& velocityMinimum
     if (d->velocityMinimum != velocityMinimum) {
         d->velocityMinimum = std::clamp(velocityMinimum, 1, 127);
         Q_EMIT velocityMinimumChanged();
+        Q_EMIT d->clip->sliceDataChanged();
         if (d->velocityMinimum > d->velocityMaximum) {
             setVelocityMaximum(d->velocityMinimum);
         }
@@ -611,6 +631,7 @@ void ClipAudioSourceSliceSettings::setVelocityMaximum(const int& velocityMaximum
     if (d->velocityMaximum != velocityMaximum) {
         d->velocityMaximum = std::clamp(velocityMaximum, 1, 127);
         Q_EMIT velocityMaximumChanged();
+        Q_EMIT d->clip->sliceDataChanged();
         if (d->velocityMinimum > d->velocityMaximum) {
             setVelocityMinimum(d->velocityMaximum);
         }
@@ -627,6 +648,7 @@ void ClipAudioSourceSliceSettings::setExclusivityGroup(const int& exclusivityGro
     if (d->exclusivityGroup != exclusivityGroup) {
         d->exclusivityGroup = std::clamp(exclusivityGroup, -1, 1024);
         Q_EMIT exclusivityGroupChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -640,6 +662,7 @@ void ClipAudioSourceSliceSettings::setInheritSubvoices(const bool& inheritSubvoi
     if (d->inheritSubvoices != inheritSubvoices) {
         d->inheritSubvoices = inheritSubvoices;
         Q_EMIT inheritSubvoicesChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -653,6 +676,7 @@ void ClipAudioSourceSliceSettings::setSubvoiceCount(const int& subvoiceCount)
   if (d->subvoiceCount != subvoiceCount) {
     d->subvoiceCount = subvoiceCount;
     Q_EMIT subvoiceCountChanged();
+    Q_EMIT d->clip->sliceDataChanged();
   }
 }
 
@@ -694,6 +718,7 @@ void ClipAudioSourceSliceSettings::setADSRAttack(const float& newValue)
         params.attack = newValue;
         d->adsr.setParameters(params);
         Q_EMIT adsrParametersChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -709,6 +734,7 @@ void ClipAudioSourceSliceSettings::setADSRDecay(const float& newValue)
         params.decay = newValue;
         d->adsr.setParameters(params);
         Q_EMIT adsrParametersChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -724,6 +750,7 @@ void ClipAudioSourceSliceSettings::setADSRSustain(const float& newValue)
         params.sustain = newValue;
         d->adsr.setParameters(params);
         Q_EMIT adsrParametersChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -739,6 +766,7 @@ void ClipAudioSourceSliceSettings::setADSRRelease(const float& newValue)
         params.release = newValue;
         d->adsr.setParameters(params);
         Q_EMIT adsrParametersChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -746,6 +774,7 @@ void ClipAudioSourceSliceSettings::setADSRParameters(const juce::ADSR::Parameter
 {
     d->adsr.setParameters(parameters);
     Q_EMIT adsrParametersChanged();
+    Q_EMIT d->clip->sliceDataChanged();
 }
 
 const juce::ADSR::Parameters & ClipAudioSourceSliceSettings::adsrParameters() const
@@ -768,6 +797,7 @@ void ClipAudioSourceSliceSettings::setGranular(const bool& newValue)
     if (d->granular != newValue) {
         d->granular = newValue;
         Q_EMIT granularChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -781,6 +811,7 @@ void ClipAudioSourceSliceSettings::setGrainPosition(const float& newValue)
     if (d->grainPosition != newValue) {
         d->grainPosition = newValue;
         Q_EMIT grainPositionChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -794,6 +825,7 @@ void ClipAudioSourceSliceSettings::setGrainSpray(const float& newValue)
     if (d->grainSpray != newValue) {
         d->grainSpray = newValue;
         Q_EMIT grainSprayChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -807,6 +839,7 @@ void ClipAudioSourceSliceSettings::setGrainScan(const float& newValue)
     if (d->grainScan != newValue) {
         d->grainScan = newValue;
         Q_EMIT grainScanChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -821,6 +854,7 @@ void ClipAudioSourceSliceSettings::setGrainInterval(const float& newValue)
     if (d->grainInterval != adjustedValue) {
         d->grainInterval = adjustedValue;
         Q_EMIT grainIntervalChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -835,6 +869,7 @@ void ClipAudioSourceSliceSettings::setGrainIntervalAdditional(const float& newVa
     if (d->grainIntervalAdditional != adjustedValue) {
         d->grainIntervalAdditional = adjustedValue;
         Q_EMIT grainIntervalAdditionalChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -849,6 +884,7 @@ void ClipAudioSourceSliceSettings::setGrainSize(const float& newValue)
     if (d->grainSize != adjustedValue) {
         d->grainSize = adjustedValue;
         Q_EMIT grainSizeChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -862,6 +898,7 @@ void ClipAudioSourceSliceSettings::setGrainSizeAdditional(const float& newValue)
     if (d->grainSizeAdditional != newValue) {
         d->grainSizeAdditional = newValue;
         Q_EMIT grainSizeAdditionalChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -876,9 +913,11 @@ void ClipAudioSourceSliceSettings::setGrainPanMinimum(const float& newValue)
     if (d->grainPanMinimum != adjustedValue) {
         d->grainPanMinimum = adjustedValue;
         Q_EMIT grainPanMinimumChanged();
+        Q_EMIT d->clip->sliceDataChanged();
         if (d->grainPanMaximum < adjustedValue) {
             d->grainPanMaximum = adjustedValue;
             Q_EMIT grainPanMaximumChanged();
+            Q_EMIT d->clip->sliceDataChanged();
         }
     }
 }
@@ -894,9 +933,11 @@ void ClipAudioSourceSliceSettings::setGrainPanMaximum(const float& newValue)
     if (d->grainPanMaximum != adjustedValue) {
         d->grainPanMaximum = adjustedValue;
         Q_EMIT grainPanMaximumChanged();
+        Q_EMIT d->clip->sliceDataChanged();
         if (d->grainPanMinimum > adjustedValue) {
             d->grainPanMinimum = adjustedValue;
             Q_EMIT grainPanMinimumChanged();
+            Q_EMIT d->clip->sliceDataChanged();
         }
     }
 }
@@ -912,9 +953,11 @@ void ClipAudioSourceSliceSettings::setGrainPitchMinimum1(const float& newValue)
     if (d->grainPitchMinimum1 != adjustedValue) {
         d->grainPitchMinimum1 = adjustedValue;
         Q_EMIT grainPitchMinimum1Changed();
+        Q_EMIT d->clip->sliceDataChanged();
         if (d->grainPitchMaximum1 < adjustedValue) {
             d->grainPitchMaximum1 = adjustedValue;
             Q_EMIT grainPitchMaximum1Changed();
+            Q_EMIT d->clip->sliceDataChanged();
         }
     }
 }
@@ -930,9 +973,11 @@ void ClipAudioSourceSliceSettings::setGrainPitchMaximum1(const float& newValue)
     if (d->grainPitchMaximum1 != adjustedValue) {
         d->grainPitchMaximum1 = adjustedValue;
         Q_EMIT grainPitchMaximum1Changed();
+        Q_EMIT d->clip->sliceDataChanged();
         if (d->grainPitchMinimum1 > adjustedValue) {
             d->grainPitchMinimum1 = adjustedValue;
             Q_EMIT grainPitchMinimum1Changed();
+            Q_EMIT d->clip->sliceDataChanged();
         }
     }
 }
@@ -948,9 +993,11 @@ void ClipAudioSourceSliceSettings::setGrainPitchMinimum2(const float& newValue)
     if (d->grainPitchMinimum2 != adjustedValue) {
         d->grainPitchMinimum2 = adjustedValue;
         Q_EMIT grainPitchMinimum2Changed();
+        Q_EMIT d->clip->sliceDataChanged();
         if (d->grainPitchMaximum2 < adjustedValue) {
             d->grainPitchMaximum2 = adjustedValue;
             Q_EMIT grainPitchMaximum2Changed();
+            Q_EMIT d->clip->sliceDataChanged();
         }
     }
 }
@@ -966,9 +1013,11 @@ void ClipAudioSourceSliceSettings::setGrainPitchMaximum2(const float& newValue)
     if (d->grainPitchMaximum2 != adjustedValue) {
         d->grainPitchMaximum2 = adjustedValue;
         Q_EMIT grainPitchMaximum2Changed();
+        Q_EMIT d->clip->sliceDataChanged();
         if (d->grainPitchMinimum2 > adjustedValue) {
             d->grainPitchMinimum2 = adjustedValue;
             Q_EMIT grainPitchMinimum2Changed();
+            Q_EMIT d->clip->sliceDataChanged();
         }
     }
 }
@@ -984,6 +1033,7 @@ void ClipAudioSourceSliceSettings::setGrainPitchPriority(const float& newValue)
     if (d->grainPitchPriority != adjustedValue) {
         d->grainPitchPriority = adjustedValue;
         Q_EMIT grainPitchPriorityChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -997,6 +1047,7 @@ void ClipAudioSourceSliceSettings::setGrainSustain(const float& newValue)
     if (d->grainSustain != newValue) {
         d->grainSustain = newValue;
         Q_EMIT grainSustainChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
@@ -1010,6 +1061,7 @@ void ClipAudioSourceSliceSettings::setGrainTilt(const float& newValue)
     if (d->grainTilt != newValue) {
         d->grainTilt = newValue;
         Q_EMIT grainTiltChanged();
+        Q_EMIT d->clip->sliceDataChanged();
     }
 }
 
