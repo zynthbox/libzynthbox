@@ -1285,7 +1285,7 @@ void MidiRouter::setZynthianSynthKeyzones(int zynthianChannel, int keyZoneStart,
                 notes << note;
             }
         }
-        d->zynthianOutputs[zynthianChannel]->setAcceptedNotes(notes);
+        d->zynthianOutputs[zynthianChannel]->setAcceptedNotes(notes, true, true);
         d->zynthianOutputs[zynthianChannel]->setTransposeAmount(rootNote - 60);
     }
 }
