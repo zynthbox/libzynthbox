@@ -73,6 +73,16 @@ int AudioLevelsChannel::process(jack_nframes_t nframes, jack_nframes_t current_f
                 juce::FloatVectorOperations::multiply(leftOutBuffer, leftBuffer, amountLeft, int(nframes));
                 juce::FloatVectorOperations::multiply(rightOutBuffer, rightBuffer, amountRight, int(nframes));
             }
+
+            // Analyse the output buffers to get the peak for each channel
+            static const float fadePerFrame{0.0001f};
+            const float fadeForPeriod{fadePerFrame * float(nframes)};
+            const auto leftPeaks = juce::FloatVectorOperations::findMinAndMax(leftOutBuffer, int(nframes));
+            const float leftPeak{qMax(abs(leftPeaks.getStart()), abs(leftPeaks.getEnd()))};
+            peakA = qMax(leftPeak, peakA - fadeForPeriod);
+            const auto rightPeaks = juce::FloatVectorOperations::findMinAndMax(rightOutBuffer, int(nframes));
+            const float rightPeak{qMax(abs(rightPeaks.getStart()), abs(rightPeaks.getEnd()))};
+            peakB = qMax(rightPeak, peakB - fadeForPeriod);
         }
     }
     return 0;

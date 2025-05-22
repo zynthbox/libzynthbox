@@ -229,46 +229,13 @@ QVariantList AudioLevels::tracks() const
 }
 
 void AudioLevels::timerCallback() {
-    // 0.2/131072 = 0.00000152587
-    static const float intToFloatMultiplier{0.00000152587};
-
     int channelIndex{0};
-    const jack_default_audio_sample_t *portBuffer{nullptr};
-    const jack_default_audio_sample_t *portBufferEnd{nullptr};
-    const int quarterSpot = 1;//nframes / 4;
-    // 2^17 = 131072
-    static const float floatToIntMultiplier{131072};
     for (AudioLevelsChannel *channel : d->audioLevelsChannels) {
         if (channel->enabled && channel->leftPort && channel->rightPort) {
-            channel->peakA = qMin(qMax(0, channel->peakA - 10000), int(floatToIntMultiplier));
-            channel->peakB = qMin(qMax(0, channel->peakB - 10000), int(floatToIntMultiplier));
-            if (channel->bufferReadSize > 0) {
-                // Peak checkery for the left output channel
-                portBuffer = channel->leftOutBuffer;
-                portBufferEnd = portBuffer + channel->bufferReadSize;
-                for (const float* channelSample = portBuffer; channelSample < portBufferEnd; channelSample += quarterSpot) {
-                    if (channelSample == nullptr || channelSample >= portBufferEnd) { break; }
-                    const int sampleValue = abs(floatToIntMultiplier * (*channelSample));
-                    if (sampleValue > channel->peakA) {
-                        channel->peakA = sampleValue;
-                    }
-                }
-
-                // Peak checkery for the right output channel
-                portBuffer = channel->rightOutBuffer;
-                portBufferEnd = portBuffer + channel->bufferReadSize;
-                for (const float* channelSample = portBuffer; channelSample < portBufferEnd; channelSample += quarterSpot) {
-                    if (channelSample == nullptr || channelSample >= portBufferEnd) { break; }
-                    const int sampleValue = abs(floatToIntMultiplier * (*channelSample));
-                    if (sampleValue > channel->peakB) {
-                        channel->peakB = sampleValue;
-                    }
-                }
-                channel->bufferReadSize = 0;
-            }
-            const float peakA{channel->peakA * intToFloatMultiplier}, peakB{channel->peakB * intToFloatMultiplier};
-            const float peakDbA{convertTodbFS(peakA)},
-                        peakDbB{convertTodbFS(peakB)};
+            // channel->peakA = qMax(0.0f, channel->peakA - 0.01f);
+            // channel->peakB = qMax(0.0f, channel->peakB - 0.01f);
+            const float peakDbA{convertTodbFS(channel->peakA)},
+                        peakDbB{convertTodbFS(channel->peakB)};
             if (channelIndex == 0) {
                 captureA = peakDbA <= -200 ? -200 : peakDbA;
                 captureB = peakDbB <= -200 ? -200 : peakDbB;
@@ -276,8 +243,8 @@ void AudioLevels::timerCallback() {
                 playbackA = peakDbA <= -200 ? -200 : peakDbA;
                 playbackB = peakDbB <= -200 ? -200 : peakDbB;
                 playback = add(peakDbA, peakDbB);
-                channel->peakAHoldSignal = (peakA >= channel->peakAHoldSignal) ? peakA : channel->peakAHoldSignal * 0.9f;
-                channel->peakBHoldSignal = (peakB >= channel->peakBHoldSignal) ? peakB : channel->peakBHoldSignal * 0.9f;
+                channel->peakAHoldSignal = (channel->peakA >= channel->peakAHoldSignal) ? channel->peakA : channel->peakAHoldSignal * 0.9f;
+                channel->peakBHoldSignal = (channel->peakB >= channel->peakBHoldSignal) ? channel->peakB : channel->peakBHoldSignal * 0.9f;
                 playbackAHold = convertTodbFS(channel->peakAHoldSignal);
                 playbackBHold = convertTodbFS(channel->peakBHoldSignal);
             } else if (channelIndex == 2) {
@@ -287,7 +254,7 @@ void AudioLevels::timerCallback() {
                 const int sketchpadChannelIndex{channelIndex - 3};
                 channelsA[sketchpadChannelIndex] = peakDbA <= -200 ? -200 : peakDbA;
                 channelsB[sketchpadChannelIndex] = peakDbB <= -200 ? -200 : peakDbB;
-                d->levels[sketchpadChannelIndex].setValue<float>(addFloat(channelsA[sketchpadChannelIndex], channelsB[sketchpadChannelIndex]));
+                d->levels[sketchpadChannelIndex].setValue<float>(qMax(channelsA[sketchpadChannelIndex], channelsB[sketchpadChannelIndex]));
             }
         }
         ++channelIndex;

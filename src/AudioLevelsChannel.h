@@ -39,8 +39,8 @@ public:
     jack_client_t *jackClient{nullptr};
     float peakAHoldSignal{0};
     float peakBHoldSignal{0};
-    int peakA{0};
-    int peakB{0};
+    float peakA{0};
+    float peakB{0};
     bool enabled{false};
     QString clientName;
     quint64 firstRecordingFrame{0};
