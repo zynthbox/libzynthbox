@@ -76,9 +76,7 @@ public:
         : q(q)
         , device(device)
     {}
-    ~SysexHelperPrivate() {
-        qDeleteAll(createdMessages);
-    }
+    ~SysexHelperPrivate() {}
     SysexHelper *q{nullptr};
     MidiRouterDevice *device{nullptr};
     int sysexChannel{0x7F};
