@@ -79,6 +79,11 @@ void ClipAudioSourceSubvoiceSettings::setGain(const float& gain)
     }
 }
 
+void ClipAudioSourceSubvoiceSettings::setGainDb(const float& gainDb)
+{
+    setGain(juce::Decibels::decibelsToGain(gainDb));
+}
+
 void ClipAudioSourceSubvoiceSettings::setGainAbsolute(const float& gainAbsolute)
 {
     setGain(juce::Decibels::decibelsToGain(juce::jmap(gainAbsolute, 0.0f, 1.0f, -maxGainDB, maxGainDB), -maxGainDB));

@@ -459,7 +459,7 @@ public:
     * @note Source : https://forum.juce.com/t/how-do-stereo-panning-knobs-work/25773/9
     * @param pan The pan value you wish to set ranging from  ranging from -1.0(Pan left) to +1.0(Pan right)
     */
-    void setPan(float pan);
+    void setPan(const float &pan);
     Q_SIGNAL void panChanged();
 
     int rootNote() const;

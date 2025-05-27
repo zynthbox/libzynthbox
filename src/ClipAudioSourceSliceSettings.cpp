@@ -539,7 +539,7 @@ float ClipAudioSourceSliceSettings::pan() const
     return d->pan;
 }
 
-void ClipAudioSourceSliceSettings::setPan(float pan)
+void ClipAudioSourceSliceSettings::setPan(const float &pan)
 {
     if (d->pan != pan) {
         IF_DEBUG_SLICE cerr << "Setting pan : " << pan;

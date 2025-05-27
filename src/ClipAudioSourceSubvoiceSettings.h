@@ -28,6 +28,7 @@ public:
     float gainDb() const;
     float gainAbsolute() const;
     void setGain(const float &gain);
+    void setGainDb(const float &gainDb);
     void setGainAbsolute(const float &gainAbsolute);
     Q_SIGNAL void gainChanged();
 private:
