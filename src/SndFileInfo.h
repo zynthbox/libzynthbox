@@ -25,6 +25,7 @@ class SndFileInfo : public QObject {
     Q_PROPERTY(QStringList synthSlotsData READ synthSlotsData CONSTANT)
     Q_PROPERTY(QStringList sampleSlotsData READ sampleSlotsData CONSTANT)
     Q_PROPERTY(QStringList fxSlotsData READ fxSlotsData CONSTANT)
+    Q_PROPERTY(QString trackStyleSnapshot READ trackStyleSnapshot CONSTANT)
     Q_PROPERTY(QString synthFxSnapshot READ synthFxSnapshot CONSTANT)
     Q_PROPERTY(QString sampleSnapshot READ sampleSnapshot CONSTANT)
     
@@ -90,6 +91,10 @@ public:
         fetchAndParseMetadata();
         return m_fxSlotsData;
     }
+    Q_INVOKABLE QString trackStyleSnapshot() {
+        fetchAndParseMetadata();
+        return m_trackStyleSnapshot;
+    }
     Q_INVOKABLE QString synthFxSnapshot() {
         fetchAndParseMetadata();
         return m_synthFxSnapshot;
@@ -129,6 +134,7 @@ private:
     QStringList m_synthSlotsData;
     QStringList m_sampleSlotsData;
     QStringList m_fxSlotsData;
+    QString m_trackStyleSnapshot;
     QString m_synthFxSnapshot;
     QString m_sampleSnapshot;
     QMap<QString, QString> m_metadata;
@@ -163,6 +169,9 @@ private:
                 for (int i = 0; i < slotsDataVariantList.size(); ++i) {
                     m_fxSlotsData << slotsDataVariantList.value(i).toString();
                 }
+            }
+            if (m_metadata.contains("ZYNTHBOX_SOUND_TRACK_STYLE_SNAPSHOT")) {
+                m_trackStyleSnapshot = m_metadata["ZYNTHBOX_SOUND_TRACK_STYLE_SNAPSHOT"];
             }
             if (m_metadata.contains("ZYNTHBOX_SOUND_SYNTH_FX_SNAPSHOT")) {
                 m_synthFxSnapshot = m_metadata["ZYNTHBOX_SOUND_SYNTH_FX_SNAPSHOT"];
