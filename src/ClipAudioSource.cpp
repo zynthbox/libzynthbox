@@ -481,6 +481,11 @@ const QString & ClipAudioSource::processingDescription() const
   return d->processingDescription;
 }
 
+bool ClipAudioSource::sourceExists() const
+{
+  return d->givenFile.exists();
+}
+
 int ClipAudioSource::sketchpadTrack() const
 {
   return d->sketchpadTrack;

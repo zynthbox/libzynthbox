@@ -49,6 +49,10 @@ class ClipAudioSource : public QObject {
      */
     Q_PROPERTY(QString processingDescription READ processingDescription NOTIFY processingDescriptionChanged)
     /**
+     * \brief If this is false, the file this object points to is missing from disk
+     */
+    Q_PROPERTY(bool sourceExists READ sourceExists NOTIFY sourceExistsChanged)
+    /**
      * \brief Whether to automatically synchronise the speed ratio between the clip's BPM and the playback one, to stretch the playback duration to match the same number of quarter notes between the two
      */
     Q_PROPERTY(bool autoSynchroniseSpeedRatio READ autoSynchroniseSpeedRatio WRITE setAutoSynchroniseSpeedRatio NOTIFY autoSynchroniseSpeedRatioChanged)
@@ -284,6 +288,9 @@ public:
   void setProcessingDescription(const QString &processingDescription);
   const QString &processingDescription() const;
   Q_SIGNAL void processingDescriptionChanged();
+
+  bool sourceExists() const;
+  Q_SIGNAL void sourceExistsChanged();
 
   int sketchpadTrack() const;
   void setSketchpadTrack(const int &newValue);
