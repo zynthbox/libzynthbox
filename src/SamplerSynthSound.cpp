@@ -70,16 +70,11 @@ public:
     juce::FileInputSource *thumbnailSource{nullptr};
     tracktion_engine::TracktionThumbnail thumbnail;
 
-    bool loadingSoundDataPostponed{false};
     void loadSoundData() {
         clip->startProcessing("Loading...");
         thumbnail.clear();
         QFileInfo clipInfo{clip->getPlaybackFile().getFile().getFullPathName().toRawUTF8()};
         if (clipInfo.exists()) {
-            if (loadingSoundDataPostponed) {
-                qDebug() << Q_FUNC_INFO << "Loading sound data for" << clip->getFilePath();
-                loadingSoundDataPostponed = false;
-            }
             AudioFormatReader *format{nullptr};
             juce::File file = clip->getPlaybackFile().getFile();
             tracktion_engine::AudioFileInfo fileInfo = clip->getPlaybackFile().getInfo();
@@ -117,13 +112,10 @@ public:
                 // TODO We'll need some way of forwarding error states to the UI, so people can try and help themselves out when they drop samples onto their sd card which are broken in some way or another...
                 qWarning() << Q_FUNC_INFO << "The file information format for" << file.getFullPathName().toUTF8() << "is null - the file exists, and is" << clipInfo.size() << "bytes";
             }
-            clip->endProcessing();
         } else {
-            qDebug() << Q_FUNC_INFO << "Postponing loading sound data for" << clip->getFilePath() << "100ms as the playback file is not there yet...";
-            loadingSoundDataPostponed = true;
-            soundLoader.start(100);
-            clip->setProcessingDescription("Waiting For File...");
+            qWarning() << Q_FUNC_INFO << "Aborting - file was missing for" << clip->getFilePath();
         }
+        clip->endProcessing();
     }
 
     QTimer playbackDataUpdater;
