@@ -421,11 +421,27 @@ public:
                                         case MidiRouter::ZynthianDestination:
                                         case MidiRouter::SamplerDestination:
                                             passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
-                                            for (const int &zynthianChannel : currentTrack->zynthianChannels) {
+                                            for (int slotIndex = 0; slotIndex < ZynthboxSlotCount; ++slotIndex) {
+                                                const int &zynthianChannel{currentTrack->zynthianChannels[slotIndex]};
                                                 if (zynthianChannel == -1) {
                                                     continue;
                                                 }
-                                                zynthianOutputs[zynthianChannel]->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                                bool sendEvent{true};
+                                                if (currentTrack->slotSelectionStyle == ClipAudioSource::SamePickingStyle && currentTrack->trustExternalInputChannel == false) {
+                                                    if (inputDeviceIsHardware) {
+                                                        if ((currentTrack->trustExternalInputChannel && slotIndex == eventChannel) || slotIndex == currentTrack->currentlySelectedPatternIndex) {
+                                                            sendEvent = true;
+                                                        } else {
+                                                            sendEvent = false;
+                                                        }
+                                                    } else if (slotIndex == currentTrack->currentlySelectedPatternIndex) {
+                                                        sendEvent = true;
+                                                    }
+                                                } else {
+                                                }
+                                                if (sendEvent) {
+                                                    zynthianOutputs[zynthianChannel]->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                                }
                                             }
                                             currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
                                             if (usbMidiPorts[0] && sketchpadTrack == currentSketchpadTrack && eventDevice != usbMidiPorts[0]) usbMidiPorts[0]->writeEventToOutput(*event, eventDeviceFilterEntry);
@@ -1255,8 +1271,8 @@ void MidiRouter::setZynthianChannels(int sketchpadTrack, const QList<int> &zynth
     if (sketchpadTrack > -1 && sketchpadTrack < ZynthboxTrackCount) {
         SketchpadTrackInfo *trackInfo = d->sketchpadTracks[sketchpadTrack];
         bool hasChanged{false};
-        for (int i = 0; i < 16; ++i) {
-            int original = trackInfo->zynthianChannels[i];
+        for (int i = 0; i < ZynthboxSlotCount; ++i) {
+            const int original = trackInfo->zynthianChannels[i];
             trackInfo->zynthianChannels[i] = zynthianChannels.value(i, -1);
             if (original != trackInfo->zynthianChannels[i]) {
                 hasChanged = true;

@@ -26,7 +26,7 @@ SketchpadTrackInfo::SketchpadTrackInfo(int trackIndex, QObject* parent)
     : QObject(parent)
     , trackIndex(trackIndex)
 {
-    for (int i = 0; i < 16; ++i) {
+    for (int i = 0; i < ZynthboxSlotCount; ++i) {
         zynthianChannels[i] = -1;
     }
 }

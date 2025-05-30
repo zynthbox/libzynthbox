@@ -45,7 +45,7 @@ public:
     // targeted on the zynthian outputs.
     explicit SketchpadTrackInfo(int trackIndex, QObject *parent = nullptr);
     ~SketchpadTrackInfo() = default;
-    int zynthianChannels[16];
+    int zynthianChannels[ZynthboxSlotCount];
     MidiRouterDevice *routerDevice{nullptr};
     MidiRouterDevice *syncTimerSequencer{nullptr};
     MidiRouterDevice *syncTimerController{nullptr};
