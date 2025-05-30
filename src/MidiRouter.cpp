@@ -427,17 +427,18 @@ public:
                                                     continue;
                                                 }
                                                 bool sendEvent{true};
-                                                if (currentTrack->slotSelectionStyle == ClipAudioSource::SamePickingStyle && currentTrack->trustExternalInputChannel == false) {
+                                                if (currentTrack->slotSelectionStyle == ClipAudioSource::SamePickingStyle) {
                                                     if (inputDeviceIsHardware) {
                                                         if ((currentTrack->trustExternalInputChannel && slotIndex == eventChannel) || slotIndex == currentTrack->currentlySelectedPatternIndex) {
-                                                            sendEvent = true;
+                                                            // Default is true, so pass through from here
                                                         } else {
                                                             sendEvent = false;
                                                         }
                                                     } else if (slotIndex == currentTrack->currentlySelectedPatternIndex) {
-                                                        sendEvent = true;
+                                                        // Default is true, so pass through from here
+                                                    } else {
+                                                        sendEvent = false;
                                                     }
-                                                } else {
                                                 }
                                                 if (sendEvent) {
                                                     zynthianOutputs[zynthianChannel]->writeEventToOutput(*event, eventDeviceFilterEntry);
