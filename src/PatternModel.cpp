@@ -248,8 +248,8 @@ public Q_SLOTS:
             int index{0};
             for (const QVariant &channelChainedSound : channelChainedSounds) {
                 const int chainedSound = channelChainedSound.toInt();
+                chainedSounds << chainedSound;
                 if (chainedSound > -1) {
-                    chainedSounds << chainedSound;
                     QList<int> acceptedChannelsActual;
                     const QVariantList &acceptedChannels = channelChainedSoundsAcceptedChannels[index].toList();
                     for (const QVariant &acceptedChannel : acceptedChannels) {
