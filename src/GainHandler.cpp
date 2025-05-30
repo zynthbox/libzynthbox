@@ -77,7 +77,7 @@ float GainHandler::gainDb() const
 
 float GainHandler::gainAbsolute() const
 {
-    return juce::jmap(juce::Decibels::gainToDecibels(d->gain, d->minimumDecibel), d->minimumDecibel, d->maximumDecibel, 0.0f, 1.0f);
+    return d->gain == 0 ? 0 : juce::jmap(juce::Decibels::gainToDecibels(d->gain, d->minimumDecibel), d->minimumDecibel, d->maximumDecibel, 0.0f, 1.0f);
 }
 
 void GainHandler::setGain(const float& gain)
@@ -89,10 +89,10 @@ void GainHandler::setGain(const float& gain)
 
 void GainHandler::setGainDb(const float& db)
 {
-    setGain(juce::Decibels::decibelsToGain(db, d->minimumDecibel));
+    setGain(db == d->minimumDecibel ? 0 : juce::Decibels::decibelsToGain(db, d->minimumDecibel));
 }
 
 void GainHandler::setGainAbsolute(const float& gainAbsolute)
 {
-    setGain(juce::Decibels::decibelsToGain(juce::jmap(gainAbsolute, 0.0f, 1.0f, d->minimumDecibel, d->maximumDecibel), d->minimumDecibel));
+    setGain(gainAbsolute == 0 ? 0 : juce::Decibels::decibelsToGain(juce::jmap(gainAbsolute, 0.0f, 1.0f, d->minimumDecibel, d->maximumDecibel), d->minimumDecibel));
 }
