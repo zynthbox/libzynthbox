@@ -76,6 +76,8 @@
 #include "SysexHelper.h"
 #include "SysexMessage.h"
 
+#include "folderlistmodel/qquickfolderlistmodel.h"
+
 #include "Plugin.h"
 
 /*
@@ -332,6 +334,8 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
 {
     m_qmlEngine = engine;
     engine->addImageProvider("pattern", new PatternImageProvider());
+
+    qmlRegisterType<QQuickFolderListModel>(uri, 1, 0, "FolderListModel");
 
     qmlRegisterType<FilterProxy>(uri, 1, 0, "FilterProxy");
     qmlRegisterUncreatableType<ClipAudioSource>(uri, 1, 0, "ClipAudioSource", "Use the getClipById fucntion to get these (they are held by sketchpad.clip, which has a .cppObjId property)");

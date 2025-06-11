@@ -64,6 +64,10 @@ target_sources(libzynthbox
         TransportManager.cpp
         WaveFormItem.cpp
         ZynthboxBasics.cpp
+
+        # FolderListModel copy goes here
+        folderlistmodel/fileinfothread.cpp
+        folderlistmodel/qquickfolderlistmodel.cpp
 )
 target_compile_definitions(libzynthbox
     PUBLIC
