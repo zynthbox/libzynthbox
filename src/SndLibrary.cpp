@@ -68,7 +68,15 @@ SndLibrary::SndLibrary(QObject *parent)
     categoriesFile.close();
     auto categoriesObj = QJsonDocument::fromJson(val.toUtf8()).object();
     for (auto category : categoriesObj.keys()) {
-        m_categories.insert(category, QVariant::fromValue(new SndCategoryInfo(categoriesObj[category].toString(), category, this)));
+        QString categoryDisplayName{"Unnamed"};
+        if (categoriesObj[category].isObject()) {
+            const QJsonObject categoryObject{categoriesObj[category].toObject()};
+            static const QLatin1String displayNameKey{"displayName"};
+            if (categoryObject.contains(displayNameKey) && categoryObject[displayNameKey].isString()) {
+                categoryDisplayName = categoryObject[displayNameKey].toString();
+            }
+        }
+        m_categories.insert(category, QVariant::fromValue(new SndCategoryInfo(categoryDisplayName, category, this)));
         if (category != "*") {
             // * is a logical category and hence does not need a directory
             QDir().mkpath(m_sndIndexPath + "/" + category);
