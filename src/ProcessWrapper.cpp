@@ -221,29 +221,26 @@ public:
     }
     void handleFinished(const int &/*exitCode*/, const QProcess::ExitStatus &exitStatus) {
         // qDebug() << Q_FUNC_INFO << "Process has exited";
+        process->deleteLater();
         process = nullptr;
         state = ProcessWrapper::NotRunningState;
         Q_EMIT q->stateChanged();
         if (exitStatus == QProcess::CrashExit) {
             if (performRestart && autoRestartCount < autoRestartLimit) {
                 ++autoRestartCount;
-                process->deleteLater();
-                process = nullptr;
                 standardOutput = {};
                 Q_EMIT q->standardOutputChanged(standardOutput);
                 standardError = {};
                 Q_EMIT q->standardErrorChanged(standardError);
                 // Clear out any waiting transactions, so we don't try and splat those into the new process before it's ready
+                currentTransaction = nullptr;
                 for (ProcessWrapperTransaction *transaction : transactions) {
                     transaction->deleteLater();
                 }
                 transactions.clear();
                 Q_EMIT q->transactionsChanged();
-                // Start the new process, and wait for it to be started if that makes sense to do
+                // Start the new process, and just mark it for release soon as we're done
                 ProcessWrapperTransaction * initTransaction = start(executable, parameters, environment, true);
-                if (commandPrompt.isEmpty() == false) {
-                    initTransaction->waitForState();
-                }
                 initTransaction->release();
             }
         }
