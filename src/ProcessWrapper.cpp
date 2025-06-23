@@ -202,7 +202,8 @@ public:
                     updatedState = ProcessWrapper::StartingState;
                     break;
                 case QProcess::Running:
-                    updatedState = ProcessWrapper::RunningState;
+                    // Not updating the state here, because this is done by testing the initial transaction instead
+                    updatedState = state;
                     // If we've got any transactions waiting to start, let's sort that out
                     if (currentTransaction && currentTransaction->state() == ProcessWrapperTransaction::WaitingToStartState) {
                         startTransaction(currentTransaction);
@@ -234,6 +235,7 @@ public:
                 Q_EMIT q->standardErrorChanged(standardError);
                 // Clear out any waiting transactions, so we don't try and splat those into the new process before it's ready
                 currentTransaction = nullptr;
+                initTransaction = nullptr;
                 for (ProcessWrapperTransaction *transaction : transactions) {
                     transaction->deleteLater();
                 }
@@ -286,7 +288,7 @@ public:
             }
             process->setProcessEnvironment(construct);
         }
-        ProcessWrapperTransaction *initTransaction = createTransaction("<initial startup>", commandPrompt);
+        initTransaction = createTransaction("<initial startup>", commandPrompt);
         process->start();
         return initTransaction;
     }
@@ -297,6 +299,7 @@ public:
     QList<ProcessWrapperTransaction*> transactionsToRelease;
     QQueue<ProcessWrapperTransaction*> waitingTransactions;
     ProcessWrapperTransaction* currentTransaction{nullptr};
+    ProcessWrapperTransaction* initTransaction{nullptr}; // This is set immediately prior to starting the process, and is unset once the transaction completes, at which point the state is changed from (Res,S)tarting to Running
     QString commandPrompt;
 
     void startTransaction(ProcessWrapperTransaction *transaction) {
@@ -388,6 +391,12 @@ public:
                         currentTransaction->appendStandardOutput(newData);
                         break;
                     }
+                }
+                // If the transaction which just completed is the init transaction, we are now Running, so set the state accordingly
+                if (currentTransaction == initTransaction) {
+                    initTransaction = nullptr;
+                    state = ProcessWrapper::RunningState;
+                    Q_EMIT q->stateChanged();
                 }
                 // Take care of any potential auto-release request
                 if (currentTransaction->autoRelease()) {
