@@ -73,7 +73,9 @@ void ProcessWrapperTransaction::setState(const TransactionState& state)
 
 void ProcessWrapperTransaction::waitForState(const TransactionState& state) const
 {
-    while (d->state != state) {
+    // If we hit a crash while waiting, then the process would change, and we'll need to return
+    const QObject *currentProcess{d->processWrapper->internalProcess()};
+    while (d->processWrapper->internalProcess() == currentProcess && d->state != state) {
         qApp->processEvents(QEventLoop::AllEvents, 10);
     }
 }
@@ -529,9 +531,11 @@ ProcessWrapperTransaction * ProcessWrapper::call(const QString& function, const 
         qWarning() << Q_FUNC_INFO << "You did not set a command prompt before attempting to call the function" << function;
     } else {
         if (d->process) {
+            // To be sure we handle crashing properly and getting the process replaced, store the current value before doing the thing...
+            const KPtyProcess *existingProcess{d->process};
             transaction = d->createTransaction(function, expectedEnd.isNull() ? d->commandPrompt : expectedEnd);
             qint64 startTime = QDateTime::currentMSecsSinceEpoch();
-            while (d->process && transaction->state() != ProcessWrapperTransaction::CompletedState) {
+            while (d->process && d->process == existingProcess && transaction->state() != ProcessWrapperTransaction::CompletedState) {
                 if (timeout > -1 && (QDateTime::currentMSecsSinceEpoch() - startTime) > timeout) {
                     break;
                 }
@@ -540,7 +544,7 @@ ProcessWrapperTransaction * ProcessWrapper::call(const QString& function, const 
                 qApp->processEvents(QEventLoop::AllEvents, 10);
             }
             // If this happens, then we (most likely) encountered a crash during processing, and the transaction will have been deleted
-            if (d->process == nullptr) {
+            if (d->process == nullptr || d->process != existingProcess) {
                 transaction = nullptr;
             }
         }
