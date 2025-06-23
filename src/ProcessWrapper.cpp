@@ -533,13 +533,17 @@ ProcessWrapperTransaction * ProcessWrapper::call(const QString& function, const 
         if (d->process) {
             transaction = d->createTransaction(function, expectedEnd.isNull() ? d->commandPrompt : expectedEnd);
             qint64 startTime = QDateTime::currentMSecsSinceEpoch();
-            while (transaction->state() != ProcessWrapperTransaction::CompletedState) {
+            while (d->process && transaction->state() != ProcessWrapperTransaction::CompletedState) {
                 if (timeout > -1 && (QDateTime::currentMSecsSinceEpoch() - startTime) > timeout) {
                     break;
                 }
                 d->handleReadyReadError();
                 d->handleReadyReadOutput();
                 qApp->processEvents(QEventLoop::AllEvents, 10);
+            }
+            // If this happens, then we (most likely) encountered a crash during processing, and the transaction will have been deleted
+            if (d->process == nullptr) {
+                transaction = nullptr;
             }
         }
     }
