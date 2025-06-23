@@ -184,6 +184,7 @@ public:
     ProcessWrapper *q{nullptr};
     QString executable;
     QStringList parameters;
+    QVariantMap environment;
     bool autoRestart{true};
     int autoRestartLimit{10};
     int autoRestartCount{0};
@@ -226,12 +227,71 @@ public:
         if (exitStatus == QProcess::CrashExit) {
             if (performRestart && autoRestartCount < autoRestartLimit) {
                 ++autoRestartCount;
-                q->start(executable, parameters);
+                process->deleteLater();
+                process = nullptr;
+                standardOutput = {};
+                Q_EMIT q->standardOutputChanged(standardOutput);
+                standardError = {};
+                Q_EMIT q->standardErrorChanged(standardError);
+                // Clear out any waiting transactions, so we don't try and splat those into the new process before it's ready
+                for (ProcessWrapperTransaction *transaction : transactions) {
+                    transaction->deleteLater();
+                }
+                transactions.clear();
+                Q_EMIT q->transactionsChanged();
+                // Start the new process, and wait for it to be started if that makes sense to do
+                ProcessWrapperTransaction * initTransaction = start(executable, parameters, environment, true);
+                if (commandPrompt.isEmpty() == false) {
+                    initTransaction->waitForState();
+                }
+                initTransaction->release();
             }
         }
     }
     void handleError(const QProcess::ProcessError &error) {
         qDebug() << Q_FUNC_INFO << process << "reported error" << error;
+    }
+
+    ProcessWrapperTransaction * start(const QString& executable, const QStringList& parameters, const QVariantMap &environment, const bool &automaticallyRestarting = false)
+    {
+        if (process) {
+            q->stop(0); // If we've already got a process going on, let's ensure that it's shut down (not gracefully, as documented, but immediately)
+        }
+        if (automaticallyRestarting) {
+            state = RestartingState;
+        } else {
+            state = StartingState;
+        }
+        Q_EMIT q->stateChanged();
+        process = new KPtyProcess(q);
+        process->setOutputChannelMode(KPtyProcess::OnlyStderrChannel);
+        process->setCurrentReadChannel(QProcess::StandardError);
+        process->setPtyChannels(KPtyProcess::StdinChannel | KPtyProcess::StdoutChannel);
+        process->pty()->setEcho(true); // We need to echo the command, otherwise our logic for detecting command line prompts etc ends up not working correctly
+        if (automaticallyRestarting == false) {
+            q->resetAutoRestartCount();
+            performRestart = autoRestart;
+        }
+        connect(process, &KPtyProcess::errorOccurred, q, [this](const QProcess::ProcessError &error){ handleError(error); });
+        connect(process, QOverload<int, QProcess::ExitStatus>::of(&KPtyProcess::finished), q, [this](const int &exitCode, const QProcess::ExitStatus &exitStatus){ handleFinished(exitCode, exitStatus); });
+        connect(process, &QProcess::stateChanged, q, [this](const QProcess::ProcessState &newState){ handleStateChange(newState); });
+        connect(process->pty(), &KPtyDevice::readyRead, q, [this]() { handleReadyReadOutput(); });
+        connect(process, &KPtyProcess::readyReadStandardError, q, [this](){ handleReadyReadError(); });
+        this->executable = executable;
+        this->parameters = parameters;
+        this->environment = environment;
+        process->setProgram(executable, parameters);
+        process->setNextOpenMode(QIODevice::ReadWrite | QIODevice::Unbuffered);
+        if (environment.isEmpty() == false) {
+            QProcessEnvironment construct;
+            for (auto it = environment.keyValueBegin(); it != environment.keyValueEnd(); ++it) {
+                construct.insert(it->first, it->second.toString());
+            }
+            process->setProcessEnvironment(construct);
+        }
+        ProcessWrapperTransaction *initTransaction = createTransaction("<initial startup>", commandPrompt);
+        process->start();
+        return initTransaction;
     }
 
     quint64 nextTransactionId{0};
@@ -428,36 +488,7 @@ ProcessWrapper::~ProcessWrapper()
 
 ProcessWrapperTransaction * ProcessWrapper::start(const QString& executable, const QStringList& parameters, const QVariantMap &environment)
 {
-    if (d->process) {
-        stop(0); // If we've already got a process going on, let's ensure that it's shut down (not gracefully, as documented, but immediately)
-    }
-    d->state = StartingState;
-    d->process = new KPtyProcess(this);
-    d->process->setOutputChannelMode(KPtyProcess::OnlyStderrChannel);
-    d->process->setCurrentReadChannel(QProcess::StandardError);
-    d->process->setPtyChannels(KPtyProcess::StdinChannel | KPtyProcess::StdoutChannel);
-    d->process->pty()->setEcho(true); // We need to echo the command, otherwise our logic for detecting command line prompts etc ends up not working correctly
-    resetAutoRestartCount();
-    d->performRestart = d->autoRestart;
-    connect(d->process, &KPtyProcess::errorOccurred, this, [this](const QProcess::ProcessError &error){ d->handleError(error); });
-    connect(d->process, QOverload<int, QProcess::ExitStatus>::of(&KPtyProcess::finished), this, [this](const int &exitCode, const QProcess::ExitStatus &exitStatus){ d->handleFinished(exitCode, exitStatus); });
-    connect(d->process, &QProcess::stateChanged, this, [this](const QProcess::ProcessState &newState){ d->handleStateChange(newState); });
-    connect(d->process->pty(), &KPtyDevice::readyRead, this, [this]() { d->handleReadyReadOutput(); });
-    connect(d->process, &KPtyProcess::readyReadStandardError, this, [this](){ d->handleReadyReadError(); });
-    d->executable = executable;
-    d->parameters = parameters;
-    d->process->setProgram(executable, parameters);
-    d->process->setNextOpenMode(QIODevice::ReadWrite | QIODevice::Unbuffered);
-    if (environment.isEmpty() == false) {
-        QProcessEnvironment construct;
-        for (auto it = environment.keyValueBegin(); it != environment.keyValueEnd(); ++it) {
-            construct.insert(it->first, it->second.toString());
-        }
-        d->process->setProcessEnvironment(construct);
-    }
-    ProcessWrapperTransaction *initTransaction = d->createTransaction("<initial startup>", d->commandPrompt);
-    d->process->start();
-    return initTransaction;
+    return d->start(executable, parameters, environment);
 }
 
 void ProcessWrapper::stop(const int& timeout)

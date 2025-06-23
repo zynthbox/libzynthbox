@@ -250,6 +250,7 @@ public:
         StartingState,
         RunningState,
         StoppingState,
+        RestartingState,
     };
     Q_ENUM(ProcessState)
 
