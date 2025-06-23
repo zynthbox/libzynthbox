@@ -237,10 +237,8 @@ public:
                 currentTransaction = nullptr;
                 initTransaction = nullptr;
                 for (ProcessWrapperTransaction *transaction : transactions) {
-                    transaction->deleteLater();
+                    transaction->release();
                 }
-                transactions.clear();
-                Q_EMIT q->transactionsChanged();
                 // Start the new process, and just mark it for release soon as we're done
                 ProcessWrapperTransaction * initTransaction = start(executable, parameters, environment, true);
                 initTransaction->release();
