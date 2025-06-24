@@ -239,6 +239,7 @@ public:
                 // Clear out any waiting transactions, so we don't try and splat those into the new process before it's ready
                 currentTransaction = nullptr;
                 initTransaction = nullptr;
+                waitingTransactions.clear();
                 for (ProcessWrapperTransaction *transaction : transactions) {
                     transaction->release();
                 }
