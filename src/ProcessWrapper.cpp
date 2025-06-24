@@ -417,6 +417,7 @@ public:
                 if (waitingTransactions.isEmpty()) {
                     // The queue is empty, so we don't have a current transaction
                     currentTransaction = nullptr;
+                    Q_EMIT q->allTransactionsCompleted();
                 } else {
                     // Pick the next transaction in the queue, if there is one, and start it
                     currentTransaction = waitingTransactions.dequeue();

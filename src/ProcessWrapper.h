@@ -228,6 +228,12 @@ public:
     QString standardOutput() const;
     QString standardError() const;
 
+    /**
+     * \brief Emitted when there are no more transactions in the queue to be processed
+     * @note This does not get emitted when the transactions are manually cleared (e.g. when the process is restarted due to crashing)
+     */
+    Q_SIGNAL void allTransactionsCompleted();
+
     // Ouch not cool hack: https://forum.qt.io/topic/130255/shiboken-signals-don-t-work
 // Core message (by vberlier): Turns out Shiboken shouldn't do anything for signals and let PySide setup the signals using the MOC data. Shiboken generates bindings for signals as if they were plain methods and shadows the actual signals.
 #ifndef PYSIDE_BINDINGS_H
