@@ -53,6 +53,15 @@ class MidiRouterDevice : public QObject {
     Q_PROPERTY(bool sendBeatClock READ sendBeatClock WRITE setSendBeatClock NOTIFY sendBeatClockChanged)
 
     /**
+     * \brief Whether the device will write any midi events to its output port
+     * This is intended to be used to temporarily pause writing events, at times where this might cause problems
+     * for the client the port is connected to (an example: some synths require there to be no midi input while
+     * changing presets)
+     * @default true
+     */
+    Q_PROPERTY(bool writeMidiEvents READ writeMidiEvents WRITE setWriteMidiEvents NOTIFY writeMidiEventsChanged)
+
+    /**
      * \brief A list of booleans describing whether to send events to that channel on this device
      * @see setSendToChannels
      * @see sendToChannel
@@ -487,6 +496,10 @@ public:
      */
     const bool &sendBeatClock() const;
     Q_SIGNAL void sendBeatClockChanged();
+
+    void setWriteMidiEvents(const bool &writeMidiEvents);
+    const bool &writeMidiEvents() const;
+    Q_SIGNAL void writeMidiEventsChanged();
 
     int lowerMasterChannel() const;
     void setLowerMasterChannel(const int &lowerMasterChannel);

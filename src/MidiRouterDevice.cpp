@@ -143,6 +143,7 @@ public:
     bool sendToChannel[16];
     bool sendTimecode{true};
     bool sendBeatClock{true};
+    bool writeMidiEvents{true};
     // Zynthbox' master channel
     int globalMaster{-1};
     bool filterZynthianByChannel{false};
@@ -412,13 +413,17 @@ void MidiRouterDevice::writeEventToOutputActual(jack_midi_event_t& event)
         if (isNoteMessage) {
             event.buffer[1] = std::clamp(int(event.buffer[1]) + d->transposeAmount, 0, 127);
         }
-        int errorCode = jack_midi_event_write(d->outputBuffer, event.time, event.buffer, event.size);
-        if (errorCode == -EINVAL) {
-            // If the error invalid happens, we should likely assume the event was out of order for whatever reason, and just schedule it at the same time as the most recently scheduled event
-            #if DebugRouterDevice
-                qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Attempted to write out-of-order event for time" << event.time << "so writing to most recent instead:" << d->mostRecentOutputTime;
-            #endif
-            errorCode = jack_midi_event_write(d->outputBuffer, d->mostRecentOutputTime, event.buffer, event.size);
+        int errorCode{0};
+        // If we have been asked to not write midi events to this output device, don't write the event (and just report no error)
+        if (d->writeMidiEvents) {
+            errorCode = jack_midi_event_write(d->outputBuffer, event.time, event.buffer, event.size);
+            if (errorCode == -EINVAL) {
+                // If the error invalid happens, we should likely assume the event was out of order for whatever reason, and just schedule it at the same time as the most recently scheduled event
+                #if DebugRouterDevice
+                    qWarning() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Attempted to write out-of-order event for time" << event.time << "so writing to most recent instead:" << d->mostRecentOutputTime;
+                #endif
+                errorCode = jack_midi_event_write(d->outputBuffer, d->mostRecentOutputTime, event.buffer, event.size);
+            }
         }
         event.buffer[1] = untransposedNote;
         if (errorCode != 0) {
@@ -825,6 +830,19 @@ void MidiRouterDevice::setSendBeatClock(const bool& sendBeatClock)
 const bool & MidiRouterDevice::sendBeatClock() const
 {
     return d->sendBeatClock;
+}
+
+void MidiRouterDevice::setWriteMidiEvents(const bool& writeMidiEvents)
+{
+    if (d->writeMidiEvents != writeMidiEvents) {
+        d->writeMidiEvents = writeMidiEvents;
+        Q_EMIT writeMidiEventsChanged();
+    }
+}
+
+const bool & MidiRouterDevice::writeMidiEvents() const
+{
+    return d->writeMidiEvents;
 }
 
 int MidiRouterDevice::lowerMasterChannel() const
