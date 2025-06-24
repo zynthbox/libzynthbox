@@ -227,6 +227,12 @@ public:
      * \brief Equivalent to getSketchpadTrackInfo, except returns the actual type
      */
     Q_INVOKABLE SketchpadTrackInfo *getSketchpadTrackInfoActual(const ZynthboxBasics::Track &track) const;
+    /**
+     * \brief Retrieve the router device instance for the given ID
+     * @param id The index of the synth engine output to fetch
+     * @return The object for the given output, or null for an invalid ID
+     */
+    Q_INVOKABLE MidiRouterDevice *getSynthOutputDevice(const int &id) const;
 
     Q_SIGNAL void addedHardwareDevice(const QString &deviceId, const QString &humanReadableName);
     Q_SIGNAL void removedHardwareDevice(const QString &deviceId, const QString &humanReadableName);

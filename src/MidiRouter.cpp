@@ -1141,6 +1141,15 @@ SketchpadTrackInfo * MidiRouter::getSketchpadTrackInfoActual(const ZynthboxBasic
     return d->sketchpadTracks[track];
 }
 
+MidiRouterDevice * MidiRouter::getSynthOutputDevice(const int& id) const
+{
+    MidiRouterDevice *device{nullptr};
+    if (-1 < id && id < 16) {
+        device = d->zynthianOutputs[id];
+    }
+    return device;
+}
+
 void MidiRouter::markAsDone() {
     d->done = true;
 }
