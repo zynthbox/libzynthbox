@@ -187,6 +187,7 @@ public:
     QString executable;
     QStringList parameters;
     QVariantMap environment;
+    QStringList startupCommands;
     bool autoRestart{true};
     int autoRestartLimit{10};
     int autoRestartCount{0};
@@ -288,7 +289,13 @@ public:
             }
             process->setProcessEnvironment(construct);
         }
-        initTransaction = createTransaction("<initial startup>", commandPrompt);
+        ProcessWrapperTransaction *lastStartupTransaction = createTransaction("<initial startup>", commandPrompt);
+        for (const QString &command : qAsConst(startupCommands)) {
+            // TODO If we want to return the startup commands to the user somehow, we'll need this to not happen (so the user gets to release them)
+            lastStartupTransaction->setAutoRelease(true);
+            lastStartupTransaction = createTransaction(command, commandPrompt);
+        }
+        initTransaction = lastStartupTransaction;
         process->start();
         return initTransaction;
     }
@@ -517,6 +524,11 @@ void ProcessWrapper::stop(const int& timeout)
         d->standardError = {};
         Q_EMIT standardErrorChanged(d->standardError);
     }
+}
+
+void ProcessWrapper::setStartupCommands(const QStringList& startupCommands)
+{
+    d->startupCommands = startupCommands;
 }
 
 void ProcessWrapper::setCommandPrompt(const QString& commandPrompt)

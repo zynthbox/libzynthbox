@@ -187,6 +187,14 @@ public:
     Q_INVOKABLE void stop(const int &timeout = 1000);
 
     /**
+     * \brief This sets a list of commands that should be run on startup, before reporting as running
+     * These commands will also be run after an automatic restart
+     * If needed, make sure to call this function before you run start()
+     * @param startupCommands The list of commands to be run (in order) during startup
+     */
+    Q_INVOKABLE void setStartupCommands(const QStringList &startupCommands);
+
+    /**
      * \brief This sets the command prompt used by the transaction based functionality to perform its operations
      * A command is considered completed when the command prompt is encountered in standard output
      * @param commandPrompt The command prompt string used to determine when a command has completed
