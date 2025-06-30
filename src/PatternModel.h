@@ -376,6 +376,21 @@ public:
     Q_INVOKABLE void removeSubnote(int row, int column, int subnote);
 
     /**
+     * \brief Remove all entries with any of the given note values from the model, in the given range of steps
+     * @param noteValues The midi note values of the notes to be removed (anything that is not a valid integer between 0 and 127 will be ignored)
+     * @param firstStep The index of the first step to remove that note from
+     * @param lastStep The index of the last step to remove that note from
+     */
+    Q_INVOKABLE void removeSubnotesByNoteValue(const QVariantList &noteValues, const int &firstStep, const int &lastStep);
+    /**
+     * \brief Remove all entries with the given note value from the model, in the given range of steps
+     * @param noteValue The midi note value of the note to be removed
+     * @param firstStep The index of the first step to remove that note from
+     * @param lastStep The index of the last step to remove that note from
+     */
+    Q_INVOKABLE void removeSubnoteByNoteValue(const int &noteValue, const int &firstStep, const int &lastStep);
+
+    /**
      * \brief Set the specified metadata key to the given value for the given position
      * @param row The row you wish to look int
      * @param column The column in the given row you wish to look in

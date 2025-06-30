@@ -998,6 +998,37 @@ void PatternModel::removeSubnote(int row, int column, int subnote)
     }
 }
 
+void PatternModel::removeSubnotesByNoteValue(const QVariantList& noteValues, const int& firstStep, const int& lastStep)
+{
+    startLongOperation();
+    for (const QVariant &variant : noteValues) {
+        const Note* note{qobject_cast<Note*>(variant.value<QObject*>())};
+        if (note) {
+            removeSubnoteByNoteValue(note->midiNote(), firstStep, lastStep);
+        } else if (variant.canConvert<int>()) {
+            const int noteValue{variant.toInt()};
+            if (-1 < noteValue && noteValue < 128) {
+                removeSubnoteByNoteValue(noteValue, firstStep, lastStep);
+            }
+        }
+    }
+    endLongOperation();
+}
+
+void PatternModel::removeSubnoteByNoteValue(const int& noteValue, const int& firstStep, const int& lastStep)
+{
+    if (-1 < firstStep && firstStep < height() * width() && -1 < lastStep && lastStep < height() * width() && firstStep <= lastStep) {
+        startLongOperation();
+        for (int step = firstStep; step <= lastStep; ++step) {
+            const int row{step / width()};
+            const int column{step - (row * width())};
+            const int subnote{subnoteIndex(row, column, noteValue)};
+            removeSubnote(row, column, subnote);
+        }
+        endLongOperation();
+    }
+}
+
 void PatternModel::setSubnoteMetadata(int row, int column, int subnote, const QString& key, const QVariant& value)
 {
     if (row > -1 && row < height() && column > -1 && column < width()) {
