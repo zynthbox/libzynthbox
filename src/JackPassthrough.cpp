@@ -260,19 +260,19 @@ public:
                     }
                 }
                 if (panAmount != 0 || outputDry || outputWetFx1 || outputWetFx2) {
-                    if (dryOutPortsEnabled) {
+                    if (dryOutPortsEnabled && outputDry) {
                         const float dryAmountLeft{dryAmount * std::min(1 - panAmount, 1.0f)};
                         const float dryAmountRight{dryAmount * std::min(1 + panAmount, 1.0f)};
                         juce::FloatVectorOperations::multiply(dryOutLeftBuffer, inputLeftBuffer, dryAmountLeft, int(nframes));
                         juce::FloatVectorOperations::multiply(dryOutRightBuffer, inputRightBuffer, dryAmountRight, int(nframes));
                     }
-                    if (wetOutFx1PortsEnabled && bypass == false) {
+                    if (wetOutFx1PortsEnabled && outputWetFx1 && bypass == false) {
                         const float wetFx1AmountLeft{wetFx1Amount * std::min(1 - panAmount, 1.0f)};
                         const float wetFx1AmountRight{wetFx1Amount * std::min(1 + panAmount, 1.0f)};
                         juce::FloatVectorOperations::multiply(wetOutFx1LeftBuffer, inputLeftBuffer, wetFx1AmountLeft, int(nframes));
                         juce::FloatVectorOperations::multiply(wetOutFx1RightBuffer, inputRightBuffer, wetFx1AmountRight, int(nframes));
                     }
-                    if (wetOutFx2PortsEnabled && bypass == false) {
+                    if (wetOutFx2PortsEnabled && outputWetFx2 && bypass == false) {
                         const float wetFx2AmountLeft{wetFx2Amount * std::min(1 - panAmount, 1.0f)};
                         const float wetFx2AmountRight{wetFx2Amount * std::min(1 + panAmount, 1.0f)};
                         juce::FloatVectorOperations::multiply(wetOutFx2LeftBuffer, inputLeftBuffer, wetFx2AmountLeft, int(nframes));
