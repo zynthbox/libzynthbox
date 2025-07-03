@@ -31,6 +31,17 @@ class JackPassthroughPrivate;
  */
 class JackPassthrough : public QObject {
     Q_OBJECT
+    /**
+     * \brief If true, the wet outputs will be zeroed (that is, the client will mute the wet outputs)
+     * @default false
+     */
+    Q_PROPERTY(bool bypass READ bypass WRITE setBypass NOTIFY bypassChanged)
+    /**
+     * \brief If true, all outputs will be zeroed (that is, the client will mute all output)
+     * @default false
+     */
+    Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY mutedChanged)
+
     // DEPRECATED Use the gainHandler instance directly
     Q_PROPERTY(float dryAmount READ dryAmount WRITE setDryAmount NOTIFY dryAmountChanged)
     // DEPRECATED Use the gainHandler instance directly
@@ -92,6 +103,14 @@ public:
     explicit JackPassthrough(const QString &clientName, QObject *parent = nullptr, const bool &dryOutPortsEnabled = true, const bool &wetOutFx1PortsEnabled = true, const bool &wetOutFx2PortsEnabled = true, const float &minimumDB = -24.0f, const float &maximumDB = 24.0f);
     ~JackPassthrough() override;
 
+    const bool &bypass() const;
+    void setBypass(const bool &bypass);
+    Q_SIGNAL void bypassChanged();
+
+    const bool &muted() const;
+    void setMuted(const bool &muted);
+    Q_SIGNAL void mutedChanged();
+
     // DEPRECATED Use the gainHandler instance directly
     float dryAmount() const;
     void setDryAmount(const float& newValue, bool resetDryWetMixAmount=true);
@@ -118,10 +137,6 @@ public:
     float panAmount() const;
     void setPanAmount(const float& newValue);
     Q_SIGNAL void panAmountChanged();
-
-    bool muted() const;
-    void setMuted(const bool& newValue);
-    Q_SIGNAL void mutedChanged();
 
     bool equaliserEnabled() const;
     void setEqualiserEnabled(const bool &equaliserEnabled);

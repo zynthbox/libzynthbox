@@ -79,6 +79,7 @@ public:
     float wetFx2Amount{1.0f};
     float dryWetMixAmount{-1.0f};
     float panAmount{0.0f};
+    bool bypass{false};
     bool muted{false};
 
     bool equaliserEnabled{false};
@@ -159,6 +160,16 @@ public:
                 wetOutFx2RightBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(wetOutFx2Right, nframes);
             }
 
+            if (bypass) {
+                if (wetOutFx1PortsEnabled) {
+                    memset(wetOutFx1LeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                    memset(wetOutFx1RightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                }
+                if (wetOutFx2PortsEnabled) {
+                    memset(wetOutFx2LeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                    memset(wetOutFx2RightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                }
+            }
             if (muted) {
                 if (dryOutPortsEnabled) {
                     memset(dryOutLeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
@@ -226,7 +237,7 @@ public:
                         memcpy(dryOutRightBuffer, inputRightBuffer, nframes * sizeof(jack_default_audio_sample_t));
                     }
                 }
-                if (wetOutFx1PortsEnabled) {
+                if (wetOutFx1PortsEnabled && bypass == false) {
                     if (panAmount == 0 && wetFx1Amount == 0) {
                         outputWetFx1 = false;
                         memset(wetOutFx1LeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
@@ -237,7 +248,7 @@ public:
                         memcpy(wetOutFx1RightBuffer, inputRightBuffer, nframes * sizeof(jack_default_audio_sample_t));
                     }
                 }
-                if (wetOutFx2PortsEnabled) {
+                if (wetOutFx2PortsEnabled && bypass == false) {
                     if (panAmount == 0 && wetFx2Amount == 0) {
                         outputWetFx2 = false;
                         memset(wetOutFx2LeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
@@ -255,13 +266,13 @@ public:
                         juce::FloatVectorOperations::multiply(dryOutLeftBuffer, inputLeftBuffer, dryAmountLeft, int(nframes));
                         juce::FloatVectorOperations::multiply(dryOutRightBuffer, inputRightBuffer, dryAmountRight, int(nframes));
                     }
-                    if (wetOutFx1PortsEnabled) {
+                    if (wetOutFx1PortsEnabled && bypass == false) {
                         const float wetFx1AmountLeft{wetFx1Amount * std::min(1 - panAmount, 1.0f)};
                         const float wetFx1AmountRight{wetFx1Amount * std::min(1 + panAmount, 1.0f)};
                         juce::FloatVectorOperations::multiply(wetOutFx1LeftBuffer, inputLeftBuffer, wetFx1AmountLeft, int(nframes));
                         juce::FloatVectorOperations::multiply(wetOutFx1RightBuffer, inputRightBuffer, wetFx1AmountRight, int(nframes));
                     }
-                    if (wetOutFx2PortsEnabled) {
+                    if (wetOutFx2PortsEnabled && bypass == false) {
                         const float wetFx2AmountLeft{wetFx2Amount * std::min(1 - panAmount, 1.0f)};
                         const float wetFx2AmountRight{wetFx2Amount * std::min(1 + panAmount, 1.0f)};
                         juce::FloatVectorOperations::multiply(wetOutFx2LeftBuffer, inputLeftBuffer, wetFx2AmountLeft, int(nframes));
@@ -440,6 +451,32 @@ JackPassthrough::~JackPassthrough()
     delete d;
 }
 
+const bool & JackPassthrough::bypass() const
+{
+    return d->bypass;
+}
+
+void JackPassthrough::setBypass(const bool& bypass)
+{
+    if (d->bypass != bypass) {
+        d->bypass = bypass;
+        Q_EMIT bypassChanged();
+    }
+}
+
+const bool &JackPassthrough::muted() const
+{
+    return d->muted;
+}
+
+void JackPassthrough::setMuted(const bool &newValue)
+{
+    if (d->muted != newValue) {
+        d->muted = newValue;
+        Q_EMIT mutedChanged();
+    }
+}
+
 float JackPassthrough::dryAmount() const
 {
     return d->dryGainHandler->gain();
@@ -541,19 +578,6 @@ void JackPassthrough::setPanAmount(const float &newValue)
     if (d->panAmount != newValue) {
         d->panAmount = newValue;
         Q_EMIT panAmountChanged();
-    }
-}
-
-bool JackPassthrough::muted() const
-{
-    return d->muted;
-}
-
-void JackPassthrough::setMuted(const bool &newValue)
-{
-    if (d->muted != newValue) {
-        d->muted = newValue;
-        Q_EMIT mutedChanged();
     }
 }
 
