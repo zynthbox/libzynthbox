@@ -12,6 +12,7 @@ public:
     float maximumDecibel{24};
     float maximumGain{15.84893192461113};
     float gain{1.0};
+    bool muted{false};
 
     // This allows us to force-set the gain when required (such as when changing the dB range)
     void setGain(const float &newGain) {
@@ -24,6 +25,8 @@ GainHandler::GainHandler(QObject* parent)
     : QObject(parent)
     , d(new Private(this))
 {
+    connect(this, &GainHandler::gainChanged, &GainHandler::operationalGainChanged);
+    connect(this, &GainHandler::mutedChanged, &GainHandler::operationalGainChanged);
 }
 
 GainHandler::~GainHandler()
@@ -95,4 +98,23 @@ void GainHandler::setGainDb(const float& db)
 void GainHandler::setGainAbsolute(const float& gainAbsolute)
 {
     setGain(gainAbsolute == 0 ? 0 : juce::Decibels::decibelsToGain(juce::jmap(gainAbsolute, 0.0f, 1.0f, d->minimumDecibel, d->maximumDecibel), d->minimumDecibel));
+}
+
+bool GainHandler::muted() const
+{
+    return d->muted;
+}
+
+void GainHandler::setMuted(const bool& muted)
+{
+    if (d->muted != muted) {
+        d->muted = muted;
+        Q_EMIT mutedChanged();
+    }
+}
+
+const float &GainHandler::operationalGain() const
+{
+    static const float mutedGain{0.0f};
+    return d->muted ? mutedGain : d->gain;
 }

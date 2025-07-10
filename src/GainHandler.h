@@ -41,6 +41,13 @@ class GainHandler : public QObject
      * \brief The gain as a raw gain value (that is, what should the audio signal be multiplied by)
      */
     Q_PROPERTY(float gain READ gain WRITE setGain NOTIFY gainChanged)
+
+    /**
+     * \brief Set this to true to mark this gain handler as muted
+     * The direct result of setting this property will be that operationalGain() will return 0
+     * @default false
+     */
+    Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY mutedChanged)
 public:
     explicit GainHandler(QObject *parent = nullptr);
     ~GainHandler() override;
@@ -60,6 +67,20 @@ public:
     void setGainDb(const float &db);
     void setGainAbsolute(const float &gainAbsolute);
     Q_SIGNAL void gainChanged();
+
+    bool muted() const;
+    void setMuted(const bool &muted);
+    Q_SIGNAL void mutedChanged();
+
+    /**
+     * \brief The gain value used for actually processing audio signals
+     * @return If the handler is muted, this will return 0, otherwise it will return the same as calling gain()
+     * @see muted()
+     * @see gain()
+     */
+    const float &operationalGain() const;
+    // Emitted whenever either gain or muted change
+    Q_SIGNAL void operationalGainChanged();
 private:
     class Private;
     Private *d{nullptr};
