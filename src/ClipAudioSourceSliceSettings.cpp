@@ -181,6 +181,9 @@ ClipAudioSourceSliceSettings::ClipAudioSourceSliceSettings(const int& index, Cli
     d->adsr.setSampleRate(d->clip->sampleRate());
     d->adsr.setParameters({0.0f, 0.0f, 1.0f, 0.0f});
 
+    connect(d->gainHandler, &GainHandler::gainChanged, this, [this](){ Q_EMIT d->clip->sliceDataChanged(); });
+    connect(d->gainHandler, &GainHandler::mutedChanged, this, [this](){ Q_EMIT d->clip->sliceDataChanged(); });
+
     // If this isn't the root slice, make sure we also update the playback style dependents (in case we're inheriting the style)
     if (d->clip->rootSliceActual() != nullptr && d->clip->rootSliceActual() != this) {
         connect(d->clip->rootSliceActual(), &ClipAudioSourceSliceSettings::playbackStyleChanged, this, [this](){ d->updatePlaybackStyleDependents(); });
