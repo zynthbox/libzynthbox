@@ -696,6 +696,7 @@ QString ClipAudioSource::slicesToString() const
     sliceObject.insert("pan", slice->pan());
     sliceObject.insert("pitch", slice->pitch());
     sliceObject.insert("gain", slice->gainHandlerActual()->gainDb());
+    sliceObject.insert("muted", slice->gainHandlerActual()->muted());
     sliceObject.insert("rootNote", slice->rootNote());
     sliceObject.insert("keyZoneStart", slice->keyZoneStart());
     sliceObject.insert("keyZoneEnd", slice->keyZoneEnd());
@@ -772,6 +773,7 @@ void ClipAudioSource::stringToSlices(const QString& data)
       slice->setPan(sliceObject.value("pan", 0.0).toFloat());
       slice->setPitch(sliceObject.value("pitch", 0.0).toFloat());
       slice->gainHandlerActual()->setGainDb(sliceObject.value("gain", 0.0f).toFloat());
+      slice->gainHandlerActual()->setMuted(sliceObject.value("muted", false).toBool());
       slice->setRootNote(sliceObject.value("rootNote", 60).toInt());
       slice->setKeyZoneStart(sliceObject.value("keyZoneStart",0).toInt());
       slice->setKeyZoneEnd(sliceObject.value("keyZoneEnd",127).toInt());
