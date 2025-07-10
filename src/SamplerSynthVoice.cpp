@@ -760,7 +760,8 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
             const float clipPitchChange = d->clip->rootSliceActual()->timeStretchStyle() == ClipAudioSource::TimeStretchOff
                 ? (d->clipCommand->changePitch ? d->clipCommand->pitchChange * d->clip->rootSliceActual()->pitchChangePrecalc() : d->clip->rootSliceActual()->pitchChangePrecalc()) * (d->subvoiceSettings ? d->subvoiceSettings->pitchChangePrecalc() : 1.0f)
                 : (d->clipCommand->changePitch ? d->clipCommand->pitchChange : 1.0f) * (d->subvoiceSettings ? d->subvoiceSettings->pitchChangePrecalc() : 1.0f);
-            const float clipGain = d->clip->rootSliceActual()->gainHandlerActual()->gain() * d->slice->gainHandlerActual()->gain() * (d->subvoiceSettings ? d->subvoiceSettings->gain() : 1.0f);
+            // For the root slice, don't apply the gain twice, that's just silly, and for everything else, apply both the root slice gain, and the current slice
+            const float clipGain = (d->slice == d->clip->rootSliceActual() ? 1 : d->clip->rootSliceActual()->gainHandlerActual()->operationalGain()) * d->slice->gainHandlerActual()->operationalGain() * (d->subvoiceSettings ? d->subvoiceSettings->gain() : 1.0f);
             const float lPan = 0.5f * (1.0f + qMax(-1.0f, d->playbackData.pan));
             const float rPan = 0.5f * (1.0f - qMax(0.0f, d->playbackData.pan));
 
