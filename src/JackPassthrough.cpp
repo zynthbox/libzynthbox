@@ -318,18 +318,18 @@ JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName, const 
     dryGainHandler = new GainHandler(q);
     dryGainHandler->setMinimumDecibel(minimumDB);
     dryGainHandler->setMaximumDecibel(maximumDB);
-    QObject::connect(dryGainHandler, &GainHandler::gainChanged, q, [this](){ dryAmount = dryGainHandler->gain(); });
-    QObject::connect(dryGainHandler, &GainHandler::gainChanged, q, &JackPassthrough::dryAmountChanged);
+    QObject::connect(dryGainHandler, &GainHandler::operationalGainChanged, q, [this](){ dryAmount = dryGainHandler->operationalGain(); });
+    QObject::connect(dryGainHandler, &GainHandler::operationalGainChanged, q, &JackPassthrough::dryAmountChanged);
     wetFx1GainHandler = new GainHandler(q);
     wetFx1GainHandler->setMinimumDecibel(minimumDB);
     wetFx1GainHandler->setMaximumDecibel(maximumDB);
-    QObject::connect(wetFx1GainHandler, &GainHandler::gainChanged, q, [this](){ wetFx1Amount = wetFx1GainHandler->gain(); });
-    QObject::connect(wetFx1GainHandler, &GainHandler::gainChanged, q, &JackPassthrough::wetFx1AmountChanged);
+    QObject::connect(wetFx1GainHandler, &GainHandler::operationalGainChanged, q, [this](){ wetFx1Amount = wetFx1GainHandler->operationalGain(); });
+    QObject::connect(wetFx1GainHandler, &GainHandler::operationalGainChanged, q, &JackPassthrough::wetFx1AmountChanged);
     wetFx2GainHandler = new GainHandler(q);
     wetFx2GainHandler->setMinimumDecibel(minimumDB);
     wetFx2GainHandler->setMaximumDecibel(maximumDB);
-    QObject::connect(wetFx2GainHandler, &GainHandler::gainChanged, q, [this](){ wetFx2Amount = wetFx2GainHandler->gain(); });
-    QObject::connect(wetFx2GainHandler, &GainHandler::gainChanged, q, &JackPassthrough::wetFx2AmountChanged);
+    QObject::connect(wetFx2GainHandler, &GainHandler::operationalGainChanged, q, [this](){ wetFx2Amount = wetFx2GainHandler->operationalGain(); });
+    QObject::connect(wetFx2GainHandler, &GainHandler::operationalGainChanged, q, &JackPassthrough::wetFx2AmountChanged);
     // Set respective output amount to 0 if ports are not enabled
     if (!dryOutPortsEnabled) {
         dryGainHandler->setGainAbsolute(0.0f);

@@ -60,7 +60,7 @@ int AudioLevelsChannel::process(jack_nframes_t nframes, jack_nframes_t current_f
             // Send all the data from the input buffers into the output buffers
             leftOutBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(leftOutPort, nframes);
             rightOutBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(rightOutPort, nframes);
-            const float gainAmount{m_gainHandler->gain()};
+            const float gainAmount{m_gainHandler->operationalGain()};
             if (m_muted || m_gainHandler->gainAbsolute() == 0) {
                 memset(leftOutBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
                 memset(rightOutBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
