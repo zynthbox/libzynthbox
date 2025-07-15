@@ -68,6 +68,7 @@ public:
         }
     }
     JackPassthrough *q{nullptr};
+    ZynthboxBasics::Track sketchpadTrack{ZynthboxBasics::NoTrack};
     QString actualClientName;
     QString portPrefix;
     GainHandler *dryGainHandler{nullptr};
@@ -451,6 +452,11 @@ JackPassthrough::~JackPassthrough()
     delete d;
 }
 
+void JackPassthrough::setSketchpadTrack(const ZynthboxBasics::Track& sketchpadTrack)
+{
+    d->sketchpadTrack = sketchpadTrack;
+}
+
 const bool & JackPassthrough::bypass() const
 {
     return d->bypass;
@@ -706,7 +712,7 @@ void JackPassthrough::setCompressorSidechannelLeft(const QString& compressorSide
         jack_port_disconnect(d->client, d->sideChainInput[0]);
         // Then connect up the new sidechain input
         static MidiRouterDeviceModel *model = qobject_cast<MidiRouterDeviceModel*>(MidiRouter::instance()->model());
-        const QStringList portsToConnect{model->audioInSourceToJackPortNames(d->compressorSidechannelLeft, {})};
+        const QStringList portsToConnect{model->audioInSourceToJackPortNames(d->compressorSidechannelLeft, {}, d->sketchpadTrack)};
         for (const QString &port : portsToConnect) {
             d->connectPorts(port, QString("%1:%2sidechainInputLeft").arg(d->actualClientName).arg(d->portPrefix));
         }
@@ -728,7 +734,7 @@ void JackPassthrough::setCompressorSidechannelRight(const QString& compressorSid
         jack_port_disconnect(d->client, d->sideChainInput[1]);
         // Then connect up the new sidechain input
         static MidiRouterDeviceModel *model = qobject_cast<MidiRouterDeviceModel*>(MidiRouter::instance()->model());
-        const QStringList portsToConnect{model->audioInSourceToJackPortNames(d->compressorSidechannelRight, {})};
+        const QStringList portsToConnect{model->audioInSourceToJackPortNames(d->compressorSidechannelRight, {}, d->sketchpadTrack)};
         for (const QString &port : portsToConnect) {
             d->connectPorts(port, QString("%1:%2sidechainInputRight").arg(d->actualClientName).arg(d->portPrefix));
         }

@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "ZynthboxBasics.h"
 #include "JUCEHeaders.h"
 
 #include <QObject>
@@ -102,6 +103,13 @@ class JackPassthrough : public QObject {
 public:
     explicit JackPassthrough(const QString &clientName, QObject *parent = nullptr, const bool &dryOutPortsEnabled = true, const bool &wetOutFx1PortsEnabled = true, const bool &wetOutFx2PortsEnabled = true, const float &minimumDB = -24.0f, const float &maximumDB = 24.0f);
     ~JackPassthrough() override;
+
+    /**
+     * \brief Set the track used as the "self" track for this passthrough
+     * Unless called, the track for any passthrough will be assumed to be ZynthboxBasics::NoTrack
+     * @param sketchpadTrack The track you wish to set as this passthrough's track (used for the "self" style sidechain entries)
+     */
+    void setSketchpadTrack(const ZynthboxBasics::Track &sketchpadTrack = ZynthboxBasics::NoTrack);
 
     const bool &bypass() const;
     void setBypass(const bool &bypass);
