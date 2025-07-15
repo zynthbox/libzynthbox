@@ -31,25 +31,27 @@ public:
         audioInSources << QVariantMap{ {"text", "Master Output - Left Channel"}, {"value", "internal-master:left"} };
         audioInSources << QVariantMap{ {"text", "Master Output - Right Channel"}, {"value", "internal-master:right"} };
         audioInSources << QVariantMap{ {"text", "Master Output - Both Channels"}, {"value", "internal-master:both"} };
-        const QStringList clients{"sketchpadTrack", "fxSlot"};
-        const QStringList clientNames{"Sound", "FX"};
-        const QList<QStringList> entries = {
+        static const QStringList clients{"synthSlot", "sampleSlot", "fxSlot"};
+        static const QStringList clientNames{"Synth", "Sample", "FX"};
+        static const QList<QStringList> entries = {
+            QStringList{"dry0", "dry1", "dry2", "dry3", "dry4"},
             QStringList{"dry0", "dry1", "dry2", "dry3", "dry4"},
             QStringList{"dry0", "wet0", "dry1", "wet1", "dry2", "wet2", "dry3", "wet3", "dry4", "wet4"}
         };
-        const QList<QStringList> entryNames = {
+        static const QList<QStringList> entryNames = {
+            QStringList{"1", "2", "3", "4", "5"},
             QStringList{"1", "2", "3", "4", "5"},
             QStringList{"1 (Dry)", "1 (Wet)", "2 (Dry)", "2 (Wet)", "3 (Dry)", "3 (Wet)", "4 (Dry)", "4 (Wet)", "5 (Dry)", "5 (Wet)"}
         };
-        QStringList channels{"left", "right", "both"};
-        QStringList channelNames{"Left Channel", "Right Channel", "Both Channels"};
-        for (int clientIndex = 0; clientIndex < 2; ++clientIndex) {
-            for (int trackIndex = 0; trackIndex < ZynthboxTrackCount; ++trackIndex) {
+        static const QStringList channels{"left", "right", "both"};
+        static const QStringList channelNames{"Left Channel", "Right Channel", "Both Channels"};
+        for (int clientIndex = 0; clientIndex < clients.length(); ++clientIndex) {
+            for (int trackIndex = -1; trackIndex < ZynthboxTrackCount; ++trackIndex) {
                 for (int entryIndex = 0; entryIndex < entries[clientIndex].length(); ++entryIndex) {
-                    for (int channelIndex = 0; channelIndex < 3; ++channelIndex) {
+                    for (int channelIndex = 0; channelIndex < channels.length(); ++channelIndex) {
                         audioInSources << QVariantMap{
-                            {"text", QString("Track %1 %2 %3 - %4").arg(trackIndex + 1).arg(clientNames[clientIndex]).arg(entryNames[clientIndex][entryIndex]).arg(channelNames[channelIndex])},
-                            {"value", QString("%1:%2:%3:%4").arg(clients[clientIndex]).arg(trackIndex).arg(entries[clientIndex][entryIndex]).arg(channels[channelIndex])}
+                            {"text", QString("Track %1 %2 %3 - %4").arg(trackIndex == -1 ? "Same" : QString::number(trackIndex + 1)).arg(clientNames[clientIndex]).arg(entryNames[clientIndex][entryIndex]).arg(channelNames[channelIndex])},
+                            {"value", QString("%1:%2:%3:%4").arg(clients[clientIndex]).arg(trackIndex == -1 ? "same" : QString::number(trackIndex)).arg(entries[clientIndex][entryIndex]).arg(channels[channelIndex])}
                         };
                     }
                 }
@@ -253,7 +255,7 @@ int MidiRouterDeviceModel::audioInSourceIndex(const QString& value) const
     return -1;
 }
 
-QStringList MidiRouterDeviceModel::audioInSourceToJackPortNames(const QString& value, const QStringList &standardRouting) const
+QStringList MidiRouterDeviceModel::audioInSourceToJackPortNames(const QString& value, const QStringList &standardRouting, const ZynthboxBasics::Track &selfTrack) const
 {
     QStringList jackPortNames;
     if (value.startsWith("standard-routing:")) {
@@ -287,26 +289,48 @@ QStringList MidiRouterDeviceModel::audioInSourceToJackPortNames(const QString& v
         if (value.endsWith(":right") || value.endsWith(":both")) {
             jackPortNames << "GlobalPlayback:dryOurRight";
         }
-    } else if (value.startsWith("sketchpadTrack:") || value.startsWith("fxSlot:")) {
+    } else if (value.startsWith("synthSlot:") || value.startsWith("sampleSlot:") || value.startsWith("fxSlot:")) {
         const QStringList splitData = value.split(":");
         QString portRootName, dryOrWet;
         int theLane = QString(splitData[2].right(1)).toInt() + 1;
-        int theTrack = QString(splitData[1]).toInt() + 1;
-        if (splitData[0] == "sketchpadTrack:") {
-            portRootName = QString("FXPassthrough-lane%1:Channel%2").arg(theLane).arg(theTrack);
+        int theTrack{0};
+        if (splitData[1] == "same") {
+            theTrack = selfTrack;
         } else {
-            portRootName = QString("TrackPassthrough:Channel%2-lane%1").arg(theLane).arg(theTrack);
+            theTrack = QString(splitData[1]).toInt();
         }
-        if (splitData[2].startsWith("dry")) {
-            dryOrWet = "dryOut";
-        } else if (splitData[2].startsWith("wet")) {
-            dryOrWet = "wetOutFx1";
-        }
-        if (splitData[3] == "left" || splitData[3] == "both") {
-            jackPortNames << QString("%1-%2Left").arg(portRootName).arg(dryOrWet);
-        }
-        if (splitData[3] == "right" || splitData[3] == "both") {
-            jackPortNames << QString("%1-%2Right").arg(portRootName).arg(dryOrWet);
+        if (theTrack == ZynthboxBasics::NoTrack) {
+            // If we've defined no track as the source, we've no ports to read from... simply pass back the empty list
+        } else {
+            ++theTrack;
+            if (splitData[0] == "sampleSlot") {
+                portRootName = QString("SamplerSynth:channel_%2-lane%1").arg(theLane).arg(theTrack);
+            } else if (splitData[0] == "synthSlot") {
+                portRootName = QString("TrackPassthrough:Channel%2-lane%1").arg(theLane).arg(theTrack);
+            } else if (splitData[0] == "fxSlot") {
+                portRootName = QString("FXPassthrough-lane%1:Channel%2").arg(theLane).arg(theTrack);
+            }
+            if (splitData[0] == "sampleSlot") {
+                // sample slot outputs are named differently to the passthrough outputs, and don't have dry/wet prefixes
+                if (splitData[3] == "left" || splitData[3] == "both") {
+                    jackPortNames << QString("%1-left").arg(portRootName);
+                }
+                if (splitData[3] == "right" || splitData[3] == "both") {
+                    jackPortNames << QString("%1-right").arg(portRootName);
+                }
+            } else {
+                    if (splitData[2].startsWith("dry")) {
+                    dryOrWet = "dryOut";
+                } else if (splitData[2].startsWith("wet")) {
+                    dryOrWet = "wetOutFx1";
+                }
+                if (splitData[3] == "left" || splitData[3] == "both") {
+                    jackPortNames << QString("%1-%2Left").arg(portRootName).arg(dryOrWet);
+                }
+                if (splitData[3] == "right" || splitData[3] == "both") {
+                    jackPortNames << QString("%1-%2Right").arg(portRootName).arg(dryOrWet);
+                }
+            }
         }
     }
     return jackPortNames;

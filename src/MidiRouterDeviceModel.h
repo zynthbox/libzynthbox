@@ -65,7 +65,7 @@ public:
 
     QVariantList audioInSources() const;
     Q_INVOKABLE int audioInSourceIndex(const QString &value) const;
-    Q_INVOKABLE QStringList audioInSourceToJackPortNames(const QString &value, const QStringList &standardRouting) const;
+    Q_INVOKABLE QStringList audioInSourceToJackPortNames(const QString &value, const QStringList &standardRouting, const ZynthboxBasics::Track &selfTrack) const;
     Q_SIGNAL void audioInSourcesChanged();
     QVariantList midiInSources() const;
     Q_INVOKABLE int midiInSourceIndex(const QString &value) const;
