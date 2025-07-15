@@ -1036,7 +1036,7 @@ void ClipAudioSource::reconnectSidechainPorts(jack_client_t* jackClient)
   // First disconnect anything currently connected to the left sidechannel input port
   jack_port_disconnect(jackClient, d->sideChainInput[0]);
   // Then connect up the new sidechain input
-  const QStringList leftPortsToConnect{model->audioInSourceToJackPortNames(d->compressorSidechannelLeft, {})};
+  const QStringList leftPortsToConnect{model->audioInSourceToJackPortNames(d->compressorSidechannelLeft, {}, ZynthboxBasics::Track(d->sketchpadTrack))};
   for (const QString &port : leftPortsToConnect) {
     connectPorts(jackClient, port, QString("SamplerSynth:Clip%1-SidechainInputLeft").arg(d->id));
   }
@@ -1044,7 +1044,7 @@ void ClipAudioSource::reconnectSidechainPorts(jack_client_t* jackClient)
   // First disconnect anything currently connected to the right sidechannel input port
   jack_port_disconnect(jackClient, d->sideChainInput[1]);
   // Then connect up the new sidechain input
-  const QStringList rightPortsToConnect{model->audioInSourceToJackPortNames(d->compressorSidechannelRight, {})};
+  const QStringList rightPortsToConnect{model->audioInSourceToJackPortNames(d->compressorSidechannelRight, {}, ZynthboxBasics::Track(d->sketchpadTrack))};
   for (const QString &port : rightPortsToConnect) {
     connectPorts(jackClient, port, QString("SamplerSynth:Clip%1-SidechainInputRight").arg(d->id));
   }
