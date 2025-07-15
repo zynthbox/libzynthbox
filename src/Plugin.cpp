@@ -244,6 +244,7 @@ void Plugin::initialize()
             }
             client->setWetFx1Amount(0.0f);
             client->setWetFx2Amount(0.0f);
+            client->setSketchpadTrack(ZynthboxBasics::Track(channelNumber));
             m_trackPassthroughClients << client;
         }
     }
@@ -256,9 +257,11 @@ void Plugin::initialize()
         for (int laneNumber = 0; laneNumber < 5; ++laneNumber) {
             JackPassthrough* fxPassthrough = new JackPassthrough(QString("FXPassthrough-lane%1:Channel%2-sound").arg(laneNumber+1).arg(channelNumber+1), QCoreApplication::instance(), true, true, false, -24.0f, 24.0f);
             fxPassthrough->setDryWetMixAmount(1.0f);
+            fxPassthrough->setSketchpadTrack(ZynthboxBasics::Track(channelNumber));
             soundLanes << fxPassthrough;
             JackPassthrough* sketchFxPassthrough = new JackPassthrough(QString("FXPassthrough-lane%1:Channel%2-sketch").arg(laneNumber+1).arg(channelNumber+1), QCoreApplication::instance(), true, true, false, -24.0f, 24.0f);
             sketchFxPassthrough->setDryWetMixAmount(1.0f);
+            sketchFxPassthrough->setSketchpadTrack(ZynthboxBasics::Track(channelNumber));
             sketchLanes << sketchFxPassthrough;
         }
         m_fxPassthroughClients << soundLanes;
