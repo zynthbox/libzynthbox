@@ -6,6 +6,7 @@
 #include "JackPassthrough.h"
 #include "PatternModel.h"
 #include "PlayGridManager.h"
+#include "Plugin.h"
 #include "MidiRecorder.h"
 #include "MidiRouterDevice.h"
 #include "MidiRouterFilter.h"
@@ -1283,9 +1284,14 @@ void MidiRouter::setZynthianChannels(int sketchpadTrack, const QList<int> &zynth
         bool hasChanged{false};
         for (int i = 0; i < ZynthboxSlotCount; ++i) {
             const int original = trackInfo->zynthianChannels[i];
-            trackInfo->zynthianChannels[i] = zynthianChannels.value(i, -1);
-            if (original != trackInfo->zynthianChannels[i]) {
+            const int newSynthSlot{zynthianChannels.value(i, -1)};
+            trackInfo->zynthianChannels[i] = newSynthSlot;
+            if (original != newSynthSlot) {
                 hasChanged = true;
+            }
+            if (newSynthSlot > -1) {
+                JackPassthrough* passthrough = Plugin::instance()->synthPassthroughClients().at(newSynthSlot);
+                passthrough->setSketchpadTrack(ZynthboxBasics::Track(sketchpadTrack));
             }
         }
         if (hasChanged) {
