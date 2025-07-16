@@ -859,28 +859,33 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
             l = lPan * mSignal + sSignal;
             r = rPan * mSignal - sSignal;
 
-            // Apply allpass filter effect
-            // Roughly based on https://thewolfsound.com/lowpass-highpass-filter-plugin-with-juce/
-            if (d->highpassCutoff > 0) {
-                // highpass filtering left channel
-                const float allpassFilteredSampleL = d->playbackData.highpassCoefficient * l + d->allpassBufferL;
-                d->allpassBufferL = l - d->playbackData.highpassCoefficient * allpassFilteredSampleL;
-                l = 0.5f * (l + highpassSign * allpassFilteredSampleL);
-                // highpass filtering right channel
-                const float allpassFilteredSampleR = d->playbackData.highpassCoefficient * r + d->allpassBufferR;
-                d->allpassBufferR = r - d->playbackData.highpassCoefficient * allpassFilteredSampleR;
-                r = 0.5f * (r + highpassSign * allpassFilteredSampleR);
-            }
-            if (d->lowpassCutoff > 0) {
-                // lowpass filtering left channel
-                const float allpassFilteredSampleL = d->playbackData.lowpassCoefficient * l + d->allpassBufferL;
-                d->allpassBufferL = l - d->playbackData.lowpassCoefficient * allpassFilteredSampleL;
-                l = 0.5f * (l + allpassFilteredSampleL);
-                // lowpass filtering right channel
-                const float allpassFilteredSampleR = d->playbackData.lowpassCoefficient * r + d->allpassBufferR;
-                d->allpassBufferR = r - d->playbackData.lowpassCoefficient * allpassFilteredSampleR;
-                r = 0.5f * (r + allpassFilteredSampleR);
-            }
+            // FIXME: Sort out the filter situation...
+            // Alright... allpass filter is clearly the wrong thing here, we really want to leave things alone unless
+            // explicitly applying a filter, and... an allpass may well have a flat response, but isn't phase correct,
+            // so, let's avoid that and get back to that later on
+            //
+            // // Apply allpass filter effect
+            // // Roughly based on https://thewolfsound.com/lowpass-highpass-filter-plugin-with-juce/
+            // if (d->highpassCutoff > 0) {
+            //     // highpass filtering left channel
+            //     const float allpassFilteredSampleL = d->playbackData.highpassCoefficient * l + d->allpassBufferL;
+            //     d->allpassBufferL = l - d->playbackData.highpassCoefficient * allpassFilteredSampleL;
+            //     l = 0.5f * (l + highpassSign * allpassFilteredSampleL);
+            //     // highpass filtering right channel
+            //     const float allpassFilteredSampleR = d->playbackData.highpassCoefficient * r + d->allpassBufferR;
+            //     d->allpassBufferR = r - d->playbackData.highpassCoefficient * allpassFilteredSampleR;
+            //     r = 0.5f * (r + highpassSign * allpassFilteredSampleR);
+            // }
+            // if (d->lowpassCutoff > 0) {
+            //     // lowpass filtering left channel
+            //     const float allpassFilteredSampleL = d->playbackData.lowpassCoefficient * l + d->allpassBufferL;
+            //     d->allpassBufferL = l - d->playbackData.lowpassCoefficient * allpassFilteredSampleL;
+            //     l = 0.5f * (l + allpassFilteredSampleL);
+            //     // lowpass filtering right channel
+            //     const float allpassFilteredSampleR = d->playbackData.lowpassCoefficient * r + d->allpassBufferR;
+            //     d->allpassBufferR = r - d->playbackData.lowpassCoefficient * allpassFilteredSampleR;
+            //     r = 0.5f * (r + allpassFilteredSampleR);
+            // }
 
             if (l > peakGainLeft) {
                 peakGainLeft = l;
