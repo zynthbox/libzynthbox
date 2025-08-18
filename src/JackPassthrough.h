@@ -71,7 +71,6 @@ class JackPassthrough : public QObject {
      */
     Q_PROPERTY(float dryWetMixAmount READ dryWetMixAmount WRITE setDryWetMixAmount NOTIFY dryWetMixAmountChanged)
     Q_PROPERTY(float panAmount READ panAmount WRITE setPanAmount NOTIFY panAmountChanged)
-    Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY mutedChanged)
 
     /**
      * \brief Whether or not the equaliser will be applied to incoming audio
