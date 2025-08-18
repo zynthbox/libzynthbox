@@ -258,6 +258,38 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::SwitchModeReleasedEvent:
                     case CUIAHelper::SwitchTracksModDownEvent:
                     case CUIAHelper::SwitchTracksModReleasedEvent:
+                    case CUIAHelper::SwitchStep1DownEvent:
+                    case CUIAHelper::SwitchStep1ReleasedEvent:
+                    case CUIAHelper::SwitchStep2DownEvent:
+                    case CUIAHelper::SwitchStep2ReleasedEvent:
+                    case CUIAHelper::SwitchStep3DownEvent:
+                    case CUIAHelper::SwitchStep3ReleasedEvent:
+                    case CUIAHelper::SwitchStep4DownEvent:
+                    case CUIAHelper::SwitchStep4ReleasedEvent:
+                    case CUIAHelper::SwitchStep5DownEvent:
+                    case CUIAHelper::SwitchStep5ReleasedEvent:
+                    case CUIAHelper::SwitchStep6DownEvent:
+                    case CUIAHelper::SwitchStep6ReleasedEvent:
+                    case CUIAHelper::SwitchStep7DownEvent:
+                    case CUIAHelper::SwitchStep7ReleasedEvent:
+                    case CUIAHelper::SwitchStep8DownEvent:
+                    case CUIAHelper::SwitchStep8ReleasedEvent:
+                    case CUIAHelper::SwitchStep9DownEvent:
+                    case CUIAHelper::SwitchStep9ReleasedEvent:
+                    case CUIAHelper::SwitchStep10DownEvent:
+                    case CUIAHelper::SwitchStep10ReleasedEvent:
+                    case CUIAHelper::SwitchStep11DownEvent:
+                    case CUIAHelper::SwitchStep11ReleasedEvent:
+                    case CUIAHelper::SwitchStep12DownEvent:
+                    case CUIAHelper::SwitchStep12ReleasedEvent:
+                    case CUIAHelper::SwitchStep13DownEvent:
+                    case CUIAHelper::SwitchStep13ReleasedEvent:
+                    case CUIAHelper::SwitchStep14DownEvent:
+                    case CUIAHelper::SwitchStep14ReleasedEvent:
+                    case CUIAHelper::SwitchStep15DownEvent:
+                    case CUIAHelper::SwitchStep15ReleasedEvent:
+                    case CUIAHelper::SwitchStep16DownEvent:
+                    case CUIAHelper::SwitchStep16ReleasedEvent:
                     case CUIAHelper::SwitchAltDownEvent:
                     case CUIAHelper::SwitchAltReleasedEvent:
                     case CUIAHelper::SwitchRecordEvent:
