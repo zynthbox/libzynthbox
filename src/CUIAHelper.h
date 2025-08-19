@@ -36,8 +36,8 @@ public:
         SwitchTrack3Event,
         SwitchTrack4Event,
         SwitchTrack5Event,
-        SwitchTracksModDownEvent,
-        SwitchTracksModReleasedEvent,
+        SwitchStarDownEvent,
+        SwitchStarReleasedEvent,
         SwitchModeDownEvent,
         SwitchModeReleasedEvent,
 

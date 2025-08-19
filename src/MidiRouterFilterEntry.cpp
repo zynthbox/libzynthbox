@@ -256,8 +256,8 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::SwitchSelectBoldEvent:
                     case CUIAHelper::SwitchModeDownEvent:
                     case CUIAHelper::SwitchModeReleasedEvent:
-                    case CUIAHelper::SwitchTracksModDownEvent:
-                    case CUIAHelper::SwitchTracksModReleasedEvent:
+                    case CUIAHelper::SwitchStarDownEvent:
+                    case CUIAHelper::SwitchStarReleasedEvent:
                     case CUIAHelper::SwitchStep1DownEvent:
                     case CUIAHelper::SwitchStep1ReleasedEvent:
                     case CUIAHelper::SwitchStep2DownEvent:
