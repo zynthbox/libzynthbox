@@ -216,19 +216,19 @@ class PatternModel : public NotesModel
      * @default KeyScales::ScaleChromatic
      */
     Q_PROPERTY(int scale READ scale WRITE setScale NOTIFY scaleChanged)
-    Q_PROPERTY(KeyScales::Scale scaleKey READ scaleKey NOTIFY scaleChanged)
+    Q_PROPERTY(KeyScales::Scale scaleKey READ scaleKey WRITE setScaleKey NOTIFY scaleChanged)
     /**
      * \brief The pitch of the key the pattern conceptually wants to use
      * @default KeyScales::KeyC
      */
     Q_PROPERTY(int pitch READ pitch WRITE setPitch NOTIFY pitchChanged)
-    Q_PROPERTY(KeyScales::Pitch pitchKey READ pitchKey NOTIFY pitchChanged)
+    Q_PROPERTY(KeyScales::Pitch pitchKey READ pitchKey WRITE setPitchKey NOTIFY pitchChanged)
     /**
      * \brief The octave of the key the pattern conceptually wants to use
      * @default KeyScales::Octave4
      */
     Q_PROPERTY(int octave READ octave WRITE setOctave NOTIFY octaveChanged)
-    Q_PROPERTY(KeyScales::Octave octaveKey READ octaveKey NOTIFY octaveChanged)
+    Q_PROPERTY(KeyScales::Octave octaveKey READ octaveKey WRITE setOctaveKey NOTIFY octaveChanged)
     /**
      * \brief Whether notes handled by this pattern's clip should be locked (or rewritten) to its given key and scale
      * @default PatternModel::KeyScaleLockOff
