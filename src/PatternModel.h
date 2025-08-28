@@ -92,6 +92,13 @@ class PatternModel : public NotesModel
      */
     Q_PROPERTY(int externalMidiChannel READ externalMidiChannel WRITE setExternalMidiChannel NOTIFY externalMidiChannelChanged)
     /**
+     * \brief The velocity which should be given to any newly added note (unless one has been explicitly chosen)
+     * @min 1
+     * @max 127
+     * @default 64
+     */
+    Q_PROPERTY(int defaultVelocity READ defaultVelocity WRITE setDefaultVelocity NOTIFY defaultVelocityChanged)
+    /**
      * \brief The duration which should be any newly added note (by default 0, meaning auto-quantized)
      *
      * By default, notes on a pattern are played back in a quantized fashion, but they can also be given an explicit duration
@@ -540,6 +547,10 @@ public:
     void setExternalMidiChannel(int externalMidiChannel);
     int externalMidiChannel() const;
     Q_SIGNAL void externalMidiChannelChanged();
+
+    void setDefaultVelocity(const int &defaultVelocity);
+    int defaultVelocity() const;
+    Q_SIGNAL void defaultVelocityChanged();
 
     void setDefaultNoteDuration(int defaultNoteDuration);
     int defaultNoteDuration() const;

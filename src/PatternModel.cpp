@@ -467,6 +467,7 @@ public:
     int width{16};
     PatternModel::NoteDestination noteDestination{PatternModel::SynthDestination};
     int externalMidiChannel{PatternModelDefaults::externalMidiChannel};
+    int defaultVelocity{64};
     int defaultNoteDuration{PatternModelDefaults::defaultNoteDuration};
     float stepLength{PatternModelDefaults::stepLength};
     int swing{PatternModelDefaults::swing};
@@ -720,6 +721,8 @@ PatternModel::PatternModel(SequenceModel* parent)
     setHeight(16);
 
     connect(this, &PatternModel::noteDestinationChanged, this, &NotesModel::registerChange);
+    connect(this, &PatternModel::defaultVelocityChanged, this, &NotesModel::registerChange);
+    connect(this, &PatternModel::defaultNoteDurationChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::stepLengthChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::swingChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::patternLengthChanged, this, &NotesModel::registerChange);
@@ -1390,6 +1393,19 @@ void PatternModel::setExternalMidiChannel(int externalMidiChannel)
 int PatternModel::externalMidiChannel() const
 {
     return d->externalMidiChannel;
+}
+
+void PatternModel::setDefaultVelocity(const int& defaultVelocity)
+{
+    if (d->defaultVelocity != defaultVelocity) {
+        d->defaultVelocity = qMax(1, qMin(defaultVelocity, 127));
+        Q_EMIT defaultVelocityChanged();
+    }
+}
+
+int PatternModel::defaultVelocity() const
+{
+    return d->defaultVelocity;
 }
 
 void PatternModel::setDefaultNoteDuration(int defaultNoteDuration)
