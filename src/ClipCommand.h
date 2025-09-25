@@ -2,6 +2,7 @@
 
 #include "SyncTimer.h"
 #include <QDebug>
+#include <atomic>
 
 class ClipAudioSource;
 /**
@@ -123,6 +124,9 @@ public:
     }
 
     void write(ClipCommand *command, quint64 timestamp) {
+        while (processFlag.test_and_set()) {
+            // spin while we wait for our guard to be released
+        }
         Entry *entry = writeHead;
         writeHead = writeHead->next;
         if (entry->processed == false) {
@@ -131,8 +135,12 @@ public:
         entry->clipCommand = command;
         entry->timestamp = timestamp;
         entry->processed = false;
+        processFlag.clear();
     }
     ClipCommand *read(quint64 *timestamp = nullptr) {
+        while (processFlag.test_and_set()) {
+            // spin while we wait for our guard to be released
+        }
         Entry *entry = readHead;
         readHead = readHead->next;
         if (timestamp) {
@@ -141,6 +149,7 @@ public:
         ClipCommand *command = entry->clipCommand;
         entry->clipCommand = nullptr;
         entry->processed = true;
+        processFlag.clear();
         return command;
     }
 
@@ -148,4 +157,5 @@ public:
     Entry *writeHead{nullptr};
 private:
     Entry ringData[ClipCommandRingSize];
+    std::atomic_flag processFlag = ATOMIC_FLAG_INIT;
 };
