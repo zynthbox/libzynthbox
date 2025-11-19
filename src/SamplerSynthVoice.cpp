@@ -12,7 +12,7 @@
 #include <QDebug>
 #include <QtMath>
 
-#define DataRingSize 256
+#define DataRingSize 1024
 class SamplerSynthVoiceDataRing {
 public:
     struct alignas(64) Entry {
