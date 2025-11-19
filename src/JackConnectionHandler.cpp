@@ -165,8 +165,9 @@ void JackConnectionHandler::disconnectPorts(const QString& first, const QString&
     d->createEntry(first, second, false);
 }
 
-void JackConnectionHandler::commit()
+bool JackConnectionHandler::commit()
 {
+    bool success{true};
     // qDebug() << Q_FUNC_INFO;
     for (JackConnectionHandlerConnection *connection : qAsConst(d->connections)) {
         if (connection->firstPort && connection->secondPort) {
@@ -175,22 +176,25 @@ void JackConnectionHandler::commit()
                 if (result == 0 || result == EEXIST) {
                     // all is well
                 } else {
-                    qWarning() << Q_FUNC_INFO << "Attempted to connect" << connection->first << "to" << connection->second << "and got the error" << result;
+                    success = false;
+                    // qWarning() << Q_FUNC_INFO << "Attempted to connect" << connection->first << "to" << connection->second << "and got the error" << result;
                 }
             } else {
                 int result = jack_disconnect(d->client, connection->first.toUtf8(), connection->second.toUtf8());
                 if (result == 0 || result == -1) {
                     // all is well (-1 is "no connection found", which we will accept as a successful result, as we are after the result, not the action)
                 } else {
-                    qWarning() << Q_FUNC_INFO << "Attempted to disconnect" << connection->first << "from" << connection->second << "and got the error" << result;
+                    // qWarning() << Q_FUNC_INFO << "Attempted to disconnect" << connection->first << "from" << connection->second << "and got the error" << result;
                 }
             }
         } else {
-            qWarning() << Q_FUNC_INFO << "Attempted to perform a connection action on one or more ports which don't exist:" << connection->first << connection->firstPort << connection->second << connection->secondPort;
+            success = false;
+            // qWarning() << Q_FUNC_INFO << "Attempted to perform a connection action on one or more ports which don't exist:" << connection->first << connection->firstPort << connection->second << connection->secondPort;
         }
     }
     qDeleteAll(d->connections);
     d->connections.clear();
+    return success;
 }
 
 void JackConnectionHandler::clear()

@@ -73,8 +73,9 @@ public:
 
     /**
      * \brief Commit all the connections and disconnections which have been requested since the last time this function was called
+     * @return True on a successful operation, false if one of the operations failed
      */
-    Q_INVOKABLE void commit();
+    Q_INVOKABLE bool commit();
 
     /**
      * \brief Abort the connection attempts which have been requested since the most recent call to either commit() or clear()
