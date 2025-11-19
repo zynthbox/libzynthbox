@@ -225,10 +225,11 @@ void Plugin::initialize()
     qDebug() << "JUCE initialisation took" << duration.count() << "ms";
 
     qDebug() << "Creating GlobalPlayback Passthrough Client";
-    m_globalPlaybackClient = new JackPassthrough("GlobalPlayback", QCoreApplication::instance(), true, false, false, -40.0f, 20.0f);
+    m_globalPlaybackClient = new JackPassthrough("GlobalPlayback", QCoreApplication::instance(), true, false, false, false, -40.0f, 20.0f);
+    m_globalPlaybackClient->setCreatePorts(true);
     qDebug() << "Creating 16 Synth Passthrough Clients";
     for (int i = 0; i < 16; i++) {
-        JackPassthrough *passthrough{new JackPassthrough(QString("SynthPassthrough:Synth%1").arg(i+1), QCoreApplication::instance(), true, false, false, -24.0f, 24.0f)};
+        JackPassthrough *passthrough{new JackPassthrough(QString("SynthPassthrough:Synth%1").arg(i+1), QCoreApplication::instance(), true, false, false, false, -24.0f, 24.0f)};
         m_synthPassthroughClients << passthrough;
     }
     qDebug() << "Creating 10 Track Passthrough Clients";
@@ -238,9 +239,9 @@ void Plugin::initialize()
         for (int laneNumber = 0; laneNumber < 10; ++laneNumber) {
             JackPassthrough* client{nullptr};
             if (laneNumber < 5) {
-                client = new JackPassthrough(QString("TrackPassthrough:Channel%1-lane%2").arg(channelNumber+1).arg(laneNumber+1), QCoreApplication::instance(), true, true, true, -40.0f, 20.0f);
+                client = new JackPassthrough(QString("TrackPassthrough:Channel%1-lane%2").arg(channelNumber+1).arg(laneNumber+1), QCoreApplication::instance(), true, true, true, false, -40.0f, 20.0f);
             } else {
-                client = new JackPassthrough(QString("TrackPassthrough:Channel%1-sketch%2").arg(channelNumber+1).arg(laneNumber-4), QCoreApplication::instance(), true, true, true, -40.0f, 20.0f);
+                client = new JackPassthrough(QString("TrackPassthrough:Channel%1-sketch%2").arg(channelNumber+1).arg(laneNumber-4), QCoreApplication::instance(), true, true, true, false, -40.0f, 20.0f);
             }
             client->setWetFx1Amount(0.0f);
             client->setWetFx2Amount(0.0f);
@@ -250,16 +251,17 @@ void Plugin::initialize()
     }
     // Create FX Passthrough clients for the 5 lanes, with 10 tracks each, for each fx slot in a channel (that is, an fx for each sound slot, and for each sketch)
     // The lanes have individual clients, ensuring we can avoid loops when routing the sketchpad track' slots in serial mode
+    // Each client has two pairs of inputs (the wet input for the signal coming from the slot's effect, and the dry input for the signal coming from the original source), and one output (the mixed down signal post-equaliser/compressor)
     qDebug() << "Creating 10*5*2 FX Passthrough Clients";
     for (int channelNumber = 0; channelNumber < 10; ++channelNumber) {
         QList<JackPassthrough*> soundLanes;
         QList<JackPassthrough*> sketchLanes;
         for (int laneNumber = 0; laneNumber < 5; ++laneNumber) {
-            JackPassthrough* fxPassthrough = new JackPassthrough(QString("FXPassthrough-lane%1:Channel%2-sound").arg(laneNumber+1).arg(channelNumber+1), QCoreApplication::instance(), true, true, false, -24.0f, 24.0f);
+            JackPassthrough* fxPassthrough = new JackPassthrough(QString("FXPassthrough-lane%1:Channel%2-sound").arg(laneNumber+1).arg(channelNumber+1), QCoreApplication::instance(), true, false, false, true, -24.0f, 24.0f);
             fxPassthrough->setDryWetMixAmount(1.0f);
             fxPassthrough->setSketchpadTrack(ZynthboxBasics::Track(channelNumber));
             soundLanes << fxPassthrough;
-            JackPassthrough* sketchFxPassthrough = new JackPassthrough(QString("FXPassthrough-lane%1:Channel%2-sketch").arg(laneNumber+1).arg(channelNumber+1), QCoreApplication::instance(), true, true, false, -24.0f, 24.0f);
+            JackPassthrough* sketchFxPassthrough = new JackPassthrough(QString("FXPassthrough-lane%1:Channel%2-sketch").arg(laneNumber+1).arg(channelNumber+1), QCoreApplication::instance(), true, false, false, true, -24.0f, 24.0f);
             sketchFxPassthrough->setDryWetMixAmount(1.0f);
             sketchFxPassthrough->setSketchpadTrack(ZynthboxBasics::Track(channelNumber));
             sketchLanes << sketchFxPassthrough;
