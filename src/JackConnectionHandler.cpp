@@ -19,7 +19,7 @@ public:
     void createEntry(const QString &first, const QString &second, bool connect) {
         bool foundExistingEntry{false};
         for (JackConnectionHandlerConnection *connection : qAsConst(connections)) {
-            if ((connection->first == first && connection->second == second) || (connection->first == first && connection->second == second)) {
+            if ((connection->first == first && connection->second == second) || (connection->first == second && connection->second == first)) {
                 connection->connect = connect;
                 foundExistingEntry = true;
                 break;
@@ -27,21 +27,8 @@ public:
         }
         if (foundExistingEntry == false) {
             JackConnectionHandlerConnection *newEntry{new JackConnectionHandlerConnection};
-            jack_port_t *firstPort = jack_port_by_name(client, first.toUtf8());
-            jack_port_t *secondPort = jack_port_by_name(client, second.toUtf8());
-            int firstPortFlags = jack_port_flags(firstPort);
-            // Since jack_connect requires the ports to be in the order output -> input, let's make sure we handle the ugly case, so we can be safe at runtime
-            if (firstPortFlags & JackPortFlags::JackPortIsOutput) {
-                newEntry->first = first;
-                newEntry->second = second;
-                newEntry->firstPort = firstPort;
-                newEntry->secondPort = secondPort;
-            } else {
-                newEntry->first = second;
-                newEntry->second = first;
-                newEntry->firstPort = secondPort;
-                newEntry->secondPort = firstPort;
-            }
+            newEntry->first = first;
+            newEntry->second = second;
             newEntry->connect = connect;
             connections.append(newEntry);
         }
@@ -71,7 +58,7 @@ bool JackConnectionHandler::isConnected(const QString& first, const QString& sec
     bool foundConnection{false};
     bool foundExistingEntry{false};
     for (JackConnectionHandlerConnection *connection : qAsConst(d->connections)) {
-        if ((connection->first == first && connection->second == second) || (connection->first == first && connection->second == second)) {
+        if ((connection->first == first && connection->second == second) || (connection->first == second && connection->second == first)) {
             foundConnection = connection->connect;
             foundExistingEntry = true;
             break;
@@ -170,6 +157,20 @@ bool JackConnectionHandler::commit()
     bool success{true};
     // qDebug() << Q_FUNC_INFO;
     for (JackConnectionHandlerConnection *connection : qAsConst(d->connections)) {
+        connection->firstPort = jack_port_by_name(d->client, connection->first.toUtf8());
+        connection->secondPort = jack_port_by_name(d->client, connection->second.toUtf8());
+        if (connection->firstPort) {
+            int firstPortFlags = jack_port_flags(connection->firstPort);
+            // Since jack_connect requires the ports to be in the order output -> input, let's make sure we handle the ugly case, so we can be safe at runtime
+            if (firstPortFlags & JackPortFlags::JackPortIsInput) {
+                const QString originalFirst{connection->first};
+                connection->first = connection->second;
+                connection->second = originalFirst;
+                jack_port_t *originalFirstPort{connection->firstPort};
+                connection->firstPort = connection->secondPort;
+                connection->secondPort = originalFirstPort;
+            }
+        }
         if (connection->firstPort && connection->secondPort) {
             if (connection->connect) {
                 int result = jack_connect(d->client, connection->first.toUtf8(), connection->second.toUtf8());
@@ -177,7 +178,7 @@ bool JackConnectionHandler::commit()
                     // all is well
                 } else {
                     success = false;
-                    // qWarning() << Q_FUNC_INFO << "Attempted to connect" << connection->first << "to" << connection->second << "and got the error" << result;
+                    qWarning() << Q_FUNC_INFO << "Attempted to connect" << connection->first << "to" << connection->second << "and got the error" << result;
                 }
             } else {
                 int result = jack_disconnect(d->client, connection->first.toUtf8(), connection->second.toUtf8());
@@ -187,9 +188,10 @@ bool JackConnectionHandler::commit()
                     // qWarning() << Q_FUNC_INFO << "Attempted to disconnect" << connection->first << "from" << connection->second << "and got the error" << result;
                 }
             }
-        } else {
+        } else if (connection->connect) {
+            // We allow disconnections to fail, because disconnecting ports that don't is supposed to just sort of be a thing anyway
             success = false;
-            // qWarning() << Q_FUNC_INFO << "Attempted to perform a connection action on one or more ports which don't exist:" << connection->first << connection->firstPort << connection->second << connection->secondPort;
+            qWarning() << Q_FUNC_INFO << "Attempted to connect one or more ports which don't exist:" << connection->first << connection->firstPort << connection->second << connection->secondPort;
         }
     }
     qDeleteAll(d->connections);
