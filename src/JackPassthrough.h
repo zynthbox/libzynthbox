@@ -99,8 +99,28 @@ class JackPassthrough : public QObject {
      * \brief The settings container object for the compressor
      */
     Q_PROPERTY(QObject* compressorSettings READ compressorSettings NOTIFY compressorSettingsChanged)
+    /**
+     * \brief Whether or not this passthrough should create its jack ports
+     * @default false
+     */
+    Q_PROPERTY(bool createPorts READ createPorts WRITE setCreatePorts NOTIFY createPortsChanged)
 public:
-    explicit JackPassthrough(const QString &clientName, QObject *parent = nullptr, const bool &dryOutPortsEnabled = true, const bool &wetOutFx1PortsEnabled = true, const bool &wetOutFx2PortsEnabled = true, const float &minimumDB = -24.0f, const float &maximumDB = 24.0f);
+    /**
+     * Create a new JackPassthrough instance with the given client name
+     * @param clientName The jack name this client should use (including port prefix, for example FXPassthrough-lane2:Channel8-sound)
+     * @param parent The QObject parent (usually the QCoreApplication instance)
+     * @param dryOutPortsEnabled Whether the dry output ports should be created
+     * @param wetOutFx1PortsEnabled Whether the wetFx1 output ports should be created
+     * @param wetOutFx2PortsEnabled Whether the wetFx2 output ports should be created
+     * @param wetInPortsEnabled Whether the wetInput input ports should be created
+     * @param minimumDB What should be used as the minimum dB level when adjusting the mixer settings for this client (output will be zeroed when the mixer is set to 0)
+     * @param maximumDB What should be used as the maximum dB level when adjusting the mxier settings for this client
+     *
+     * When you create a client, wet/dry mixing will be done as follows, depending on wetInPortsEnabled being true or false:
+     * - wetInPortsEnabled=true, you will perform dry/wet mixing through mixdown of the data sent into the input ports and the wet input ports which will then be sent identically to all enabled output ports after processing with eq/compressor
+     * - wetInPortsEnabled=false, you will perform dry/wet mixing through output, by distributing it between the dry output ports, and identical output sent to the wet output ports (unless they are both set explicitly to another value, such as for send purposes)
+     */
+    explicit JackPassthrough(const QString &clientName, QObject *parent = nullptr, const bool &dryOutPortsEnabled = true, const bool &wetOutFx1PortsEnabled = true, const bool &wetOutFx2PortsEnabled = true, const bool &wetInPortsEnabled = false, const float &minimumDB = -24.0f, const float &maximumDB = 24.0f);
     ~JackPassthrough() override;
 
     /**
@@ -169,6 +189,10 @@ public:
     Q_SIGNAL void compressorSidechannelRightChanged();
     QObject *compressorSettings() const;
     Q_SIGNAL void compressorSettingsChanged();
+
+    bool createPorts() const;
+    void setCreatePorts(const bool &createPorts);
+    Q_SIGNAL void createPortsChanged();
 private:
     JackPassthroughPrivate *d{nullptr};
 };

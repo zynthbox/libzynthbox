@@ -45,7 +45,7 @@ Q_GLOBAL_STATIC(JackClientHash, jackPassthroughClients)
 
 class JackPassthroughPrivate {
 public:
-    JackPassthroughPrivate(const QString &clientName, const bool &dryOutPortsEnabled, const bool &wetOutFx1PortsEnabled, const bool &wetOutFx2PortsEnabled, const float &minimumDB, const float &maximumDB, JackPassthrough *q);
+    JackPassthroughPrivate(const QString &clientName, const bool &dryOutPortsEnabled, const bool &wetOutFx1PortsEnabled, const bool &wetOutFx2PortsEnabled, const bool &wetInPortsEnabled, const float &minimumDB, const float &maximumDB, JackPassthrough *q);
     ~JackPassthroughPrivate() {
         JackPassthroughAggregate *aggregate{nullptr};
         QString key;
@@ -67,6 +67,7 @@ public:
             delete sideChainGain[channelIndex];
         }
     }
+    void registerPorts();
     JackPassthrough *q{nullptr};
     ZynthboxBasics::Track sketchpadTrack{ZynthboxBasics::NoTrack};
     QString actualClientName;
@@ -96,16 +97,51 @@ public:
     JackPassthroughCompressor *compressorSettings{nullptr};
     QString compressorSidechannelLeft, compressorSidechannelRight;
     bool compressorSidechannelEmpty[2]{true, true};
+    void updateSidechannelLeftConnections() {
+        // First disconnect anything currently connected to the left sidechannel input port
+        if (createPorts) {
+            jack_port_disconnect(client, sideChainInput[0]);
+        }
+        // Then connect up the new sidechain input
+        static MidiRouterDeviceModel *model = qobject_cast<MidiRouterDeviceModel*>(MidiRouter::instance()->model());
+        const QStringList portsToConnect{model->audioInSourceToJackPortNames(compressorSidechannelLeft, {}, sketchpadTrack)};
+        if (createPorts) {
+            for (const QString &port : portsToConnect) {
+                connectPorts(port, QString("%1:%2sidechainInputLeft").arg(actualClientName).arg(portPrefix));
+            }
+        }
+        compressorSidechannelEmpty[0] = portsToConnect.isEmpty();
+    }
+    void updateSidechannelRightConnections() {
+        // First disconnect anything currently connected to the right sidechannel input port
+        if (createPorts) {
+            jack_port_disconnect(client, sideChainInput[1]);
+        }
+        // Then connect up the new sidechain input
+        static MidiRouterDeviceModel *model = qobject_cast<MidiRouterDeviceModel*>(MidiRouter::instance()->model());
+        const QStringList portsToConnect{model->audioInSourceToJackPortNames(compressorSidechannelRight, {}, sketchpadTrack)};
+        if (createPorts) {
+            for (const QString &port : portsToConnect) {
+                connectPorts(port, QString("%1:%2sidechainInputRight").arg(actualClientName).arg(portPrefix));
+            }
+        }
+        compressorSidechannelEmpty[1] = portsToConnect.isEmpty();
+    }
+
+    bool createPorts{false};
 
     bool dryOutPortsEnabled{true};
     bool wetOutFx1PortsEnabled{true};
     bool wetOutFx2PortsEnabled{true};
+    bool wetInPortsEnabled{false};
     jack_default_audio_sample_t channelSampleLeft;
     jack_default_audio_sample_t channelSampleRight;
 
     jack_client_t *client{nullptr};
     jack_port_t *inputLeft{nullptr};
     jack_port_t *inputRight{nullptr};
+    jack_port_t *wetInputLeft{nullptr};
+    jack_port_t *wetInputRight{nullptr};
     jack_port_t *dryOutLeft{nullptr};
     jack_port_t *dryOutRight{nullptr};
     jack_port_t *wetOutFx1Left{nullptr};
@@ -114,6 +150,8 @@ public:
     jack_port_t *wetOutFx2Right{nullptr};
     jack_default_audio_sample_t *inputLeftBuffer{nullptr};
     jack_default_audio_sample_t *inputRightBuffer{nullptr};
+    jack_default_audio_sample_t *wetInputLeftBuffer{nullptr};
+    jack_default_audio_sample_t *wetInputRightBuffer{nullptr};
     jack_default_audio_sample_t *dryOutLeftBuffer{nullptr};
     jack_default_audio_sample_t *dryOutRightBuffer{nullptr};
     jack_default_audio_sample_t *wetOutFx1LeftBuffer{nullptr};
@@ -145,9 +183,13 @@ public:
     }
 
     int process(jack_nframes_t nframes) {
-        if (inputLeft && inputRight) {
-            jack_default_audio_sample_t *inputLeftBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(inputLeft, nframes);
-            jack_default_audio_sample_t *inputRightBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(inputRight, nframes);
+        if (createPorts && inputLeft && inputRight) {
+            inputLeftBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(inputLeft, nframes);
+            inputRightBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(inputRight, nframes);
+            if (wetInPortsEnabled) {
+                wetInputLeftBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(wetInputLeft, nframes);
+                wetInputRightBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(wetInputRight, nframes);
+            }
             if (dryOutPortsEnabled) {
                 dryOutLeftBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(dryOutLeft, nframes);
                 dryOutRightBuffer = (jack_default_audio_sample_t *)jack_port_get_buffer(dryOutRight, nframes);
@@ -186,6 +228,28 @@ public:
                 }
             } else {
                 jack_default_audio_sample_t *inputBuffers[2]{inputLeftBuffer, inputRightBuffer};
+                if (wetInPortsEnabled) {
+                    // If the wet inputs are enabled, it means we mix down before applying eq/compressor and outputting the result to all enabled outputs
+                    // First inline-adjust the input buffer according to the dry level and pan amount (if that is anything other than 1.0, or if the dry amount is 0, in which case dry should be zeroed anyway)
+                    if (dryAmount == 0) {
+                        memset(inputLeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                        memset(inputRightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                    } else if (dryAmount != 1.0 || panAmount != 0.0) {
+                        const float dryAmountLeft{dryAmount * std::min(1 - panAmount, 1.0f)};
+                        const float dryAmountRight{dryAmount * std::min(1 + panAmount, 1.0f)};
+                        juce::FloatVectorOperations::multiply(inputLeftBuffer, dryAmountLeft, int(nframes));
+                        juce::FloatVectorOperations::multiply(inputRightBuffer, dryAmountRight, int(nframes));
+                    }
+                    // Adjust the wet input buffer according to the wet fx1 level and pan amount (if that is anything other than 1.0) and apply directly to the matching input buffers
+                    if (wetFx1Amount == 0 || bypass) {
+                        // Do nothing if wet is 1 (as this just means it shouldn't be used)
+                    } else {
+                        const float wetAmountLeft{wetFx1Amount * std::min(1 - panAmount, 1.0f)};
+                        const float wetAmountRight{wetFx1Amount * std::min(1 + panAmount, 1.0f)};
+                        juce::FloatVectorOperations::addWithMultiply(inputLeftBuffer, wetInputLeftBuffer, wetAmountLeft, int(nframes));
+                        juce::FloatVectorOperations::addWithMultiply(inputRightBuffer, wetInputRightBuffer, wetAmountRight, int(nframes));
+                    }
+                }
                 if (equaliserEnabled) {
                     for (JackPassthroughFilter *filter : equaliserSettings) {
                         filter->updateCoefficients();
@@ -224,60 +288,77 @@ public:
                 } else if (compressorSettings) { // just to avoid doing any unnecessary hoop-jumping during construction
                     compressorSettings->setPeaks(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
                 }
-                bool outputDry{true};
-                bool outputWetFx1{true};
-                bool outputWetFx2{true};
-                if (dryOutPortsEnabled) {
-                    if (panAmount == 0 && dryAmount == 0) {
-                        outputDry = false;
-                        memset(dryOutLeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
-                        memset(dryOutRightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
-                    } else if (panAmount == 0 && dryAmount == 1) {
-                        outputDry = false;
+                if (wetInPortsEnabled) {
+                    // If the wet input ports are enabled, our mixdown is done before applying the effects, so we should just copy whatever is in the processed input buffer to all enabled outputs
+                    // Usually there would be only one output buffer actually enabled, but technically there's nothing to stop you having more, so...
+                    if (dryOutPortsEnabled) {
                         memcpy(dryOutLeftBuffer, inputLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
                         memcpy(dryOutRightBuffer, inputRightBuffer, nframes * sizeof(jack_default_audio_sample_t));
                     }
-                }
-                if (wetOutFx1PortsEnabled && bypass == false) {
-                    if (panAmount == 0 && wetFx1Amount == 0) {
-                        outputWetFx1 = false;
-                        memset(wetOutFx1LeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
-                        memset(wetOutFx1RightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
-                    } else if (panAmount == 0 && wetFx1Amount == 1) {
-                        outputWetFx1 = false;
+                    if (wetOutFx1PortsEnabled) {
                         memcpy(wetOutFx1LeftBuffer, inputLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
                         memcpy(wetOutFx1RightBuffer, inputRightBuffer, nframes * sizeof(jack_default_audio_sample_t));
                     }
-                }
-                if (wetOutFx2PortsEnabled && bypass == false) {
-                    if (panAmount == 0 && wetFx2Amount == 0) {
-                        outputWetFx2 = false;
-                        memset(wetOutFx2LeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
-                        memset(wetOutFx2RightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
-                    } else if (panAmount == 0 && wetFx2Amount == 1) {
-                        outputWetFx2 = false;
+                    if (wetOutFx2PortsEnabled) {
                         memcpy(wetOutFx2LeftBuffer, inputLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
                         memcpy(wetOutFx2RightBuffer, inputRightBuffer, nframes * sizeof(jack_default_audio_sample_t));
                     }
-                }
-                if (panAmount != 0 || outputDry || outputWetFx1 || outputWetFx2) {
-                    if (dryOutPortsEnabled && outputDry) {
-                        const float dryAmountLeft{dryAmount * std::min(1 - panAmount, 1.0f)};
-                        const float dryAmountRight{dryAmount * std::min(1 + panAmount, 1.0f)};
-                        juce::FloatVectorOperations::multiply(dryOutLeftBuffer, inputLeftBuffer, dryAmountLeft, int(nframes));
-                        juce::FloatVectorOperations::multiply(dryOutRightBuffer, inputRightBuffer, dryAmountRight, int(nframes));
+                } else {
+                    bool outputDry{true};
+                    bool outputWetFx1{true};
+                    bool outputWetFx2{true};
+                    if (dryOutPortsEnabled) {
+                        if (panAmount == 0 && dryAmount == 0) {
+                            outputDry = false;
+                            memset(dryOutLeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                            memset(dryOutRightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                        } else if (panAmount == 0 && dryAmount == 1) {
+                            outputDry = false;
+                            memcpy(dryOutLeftBuffer, inputLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                            memcpy(dryOutRightBuffer, inputRightBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                        }
                     }
-                    if (wetOutFx1PortsEnabled && outputWetFx1 && bypass == false) {
-                        const float wetFx1AmountLeft{wetFx1Amount * std::min(1 - panAmount, 1.0f)};
-                        const float wetFx1AmountRight{wetFx1Amount * std::min(1 + panAmount, 1.0f)};
-                        juce::FloatVectorOperations::multiply(wetOutFx1LeftBuffer, inputLeftBuffer, wetFx1AmountLeft, int(nframes));
-                        juce::FloatVectorOperations::multiply(wetOutFx1RightBuffer, inputRightBuffer, wetFx1AmountRight, int(nframes));
+                    if (wetOutFx1PortsEnabled && bypass == false) {
+                        if (panAmount == 0 && wetFx1Amount == 0) {
+                            outputWetFx1 = false;
+                            memset(wetOutFx1LeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                            memset(wetOutFx1RightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                        } else if (panAmount == 0 && wetFx1Amount == 1) {
+                            outputWetFx1 = false;
+                            memcpy(wetOutFx1LeftBuffer, inputLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                            memcpy(wetOutFx1RightBuffer, inputRightBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                        }
                     }
-                    if (wetOutFx2PortsEnabled && outputWetFx2 && bypass == false) {
-                        const float wetFx2AmountLeft{wetFx2Amount * std::min(1 - panAmount, 1.0f)};
-                        const float wetFx2AmountRight{wetFx2Amount * std::min(1 + panAmount, 1.0f)};
-                        juce::FloatVectorOperations::multiply(wetOutFx2LeftBuffer, inputLeftBuffer, wetFx2AmountLeft, int(nframes));
-                        juce::FloatVectorOperations::multiply(wetOutFx2RightBuffer, inputRightBuffer, wetFx2AmountRight, int(nframes));
+                    if (wetOutFx2PortsEnabled && bypass == false) {
+                        if (panAmount == 0 && wetFx2Amount == 0) {
+                            outputWetFx2 = false;
+                            memset(wetOutFx2LeftBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                            memset(wetOutFx2RightBuffer, 0, nframes * sizeof(jack_default_audio_sample_t));
+                        } else if (panAmount == 0 && wetFx2Amount == 1) {
+                            outputWetFx2 = false;
+                            memcpy(wetOutFx2LeftBuffer, inputLeftBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                            memcpy(wetOutFx2RightBuffer, inputRightBuffer, nframes * sizeof(jack_default_audio_sample_t));
+                        }
+                    }
+                    if (panAmount != 0 || outputDry || outputWetFx1 || outputWetFx2) {
+                        if (dryOutPortsEnabled && outputDry) {
+                            const float dryAmountLeft{dryAmount * std::min(1 - panAmount, 1.0f)};
+                            const float dryAmountRight{dryAmount * std::min(1 + panAmount, 1.0f)};
+                            juce::FloatVectorOperations::multiply(dryOutLeftBuffer, inputLeftBuffer, dryAmountLeft, int(nframes));
+                            juce::FloatVectorOperations::multiply(dryOutRightBuffer, inputRightBuffer, dryAmountRight, int(nframes));
+                        }
+                        if (wetOutFx1PortsEnabled && outputWetFx1 && bypass == false) {
+                            const float wetFx1AmountLeft{wetFx1Amount * std::min(1 - panAmount, 1.0f)};
+                            const float wetFx1AmountRight{wetFx1Amount * std::min(1 + panAmount, 1.0f)};
+                            juce::FloatVectorOperations::multiply(wetOutFx1LeftBuffer, inputLeftBuffer, wetFx1AmountLeft, int(nframes));
+                            juce::FloatVectorOperations::multiply(wetOutFx1RightBuffer, inputRightBuffer, wetFx1AmountRight, int(nframes));
+                        }
+                        if (wetOutFx2PortsEnabled && outputWetFx2 && bypass == false) {
+                            const float wetFx2AmountLeft{wetFx2Amount * std::min(1 - panAmount, 1.0f)};
+                            const float wetFx2AmountRight{wetFx2Amount * std::min(1 + panAmount, 1.0f)};
+                            juce::FloatVectorOperations::multiply(wetOutFx2LeftBuffer, inputLeftBuffer, wetFx2AmountLeft, int(nframes));
+                            juce::FloatVectorOperations::multiply(wetOutFx2RightBuffer, inputRightBuffer, wetFx2AmountRight, int(nframes));
+                        }
                     }
                 }
             }
@@ -307,7 +388,7 @@ static int jackPassthroughProcess(jack_nframes_t nframes, void* arg) {
     return 0;
 }
 
-JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName, const bool &dryOutPortsEnabled, const bool &wetOutFx1PortsEnabled, const bool &wetOutFx2PortsEnabled, const float &minimumDB, const float &maximumDB, JackPassthrough *q)
+JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName, const bool &dryOutPortsEnabled, const bool &wetOutFx1PortsEnabled, const bool &wetOutFx2PortsEnabled, const bool &wetInPortsEnabled, const float &minimumDB, const float &maximumDB, JackPassthrough *q)
     : q(q)
 {
     jack_status_t real_jack_status{};
@@ -315,6 +396,7 @@ JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName, const 
     this->dryOutPortsEnabled = dryOutPortsEnabled;
     this->wetOutFx1PortsEnabled = wetOutFx1PortsEnabled;
     this->wetOutFx2PortsEnabled = wetOutFx2PortsEnabled;
+    this->wetInPortsEnabled = wetInPortsEnabled;
 
     dryGainHandler = new GainHandler(q);
     dryGainHandler->setMinimumDecibel(minimumDB);
@@ -374,32 +456,10 @@ JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName, const 
             qWarning() << "JackPasstrough Client: Failed to create Jack client for" << clientName;
         }
     }
+    if (createPorts) {
+        registerPorts();
+    }
     if (aggregate) {
-        bool dryOutPortsRegistrationFailed{false};
-        bool wetOutFx1PortsRegistrationFailed{false};
-        bool wetOutFx2PortsRegistrationFailed{false};
-        inputLeft = jack_port_register(client, QString("%1inputLeft").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-        inputRight = jack_port_register(client, QString("%1inputRight").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-        if (dryOutPortsEnabled) {
-            dryOutLeft = jack_port_register(client, QString("%1dryOutLeft").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-            dryOutRight = jack_port_register(client, QString("%1dryOutRight").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-            dryOutPortsRegistrationFailed = dryOutLeft == NULL || dryOutRight == NULL;
-        }
-        if (wetOutFx1PortsEnabled) {
-            wetOutFx1Left = jack_port_register(client, QString("%1wetOutFx1Left").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-            wetOutFx1Right = jack_port_register(client, QString("%1wetOutFx1Right").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-            wetOutFx1PortsRegistrationFailed = wetOutFx1Left == NULL || wetOutFx1Right == NULL;
-        }
-        if (wetOutFx2PortsEnabled) {
-            wetOutFx2Left = jack_port_register(client, QString("%1wetOutFx2Left").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-            wetOutFx2Right = jack_port_register(client, QString("%1wetOutFx2Right").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-            wetOutFx2PortsRegistrationFailed = wetOutFx2Left == NULL || wetOutFx2Right == NULL;
-        }
-        if (inputLeft != NULL && inputRight != NULL && !dryOutPortsRegistrationFailed && !wetOutFx1PortsRegistrationFailed && !wetOutFx2PortsRegistrationFailed) {
-            aggregate->passthroughs << this;
-        } else {
-            qWarning() << "JackPasstrough Client: Failed to register ports for" << clientName;
-        }
         // Equaliser
         const float sampleRate = jack_get_sample_rate(client);
         for (int equaliserBand = 0; equaliserBand < equaliserBandCount; ++equaliserBand) {
@@ -435,15 +495,58 @@ JackPassthroughPrivate::JackPassthroughPrivate(const QString &clientName, const 
         compressorSettings = new JackPassthroughCompressor(q);
         compressorSettings->setSampleRate(sampleRate);
         for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
-            sideChainInput[channelIndex] = jack_port_register(client, QString("%1sidechainInput%2").arg(portPrefix).arg(channelNames[channelIndex]).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
             sideChainGain[channelIndex] = new jack_default_audio_sample_t[8192](); // TODO This is an awkward assumption, there has to be a sensible way to do this - jack should know this, right?
         }
     }
 }
 
-JackPassthrough::JackPassthrough(const QString &clientName, QObject *parent, const bool &dryOutPortsEnabled, const bool &wetOutFx1PortsEnabled, const bool &wetOutFx2PortsEnabled, const float &minimumDB, const float &maximumDB)
+void JackPassthroughPrivate::registerPorts()
+{
+    JackPassthroughAggregate *aggregate{jackPassthroughClients->value(actualClientName)};
+    if (aggregate) {
+        bool dryOutPortsRegistrationFailed{false};
+        bool wetOutFx1PortsRegistrationFailed{false};
+        bool wetOutFx2PortsRegistrationFailed{false};
+        inputLeft = jack_port_register(client, QString("%1inputLeft").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+        inputRight = jack_port_register(client, QString("%1inputRight").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+        if (wetInPortsEnabled) {
+            wetInputLeft = jack_port_register(client, QString("%1wetInputLeft").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+            wetInputRight = jack_port_register(client, QString("%1wetInputRight").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+        }
+        if (dryOutPortsEnabled) {
+            dryOutLeft = jack_port_register(client, QString("%1dryOutLeft").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+            dryOutRight = jack_port_register(client, QString("%1dryOutRight").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+            dryOutPortsRegistrationFailed = dryOutLeft == NULL || dryOutRight == NULL;
+        }
+        if (wetOutFx1PortsEnabled) {
+            wetOutFx1Left = jack_port_register(client, QString("%1wetOutFx1Left").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+            wetOutFx1Right = jack_port_register(client, QString("%1wetOutFx1Right").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+            wetOutFx1PortsRegistrationFailed = wetOutFx1Left == NULL || wetOutFx1Right == NULL;
+        }
+        if (wetOutFx2PortsEnabled) {
+            wetOutFx2Left = jack_port_register(client, QString("%1wetOutFx2Left").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+            wetOutFx2Right = jack_port_register(client, QString("%1wetOutFx2Right").arg(portPrefix).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+            wetOutFx2PortsRegistrationFailed = wetOutFx2Left == NULL || wetOutFx2Right == NULL;
+        }
+        if (inputLeft != NULL && inputRight != NULL && !dryOutPortsRegistrationFailed && !wetOutFx1PortsRegistrationFailed && !wetOutFx2PortsRegistrationFailed) {
+            if (!aggregate->passthroughs.contains(this)) {
+                aggregate->passthroughs << this;
+            }
+        } else {
+            qWarning() << "JackPasstrough Client: Failed to register ports for" << actualClientName << portPrefix;
+        }
+        // Compressor
+        static const QString channelNames[2]{"Left", "Right"};
+        for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
+            sideChainInput[channelIndex] = jack_port_register(client, QString("%1sidechainInput%2").arg(portPrefix).arg(channelNames[channelIndex]).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+        }
+    }
+}
+
+
+JackPassthrough::JackPassthrough(const QString &clientName, QObject *parent, const bool &dryOutPortsEnabled, const bool &wetOutFx1PortsEnabled, const bool &wetOutFx2PortsEnabled, const bool &wetInPortsEnabled, const float &minimumDB, const float &maximumDB)
     : QObject(parent)
-    , d(new JackPassthroughPrivate(clientName, dryOutPortsEnabled, wetOutFx1PortsEnabled, wetOutFx2PortsEnabled, minimumDB, maximumDB, this))
+    , d(new JackPassthroughPrivate(clientName, dryOutPortsEnabled, wetOutFx1PortsEnabled, wetOutFx2PortsEnabled, wetInPortsEnabled, minimumDB, maximumDB, this))
 {
 }
 
@@ -708,15 +811,7 @@ void JackPassthrough::setCompressorSidechannelLeft(const QString& compressorSide
     if (d->compressorSidechannelLeft != compressorSidechannelLeft) {
         d->compressorSidechannelLeft = compressorSidechannelLeft;
         Q_EMIT compressorSidechannelLeftChanged();
-        // First disconnect anything currently connected to the left sidechannel input port
-        jack_port_disconnect(d->client, d->sideChainInput[0]);
-        // Then connect up the new sidechain input
-        static MidiRouterDeviceModel *model = qobject_cast<MidiRouterDeviceModel*>(MidiRouter::instance()->model());
-        const QStringList portsToConnect{model->audioInSourceToJackPortNames(d->compressorSidechannelLeft, {}, d->sketchpadTrack)};
-        for (const QString &port : portsToConnect) {
-            d->connectPorts(port, QString("%1:%2sidechainInputLeft").arg(d->actualClientName).arg(d->portPrefix));
-        }
-        d->compressorSidechannelEmpty[0] = portsToConnect.isEmpty();
+        d->updateSidechannelLeftConnections();
     }
 }
 
@@ -730,19 +825,81 @@ void JackPassthrough::setCompressorSidechannelRight(const QString& compressorSid
     if (d->compressorSidechannelRight != compressorSidechannelRight) {
         d->compressorSidechannelRight = compressorSidechannelRight;
         Q_EMIT compressorSidechannelRightChanged();
-        // First disconnect anything currently connected to the right sidechannel input port
-        jack_port_disconnect(d->client, d->sideChainInput[1]);
-        // Then connect up the new sidechain input
-        static MidiRouterDeviceModel *model = qobject_cast<MidiRouterDeviceModel*>(MidiRouter::instance()->model());
-        const QStringList portsToConnect{model->audioInSourceToJackPortNames(d->compressorSidechannelRight, {}, d->sketchpadTrack)};
-        for (const QString &port : portsToConnect) {
-            d->connectPorts(port, QString("%1:%2sidechainInputRight").arg(d->actualClientName).arg(d->portPrefix));
-        }
-        d->compressorSidechannelEmpty[1] = portsToConnect.isEmpty();
+        d->updateSidechannelRightConnections();
     }
 }
 
 QObject * JackPassthrough::compressorSettings() const
 {
     return d->compressorSettings;
+}
+
+bool JackPassthrough::createPorts() const
+{
+    return d->createPorts;
+}
+
+void JackPassthrough::setCreatePorts(const bool& createPorts)
+{
+    // qDebug() << Q_FUNC_INFO << d->actualClientName << d->portPrefix << createPorts;
+    if (d->createPorts != createPorts) {
+        // And now, actually create/remove the ports
+        if (createPorts) {
+            d->registerPorts();
+        } else {
+            JackPassthroughAggregate *aggregate{jackPassthroughClients->value(d->actualClientName)};
+            aggregate->passthroughs.removeAll(d);
+            if (d->inputLeft) {
+                jack_port_unregister(d->client, d->inputLeft);
+                d->inputLeft = nullptr;
+            }
+            if (d->inputRight) {
+                jack_port_unregister(d->client, d->inputRight);
+                d->inputRight = nullptr;
+            }
+            if (d->wetInputLeft) {
+                jack_port_unregister(d->client, d->wetInputLeft);
+                d->wetInputLeft = nullptr;
+            }
+            if (d->wetInputRight) {
+                jack_port_unregister(d->client, d->wetInputRight);
+                d->wetInputRight = nullptr;
+            }
+            if (d->dryOutLeft) {
+                jack_port_unregister(d->client, d->dryOutLeft);
+                d->dryOutLeft = nullptr;
+            }
+            if (d->dryOutRight) {
+                jack_port_unregister(d->client, d->dryOutRight);
+                d->dryOutRight = nullptr;
+            }
+            if (d->wetOutFx1Left) {
+                jack_port_unregister(d->client, d->wetOutFx1Left);
+                d->wetOutFx1Left = nullptr;
+            }
+            if (d->wetOutFx1Right) {
+                jack_port_unregister(d->client, d->wetOutFx1Right);
+                d->wetOutFx1Right = nullptr;
+            }
+            if (d->wetOutFx2Left) {
+                jack_port_unregister(d->client, d->wetOutFx2Left);
+                d->wetOutFx2Left = nullptr;
+            }
+            if (d->wetOutFx2Right) {
+                jack_port_unregister(d->client, d->wetOutFx2Right);
+                d->wetOutFx2Right = nullptr;
+            }
+            // Compressor
+            for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
+                if (d->sideChainInput[channelIndex]) {
+                    jack_port_unregister(d->client, d->sideChainInput[channelIndex]);
+                    d->sideChainInput[channelIndex] = nullptr;
+                }
+            }
+        }
+        d->createPorts = createPorts;
+        d->updateSidechannelLeftConnections();
+        d->updateSidechannelRightConnections();
+        Q_EMIT createPortsChanged();
+    }
 }
