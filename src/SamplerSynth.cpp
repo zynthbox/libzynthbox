@@ -41,6 +41,7 @@ class SamplerChannel
 public:
     explicit SamplerChannel(SamplerVoicePoolRing *voicePool, jack_client_t *client, const QString &clientName, const int &midiChannel);
     ~SamplerChannel();
+    void ensureOutputPorts();
     int process(jack_nframes_t nframes);
     double sampleRate() const;
     /**
@@ -57,6 +58,7 @@ public:
     SubChannel subChannels[SubChannelCount];
     SamplerVoicePoolRing *voicePool{nullptr};
     QList<ClipAudioSource*> trackSamples;
+    QList<ClipAudioSource*> trackSketches;
     ClipAudioSource::SamplePickingStyle samplePickingStyle{ClipAudioSource::AllPickingStyle};
     /**
      * Writes any ClipCommands which match the midi message passed to the function to the list also passed in
@@ -366,17 +368,7 @@ SamplerChannel::SamplerChannel(SamplerVoicePoolRing *voicePool, jack_client_t *c
     grainerator = new Grainerator(this);
     jackClient = client;
     midiInPort = jack_port_register(jackClient, QString("%1-midiIn").arg(clientName).toUtf8(), JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
-    for (int subChannelIndex = 0; subChannelIndex < SubChannelCount; ++subChannelIndex) {
-        if (subChannelIndex < 5) {
-            // Naming the first five ports laneX (where X is the slot number of the sample that goes into it)
-            subChannels[subChannelIndex].leftPort = jack_port_register(jackClient, QString("%1-lane%2-left").arg(clientName).arg(QString::number(subChannelIndex + 1)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-            subChannels[subChannelIndex].rightPort = jack_port_register(jackClient, QString("%1-lane%2-right").arg(clientName).arg(QString::number(subChannelIndex + 1)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-        } else {
-            // Naming the second set of five ports sketchX (where X is the slot number of the sketch that goes into it)
-            subChannels[subChannelIndex].leftPort = jack_port_register(jackClient, QString("%1-sketch%2-left").arg(clientName).arg(QString::number(subChannelIndex - 4)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-            subChannels[subChannelIndex].rightPort = jack_port_register(jackClient, QString("%1-sketch%2-right").arg(clientName).arg(QString::number(subChannelIndex - 4)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-        }
-    }
+    ensureOutputPorts();
     if (midiChannel < 0) {
         jackConnect(jackClient, QLatin1String("ZLRouter:PassthroughOut"), QString("SamplerSynth:%1-midiIn").arg(clientName));
     } else {
@@ -387,6 +379,60 @@ SamplerChannel::SamplerChannel(SamplerVoicePoolRing *voicePool, jack_client_t *c
 
 SamplerChannel::~SamplerChannel() {
     delete grainerator;
+}
+
+void SamplerChannel::ensureOutputPorts()
+{
+    ClipAudioSource* sample{nullptr};
+    for (int subChannelIndex = 0; subChannelIndex < SubChannelCount; ++subChannelIndex) {
+        if (subChannelIndex < 5) {
+            sample = nullptr;
+            for (ClipAudioSource *testSample : qAsConst(trackSamples)) {
+                if (testSample->sketchpadSlot() == subChannelIndex) {
+                    sample = testSample;
+                    break;
+                }
+            }
+            if (sample) {
+                // Naming the first five ports laneX (where X is the slot number of the sample that goes into it)
+                subChannels[subChannelIndex].leftPort = jack_port_register(jackClient, QString("%1-lane%2-left").arg(clientName).arg(QString::number(subChannelIndex + 1)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+                subChannels[subChannelIndex].rightPort = jack_port_register(jackClient, QString("%1-lane%2-right").arg(clientName).arg(QString::number(subChannelIndex + 1)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+            } else {
+                // If there is no sample for this output port, remove the port
+                if (subChannels[subChannelIndex].leftPort) {
+                    jack_port_unregister(jackClient, subChannels[subChannelIndex].leftPort);
+                    subChannels[subChannelIndex].leftPort = nullptr;
+                }
+                if (subChannels[subChannelIndex].rightPort) {
+                    jack_port_unregister(jackClient, subChannels[subChannelIndex].rightPort);
+                    subChannels[subChannelIndex].rightPort = nullptr;
+                }
+            }
+        } else {
+            sample = nullptr;
+            for (ClipAudioSource *testSample : qAsConst(trackSketches)) {
+                if (testSample->sketchpadSlot() == subChannelIndex - 5) {
+                    sample = testSample;
+                    break;
+                }
+            }
+            if (sample) {
+                // Naming the second set of five ports sketchX (where X is the slot number of the sketch that goes into it)
+                subChannels[subChannelIndex].leftPort = jack_port_register(jackClient, QString("%1-sketch%2-left").arg(clientName).arg(QString::number(subChannelIndex - 4)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+                subChannels[subChannelIndex].rightPort = jack_port_register(jackClient, QString("%1-sketch%2-right").arg(clientName).arg(QString::number(subChannelIndex - 4)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+            } else {
+                // If there is no sample for this output port, remove the port
+                if (subChannels[subChannelIndex].leftPort) {
+                    jack_port_unregister(jackClient, subChannels[subChannelIndex].leftPort);
+                    subChannels[subChannelIndex].leftPort = nullptr;
+                }
+                if (subChannels[subChannelIndex].rightPort) {
+                    jack_port_unregister(jackClient, subChannels[subChannelIndex].rightPort);
+                    subChannels[subChannelIndex].rightPort = nullptr;
+                }
+            }
+        }
+    }
 }
 
 void SamplerChannel::midiMessageToClipCommands(ClipCommandRing* listToPopulate, const int& byte1, const int& byte2, const int& byte3) const
@@ -704,10 +750,12 @@ int SamplerSynthPrivate::process(jack_nframes_t nframes)
         for(SamplerChannel *channel : qAsConst(channels)) {
             int subChannelIndex{0};
             for (SubChannel &subChannel : channel->subChannels) {
-                leftBuffers[channelIndex][subChannelIndex] = (jack_default_audio_sample_t*)jack_port_get_buffer(subChannel.leftPort, nframes);
-                rightBuffers[channelIndex][subChannelIndex] = (jack_default_audio_sample_t*)jack_port_get_buffer(subChannel.rightPort, nframes);
-                memset(leftBuffers[channelIndex][subChannelIndex], 0, nframes * sizeof (jack_default_audio_sample_t));
-                memset(rightBuffers[channelIndex][subChannelIndex], 0, nframes * sizeof (jack_default_audio_sample_t));
+                if (subChannel.leftPort && subChannel.rightPort) {
+                    leftBuffers[channelIndex][subChannelIndex] = (jack_default_audio_sample_t*)jack_port_get_buffer(subChannel.leftPort, nframes);
+                    rightBuffers[channelIndex][subChannelIndex] = (jack_default_audio_sample_t*)jack_port_get_buffer(subChannel.rightPort, nframes);
+                    memset(leftBuffers[channelIndex][subChannelIndex], 0, nframes * sizeof (jack_default_audio_sample_t));
+                    memset(rightBuffers[channelIndex][subChannelIndex], 0, nframes * sizeof (jack_default_audio_sample_t));
+                }
                 ++subChannelIndex;
             }
             channel->process(nframes);
@@ -722,9 +770,11 @@ int SamplerSynthPrivate::process(jack_nframes_t nframes)
                 const int channelIndex{clip->sketchpadTrack() + 1};
                 const int laneIndex{clip->laneAffinity()};
                 // if (throttler == 0) { qDebug() << Q_FUNC_INFO << "Working on clip" << clip << "with channel" << channelIndex << "and lane" << laneIndex; }
-                jack_default_audio_sample_t *laneOutputBuffers[2]{leftBuffers[channelIndex][laneIndex], rightBuffers[channelIndex][laneIndex]};
-                jack_default_audio_sample_t *soundBuffers[2]{sound->leftBuffer, sound->rightBuffer};
-                clip->finaliseProcess(soundBuffers, laneOutputBuffers, nframes);
+                if (leftBuffers[channelIndex][laneIndex] && rightBuffers[channelIndex][laneIndex]) {
+                    jack_default_audio_sample_t *laneOutputBuffers[2]{leftBuffers[channelIndex][laneIndex], rightBuffers[channelIndex][laneIndex]};
+                    jack_default_audio_sample_t *soundBuffers[2]{sound->leftBuffer, sound->rightBuffer};
+                    clip->finaliseProcess(soundBuffers, laneOutputBuffers, nframes);
+                }
             }
         }
         // Update the clips' position model information
@@ -929,8 +979,8 @@ void SamplerSynth::registerClip(ClipAudioSource *clip)
         d->clipSounds[clip] = sound;
         d->positionModels << clip->playbackPositionsModel();
         // Make sure the channel knows what samples to work with - but only samples, we don't want the loops to end up in here
+        SamplerChannel * channel = d->channels[clip->sketchpadTrack() + 1];
         if (clip->registerForPolyphonicPlayback()) {
-            SamplerChannel * channel = d->channels[clip->sketchpadTrack() + 1];
             QList<ClipAudioSource*> newTrackSamples = channel->trackSamples;
             // Insert into the list according to the sample's slot position
             int insertionIndex = 0;
@@ -944,7 +994,20 @@ void SamplerSynth::registerClip(ClipAudioSource *clip)
             channel->trackSamples = newTrackSamples;
             // If the slot changes, we'll need to re-sort our list
             connect(clip, &ClipAudioSource::sketchpadSlotChanged, this, [channel](){ channel->resortSamples(); });
+        } else {
+            QList<ClipAudioSource*> newTrackSketches = channel->trackSketches;
+            // Insert into the list according to the sketch's slot position
+            int insertionIndex = 0;
+            for (; insertionIndex < newTrackSketches.count(); ++insertionIndex) {
+                if (newTrackSketches[insertionIndex]->sketchpadSlot() > clip->sketchpadSlot()) {
+                    break;
+                }
+            }
+            newTrackSketches.insert(insertionIndex, clip);
+            // qDebug() << Q_FUNC_INFO << newTrackSketches << insertionIndex << clip;
+            channel->trackSketches = newTrackSketches;
         }
+        channel->ensureOutputPorts();
     } else {
         qDebug() << "Clip list already contains the clip up for registration" << clip << clip->getFilePath();
     }
@@ -973,6 +1036,7 @@ void SamplerSynth::unregisterClip(ClipAudioSource *clip)
             newTrackSamples.removeAll(clip);
             channel->trackSamples = newTrackSamples;
         }
+        channel->ensureOutputPorts();
     }
 }
 
