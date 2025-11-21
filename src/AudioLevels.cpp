@@ -140,6 +140,21 @@ AudioLevels::AudioLevels(QObject *parent)
         "Channel9",
         "Channel10",
     };
+    static const QList<ZynthboxBasics::Track> audioLevelSketchpadTracks {
+        ZynthboxBasics::NoTrack,
+        ZynthboxBasics::NoTrack,
+        ZynthboxBasics::NoTrack,
+        ZynthboxBasics::Track1,
+        ZynthboxBasics::Track2,
+        ZynthboxBasics::Track3,
+        ZynthboxBasics::Track4,
+        ZynthboxBasics::Track5,
+        ZynthboxBasics::Track6,
+        ZynthboxBasics::Track7,
+        ZynthboxBasics::Track8,
+        ZynthboxBasics::Track9,
+        ZynthboxBasics::Track10,
+    };
     m_formatManager.registerBasicFormats();
     jack_status_t real_jack_status{};
     int result{0};
@@ -155,7 +170,7 @@ AudioLevels::AudioLevels(QObject *parent)
                 zl_set_jack_client_affinity(d->jackClient);
                 int channelIndex{0};
                 for (const QString &clientName : audioLevelClientNames) {
-                    AudioLevelsChannel *channel = new AudioLevelsChannel(d->jackClient, clientName, m_formatManager, m_thumbnailsCache);
+                    AudioLevelsChannel *channel = new AudioLevelsChannel(d->jackClient, clientName, audioLevelSketchpadTracks[channelIndex], m_formatManager, m_thumbnailsCache);
                     if (channelIndex == 0) {
                         d->jackClient = channel->jackClient;
                         d->connectPorts("system:capture_1", "AudioLevels:SystemCapture-left_in");
