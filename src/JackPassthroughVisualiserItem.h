@@ -32,6 +32,11 @@ Q_OBJECT
      * @default true
      */
     Q_PROPERTY(bool drawDisabledBands READ drawDisabledBands WRITE setDrawDisabledBands NOTIFY drawDisabledBandsChanged)
+    /**
+     * \brief The thickness in pixels of the line used for the combined version of all the eq curves
+     * @default 3
+     */
+    Q_PROPERTY(int eqCurveThickness READ eqCurveThickness WRITE setEqCurveThickness NOTIFY eqCurveThicknessChanged)
 
 public:
     explicit JackPassthroughVisualiserItem(QQuickItem *parent = nullptr);
@@ -49,6 +54,10 @@ public:
     bool drawDisabledBands() const;
     void setDrawDisabledBands(const bool &drawDisabledBands);
     Q_SIGNAL void drawDisabledBandsChanged();
+
+    int eqCurveThickness() const;
+    void setEqCurveThickness(const int &eqCurveThickness);
+    Q_SIGNAL void eqCurveThicknessChanged();
 private:
     JackPassthroughVisualiserItemPrivate *d{nullptr};
 };

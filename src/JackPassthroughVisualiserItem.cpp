@@ -47,6 +47,7 @@ public:
     QObject *source{nullptr};
     bool analyseAudio{true};
     bool drawDisabledBands{true};
+    int eqCurveThickness{3};
     JackPassthrough *passthrough{nullptr};
     ClipAudioSource *clip{nullptr};
     AudioLevelsChannel *audioLevelsChannel{nullptr};
@@ -186,6 +187,20 @@ void JackPassthroughVisualiserItem::setDrawDisabledBands(const bool& drawDisable
     }
 }
 
+int JackPassthroughVisualiserItem::eqCurveThickness() const
+{
+    return d->eqCurveThickness;
+}
+
+void JackPassthroughVisualiserItem::setEqCurveThickness(const int& eqCurveThickness)
+{
+    if (d->eqCurveThickness != eqCurveThickness) {
+        d->eqCurveThickness = eqCurveThickness;
+        Q_EMIT eqCurveThicknessChanged();
+        update();
+    }
+}
+
 static float getPositionForFrequency(float freq) {
     return (std::log(freq / 20.0f) / std::log(2.0f)) / 10.0f;
 }
@@ -282,7 +297,7 @@ void JackPassthroughVisualiserItem::paint(QPainter* painter)
                 d->audioLevelsChannel->equaliserCreateFrequencyPlot(polygon, frame, pixelsPerDouble);
             }
             pen.setColor(QColorConstants::White);
-            pen.setWidth(3);
+            pen.setWidth(d->eqCurveThickness);
             painter->setPen(pen);
             painter->drawPolyline(polygon);
             polygon.clear();
