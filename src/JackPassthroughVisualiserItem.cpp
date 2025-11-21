@@ -10,6 +10,7 @@
 
 #include "JackPassthroughVisualiserItem.h"
 
+#include "AudioLevelsChannel.h"
 #include "ClipAudioSource.h"
 #include "JackPassthrough.h"
 #include "JackPassthroughAnalyser.h"
@@ -44,8 +45,11 @@ public:
     }
     JackPassthroughVisualiserItem *q{nullptr};
     QObject *source{nullptr};
+    bool analyseAudio{true};
+    bool drawDisabledBands{true};
     JackPassthrough *passthrough{nullptr};
     ClipAudioSource *clip{nullptr};
+    AudioLevelsChannel *audioLevelsChannel{nullptr};
     JackPassthroughFilter *filter{nullptr};
     float sampleRate{48000.0f};
     JackPassthroughAnalyser equaliserInputAnalyser[2];
@@ -96,6 +100,14 @@ void JackPassthroughVisualiserItem::setSource(QObject* source)
             d->clip->setEqualiserOutputAnalysers(emptyList);
             d->clip = nullptr;
         }
+        if (d->audioLevelsChannel) {
+            d->audioLevelsChannel->disconnect(this);
+            // Clear the analysers on the previous audiolevels channel
+            QList<JackPassthroughAnalyser*> emptyList{nullptr, nullptr};
+            d->audioLevelsChannel->setEqualiserInputAnalysers(emptyList);
+            d->audioLevelsChannel->setEqualiserOutputAnalysers(emptyList);
+            d->audioLevelsChannel = nullptr;
+        }
         d->filter = qobject_cast<JackPassthroughFilter*>(source);
         if (d->filter) {
             d->passthrough = qobject_cast<JackPassthrough*>(d->filter->parent());
@@ -108,23 +120,69 @@ void JackPassthroughVisualiserItem::setSource(QObject* source)
                 d->clip = qobject_cast<ClipAudioSource*>(source);
                 if (d->clip) {
                     connect(d->clip, &ClipAudioSource::equaliserDataChanged, this, &QQuickItem::update);
+                } else {
+                    d->audioLevelsChannel = qobject_cast<AudioLevelsChannel*>(source);
+                    if (d->audioLevelsChannel) {
+                        connect(d->audioLevelsChannel, &AudioLevelsChannel::equaliserDataChanged, this, &QQuickItem::update);
+                    }
                 }
             }
         }
-        if (d->passthrough) {
-            // Set the analysers on the new passthrough
-            d->passthrough->setEqualiserInputAnalysers(d->equaliserInputAnalyserList);
-            d->passthrough->setEqualiserOutputAnalysers(d->equaliserOutputAnalyserList);
-            d->repaintTimer.start();
-        } else if (d->clip) {
-            // Set the analysers on the new clip
-            d->clip->setEqualiserInputAnalysers(d->equaliserInputAnalyserList);
-            d->clip->setEqualiserOutputAnalysers(d->equaliserOutputAnalyserList);
-            d->repaintTimer.start();
-
+        if (d->analyseAudio) {
+            if (d->passthrough) {
+                // Set the analysers on the new passthrough
+                d->passthrough->setEqualiserInputAnalysers(d->equaliserInputAnalyserList);
+                d->passthrough->setEqualiserOutputAnalysers(d->equaliserOutputAnalyserList);
+                d->repaintTimer.start();
+            } else if (d->clip) {
+                // Set the analysers on the new clip
+                d->clip->setEqualiserInputAnalysers(d->equaliserInputAnalyserList);
+                d->clip->setEqualiserOutputAnalysers(d->equaliserOutputAnalyserList);
+                d->repaintTimer.start();
+            } else if (d->audioLevelsChannel) {
+                // Set the analysers on the new audiolevels channel
+                d->audioLevelsChannel->setEqualiserInputAnalysers(d->equaliserInputAnalyserList);
+                d->audioLevelsChannel->setEqualiserOutputAnalysers(d->equaliserOutputAnalyserList);
+                d->repaintTimer.start();
+            } else {
+                d->repaintTimer.stop();
+            }
         } else {
             d->repaintTimer.stop();
+            update();
         }
+    }
+}
+
+bool JackPassthroughVisualiserItem::analyseAudio() const
+{
+    return d->analyseAudio;
+}
+
+void JackPassthroughVisualiserItem::setAnalyseAudio(const bool& analyseAudio)
+{
+    if (d->analyseAudio != analyseAudio) {
+        d->analyseAudio = analyseAudio;
+        Q_EMIT analyseAudioChanged();
+        if (d->source) {
+            QObject *oldSource{d->source};
+            setSource(nullptr);
+            setSource(oldSource);
+        }
+    }
+}
+
+bool JackPassthroughVisualiserItem::drawDisabledBands() const
+{
+    return d->drawDisabledBands;
+}
+
+void JackPassthroughVisualiserItem::setDrawDisabledBands(const bool& drawDisabledBands)
+{
+    if (d->drawDisabledBands != drawDisabledBands) {
+        d->drawDisabledBands = drawDisabledBands;
+        Q_EMIT drawDisabledBandsChanged();
+        update();
     }
 }
 
@@ -139,9 +197,13 @@ static float getPositionForGain(float gain, float top, float bottom) {
 
 void JackPassthroughVisualiserItem::paint(QPainter* painter)
 {
-    if (d->passthrough || d->clip) {
+    if (d->passthrough || d->clip || d->audioLevelsChannel) {
         JackPassthroughFilter *soloFilter{nullptr};
-        const QVariantList &equaliserSettings{d->passthrough ? d->passthrough->equaliserSettings() : d->clip->equaliserSettings()};
+        const QVariantList &equaliserSettings{d->audioLevelsChannel
+            ? d->audioLevelsChannel->equaliserSettings()
+            : d->passthrough
+                ? d->passthrough->equaliserSettings()
+                : d->clip->equaliserSettings()};
         for (const QVariant &variant : equaliserSettings) {
             JackPassthroughFilter *filter = qobject_cast<JackPassthroughFilter*>(variant.value<QObject*>());
             if (filter->soloed()) {
@@ -152,56 +214,60 @@ void JackPassthroughVisualiserItem::paint(QPainter* painter)
         QRect frame(0, 0, width(), height());
         static const float maxDB{24.0f};
         auto pixelsPerDouble = 2.0f * height() / juce::Decibels::decibelsToGain(maxDB);
-        auto drawAndClearPath = [&painter, &frame, soloFilter](JackPassthroughFilter* filter, QPolygonF &path, QPen &pen) {
-            pen.setColor(filter->color());
-            pen.setWidth(1);
-            if (soloFilter) {
-                pen.setStyle(soloFilter == filter ? Qt::SolidLine : Qt::DotLine);
-            } else {
-                pen.setStyle(filter->active() ? Qt::SolidLine : Qt::DotLine);
+        auto drawAndClearPath = [this, &painter, &frame, soloFilter](JackPassthroughFilter* filter, QPolygonF &path, QPen &pen) {
+            if (filter->active() || (filter->active() == false && d->drawDisabledBands)) {
+                pen.setColor(filter->color());
+                pen.setWidth(1);
+                if (soloFilter) {
+                    pen.setStyle(soloFilter == filter ? Qt::SolidLine : Qt::DotLine);
+                } else {
+                    pen.setStyle(filter->active() ? Qt::SolidLine : Qt::DotLine);
+                }
+                painter->setPen(pen);
+                painter->drawPolyline(path);
+                painter->setBrush(filter->selected() ? filter->color() : QColorConstants::Transparent);
+                auto x = juce::roundToInt(frame.width() * getPositionForFrequency(filter->frequency()));
+                auto y = juce::roundToInt(getPositionForGain(filter->gain(), 0, float(frame.height())));
+                painter->drawLine(x, 0, x, y - 5);
+                painter->drawLine(x, y + 4, x, frame.height());
+                painter->drawEllipse(x - 4, y - 4, 7, 7);
+                path.clear();
             }
-            painter->setPen(pen);
-            painter->drawPolyline(path);
-            painter->setBrush(filter->selected() ? filter->color() : QColorConstants::Transparent);
-            auto x = juce::roundToInt(frame.width() * getPositionForFrequency(filter->frequency()));
-            auto y = juce::roundToInt(getPositionForGain(filter->gain(), 0, float(frame.height())));
-            painter->drawLine(x, 0, x, y - 5);
-            painter->drawLine(x, y + 4, x, frame.height());
-            painter->drawEllipse(x - 4, y - 4, 7, 7);
-            path.clear();
         };
         QPolygonF polygon;
         QPen pen;
         pen.setCosmetic(true);
-        pen.setWidth(1);
-        QFont font = painter->font();
-        font.setPixelSize(12);
-        painter->setFont(font);
-        const QRect insetFrame = frame.adjusted(3, 3, -3, -3);
-        const QRect insetFrameDown = insetFrame.translated(0, 13);
-        pen.setColor(d->inputColours[0]);
-        painter->setPen(pen);
-        painter->drawText(insetFrame, Qt::AlignLeft | Qt::AlignTop, "Input (left)");
-        pen.setColor(d->inputColours[1]);
-        painter->setPen(pen);
-        painter->drawText(insetFrameDown, Qt::AlignLeft | Qt::AlignTop, "Input (right)");
-        pen.setColor(d->outputColours[0]);
-        painter->setPen(pen);
-        painter->drawText(insetFrame, Qt::AlignRight | Qt::AlignTop, "Output (left)");
-        pen.setColor(d->outputColours[1]);
-        painter->setPen(pen);
-        painter->drawText(insetFrameDown, Qt::AlignRight | Qt::AlignTop, "Output (right)");
-        for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
-            d->equaliserInputAnalyser[channelIndex].createPath(polygon, frame, 20.0f);
-            pen.setColor(d->inputColours[channelIndex]);
+        if (d->analyseAudio) {
+            pen.setWidth(1);
+            QFont font = painter->font();
+            font.setPixelSize(12);
+            painter->setFont(font);
+            const QRect insetFrame = frame.adjusted(3, 3, -3, -3);
+            const QRect insetFrameDown = insetFrame.translated(0, 13);
+            pen.setColor(d->inputColours[0]);
             painter->setPen(pen);
-            painter->drawPolyline(polygon);
-            d->equaliserOutputAnalyser[channelIndex].createPath(polygon, frame, 20.0f);
-            pen.setColor(d->outputColours[channelIndex]);
+            painter->drawText(insetFrame, Qt::AlignLeft | Qt::AlignTop, "Input (left)");
+            pen.setColor(d->inputColours[1]);
             painter->setPen(pen);
-            painter->drawPolyline(polygon);
+            painter->drawText(insetFrameDown, Qt::AlignLeft | Qt::AlignTop, "Input (right)");
+            pen.setColor(d->outputColours[0]);
+            painter->setPen(pen);
+            painter->drawText(insetFrame, Qt::AlignRight | Qt::AlignTop, "Output (left)");
+            pen.setColor(d->outputColours[1]);
+            painter->setPen(pen);
+            painter->drawText(insetFrameDown, Qt::AlignRight | Qt::AlignTop, "Output (right)");
+            for (int channelIndex = 0; channelIndex < 2; ++channelIndex) {
+                d->equaliserInputAnalyser[channelIndex].createPath(polygon, frame, 20.0f);
+                pen.setColor(d->inputColours[channelIndex]);
+                painter->setPen(pen);
+                painter->drawPolyline(polygon);
+                d->equaliserOutputAnalyser[channelIndex].createPath(polygon, frame, 20.0f);
+                pen.setColor(d->outputColours[channelIndex]);
+                painter->setPen(pen);
+                painter->drawPolyline(polygon);
+            }
+            polygon.clear();
         }
-        polygon.clear();
         if (d->filter) {
             // If there's a filter, then we are only drawing that one filter rather than the entire passthrough
             d->filter->createFrequencyPlot(polygon, frame, pixelsPerDouble);
@@ -212,6 +278,8 @@ void JackPassthroughVisualiserItem::paint(QPainter* painter)
                 d->passthrough->equaliserCreateFrequencyPlot(polygon, frame, pixelsPerDouble);
             } else if (d->clip) {
                 d->clip->equaliserCreateFrequencyPlot(polygon, frame, pixelsPerDouble);
+            } else if (d->audioLevelsChannel) {
+                d->audioLevelsChannel->equaliserCreateFrequencyPlot(polygon, frame, pixelsPerDouble);
             }
             pen.setColor(QColorConstants::White);
             pen.setWidth(3);

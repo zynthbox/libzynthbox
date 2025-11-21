@@ -18,9 +18,20 @@ class JackPassthroughVisualiserItem : public QQuickPaintedItem
 {
 Q_OBJECT
     /**
-     * \brief The JackPassthrough or JackPassthroughFilter object you wish to visualise
+     * \brief The AudioLevelChannel, ClipAudioSource, JackPassthrough, or JackPassthroughFilter object you wish to visualise
      */
     Q_PROPERTY(QObject* source READ source WRITE setSource NOTIFY sourceChanged)
+    /**
+     * \brief Whether or not to perform live input and output analysis on the audio passing through
+     * @default true
+     * Set this to false to simply paint the filter curve
+     */
+    Q_PROPERTY(bool analyseAudio READ analyseAudio WRITE setAnalyseAudio NOTIFY analyseAudioChanged)
+    /**
+     * \brief Whether or not to draw the curves for disabled bands
+     * @default true
+     */
+    Q_PROPERTY(bool drawDisabledBands READ drawDisabledBands WRITE setDrawDisabledBands NOTIFY drawDisabledBandsChanged)
 
 public:
     explicit JackPassthroughVisualiserItem(QQuickItem *parent = nullptr);
@@ -30,6 +41,14 @@ public:
     QObject *source() const;
     void setSource(QObject *source);
     Q_SIGNAL void sourceChanged();
+
+    bool analyseAudio() const;
+    void setAnalyseAudio(const bool &analyseAudio);
+    Q_SIGNAL void analyseAudioChanged();
+
+    bool drawDisabledBands() const;
+    void setDrawDisabledBands(const bool &drawDisabledBands);
+    Q_SIGNAL void drawDisabledBandsChanged();
 private:
     JackPassthroughVisualiserItemPrivate *d{nullptr};
 };
