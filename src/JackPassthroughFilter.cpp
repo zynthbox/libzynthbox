@@ -40,6 +40,8 @@ public:
     float sampleRate{48000.0f};
     JackPassthroughFilter::FilterType filterType;
     float frequency;
+    juce::NormalisableRange<float> frequencyRangeNormalised{20.0f, 20000.0f, 1.0f, 0.2f};
+    float frequencyAbsolute;
     float quality{inverseRootTwo};
     float gain{1.0f};
     bool active{true}; // The global setting is off, but when enabling the qualiser, we want all of the filters to be active by default
@@ -247,11 +249,24 @@ float JackPassthroughFilter::frequency() const
 
 void JackPassthroughFilter::setFrequency(const float& frequency)
 {
-    if (d->frequency != frequency && 20.0f <= frequency && frequency <= 20000.0f) {
-        d->frequency = frequency;
+    if (d->frequency != frequency) {
+        d->frequency = qMax(20.0f, qMin(frequency, 20000.0f));
+        d->frequencyAbsolute = d->frequencyRangeNormalised.convertTo0to1(d->frequency);
         Q_EMIT frequencyChanged();
         d->updateCoefficients();
         setSelected(true);
+    }
+}
+
+float JackPassthroughFilter::frequencyAbsolute() const
+{
+    return d->frequencyAbsolute;
+}
+
+void JackPassthroughFilter::setFrequencyAbsolute(const float& frequencyAbsolute)
+{
+    if (d->frequencyAbsolute != frequencyAbsolute) {
+        setFrequency(d->frequencyRangeNormalised.convertFrom0to1(qMax(0.0f, qMin(frequencyAbsolute, 1.0f))));
     }
 }
 

@@ -22,7 +22,18 @@ class JackPassthroughFilter : public QObject {
     Q_PROPERTY(QObject* previous READ previous NOTIFY previousChanged)
     Q_PROPERTY(QObject* next READ next NOTIFY nextChanged)
     Q_PROPERTY(FilterType filterType READ filterType WRITE setFilterType NOTIFY filterTypeChanged)
+    /**
+     * \brief The frequency of the filter
+     * @minimum 20
+     * @maximum 20000
+     */
     Q_PROPERTY(float frequency READ frequency WRITE setFrequency NOTIFY frequencyChanged)
+    /**
+     * \brief The filter's frequency represented as the position of a conceptual slider widget (from 0 through 1 inclusive)
+     * @minimum 0.0
+     * @maximum 1.0
+     */
+    Q_PROPERTY(float frequencyAbsolute READ frequencyAbsolute WRITE setFrequencyAbsolute NOTIFY frequencyChanged)
     Q_PROPERTY(float quality READ quality WRITE setQuality NOTIFY qualityChanged)
     Q_PROPERTY(float gain READ gain WRITE setGain NOTIFY gainChanged)
     Q_PROPERTY(float gainDb READ gainDb NOTIFY gainChanged)
@@ -78,6 +89,8 @@ public:
     Q_SIGNAL void filterTypeChanged();
     float frequency() const;
     void setFrequency(const float &frequency);
+    float frequencyAbsolute() const;
+    void setFrequencyAbsolute(const float &frequencyAbsolute);
     Q_SIGNAL void frequencyChanged();
     float quality() const;
     void setQuality(const float &quality);
