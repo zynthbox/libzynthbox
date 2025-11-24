@@ -202,7 +202,8 @@ void JackPassthroughVisualiserItem::setEqCurveThickness(const int& eqCurveThickn
 }
 
 static float getPositionForFrequency(float freq) {
-    return (std::log(freq / 20.0f) / std::log(2.0f)) / 10.0f;
+    static const juce::NormalisableRange<float> frequencyRangeNormalised{20.0f, 20000.0f, 1.0f, 0.2f};
+    return frequencyRangeNormalised.convertTo0to1(freq);
 }
 
 static float getPositionForGain(float gain, float top, float bottom) {

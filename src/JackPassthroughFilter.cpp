@@ -25,7 +25,7 @@ public:
     {
         frequencies.resize(300);
         for (size_t i = 0; i < frequencies.size(); ++i) {
-            frequencies [i] = 20.0 * std::pow(2.0, i / 30.0);
+            frequencies[i] = frequencyRangeNormalised.convertFrom0to1(double(i) / 300.0);
         }
         magnitudes.resize(frequencies.size());
 
