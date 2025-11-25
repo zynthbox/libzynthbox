@@ -9,6 +9,7 @@
 */
 #include "JackPassthroughFilter.h"
 
+#include "AudioLevelsChannel.h"
 #include "JUCEHeaders.h"
 
 #include <QDebug>
@@ -134,6 +135,30 @@ void JackPassthroughFilter::setDefaults()
         default:
             qCritical() << Q_FUNC_INFO << "Attempted to create a JackPassthroughFilter with an index outside the expected range of 0 through 5 - probably look at that. Given index was" << d->index;
             break;
+    }
+    // For the track mixer, we put a high pass at the very bottom end, and a low pass at the very high end, and the other four bands are disabled.
+    // The filter is disabled by default, so while these will change the audio a little when the EQ is enabled, this allows for the interaction
+    // to be the most immediate we can really get to, for the most straightforward approach to track filtering.
+    AudioLevelsChannel *audioLevelsChannel = qobject_cast<AudioLevelsChannel*>(parent());
+    if (audioLevelsChannel) {
+        switch(d->index) {
+            case 0:
+                d->active = true; // This will change the sound at base state, but the EQ is disabled by default, and for the track mixer, this is what we will want
+                break;
+            case 1:
+            case 2:
+            case 3:
+            case 4:
+                d->active = false; // For the track mixer, only the first and last filters are enabled by default (so it's easy to switch between the two)
+                break;
+            case 5:
+                d->frequency = 20000.0f; // Setting this to the very end, to make for the smallest amount of audio change at base state
+                d->active = true; // This will change the sound at base state, but the EQ is disabled by default, and for the track mixer, this is what we will want
+                break;
+            default:
+                qCritical() << Q_FUNC_INFO << "Attempted to create a JackPassthroughFilter with an index outside the expected range of 0 through 5 - probably look at that. Given index was" << d->index;
+                break;
+        }
     }
     d->frequencyAbsolute = d->frequencyRangeNormalised.convertTo0to1(d->frequency);
     Q_EMIT nameChanged();
