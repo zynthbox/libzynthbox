@@ -18,6 +18,16 @@
 static constexpr float inverseRootTwo{0.70710678118654752440};
 static constexpr float maxGainDB{24.0f};
 
+template <typename ValueT>
+juce::NormalisableRange<ValueT> logRange (ValueT min, ValueT max)
+{
+    ValueT rng{ std::log (max / min) };
+    return { min, max,
+        [=](ValueT min, ValueT, ValueT v) { return std::exp (v * rng) * min; },
+        [=](ValueT min, ValueT, ValueT v) { return std::log (v / min) / rng; }
+    };
+}
+
 class JackPassthroughFilterPrivate {
 public:
     JackPassthroughFilterPrivate(JackPassthroughFilter *q)
@@ -40,7 +50,7 @@ public:
     float sampleRate{48000.0f};
     JackPassthroughFilter::FilterType filterType;
     float frequency;
-    juce::NormalisableRange<float> frequencyRangeNormalised{20.0f, 20000.0f, 1.0f, 0.2f};
+    juce::NormalisableRange<float> frequencyRangeNormalised = logRange(20.0f, 20000.0f);
     float frequencyAbsolute;
     float quality{inverseRootTwo};
     float gain{1.0f};
@@ -125,6 +135,7 @@ void JackPassthroughFilter::setDefaults()
             qCritical() << Q_FUNC_INFO << "Attempted to create a JackPassthroughFilter with an index outside the expected range of 0 through 5 - probably look at that. Given index was" << d->index;
             break;
     }
+    d->frequencyAbsolute = d->frequencyRangeNormalised.convertTo0to1(d->frequency);
     Q_EMIT nameChanged();
     Q_EMIT filterTypeChanged();
     Q_EMIT frequencyChanged();

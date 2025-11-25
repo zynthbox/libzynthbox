@@ -19,6 +19,16 @@
 #include <QTimer>
 #include <QPainter>
 
+template <typename ValueT>
+juce::NormalisableRange<ValueT> logRange (ValueT min, ValueT max)
+{
+    ValueT rng{ std::log (max / min) };
+    return { min, max,
+        [=](ValueT min, ValueT, ValueT v) { return std::exp (v * rng) * min; },
+        [=](ValueT min, ValueT, ValueT v) { return std::log (v / min) / rng; }
+    };
+}
+
 class JackPassthroughVisualiserItemPrivate {
 public:
     JackPassthroughVisualiserItemPrivate(JackPassthroughVisualiserItem *q)
@@ -202,7 +212,7 @@ void JackPassthroughVisualiserItem::setEqCurveThickness(const int& eqCurveThickn
 }
 
 static float getPositionForFrequency(float freq) {
-    static const juce::NormalisableRange<float> frequencyRangeNormalised{20.0f, 20000.0f, 1.0f, 0.2f};
+    static const juce::NormalisableRange<float> frequencyRangeNormalised = logRange(20.0f, 20000.0f);
     return frequencyRangeNormalised.convertTo0to1(freq);
 }
 
