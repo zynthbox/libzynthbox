@@ -209,6 +209,8 @@ public:
     float processingLoad{0.0f};
 
     int currentSketchpadTrack{0};
+    MidiRouter::ClockSource clockSource{MidiRouter::InternalClockSource};
+    MidiRouterDevice *externalClockSourceDevice{nullptr};
     jack_client_t* jackClient{nullptr};
 
     // This is a list of devices that always exist (specifically, the SyncTimer input devices, and TimeCode's bi-directional device)
@@ -1275,6 +1277,45 @@ void MidiRouter::setCurrentSketchpadTrack(int sketchpadTrack)
 int MidiRouter::currentSketchpadTrack() const
 {
     return d->currentSketchpadTrack;
+}
+
+MidiRouter::ClockSource MidiRouter::clockSource() const
+{
+    return d->clockSource;
+}
+
+void MidiRouter::setClockSource(const MidiRouter::ClockSource& clockSource)
+{
+    if (d->clockSource != clockSource) {
+        d->clockSource = clockSource;
+        Q_EMIT clockSourceChanged();
+    }
+}
+
+QObject * MidiRouter::externalClockSourceDevice() const
+{
+    return d->externalClockSourceDevice;
+}
+
+MidiRouterDevice * MidiRouter::externalClockSourceDeviceActual() const
+{
+    return d->externalClockSourceDevice;
+}
+
+void MidiRouter::setExternalClockSourceDevice(MidiRouterDevice* externalClockSourceDevice)
+{
+    if (d->externalClockSourceDevice != externalClockSourceDevice) {
+        d->externalClockSourceDevice = externalClockSourceDevice;
+        TransportManager::instance()->setClockSource(externalClockSourceDevice);
+        for (MidiRouterDevice *device : qAsConst(d->devices)) {
+            if (device->deviceType(MidiRouterDevice::HardwareDeviceType)) {
+                if (device != externalClockSourceDevice) {
+                    device->setReceiveBeatClock(false);
+                }
+            }
+        }
+        Q_EMIT externalClockSourceDeviceChanged();
+    }
 }
 
 void MidiRouter::setZynthianChannels(int sketchpadTrack, const QList<int> &zynthianChannels)

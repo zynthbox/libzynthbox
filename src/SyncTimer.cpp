@@ -146,6 +146,7 @@ public:
     }
 
     void run() override {
+        TransportManager *transportManager{TransportManager::instance()};
         startTime = frame_clock::now();
         pthread_t threadId = from_HANDLE<pthread_t>(currentThreadId());
         zl_set_dsp_thread_affinity(threadId);
@@ -155,7 +156,8 @@ public:
                 break;
             }
             nextMinute = startTime + ((minuteCount + 1) * nanosecondsPerMinute);
-            while (count < bpm * BeatSubdivisions) {
+            const double externalBpm{transportManager->bpm()};
+            while (count < (externalBpm > -1 ? externalBpm : bpm) * BeatSubdivisions) {
                 mutex.lock();
                 if (paused)
                 {
@@ -183,7 +185,8 @@ public:
                 Q_EMIT timeout(); // Do the thing!
                 ++count;
                 ++cumulativeCount;
-                waitTill(frame_clock::now() + frame_clock::duration(subbeatCountToNanoseconds(bpm, 1)));
+                const double externalBpm{transportManager->bpm()};
+                waitTill(frame_clock::now() + frame_clock::duration(subbeatCountToNanoseconds(externalBpm > -1 ? externalBpm : bpm, 1)));
             }
 #ifdef DEBUG_SYNCTIMER_TIMING
             qDebug() << "Sync timer reached minute:" << minuteCount << "with interval" << interval.count();
@@ -270,6 +273,7 @@ public:
      */
     Q_SIGNAL void timerMessage(const QString& message, const int &parameter, const int &parameter2, const int &parameter3, const int &parameter4, const quint64 &bigParameter);
 private:
+    SyncTimer *q{nullptr};
     qint64 nextExtraTickAt{0};
     quint64 currentExtraTick{0};
     qint64 adjustment{0};
@@ -533,6 +537,14 @@ public:
     quint64 jackPlayheadReturn{0};
     quint64 jackSubbeatLengthInMicrosecondsReturn{0};
 
+    // This is a number of jack frames which should be used to adjust the next step's playback position as best as possible
+    // That is, if this is negative, the step should be positioned backward by this many frames, and if positive by this
+    // many frames forward.
+    // If this would put the step outside the currently available positions (so, outside the current period), perform as
+    // much adjustment as possible, and then adjust the *next* step by the next possible amount (and so on until we reach
+    // 0 here again)
+    int stepPositionAdjustment{0};
+    quint64 stepPositionAdjustedAppliedForStep{0};
     juce::MidiBuffer missingBitsBuffer[ZynthboxTrackCount + 1];
     int process(jack_nframes_t nframes) {
         // const std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
@@ -562,6 +574,15 @@ public:
         refreshThingsAfter = current_usecs + 5000;
         const quint64 microsecondsPerFrame = (next_usecs - current_usecs) / nframes;
 
+        const double externalBpm{transportManager->bpm()};
+        // If the external BPM is above -1, use that and update the state if relevant
+        if (externalBpm > -1) {
+            // If the external BPM has changed, update our internal state based on what was there previously
+            if (jackPlayheadBpm != externalBpm) {
+                // Update the playhead's BPM, based on this new finding
+                jackPlayheadBpm = externalBpm;
+            }
+        }
         double thisStepBpm{jackPlayheadBpm};
         double thisStepSubbeatLengthInMicroseconds{double(timerThread->subbeatCountToNanoseconds(jackPlayheadBpm, 1)) / 1000.0};
 
@@ -576,6 +597,7 @@ public:
                 jackBar = jackBeat = jackBeatTick = jackTick = 0;
                 transportManager->restartTransport();
                 mostRecentlyUpdatedJackPlayheadForTimerTick = 0;
+                stepPositionAdjustment = 0;
                 for (int step = 0; step < StepRingCount; ++step) {
                     jackPlayheadForTimerTick[step] = UINT_MAX;
                 }
@@ -605,6 +627,31 @@ public:
                 missingBitsBuffer[track].clear();
             }
         }
+
+        // If we are using an external clock, make sure that if we are ahead of that clock, our
+        // steps line up in time with what TransportManager says reality is supposed to be
+        if (externalBpm > -1) {
+            const quint64 mostRecentlyClockedSyncTimerTick{transportManager->mostRecentlyClockedSyncTimerTick()};
+            // If we have not yet applied the adjustments for the current playhead, and we have a remote clock tick to test against...
+            if (stepPositionAdjustedAppliedForStep < jackCumulativePlayhead && mostRecentlyClockedSyncTimerTick <= jackCumulativePlayhead) {
+                quint64 storedJackPlayheadForTimerTick{jackPlayheadForTimerTick[mostRecentlyClockedSyncTimerTick]};
+                quint64 mostRecentTickJackFrame{transportManager->mostRecentTickJackFrame()};
+                // If these two don't match, it means we have a discrepancy, and we should adjust our current playhead's position by that amount,
+                // forward or backward as appropriate... and also remember to actually ensure we adjust our playback as appropriate, not *just*
+                // the first one, in case it ends up not matching (so if we're attempting to schedule behind, make sure the next one is also
+                // scheduled backward, and if we're scheduling forward outside our current period, adjust the next step's playback position)
+                // NOTE Also remember to update the usecs position for (for stepNextPlaybackPosition and whatnot)
+                if (storedJackPlayheadForTimerTick < mostRecentTickJackFrame) {
+                    // We are behind, so we need to adjust our timing to push the next steps forward (so, positive adjustment)
+                    stepPositionAdjustment += int(mostRecentTickJackFrame - storedJackPlayheadForTimerTick);
+                } else if (storedJackPlayheadForTimerTick > mostRecentTickJackFrame) {
+                    // We are ahead, so we need to adjust our timing to pull the next steps back (so, negative adjustment)
+                    stepPositionAdjustment -= int(storedJackPlayheadForTimerTick - mostRecentTickJackFrame);
+                }
+                stepPositionAdjustedAppliedForStep = jackCumulativePlayhead;
+            }
+        }
+
         // As long as the next playback position is before this period is supposed to end, and we have frames for it, let's post some events
         while (stepNextPlaybackPosition < next_usecs && firstAvailableFrame < nframes) {
             StepData *stepData = stepReadHead;
@@ -613,11 +660,37 @@ public:
             // Counting total steps, for determining delays and the like at a global level
             ++jackCumulativePlayhead;
             // If the events are in the past, they need to be scheduled as soon as we can, so just put those on position 0, and if we are here, that means that ending up in the future is a rounding error, so clamp that
+            const jack_nframes_t formerFirstAvailableFrames{firstAvailableFrame};
             if (stepNextPlaybackPosition <= current_usecs) {
                 relativePosition = firstAvailableFrame;
                 ++firstAvailableFrame;
             } else {
                 relativePosition = std::clamp<jack_nframes_t>((stepNextPlaybackPosition - current_usecs) / microsecondsPerFrame, firstAvailableFrame, nframes - 1);
+                firstAvailableFrame = relativePosition;
+            }
+            // If we have any step position adjustment to do, apply that now
+            if (stepPositionAdjustment < 0) {
+                // Negative adjustment means we need to pull the step back a bit in time...
+                // NB: Don't push things further back than the first available frame
+                jack_nframes_t actualFrameAdjustment{jack_nframes_t(abs(stepPositionAdjustment))};
+                if (formerFirstAvailableFrames < actualFrameAdjustment) {
+                    const jack_nframes_t stillToAdjust{actualFrameAdjustment - formerFirstAvailableFrames};
+                    actualFrameAdjustment = actualFrameAdjustment - stillToAdjust;
+                    stepPositionAdjustment = -int(stillToAdjust);
+                }
+                relativePosition -= actualFrameAdjustment;
+                firstAvailableFrame = relativePosition;
+            } else if (0 < stepPositionAdjustment) {
+                // Positive adjustment means we need to push the step forward in time a bit
+                // NB: Don't push further ahead than the last frame in the period
+                jack_nframes_t actualFrameAdjustment{jack_nframes_t(stepPositionAdjustment)};
+                jack_nframes_t maximumFrameAdjustment{nframes - relativePosition};
+                if (maximumFrameAdjustment < actualFrameAdjustment) {
+                    const jack_nframes_t stillToAdjust{actualFrameAdjustment - maximumFrameAdjustment};
+                    actualFrameAdjustment = maximumFrameAdjustment;
+                    stepPositionAdjustment = int(stillToAdjust);
+                }
+                relativePosition += actualFrameAdjustment;
                 firstAvailableFrame = relativePosition;
             }
             // Assign this step's position, so we can retrieve it if any consumers need that (such as for live recording reasons)
@@ -691,9 +764,15 @@ public:
                     switch (command->operation) {
                         case TimerCommand::StartPlaybackOperation:
                             if (startPlayback(command, firstAvailableFrame + current_frames, stepNextPlaybackPosition)) {
-                                // Start playback does in fact happen here, but anything scheduled for step 0 of playback will happen on /next/ step.
-                                // Consequently, we'll need to kind of lie a little bit, since playback actually will start next step, not this step.
-                                jackPlayheadAtStart = firstAvailableFrame + current_frames + (thisStepSubbeatLengthInMicroseconds / microsecondsPerFrame);
+                                if (transportManager->bpm() > -1) {
+                                    // When starting playback from externally, we suddenly end up in that weird situation where playback *already began* before we did anything.
+                                    // Consequently, we set the playhead at start to whatever the jack frame was when the most recent start event was sent through the transport manager
+                                    jackPlayheadAtStart = transportManager->jackFrameForLastRestart();
+                                } else {
+                                    // Start playback does in fact happen here, but anything scheduled for step 0 of playback will happen on /next/ step.
+                                    // Consequently, we'll need to kind of lie a little bit, since playback actually will start next step, not this step.
+                                    jackPlayheadAtStart = firstAvailableFrame + current_frames + (thisStepSubbeatLengthInMicroseconds / microsecondsPerFrame);
+                                }
                                 jack_midi_event_write(bufferSequencer[ZynthboxTrackCount], relativePosition, &jackMidiStartMessage, 1); // Tell any listener that playback should begin
                                 jackMidiBeatTick = 0; // Ensure a tick heads out on the next loop, so that playback actually starts on anything that is expected to
                             }
@@ -810,12 +889,22 @@ public:
                     }
                 }
             }
-            // Update our internal BPM state, based on what we had on the previous step
-            if (jackPlayheadBpm != thisStepBpm) {
-                // update the playhead's BPM
-                jackPlayheadBpm = thisStepBpm;
-                // update the subbeat length in ms
-                thisStepSubbeatLengthInMicroseconds = timerThread->subbeatCountToNanoseconds(jackPlayheadBpm, 1) / 1000;
+            const double externalBpm{transportManager->bpm()};
+            // If the external BPM is above -1, use that, otherwise use our internal clock
+            if (externalBpm > -1) {
+                // If the external BPM has changed (which should really not be happening during processing time, but still), update our internal state based on what was there previously
+                if (jackPlayheadBpm != externalBpm) {
+                    // Update the playhead's BPM, based on this new finding
+                    jackPlayheadBpm = externalBpm;
+                }
+            } else {
+                // Update our internal BPM state, based on what we had on the previous step
+                if (jackPlayheadBpm != thisStepBpm) {
+                    // update the playhead's BPM
+                    jackPlayheadBpm = thisStepBpm;
+                    // update the subbeat length in ms
+                    thisStepSubbeatLengthInMicroseconds = timerThread->subbeatCountToNanoseconds(jackPlayheadBpm, 1) / 1000;
+                }
             }
             // Add the amount of the BPM value appropriate to this step's duration inside the current period
             updatedJackBeatsPerMinute += jackPlayheadBpm * double(currentStepUsecsEnd - currentStepUsecsStart) / period_usecs;
@@ -964,7 +1053,7 @@ public:
 
     quint64 scheduleAheadAmount{0};
     void updateScheduleAheadAmount() {
-        scheduleAheadAmount = (timerThread->nanosecondsToSubbeatCount(timerThread->getBpm(), jackLatency * (float)1000000)) + 1;
+        scheduleAheadAmount = (timerThread->nanosecondsToSubbeatCount(q->effectiveBpm(), jackLatency * (float)1000000)) + 1;
         QMetaObject::invokeMethod(q, "scheduleAheadAmountChanged", Qt::QueuedConnection);
     }
 };
@@ -1034,6 +1123,7 @@ SyncTimer::SyncTimer(QObject *parent)
     connect(timerThread, &SyncTimerThread::pausedChanged, this, [this](){
         d->isPaused = timerThread->isPaused();
     }, Qt::DirectConnection);
+    connect(this, &SyncTimer::effectiveBpmChanged, this, [this](){ d->updateScheduleAheadAmount(); });
     // Open the client.
     jack_status_t real_jack_status{};
     d->jackClient = jack_client_open("SyncTimer", JackNullOption, &real_jack_status);
@@ -1303,6 +1393,20 @@ void SyncTimer::increaseBpm()
 void SyncTimer::decreaseBpm()
 {
     setBpm(qMax(d->recentlyRequestedBpm - 1, quint64(BPM_MINIMUM)));
+}
+
+bool SyncTimer::externalClockActive() const
+{
+    return d->transportManager->bpm() > -1;
+}
+
+double SyncTimer::effectiveBpm() const
+{
+    if (d->transportManager->bpm() > -1) {
+        // Then we've got an external clock that is active, use that
+        return d->transportManager->bpm();
+    }
+    return timerThread->getBpm();
 }
 
 quint64 SyncTimer::scheduleAheadAmount() const

@@ -1,6 +1,7 @@
 #include "TransportManager.h"
 #include "SyncTimer.h"
 #include "TimerCommand.h"
+#include "MidiRouterDevice.h"
 #include "JackThreadAffinitySetter.h"
 
 #include <QDebug>
@@ -27,12 +28,25 @@ public:
     uint32_t mostRecentEventCount{0};
     jack_time_t nextMidiTick{0};
     const jack_midi_data_t midiTickEvent{0xf9};
+    jack_time_t previousMidiClockFrame{0};
+    double previousMidiClockDeltas[16]{0};
+    double bpm{-1};
+    jack_nframes_t jackFrameForLastRestart{0};
+    jack_nframes_t midiTicksSinceLastRestart{0};
+    jack_nframes_t mostRecentTickJackFrame{0};
+    quint64 mostRecentlyClockedSyncTimerTick{0};
+    jack_nframes_t jackFrameForLastSyncTimerTick{0};
+    MidiRouterDevice *clockSourceDevice{nullptr};
+    int clockSourcePPQN{-1};
+    int internalPPQN{0};
+    quint64 syncTimerIncrementPerTick{0};
     int process(jack_nframes_t nframes) {
         jack_nframes_t current_frames;
         jack_time_t current_usecs;
         jack_time_t next_usecs;
         float period_usecs;
         jack_get_cycle_times(client, &current_frames, &current_usecs, &next_usecs, &period_usecs);
+        const double microsecondsPerFrame = double(next_usecs - current_usecs) / double(nframes);
 
         // Handle transport input as thrown at us by others
         void *inputBuffer = jack_port_get_buffer(inPort, nframes);
@@ -64,13 +78,101 @@ public:
                         // (event->buffer[2]<<7) | event->buffer[1];
                         break;
                     case 0xf8: // clock
+                    {
                         // qDebug() << Q_FUNC_INFO << "Clock signal received";
+                        if (clockSourcePPQN == -1) {
+                            if (clockSourceDevice) {
+                                clockSourcePPQN = clockSourceDevice->ppqn();
+                                if (internalPPQN > clockSourcePPQN) {
+                                    // If the internal PPQN is higher than the clock source, our increment is the number of SyncTimer ticks per each clock event
+                                    syncTimerIncrementPerTick = quint64(internalPPQN / clockSourcePPQN);
+                                } else {
+                                    // If the external PPQN is the same or higher, then the increment is 1, but we use this variable to test when to update next
+                                    syncTimerIncrementPerTick = quint64(clockSourcePPQN / internalPPQN);
+                                }
+                            } else {
+                                // This is super extra bad, we apparently got a tick, but don't have a source...
+                                // this isn't great. Let's just ignore that for now, we'll be clearing it up shortly
+                                continue;
+                            }
+                        }
+                        if (clockSourcePPQN < 1) {
+                            // This is even more super extra bad, for some reason the ppqn of our source device is not a positive number?
+                            // That should basically not be possible, and we can't really work with that
+                            continue;
+                        }
+                        const jack_time_t currentMidiClockFrame{(current_frames + event.time)};
+                        const double currentDelta{double((current_frames + event.time) - previousMidiClockFrame)};
+                        // Logic is, have a rolling number of timestamp deltas up to 16, depending on a couple of things:
+                        // - If there is only a small amount of change, assume this is not a jump in bpm, and instead that it is a smooth slide to another (or jitter), and allow that
+                        // - If there is a larger jump in the timestamp delta between the previous and the incoming one, assume we are jumping to a new bpm, clear out previous timestamps, and start calculations from scratch
+                        // If we have no previous deltas (that is, the first one is 0), use our current
+                        // delta as the average so we at least have *something* to work with
+                        double averageDelta{currentDelta};
+                        for (int availableDeltas = 0; availableDeltas < 16; ++availableDeltas) {
+                            if (previousMidiClockDeltas[availableDeltas] == 0) {
+                                averageDelta /= double(availableDeltas + 1);
+                                break;
+                            } else {
+                                averageDelta += previousMidiClockDeltas[availableDeltas];
+                            }
+                        }
+                        if (abs(currentDelta - averageDelta) > 10) {
+                            // If the delta is large, then we're being asked to jump immediately to another bpm
+                            // Set all entries in our history to 0
+                            memset(previousMidiClockDeltas, 0, sizeof(double)*16);
+                        } else {
+                            // If the delta change is tiny, assume we want either a smooth bpm transition, or that it's jitter
+                            // Rotate all entries one step to the right (ignoring any overflow)
+                            memmove(previousMidiClockDeltas + 1, previousMidiClockDeltas, sizeof(double)*15);
+                        }
+                        // Once rotated (or zeroed), set the first element to our new delta
+                        previousMidiClockDeltas[0] = currentDelta;
+                        previousMidiClockFrame = currentMidiClockFrame;
+                        // Now we've got everything done, update our BPM to whatever is appropriate for the new average delta
+                        const double newBpm{(1000.0 / (microsecondsPerFrame * averageDelta) / double(clockSourcePPQN)) * 60.0};
+                        if (newBpm != bpm) {
+                            bpm = newBpm;
+                            QMetaObject::invokeMethod(syncTimer, &SyncTimer::effectiveBpmChanged, Qt::QueuedConnection);
+                        }
+                        ++midiTicksSinceLastRestart;
+                        mostRecentTickJackFrame = currentMidiClockFrame;
+                        static int throttleThing{0};
+                        if (throttleThing++ > 10) {
+                            qDebug() << Q_FUNC_INFO << "New BPM according to external clock is" << bpm;
+                        }
+                        // Update the SyncTimer tick data, so it can keep itself in sync
+                        if (internalPPQN > clockSourcePPQN) {
+                            // If the internal PPQN is higher than the clock source, make sure we're counting up the most recent time we got a clock event by by the number of sync timer steps that are in the clock source's clock period
+                            mostRecentlyClockedSyncTimerTick += syncTimerIncrementPerTick;
+                            jackFrameForLastSyncTimerTick = currentMidiClockFrame;
+                        } else {
+                            // If the external PPQN is the same or higher, update the ticks when we have an appropriate multiple of ticks since the last update
+                            if (midiTicksSinceLastRestart == ((1 + mostRecentlyClockedSyncTimerTick) * syncTimerIncrementPerTick)) {
+                                ++mostRecentlyClockedSyncTimerTick;
+                                jackFrameForLastSyncTimerTick = currentMidiClockFrame;
+                            }
+                        }
+                        // TODO Do we want to have a separate BPM value as defined by external clock, and then when in external clock mode, don't let the user set the thing, and instead display that value where-ever we display the BPM? Probably yes...
+                        // TODO When we get a midi clock event, make sure we count up and push ticks to SyncTimer, so things can be scheduled as required.
+                        // Optimally we want to also do some interpolation logic here, so we can intersperse ticks inside that timer... perhaps we can do
+                        // that by synctimer knowing the BPM, and adjusting to each tick (either by pushing forward or backward) when it slips out of sync
+                        // with the midi ticks, and otherwise "simply" operate entirely on BPM value the way we're doing already? That seems like it'd
+                        // likely work reasonably well and scale both up and down...
                         break;
+                    }
                     case 0xfa: // start
                     case 0xfb: // continue
                         // Spec says to ignore start messages if they arrive while playback is happening
                         qDebug() << Q_FUNC_INFO << "Received MIDI START message";
                         if (!syncTimer->timerRunning()) {
+                            jackFrameForLastRestart = current_frames + event.time;
+                            if (clockSourceDevice) {
+                                // If we have a clock source, then *this* is when we're resetting things, not when the start command is actually handled
+                                jack_transport_stop(client);
+                                jack_transport_start(client);
+                                midiTicksSinceLastRestart = 0;
+                            }
                             TimerCommand *startCommand = syncTimer->getTimerCommand();
                             startCommand->operation = TimerCommand::StartPlaybackOperation;
                             syncTimer->scheduleTimerCommand(0, startCommand);
@@ -153,6 +255,7 @@ void transport_timebase_callback(jack_transport_state_t state, jack_nframes_t nf
 TransportManagerPrivate::TransportManagerPrivate(SyncTimer *syncTimerInstance)
 {
     syncTimer = syncTimerInstance;
+    internalPPQN = syncTimer->getMultiplier();
 }
 
 
@@ -201,6 +304,67 @@ void TransportManager::initialize()
 
 void TransportManager::restartTransport()
 {
-    jack_transport_stop(d->client);
-    jack_transport_start(d->client);
+    if (d->clockSourceDevice) {
+        jack_transport_stop(d->client);
+        jack_transport_start(d->client);
+        d->midiTicksSinceLastRestart = 0;
+    }
+}
+
+double TransportManager::bpm() const
+{
+    return d->bpm;
+}
+
+uint32_t TransportManager::midiTicksSinceLastRestart() const
+{
+    return d->midiTicksSinceLastRestart;
+}
+
+uint32_t TransportManager::mostRecentTickJackFrame() const
+{
+    return d->mostRecentTickJackFrame;
+}
+
+uint32_t TransportManager::jackFrameForLastRestart() const
+{
+    return d->jackFrameForLastRestart;
+}
+
+quint64 TransportManager::mostRecentlyClockedSyncTimerTick() const
+{
+    return d->mostRecentlyClockedSyncTimerTick;
+}
+
+int TransportManager::externalPPQN() const
+{
+    return d->clockSourcePPQN;
+}
+
+void TransportManager::setClockSource(MidiRouterDevice* device)
+{
+    if (d->clockSourceDevice) {
+        d->clockSourceDevice->disconnect(this);
+    }
+    d->clockSourceDevice = device;
+    if (d->clockSourceDevice) {
+        connect(d->clockSourceDevice, &MidiRouterDevice::ppqnChanged, this, [this](){
+            d->clockSourcePPQN = d->clockSourceDevice->ppqn();
+            if (d->internalPPQN > d->clockSourcePPQN) {
+                // If the internal PPQN is higher than the clock source, our increment is the number of SyncTimer ticks per each clock event
+                d->syncTimerIncrementPerTick = quint64(d->internalPPQN / d->clockSourcePPQN);
+            } else {
+                // If the external PPQN is the same or higher, then the increment is 1, but we use this variable to test when to update next
+                d->syncTimerIncrementPerTick = quint64(d->clockSourcePPQN / d->internalPPQN);
+            }
+        });
+        connect(d->clockSourceDevice, &QObject::destroyed, this, [this](){
+            d->clockSourceDevice = nullptr;
+            d->clockSourcePPQN = -1;
+            d->syncTimerIncrementPerTick = 0;
+            d->bpm = -1;
+            Q_EMIT d->syncTimer->effectiveBpmChanged();
+        });
+    }
+    Q_EMIT d->syncTimer->effectiveBpmChanged();
 }

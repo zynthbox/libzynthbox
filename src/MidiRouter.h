@@ -42,6 +42,29 @@ class MidiRouter : public QThread
      */
     Q_PROPERTY(QVariantList sketchpadTrackTargetTracks READ sketchpadTrackTargetTracks NOTIFY sketchpadTrackTargetTracksChanged)
     /**
+     * \brief The method by which we ensure that we have a midi clock source
+     * You can set this to one of a number of options:
+     * - InternalClockSource: (default) This will always use the internal
+     *       clock source as provided by TransportManager.
+     * - AutoClockSource: This will use whatever the first device that provides
+     *       a clock signal as the source, and otherwise it will fall back to
+     *       the internal clock source provided by TransportManager
+     * - ExternalClockSource: This will use whatever you explicitly set as the
+     *       clock source (a specific device on which you have set the
+     *       receiveTimecode property to true) as the clock source. If this
+     *       device is not available/plugged in, we will use the internal clock.
+     *       If the device does not provide clock even when available, things
+     *       will get weird, but we will trust what you say.
+     * @default InternalClockSource
+     */
+    Q_PROPERTY(ClockSource clockSource READ clockSource WRITE setClockSource NOTIFY clockSourceChanged)
+    /**
+     * \brief The actual device currently used as the clock source
+     * This will be null when no external device is used as the clock source (that is, when either
+     * clockSource is InternalClockSource, or the external device set as clock source is unavailable)
+     */
+    Q_PROPERTY(QObject* externalClockSourceDevice READ externalClockSourceDevice NOTIFY externalClockSourceDeviceChanged)
+    /**
      * \brief The master channels as defined by the MPE split point (16 entries, one per channel)
      * @note if the split is all-Upper zone, this will be what is set in webconf, otherwise it will be 0 or 15, depending on the Zone
      * @see setExpressiveSplitPoint(int)
@@ -143,6 +166,26 @@ public:
     void setCurrentSketchpadTrack(int currentSketchpadTrack);
     int currentSketchpadTrack() const;
     Q_SIGNAL void currentSketchpadTrackChanged();
+
+    enum ClockSource {
+        InternalClockSource, // (default) This will always use the internal clock source as provided by TransportManager.
+        AutoClockSource, // This will use whatever the first device that provides a clock signal as the source, and otherwise it will fall back to the internal clock source provided by TransportManager.
+        ExternalClockSource // This will use whatever you explicitly set as the clock source (a specific device) as the clock source. If this device is not available, we will use the internal clock. If the device does not provide clock even when available, things will get weird, but we will trust what you say.
+    };
+    Q_ENUM( ClockSource )
+    ClockSource clockSource() const;
+    void setClockSource(const ClockSource &clockSource);
+    Q_SIGNAL void clockSourceChanged();
+
+    QObject *externalClockSourceDevice() const;
+    MidiRouterDevice *externalClockSourceDeviceActual() const;
+    Q_SIGNAL void externalClockSourceDeviceChanged();
+    /**
+     * \brief Sets the given device as the external clock source
+     * When this is called, the state will be set on the given device, and cleared on all other connected devices
+     * @param externalClockSourceDevice The MidiRouterDevice instance that should be used as external clock source
+     */
+    void setExternalClockSourceDevice(MidiRouterDevice *externalClockSourceDevice);
 
     /**
      * \brief Set the channels which will be used to map events for the given sketchpad track into zynthian

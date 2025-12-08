@@ -16,13 +16,24 @@ struct TimerCommand;
 class ClipAudioSource;
 class SyncTimerPrivate;
 /**
- * \brief A sequencer into which can be scheduled midi events, TimerCommand and ClipCommand instances
+ * \brief A sequencer into which can be scheduled MIDI events, TimerCommand and ClipCommand instances
  */
 class SyncTimer : public QObject {
   Q_OBJECT
   Q_PROPERTY(int currentTrack READ currentTrack WRITE setCurrentTrack NOTIFY currentTrackChanged)
   Q_PROPERTY(bool timerRunning READ timerRunning NOTIFY timerRunningChanged)
   Q_PROPERTY(quint64 bpm READ getBpm WRITE setBpm NOTIFY bpmChanged)
+  /**
+   * \brief Whether or not there is an active external clock (that is, essentially, whether bpm adjustment should be allowed)
+   */
+  Q_PROPERTY(bool externalClockActive READ externalClockActive NOTIFY effectiveBpmChanged)
+  /**
+   * \brief This is a read-only property with the current actual BPM used by the system
+   * This is going to be either the custom-set BPM, *or* it will be whatever the externally determined BPM is
+   * as defined by whatever the device currently providing MIDI clock to us is.
+   * If that device is present and *not* providing MIDI clock, this will result in the effective BPM becoming 0
+   */
+  Q_PROPERTY(double effectiveBpm READ effectiveBpm NOTIFY effectiveBpmChanged)
   Q_PROPERTY(quint64 scheduleAheadAmount READ scheduleAheadAmount NOTIFY scheduleAheadAmountChanged)
   Q_PROPERTY(bool audibleMetronome READ audibleMetronome WRITE setAudibleMetronome NOTIFY audibleMetronomeChanged)
 public:
@@ -92,6 +103,10 @@ public:
   Q_INVOKABLE void increaseBpm();
   Q_INVOKABLE void decreaseBpm();
   Q_SIGNAL void bpmChanged();
+
+  bool externalClockActive() const;
+  double effectiveBpm() const;
+  Q_SIGNAL void effectiveBpmChanged();
 
   /**
    * \brief Returns the number of timer ticks you should schedule midi events for to ensure they won't get missed

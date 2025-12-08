@@ -143,6 +143,8 @@ public:
     bool sendToChannel[16];
     bool sendTimecode{true};
     bool sendBeatClock{true};
+    bool receiveBeatClock{false};
+    int ppqn{24};
     bool writeMidiEvents{true};
     // Zynthbox' master channel
     int globalMaster{-1};
@@ -203,6 +205,14 @@ public:
             }
             q->setSendTimecode(settings.value("sendTimecode", sendTimecode).toBool());
             q->setSendBeatClock(settings.value("sendBeatClock", sendBeatClock).toBool());
+            const bool tempReceiveBeatClock = settings.value("receiveBeatClock", receiveBeatClock).toBool();
+            if (router->externalClockSourceDeviceActual() && tempReceiveBeatClock) {
+                // If there is already a router device, we need to leave that alone, and clear our own setting
+                receiveBeatClock = false;
+            } else {
+                q->setReceiveBeatClock(tempReceiveBeatClock);
+            }
+            q->setPpqn(settings.value("ppqn", ppqn).toInt());
             // Fetch the MPE settings
             settings.beginGroup("MPESettings");
             q->setLowerMasterChannel(settings.value("lowerMasterChannel", 0).toInt());
@@ -245,6 +255,8 @@ public:
             settings.setValue("sendToChannel", sendToChannelVariant);
             settings.setValue("sendTimecode", sendTimecode);
             settings.setValue("sendBeatClock", sendBeatClock);
+            settings.setValue("receiveBeatClock", receiveBeatClock);
+            settings.setValue("ppqn", ppqn);
             // Save the MPE settings in their own sub-group
             settings.beginGroup("MPESettings");
             settings.setValue("lowerMasterChannel", lowerMasterChannel);
@@ -282,6 +294,8 @@ MidiRouterDevice::MidiRouterDevice(jack_client_t *jackClient, MidiRouter *parent
     connect(this, &MidiRouterDevice::midiChannelTargetTracksChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
     connect(this, &MidiRouterDevice::sendTimecodeChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
     connect(this, &MidiRouterDevice::sendBeatClockChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
+    connect(this, &MidiRouterDevice::receiveBeatClockChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
+    connect(this, &MidiRouterDevice::ppqnChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
     connect(this, &MidiRouterDevice::channelsToSendToChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
     connect(this, &MidiRouterDevice::lowerMasterChannelChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
     connect(this, &MidiRouterDevice::upperMasterChannelChanged, this, [this, deviceSettingsSaverThrottle](){ if (d->doingSettingsHandling == false) { deviceSettingsSaverThrottle->start(); } });
@@ -478,6 +492,12 @@ void MidiRouterDevice::nextInputEvent()
         currentInputEvent.size = 0;
     }
     d->nextInputEventIndex++;
+    // If our current event is a beat clock one (that is, specifically the beat clock message, not other transport control messages)
+    // And also, if this device is not supposed to be a beat clock source,
+    // we should try skip the message and try again
+    if (currentInputEvent.size > 0 && currentInputEvent.buffer[0] == 0xf8 && d->receiveBeatClock == false) {
+        nextInputEvent();
+    }
 }
 
 void MidiRouterDevice::processEnd()
@@ -830,6 +850,35 @@ void MidiRouterDevice::setSendBeatClock(const bool& sendBeatClock)
 const bool & MidiRouterDevice::sendBeatClock() const
 {
     return d->sendBeatClock;
+}
+
+bool MidiRouterDevice::receiveBeatClock() const
+{
+    return d->receiveBeatClock;
+}
+
+void MidiRouterDevice::setReceiveBeatClock(const bool& receiveBeatClock)
+{
+    if (d->receiveBeatClock != receiveBeatClock) {
+        d->receiveBeatClock = receiveBeatClock;
+        if (receiveBeatClock) {
+            d->router->setExternalClockSourceDevice(this);
+        }
+        Q_EMIT receiveBeatClockChanged();
+    }
+}
+
+int MidiRouterDevice::ppqn() const
+{
+    return d->ppqn;
+}
+
+void MidiRouterDevice::setPpqn(const int& ppqn)
+{
+    if (d->ppqn != ppqn) {
+        d->ppqn = ppqn;
+        Q_EMIT ppqnChanged();
+    }
 }
 
 void MidiRouterDevice::setWriteMidiEvents(const bool& writeMidiEvents)

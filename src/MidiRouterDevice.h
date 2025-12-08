@@ -53,6 +53,25 @@ class MidiRouterDevice : public QObject {
     Q_PROPERTY(bool sendBeatClock READ sendBeatClock WRITE setSendBeatClock NOTIFY sendBeatClockChanged)
 
     /**
+     * \brief Whether or not this device should be used as a beat clock source when MidiRouter's clockSource is set to External
+     * @note This will be true for only exactly one device at any time (and setting it will disable it on all other devices, including any that you have not plugged in)
+     * @default false
+     */
+    Q_PROPERTY(bool receiveBeatClock READ receiveBeatClock WRITE setReceiveBeatClock NOTIFY receiveBeatClockChanged)
+    /**
+     * \brief The number of pulses per quarter-note this device provides/expects
+     * TODO sending is currently limited to our internal 24ppqn clock, this is for handling incoming time signals
+     * @note This must be an "interesting" number related to 96 (meaning either a division or multiple of 96), so we can line it up with our internal clock without running into floating point precision trouble or hoop-jumping
+     * Setting this to any value other than those in the allowed list will cause the value to snap to the next value down
+     * @default 24
+     * @minimum 1
+     * @maximum 960
+     * @allowed 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 96, 192, 288, 384, 480, 576, 672, 768, 864, 960
+     */
+    Q_PROPERTY(int ppqn READ ppqn WRITE setPpqn NOTIFY ppqnChanged)
+
+
+    /**
      * \brief Whether the device will write any midi events to its output port
      * This is intended to be used to temporarily pause writing events, at times where this might cause problems
      * for the client the port is connected to (an example: some synths require there to be no midi input while
@@ -496,6 +515,14 @@ public:
      */
     const bool &sendBeatClock() const;
     Q_SIGNAL void sendBeatClockChanged();
+
+    bool receiveBeatClock() const;
+    void setReceiveBeatClock(const bool &receiveBeatClock);
+    Q_SIGNAL void receiveBeatClockChanged();
+
+    int ppqn() const;
+    void setPpqn(const int &ppqn);
+    Q_SIGNAL void ppqnChanged();
 
     void setWriteMidiEvents(const bool &writeMidiEvents);
     const bool &writeMidiEvents() const;
