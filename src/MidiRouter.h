@@ -216,7 +216,7 @@ public:
      * @param byte1 The second byte (will be clamped to 0-127)
      * @param byte2 The third byte (will be clamped to 0-127)
      */
-    void sendMidiMessageToZynthianSynth(const int &zynthianChannel, const int &byteCount, const int &byte0, const int &byte1, const int &byte2) const;
+    Q_INVOKABLE void sendMidiMessageToZynthianSynth(const int &zynthianChannel, const int &byteCount, const int &byte0, const int &byte1, const int &byte2) const;
 
     /**
      * \brief Write the given midi message directly to all output-enabled hardware controllers
