@@ -6,6 +6,7 @@
 #include "ClipAudioSourceSubvoiceSettings.h"
 #include "GainHandler.h"
 #include "SyncTimer.h"
+#include "ClipCommand.h"
 
 #define DEBUG_SLICE false
 #define IF_DEBUG_SLICE if (DEBUG_SLICE)
@@ -223,6 +224,24 @@ int ClipAudioSourceSliceSettings::index() const
 bool ClipAudioSourceSliceSettings::isRootSlice() const
 {
     return d->index == -1;
+}
+
+void ClipAudioSourceSliceSettings::play(const int& midiNote, const int& velocity) const
+{
+    ClipCommand *command = ClipCommand::channelCommand(d->clip, d->clip->sketchpadTrack());
+    command->midiNote = qMax(0, qMin(midiNote, 127));
+    command->changeVolume = true;
+    command->volume = float(qMax(0, qMin(velocity, 127))) / 127.0f;
+    command->startPlayback = true;
+    SyncTimer::instance()->scheduleClipCommand(command, 0);
+}
+
+void ClipAudioSourceSliceSettings::stop(const int& midiNote) const
+{
+    ClipCommand *command = ClipCommand::channelCommand(d->clip, d->clip->sketchpadTrack());
+    command->midiNote = qMax(0, qMin(midiNote, 127));
+    command->stopPlayback = true;
+    SyncTimer::instance()->scheduleClipCommand(command, 0);
 }
 
 ClipAudioSource::PlaybackStyle ClipAudioSourceSliceSettings::playbackStyle() const
