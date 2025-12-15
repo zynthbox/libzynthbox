@@ -590,7 +590,7 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                         for (const SubChannel &subChannel : subChannels) {
                             SamplerSynthVoice *voice = subChannel.firstActiveVoice;
                             while (voice) {
-                                voice->handleAftertouch(event.time, pressure, eventChannel, note);
+                                voice->handleAftertouch(event.time, eventChannel, note, pressure);
                                 voice = voice->next;
                             }
                         }
