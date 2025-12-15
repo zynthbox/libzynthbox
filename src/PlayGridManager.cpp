@@ -316,6 +316,14 @@ public:
                                 note->registerOff(midiChannel);
                             }
                         }
+                    } else if (0x9F < byte1 && byte1 < 0xB0) {
+                        // Polyphonic aftertouch
+                        const int midiChannel{byte1 & 0xF};
+                        for (Note *note : qAsConst(notes)) {
+                            if (note->sketchpadTrack() == sketchpadTrack && note->activeChannel() == midiChannel) {
+                                note->registerPolyphonicAftertouch(byte3);
+                            }
+                        }
                     } else if (0xAF < byte1 && byte1 < 0xC0) {
                         if (byte2 == 0x7B) {
                             // All Notes Off
