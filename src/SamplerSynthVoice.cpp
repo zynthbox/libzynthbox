@@ -326,6 +326,7 @@ public:
     SamplerSynthSound* sound{nullptr};
     double pitchRatio = 0;
     double sourceSamplePosition = 0;
+    float initialGain = 0;
     float targetGain = 0, lgain = 0, rgain = 0;
     // Used to make sure the first sample on looped playback is interpolated to an empty previous sample, rather than the previous sample in the loop
     bool firstRoll{true};
@@ -504,6 +505,7 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         d->playbackData.snappedToBeat = (trunc(d->slice->lengthBeats()) == d->slice->lengthBeats());
         d->playbackData.isLooping = d->clipCommand->looping;
 
+        d->initialGain = clipCommand->volume;
         d->targetGain = clipCommand->volume;
         d->lgain = 0;
         d->rgain = 0;
@@ -735,7 +737,9 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
                 // const float previousGain = d->targetGain;
                 static constexpr float minGainDB{-24.f};
                 static constexpr float maxGainDB{0.0f};
-                d->targetGain = juce::Decibels::decibelsToGain(juce::jmap((aftertouch/127.0f), 0.0f, 1.0f, minGainDB, maxGainDB), minGainDB);
+                // Limit aftertouch to increasing, but also only up to the full allowed gain amount (requiring a higher aftertouch value than the initial gain to increase from there)
+                const float afterTouchGain{juce::Decibels::decibelsToGain(juce::jmap((aftertouch/127.0f), 0.0f, 1.0f, minGainDB, maxGainDB), minGainDB)};
+                d->targetGain = d->initialGain + qMax(0.0f, afterTouchGain - d->initialGain);
                 // if (d->subvoiceSettings == nullptr) { qDebug() << d->clip << "On frame" << currentFrame << "target gain changed by" << d->targetGain - previousGain << "from" << previousGain << "to" << d->targetGain << "with current gain at" << d->lgain; }
             }
         }
