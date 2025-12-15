@@ -36,6 +36,7 @@ public:
     int activeChannel{-1};
     int internalOnChannel{-1};
     int pitch{0};
+    int polyphonicAftertouch{0};
 
     int activations[16]{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
@@ -268,4 +269,22 @@ void Note::sendPitchChange(const int& pitch)
 {
     const int adjusted = qBound(0, pitch + 8192, 16383);
     d->syncTimer->sendMidiMessageImmediately(3, 0xE0 + d->activeChannel,  adjusted & 127, (adjusted >> 7) & 127, d->sketchpadTrack);
+}
+
+void Note::registerPolyphonicAftertouch(const int& polyphonicAftertouch)
+{
+    if (d->polyphonicAftertouch != polyphonicAftertouch) {
+        d->polyphonicAftertouch = polyphonicAftertouch;
+        Q_EMIT polyphonicAftertouchChanged();
+    }
+}
+
+int Note::polyphonicAftertouch() const
+{
+    return d->polyphonicAftertouch;
+}
+
+void Note::sendPolyphonicAftertouch(const int& polyphonicAftertouch)
+{
+    d->syncTimer->sendMidiMessageImmediately(3, 0xA0 + d->activeChannel, d->midiNote, qMax(0, qMin(polyphonicAftertouch, 127)), d->sketchpadTrack);
 }
