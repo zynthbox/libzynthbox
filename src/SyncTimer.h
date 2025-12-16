@@ -296,7 +296,7 @@ public:
   int nextAvailableChannel(const int &sketchpadTrack = -1, quint64 delay = 0);
 
   /**
-   * \brief Schedule a note message to be sent on the next tick of the timer
+   * \brief Schedule a note message to be sent on the next tick of the timer using the sequencer buffer
    * @note This is not thread-safe in itself - when the timer is running, don't call this function outside of a callback
    * @param midiNote The note you wish to change the state of
    * @param midiChannel The channel you wish to change the given note on
@@ -309,7 +309,7 @@ public:
   void scheduleNote(unsigned char midiNote, unsigned char midiChannel, bool setOn, unsigned char velocity, quint64 duration, quint64 delay, int sketchpadTrack = -1);
 
   /**
-   * \brief Schedule a buffer of midi messages (the Juce type) to be sent with the given delay
+   * \brief Schedule a buffer of midi messages (the Juce type) to be sent with the given delay using the sequencer buffer
    * @note This is not thread-safe in itself - when the timer is running, don't call this function outside of a callback
    * @param buffer The buffer that you wish to add to the schedule
    * @param delay The delay (if any) you wish to add
@@ -318,7 +318,15 @@ public:
   void scheduleMidiBuffer(const juce::MidiBuffer& buffer, quint64 delay, int sketchpadTrack = -1);
 
   /**
-   * \brief Send a note message immediately (ensuring it goes through the step sequencer output)
+   * \brief Schedule a buffer of midi messages (the Juce type) to be sent with the given delay using the controller buffer
+   * @param buffer The buffer that you wish to add to the schedule
+   * @param delay The delay (if any) you wish to add
+   * @param sketchpadTrack The sketchpad track to schedule this to (-1 will send to the current track, -2 will send to the master track)
+   */
+  void scheduleControllerMidiBuffer(const juce::MidiBuffer& buffer, quint64 delay, int sketchpadTrack = -1);
+
+  /**
+   * \brief Send a note message immediately (ensuring it goes through the step sequencer's controller output)
    * @param midiNote The note you wish to change the state of
    * @param midiChannel The channel you wish to change the given note on
    * @param setOn Whether or not you are turning the note on

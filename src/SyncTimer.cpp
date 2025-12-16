@@ -1686,6 +1686,12 @@ void SyncTimer::scheduleMidiBuffer(const juce::MidiBuffer& buffer, quint64 delay
     stepData->insertMidiBuffer(buffer, d->sketchpadTrack(sketchpadTrack), StepData::SequencerBuffer);
 }
 
+void SyncTimer::scheduleControllerMidiBuffer(const juce::MidiBuffer& buffer, quint64 delay, int sketchpadTrack)
+{
+    StepData *stepData{d->delayedStep(delay)};
+    stepData->insertMidiBuffer(buffer, d->sketchpadTrack(sketchpadTrack), StepData::ControllerBuffer);
+}
+
 void SyncTimer::sendNoteImmediately(unsigned char midiNote, unsigned char midiChannel, bool setOn, unsigned char velocity, int sketchpadTrack)
 {
     StepData *stepData{d->delayedStep(0, true, true)};
