@@ -438,6 +438,19 @@ public:
     constexpr static const int gridModelEndNote{64};
 };
 
+static inline void addNoteToBuffer(juce::MidiBuffer &buffer, const Note *theNote, const unsigned char &velocity, const bool &setOn, const int &availableChannel) {
+    unsigned char note[3];
+    if (setOn) {
+        note[0] = 0x90 + availableChannel;
+    } else {
+        note[0] = 0x80 + availableChannel;
+    }
+    note[1] = theNote->midiNote();
+    note[2] = velocity;
+    const int onOrOff = setOn ? 1 : 0;
+    buffer.addEvent(note, 3, onOrOff);
+}
+
 class PatternModel::Private {
 public:
     Private(PatternModel *q) : q(q) {
@@ -508,9 +521,9 @@ public:
     // nb: this documents intent, and is used by the Same As Previous probability option
     bool mostRecentProbabilityResult{true};
 
-    // These contain the generated information per step, stored per-pisition (that
-    // is, the key of each entry is rot * width + column). The position must be cleared
-    // on any change made to the step (which should always be done through stetNote and
+    // These contain the generated information per step, stored per-position (that
+    // is, the key of each entry is row * width + column). The position must be cleared
+    // on any change made to the step (which should always be done through stepNote and
     // setMetadata which both ensure that this happens). If they are not cleared on all
     // changes, what ends up sent to SyncTimer during playback will not match what the
     // model contains. So, remember your pattern hygiene and clean your buffers!
@@ -524,6 +537,174 @@ public:
             }
             return stepData[position];
         }
+    }
+
+    void fillStepData(StepData &stepData, const bool &lockMidiChannelToClipIndex, const qint64 &nextPosition, bool &invalidateNoteBuffersImmediately, const qint64 &noteDuration, const int &schedulingIncrement) {
+        static const QLatin1String velocityString{"velocity"};
+        static const QLatin1String delayString{"delay"};
+        static const QLatin1String durationString{"duration"};
+        static const QLatin1String probabilityString{"probability"};
+        static const QLatin1String ratchetStyleString{"ratchet-style"};
+        static const QLatin1String ratchetCountString{"ratchet-count"};
+        static const QLatin1String ratchetProbabilityString{"ratchet-probability"};
+        static const QLatin1String nextStepString{"next-step"};
+        auto subnoteSender = [this, lockMidiChannelToClipIndex, nextPosition, &invalidateNoteBuffersImmediately, noteDuration, schedulingIncrement, &stepData](const Note* subnote, const QVariantHash &metaHash, const qint64 &delay, StepData &noteStepData, int subnoteIndex) {
+            bool sendNotes{true};
+            // qDebug() << Q_FUNC_INFO << "Preparing note" << subnote << "at index" << subnoteIndex << "with meta hash" << metaHash;
+            const int probability{metaHash.value(probabilityString, 0).toInt()};
+            if (probability > 0) {
+                invalidateNoteBuffersImmediately = true;
+                if (probability != 10) { // 10 is the Same As Previous option (meaning simply use whatever the most recent probability result was for this pattern)
+                    mostRecentProbabilityResult = noteStepData.getOrCreateProbabilitySequence(subnoteIndex, probability).nextStep();
+                }
+                sendNotes = mostRecentProbabilityResult;
+            }
+            if (sendNotes) {
+                int nextStep{metaHash.value(nextStepString, 0).toInt()};
+                if (nextStep > 0) {
+                    // Technically the steps are 0-indexed, but this makes displaying it a little easier, and it's inexpensive here anyway
+                    --nextStep;
+                    // Reset this clip's playfield offset by the distance from this clip to the clip we are asking to play
+                    // next (or, rather, move it forward to the end of the pattern, and then set it to the next step)
+                    nextStep = (patternLength - nextPosition + nextStep) * noteDuration;
+                    playfieldManager->setClipPlaystate(song, sketchpadTrack, clipIndex, PlayfieldManager::PlayingState, PlayfieldManager::CurrentPosition, playfieldManager->clipOffset(song, sketchpadTrack, clipIndex) + nextStep);
+                }
+                int velocity{metaHash.value(velocityString, 64).toInt()};
+                if (velocity == 0) {
+                    velocity = 64;
+                } else if (velocity == -1) {
+                    sendNotes = false;
+                }
+                if (sendNotes) {
+                    int duration{metaHash.value(durationString, 0).toInt() * patternTickToSyncTimerTick};
+                    if (duration == 0) {
+                        // If the duration is 0, duration should be the size of a step
+                        duration = noteDuration;
+                    } else if (duration < 0) {
+                        // If the duration is less than 0, and we have a default note duration given, use that, otherwise use the step length
+                        duration = (defaultNoteDuration + 1) < PatternModelDefaults::defaultNoteDuration ? noteDuration : defaultNoteDuration * patternTickToSyncTimerTick;
+                    }
+                    const int ratchetCount{metaHash.value(ratchetCountString, 0).toInt()};
+                    if (ratchetCount > 0) {
+                        const int ratchetStyle{metaHash.value(ratchetStyleString, 0).toInt()};
+                        qint64 ratchetDelay{qMax(qint64(1), noteDuration / ratchetCount)};
+                        qint64 ratchetDuration{duration};
+                        qint64 ratchetLastDuration{duration};
+                        bool reuseChannel{false}; // This only works in choke modes, and will fail with overlap modes
+                        switch(ratchetStyle) {
+                            case 3: // Split Length, Choke
+                                ratchetDelay = qMax(1, duration / ratchetCount);
+                                ratchetDuration = ratchetDelay;
+                                reuseChannel = true;
+                                break;
+                            case 2: // Split Length, Overlap
+                                ratchetDelay = qMax(1, duration / ratchetCount);
+                                break;
+                            case 1: // Split Step, Choke
+                                ratchetDuration = ratchetDelay;
+                                reuseChannel = true;
+                                break;
+                            case 0: // Split Step, Overlap
+                            default:
+                                // These are the default values, so just pass this through
+                                break;
+                        }
+                        const int ratchetProbability{metaHash.value(ratchetProbabilityString, 100).toInt()};
+                        if (ratchetProbability < 100) {
+                            invalidateNoteBuffersImmediately = true;
+                        }
+                        int avaialbleChannel = syncTimer->nextAvailableChannel(sketchpadTrack, quint64(schedulingIncrement));
+                        for (int ratchetIndex = 0; ratchetIndex < ratchetCount; ++ratchetIndex) {
+                            sendNotes = true;
+                            if (ratchetProbability < 100) {
+                                if (QRandomGenerator::global()->generateDouble() * 100 < ratchetProbability) {
+                                    sendNotes = false;
+                                }
+                            }
+                            if (sendNotes) {
+                                if (ratchetIndex + 1 == ratchetCount) {
+                                    ratchetDuration = ratchetLastDuration;
+                                }
+                                addNoteToBuffer(stepData.getOrCreateBuffer(delay + (ratchetDelay * ratchetIndex)), subnote, velocity, true, avaialbleChannel);
+                                addNoteToBuffer(stepData.getOrCreateBuffer(delay + (ratchetDelay * ratchetIndex) + ratchetDuration), subnote, velocity, false, avaialbleChannel);
+                                if (reuseChannel == false && ratchetIndex + 1 < ratchetCount) {
+                                    avaialbleChannel = syncTimer->nextAvailableChannel(sketchpadTrack, quint64(schedulingIncrement));
+                                }
+                            }
+                        }
+                    } else {
+                        const int avaialbleChannel = lockMidiChannelToClipIndex ? clipIndex : syncTimer->nextAvailableChannel(sketchpadTrack, quint64(schedulingIncrement));
+                        addNoteToBuffer(stepData.getOrCreateBuffer(delay), subnote, velocity, true, avaialbleChannel);
+                        addNoteToBuffer(stepData.getOrCreateBuffer(delay + duration), subnote, velocity, false, avaialbleChannel);
+                    }
+                }
+            }
+        };
+        // Do a lookup for any notes after this position that want playing before their step (currently
+        // just looking ahead two steps, accounting for delay and swing both adjusting one step backwards)
+        for (int subsequentStepIndex = 0; subsequentStepIndex < lookaheadAmount; ++subsequentStepIndex) {
+            const int ourPosition = (nextPosition + subsequentStepIndex) % patternLength;
+            StepData &subsequentStep = getOrCreateStepData(ourPosition);
+            // Swing is applied to every even step as counted by humans (so every uneven step as counted by our indices)
+            subsequentStep.updateSwing(noteDuration, ourPosition % 2 == 0 ? 50 : (performanceActive && performanceClone ? performanceClone->d->swing : swing));
+            const int row = (ourPosition / width) % availableBars;
+            const int column = ourPosition - (row * width);
+            const Note *note = (performanceActive && performanceClone) ? qobject_cast<const Note*>(performanceClone->getNote(row + bankOffset, column)) : qobject_cast<const Note*>(q->getNote(row + bankOffset, column));
+            if (note) {
+                const QVariantList &subnotes = note->subnotes();
+                const QVariantList &meta = (performanceActive && performanceClone) ? performanceClone->getMetadata(row + bankOffset, column).toList() : q->getMetadata(row + bankOffset, column).toList();
+                // The first step (that is, the "current" step) we want to treat to all the things
+                if (subsequentStepIndex == 0) {
+                    // qDebug() << Q_FUNC_INFO << "Step: Position" << ourPosition;
+                    if (meta.count() == subnotes.count()) {
+                        for (int subnoteIndex = 0; subnoteIndex < subnotes.count(); ++subnoteIndex) {
+                            const Note *subnote = subnotes[subnoteIndex].value<Note*>();
+                            const QVariantHash &metaHash = meta[subnoteIndex].toHash();
+                            if (subnote) {
+                                const qint64 delay{(metaHash.value(delayString, 0).toInt() * patternTickToSyncTimerTick) + subsequentStep.swingOffset};
+                                // Only handle if the delay is zero or in the future (since if it's in
+                                // the past, we'd be handling it twice, and at the wrong time)
+                                // qDebug() << Q_FUNC_INFO << "Delay is" << delay;
+                                if (delay >= 0) {
+                                    subnoteSender(subnote, metaHash, delay, subsequentStep, subnoteIndex);
+                                }
+                            }
+                        }
+                    } else if (subnotes.count() > 0) {
+                        for (const QVariant &subnoteVar : subnotes) {
+                            const Note *subnote = subnoteVar.value<Note*>();
+                            if (subnote && subsequentStep.swingOffset >= 0) {
+                                const int avaialbleChannel = syncTimer->nextAvailableChannel(sketchpadTrack, quint64(schedulingIncrement));
+                                addNoteToBuffer(stepData.getOrCreateBuffer(subsequentStep.swingOffset), subnote, 64, true, avaialbleChannel);
+                                addNoteToBuffer(stepData.getOrCreateBuffer(subsequentStep.swingOffset + noteDuration), subnote, 64, false, avaialbleChannel);
+                            }
+                        }
+                    } else if (subsequentStep.swingOffset >= 0) {
+                        const int avaialbleChannel = syncTimer->nextAvailableChannel(sketchpadTrack, quint64(schedulingIncrement));
+                        addNoteToBuffer(stepData.getOrCreateBuffer(subsequentStep.swingOffset), note, 64, true, avaialbleChannel);
+                        addNoteToBuffer(stepData.getOrCreateBuffer(subsequentStep.swingOffset + noteDuration), note, 64, false, avaialbleChannel);
+                    }
+                // The lookahead notes only need handling if, and only if, there is matching meta (or negative swing), and the delay+swing is negative (that meaning, the position of the entry is before that step)
+                } else {
+                    // qDebug() << Q_FUNC_INFO << "Step: Subsequent" << subsequentStepIndex;
+                    if (meta.count() == subnotes.count() || subsequentStep.swingOffset < 0) {
+                        const qint64 positionAdjustment{subsequentStepIndex * noteDuration};
+                        for (int subnoteIndex = 0; subnoteIndex < subnotes.count(); ++subnoteIndex) {
+                            const Note *subnote = subnotes[subnoteIndex].value<Note*>();
+                            const QVariantHash &metaHash = meta[subnoteIndex].toHash();
+                            if (subnote) {
+                                const qint64 delay{(metaHash.value(delayString, 0).toInt() * patternTickToSyncTimerTick) + subsequentStep.swingOffset};
+                                // qDebug() << Q_FUNC_INFO << "Delay is" << delay;
+                                if (delay < 0) {
+                                    subnoteSender(subnote, metaHash, positionAdjustment +  delay, subsequentStep, subnoteIndex);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        stepData.isValid = true;
     }
 
     // Handy variable in case we want to adjust how far ahead we're looking sometime
@@ -2140,19 +2321,6 @@ bool PatternModel::isPlaying() const
     return d->isPlaying;
 }
 
-static inline void addNoteToBuffer(juce::MidiBuffer &buffer, const Note *theNote, const unsigned char &velocity, const bool &setOn, const int &availableChannel) {
-    unsigned char note[3];
-    if (setOn) {
-        note[0] = 0x90 + availableChannel;
-    } else {
-        note[0] = 0x80 + availableChannel;
-    }
-    note[1] = theNote->midiNote();
-    note[2] = velocity;
-    const int onOrOff = setOn ? 1 : 0;
-    buffer.addEvent(note, 3, onOrOff);
-}
-
 inline void PatternModel::Private::noteLengthDetails(int stepLength, qint64 &nextPosition, bool &relevantToUs, qint64 &noteDuration)
 {
     if (nextPosition % stepLength == 0) {
@@ -2164,16 +2332,37 @@ inline void PatternModel::Private::noteLengthDetails(int stepLength, qint64 &nex
     }
 }
 
+void PatternModel::playStep(const int& step)
+{
+    if (-1 < step && step < (width() * height())) {
+        StepData &stepData = d->getOrCreateStepData(step + (d->bankOffset * d->width));
+        if (stepData.isValid == false) {
+            const ZynthboxBasics::Track targetTrack{MidiRouter::instance()->sketchpadTrackTargetTrack(ZynthboxBasics::Track(d->sketchpadTrack))};
+            const bool lockMidiChannelToClipIndex{targetTrack == ZynthboxBasics::Track(d->sketchpadTrack)
+                ? d->zlSyncManager->samplePickingStyle == ClipAudioSource::SamePickingStyle
+                : MidiRouter::instance()->sketchpadTrackSlotPickingStyle(targetTrack) == ClipAudioSource::SamePickingStyle ? true : false
+            };
+            qint64 noteDuration{0};
+            bool relevantToUs{false};
+            qint64 nextPosition{qint64(step * d->stepLength)};
+            d->noteLengthDetails(d->stepLength, nextPosition, relevantToUs, noteDuration);
+            const int schedulingIncrement{0};
+            // This is going to be ignored, since we will always invalidate after test firing a step
+            bool invalidateNoteBuffersImmediately{false};
+            d->fillStepData(stepData, lockMidiChannelToClipIndex, nextPosition, invalidateNoteBuffersImmediately, noteDuration, schedulingIncrement);
+        }
+        QHash<int, juce::MidiBuffer>::const_iterator position;
+        for (position = stepData.positionBuffers.constBegin(); position != stepData.positionBuffers.constEnd(); ++position) {
+            d->syncTimer->scheduleControllerMidiBuffer(position.value(), quint64(qMax(0, position.key())), d->sketchpadTrack);
+        }
+        const int row = (step / d->width) % d->availableBars;
+        const int column = step - (row * d->width);
+        d->invalidateNotes(row, column);
+    }
+}
+
 void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progressionLength) const
 {
-    static const QLatin1String velocityString{"velocity"};
-    static const QLatin1String delayString{"delay"};
-    static const QLatin1String durationString{"duration"};
-    static const QLatin1String probabilityString{"probability"};
-    static const QLatin1String ratchetStyleString{"ratchet-style"};
-    static const QLatin1String ratchetCountString{"ratchet-count"};
-    static const QLatin1String ratchetProbabilityString{"ratchet-probability"};
-    static const QLatin1String nextStepString{"next-step"};
     if (!d->zlSyncManager->channelMuted && isPlaying()) {
         if (d->updateMostRecentStartTimestamp) {
             d->updateMostRecentStartTimestamp = false;
@@ -2208,163 +2397,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
 
                 StepData &stepData = d->getOrCreateStepData(nextPosition + (d->bankOffset * d->width));
                 if (stepData.isValid == false) {
-                    auto subnoteSender = [this, lockMidiChannelToClipIndex, nextPosition, &invalidateNoteBuffersImmediately, noteDuration, schedulingIncrement, &stepData](const Note* subnote, const QVariantHash &metaHash, const qint64 &delay, StepData &noteStepData, int subnoteIndex) {
-                        bool sendNotes{true};
-                        // qDebug() << Q_FUNC_INFO << "Preparing note" << subnote << "at index" << subnoteIndex << "with meta hash" << metaHash;
-                        const int probability{metaHash.value(probabilityString, 0).toInt()};
-                        if (probability > 0) {
-                            invalidateNoteBuffersImmediately = true;
-                            if (probability != 10) { // 10 is the Same As Previous option (meaning simply use whatever the most recent probability result was for this pattern)
-                                d->mostRecentProbabilityResult = noteStepData.getOrCreateProbabilitySequence(subnoteIndex, probability).nextStep();
-                            }
-                            sendNotes = d->mostRecentProbabilityResult;
-                        }
-                        if (sendNotes) {
-                            int nextStep{metaHash.value(nextStepString, 0).toInt()};
-                            if (nextStep > 0) {
-                                // Technically the steps are 0-indexed, but this makes displaying it a little easier, and it's inexpensive here anyway
-                                --nextStep;
-                                // Reset this clip's playfield offset by the distance from this clip to the clip we are asking to play
-                                // next (or, rather, move it forward to the end of the pattern, and then set it to the next step)
-                                nextStep = (d->patternLength - nextPosition + nextStep) * noteDuration;
-                                d->playfieldManager->setClipPlaystate(d->song, d->sketchpadTrack, d->clipIndex, PlayfieldManager::PlayingState, PlayfieldManager::CurrentPosition, d->playfieldManager->clipOffset(d->song, d->sketchpadTrack, d->clipIndex) + nextStep);
-                            }
-                            int velocity{metaHash.value(velocityString, 64).toInt()};
-                            if (velocity == 0) {
-                                velocity = 64;
-                            } else if (velocity == -1) {
-                                sendNotes = false;
-                            }
-                            if (sendNotes) {
-                                int duration{metaHash.value(durationString, 0).toInt() * d->patternTickToSyncTimerTick};
-                                if (duration == 0) {
-                                    // If the duration is 0, duration should be the size of a step
-                                    duration = noteDuration;
-                                } else if (duration < 0) {
-                                    // If the duration is less than 0, and we have a default note duration given, use that, otherwise use the step length
-                                    duration = (d->defaultNoteDuration + 1) < PatternModelDefaults::defaultNoteDuration ? noteDuration : d->defaultNoteDuration * d->patternTickToSyncTimerTick;
-                                }
-                                const int ratchetCount{metaHash.value(ratchetCountString, 0).toInt()};
-                                if (ratchetCount > 0) {
-                                    const int ratchetStyle{metaHash.value(ratchetStyleString, 0).toInt()};
-                                    qint64 ratchetDelay{qMax(qint64(1), noteDuration / ratchetCount)};
-                                    qint64 ratchetDuration{duration};
-                                    qint64 ratchetLastDuration{duration};
-                                    bool reuseChannel{false}; // This only works in choke modes, and will fail with overlap modes
-                                    switch(ratchetStyle) {
-                                        case 3: // Split Length, Choke
-                                            ratchetDelay = qMax(1, duration / ratchetCount);
-                                            ratchetDuration = ratchetDelay;
-                                            reuseChannel = true;
-                                            break;
-                                        case 2: // Split Length, Overlap
-                                            ratchetDelay = qMax(1, duration / ratchetCount);
-                                            break;
-                                        case 1: // Split Step, Choke
-                                            ratchetDuration = ratchetDelay;
-                                            reuseChannel = true;
-                                            break;
-                                        case 0: // Split Step, Overlap
-                                        default:
-                                            // These are the default values, so just pass this through
-                                            break;
-                                    }
-                                    const int ratchetProbability{metaHash.value(ratchetProbabilityString, 100).toInt()};
-                                    if (ratchetProbability < 100) {
-                                        invalidateNoteBuffersImmediately = true;
-                                    }
-                                    int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->sketchpadTrack, quint64(schedulingIncrement));
-                                    for (int ratchetIndex = 0; ratchetIndex < ratchetCount; ++ratchetIndex) {
-                                        sendNotes = true;
-                                        if (ratchetProbability < 100) {
-                                            if (QRandomGenerator::global()->generateDouble() * 100 < ratchetProbability) {
-                                                sendNotes = false;
-                                            }
-                                        }
-                                        if (sendNotes) {
-                                            if (ratchetIndex + 1 == ratchetCount) {
-                                                ratchetDuration = ratchetLastDuration;
-                                            }
-                                            addNoteToBuffer(stepData.getOrCreateBuffer(delay + (ratchetDelay * ratchetIndex)), subnote, velocity, true, avaialbleChannel);
-                                            addNoteToBuffer(stepData.getOrCreateBuffer(delay + (ratchetDelay * ratchetIndex) + ratchetDuration), subnote, velocity, false, avaialbleChannel);
-                                            if (reuseChannel == false && ratchetIndex + 1 < ratchetCount) {
-                                                avaialbleChannel = d->syncTimer->nextAvailableChannel(d->sketchpadTrack, quint64(schedulingIncrement));
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    const int avaialbleChannel = lockMidiChannelToClipIndex ? d->clipIndex : d->syncTimer->nextAvailableChannel(d->sketchpadTrack, quint64(schedulingIncrement));
-                                    addNoteToBuffer(stepData.getOrCreateBuffer(delay), subnote, velocity, true, avaialbleChannel);
-                                    addNoteToBuffer(stepData.getOrCreateBuffer(delay + duration), subnote, velocity, false, avaialbleChannel);
-                                }
-                            }
-                        }
-                    };
-                    // Do a lookup for any notes after this position that want playing before their step (currently
-                    // just looking ahead two steps, accounting for delay and swing both adjusting one step backwards)
-                    for (int subsequentStepIndex = 0; subsequentStepIndex < d->lookaheadAmount; ++subsequentStepIndex) {
-                        const int ourPosition = (nextPosition + subsequentStepIndex) % d->patternLength;
-                        StepData &subsequentStep = d->getOrCreateStepData(ourPosition);
-                        // Swing is applied to every even step as counted by humans (so every uneven step as counted by our indices)
-                        subsequentStep.updateSwing(noteDuration, ourPosition % 2 == 0 ? 50 : (d->performanceActive && d->performanceClone ? d->performanceClone->d->swing : d->swing));
-                        const int row = (ourPosition / d->width) % d->availableBars;
-                        const int column = ourPosition - (row * d->width);
-                        const Note *note = (d->performanceActive && d->performanceClone) ? qobject_cast<const Note*>(d->performanceClone->getNote(row + d->bankOffset, column)) : qobject_cast<const Note*>(getNote(row + d->bankOffset, column));
-                        if (note) {
-                            const QVariantList &subnotes = note->subnotes();
-                            const QVariantList &meta = (d->performanceActive && d->performanceClone) ? d->performanceClone->getMetadata(row + d->bankOffset, column).toList() : getMetadata(row + d->bankOffset, column).toList();
-                            // The first step (that is, the "current" step) we want to treat to all the things
-                            if (subsequentStepIndex == 0) {
-                                // qDebug() << Q_FUNC_INFO << "Step: Position" << ourPosition;
-                                if (meta.count() == subnotes.count()) {
-                                    for (int subnoteIndex = 0; subnoteIndex < subnotes.count(); ++subnoteIndex) {
-                                        const Note *subnote = subnotes[subnoteIndex].value<Note*>();
-                                        const QVariantHash &metaHash = meta[subnoteIndex].toHash();
-                                        if (subnote) {
-                                            const qint64 delay{(metaHash.value(delayString, 0).toInt() * d->patternTickToSyncTimerTick) + subsequentStep.swingOffset};
-                                            // Only handle if the delay is zero or in the future (since if it's in
-                                            // the past, we'd be handling it twice, and at the wrong time)
-                                            // qDebug() << Q_FUNC_INFO << "Delay is" << delay;
-                                            if (delay >= 0) {
-                                                subnoteSender(subnote, metaHash, delay, subsequentStep, subnoteIndex);
-                                            }
-                                        }
-                                    }
-                                } else if (subnotes.count() > 0) {
-                                    for (const QVariant &subnoteVar : subnotes) {
-                                        const Note *subnote = subnoteVar.value<Note*>();
-                                        if (subnote && subsequentStep.swingOffset >= 0) {
-                                            const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->sketchpadTrack, quint64(schedulingIncrement));
-                                            addNoteToBuffer(stepData.getOrCreateBuffer(subsequentStep.swingOffset), subnote, 64, true, avaialbleChannel);
-                                            addNoteToBuffer(stepData.getOrCreateBuffer(subsequentStep.swingOffset + noteDuration), subnote, 64, false, avaialbleChannel);
-                                        }
-                                    }
-                                } else if (subsequentStep.swingOffset >= 0) {
-                                    const int avaialbleChannel = d->syncTimer->nextAvailableChannel(d->sketchpadTrack, quint64(schedulingIncrement));
-                                    addNoteToBuffer(stepData.getOrCreateBuffer(subsequentStep.swingOffset), note, 64, true, avaialbleChannel);
-                                    addNoteToBuffer(stepData.getOrCreateBuffer(subsequentStep.swingOffset + noteDuration), note, 64, false, avaialbleChannel);
-                                }
-                            // The lookahead notes only need handling if, and only if, there is matching meta (or negative swing), and the delay+swing is negative (that meaning, the position of the entry is before that step)
-                            } else {
-                                // qDebug() << Q_FUNC_INFO << "Step: Subsequent" << subsequentStepIndex;
-                                if (meta.count() == subnotes.count() || subsequentStep.swingOffset < 0) {
-                                    const qint64 positionAdjustment{subsequentStepIndex * noteDuration};
-                                    for (int subnoteIndex = 0; subnoteIndex < subnotes.count(); ++subnoteIndex) {
-                                        const Note *subnote = subnotes[subnoteIndex].value<Note*>();
-                                        const QVariantHash &metaHash = meta[subnoteIndex].toHash();
-                                        if (subnote) {
-                                            const qint64 delay{(metaHash.value(delayString, 0).toInt() * d->patternTickToSyncTimerTick) + subsequentStep.swingOffset};
-                                            // qDebug() << Q_FUNC_INFO << "Delay is" << delay;
-                                            if (delay < 0) {
-                                                subnoteSender(subnote, metaHash, positionAdjustment +  delay, subsequentStep, subnoteIndex);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    stepData.isValid = true;
+                    d->fillStepData(stepData, lockMidiChannelToClipIndex, nextPosition, invalidateNoteBuffersImmediately, noteDuration, schedulingIncrement);
                 }
                 switch (d->noteDestination) {
                     case PatternModel::SampleLoopedDestination:

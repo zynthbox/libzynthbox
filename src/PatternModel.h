@@ -443,6 +443,13 @@ public:
     Q_INVOKABLE void setMetadata(int row, int column, QVariant metadata) override;
 
     /**
+     * \brief Send the data for the given step to SyncTimer
+     * Useful for performing test plays of a step's data
+     * @param step The index of the step you wish to play
+     */
+    Q_INVOKABLE void playStep(const int &step);
+
+    /**
      * \brief Move the steps between firstStep and lastStep by the given amount, shifting overflow to the opposite end of the range
      * @param firstStep The first step of the range of steps to nudge
      * @param lastStep the last step of the range of steps to nudge
