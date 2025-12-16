@@ -831,8 +831,8 @@ void SequenceModel::disconnectSequencePlayback()
 
 void SequenceModel::stopSequencePlayback()
 {
+    disconnectSequencePlayback();
     if (d->isPlaying) {
-        disconnectSequencePlayback();
         playGridManager()->stopMetronome();
     }
 }

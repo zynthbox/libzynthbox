@@ -336,6 +336,10 @@ public:
                                 noteActivations[note] = 0;
                             }
                             activeNotesUpdater->start();
+                            // Also use this to reset any patterns to their start state (for example if you've tested steps with probability on them)
+                            for (SequenceModel *sequence : qAsConst(sequenceModels)) {
+                                sequence->stopSequencePlayback();
+                            }
                         }
                     } else if (0xDF < byte1 && byte1 < 0xF0) {
                         const int midiChannel = (byte1 & 0xF);
