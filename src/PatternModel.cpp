@@ -543,6 +543,7 @@ public:
         static const QLatin1String velocityString{"velocity"};
         static const QLatin1String delayString{"delay"};
         static const QLatin1String durationString{"duration"};
+        static const QLatin1String enabledString{"enabled"};
         static const QLatin1String probabilityString{"probability"};
         static const QLatin1String ratchetStyleString{"ratchet-style"};
         static const QLatin1String ratchetCountString{"ratchet-count"};
@@ -650,7 +651,9 @@ public:
             const int row = (ourPosition / width) % availableBars;
             const int column = ourPosition - (row * width);
             const Note *note = (performanceActive && performanceClone) ? qobject_cast<const Note*>(performanceClone->getNote(row + bankOffset, column)) : qobject_cast<const Note*>(q->getNote(row + bankOffset, column));
-            if (note) {
+            const QVariant enabledVariant = (performanceActive && performanceClone) ? performanceClone->getKeyedDataValue(row + bankOffset, column, enabledString) : q->getKeyedDataValue(row + bankOffset, column, enabledString);
+            const bool stepEnabled = enabledVariant.isValid() ? enabledVariant.toBool() : true;
+            if (stepEnabled && note) {
                 const QVariantList &subnotes = note->subnotes();
                 const QVariantList &meta = (performanceActive && performanceClone) ? performanceClone->getMetadata(row + bankOffset, column).toList() : q->getMetadata(row + bankOffset, column).toList();
                 // The first step (that is, the "current" step) we want to treat to all the things
@@ -1242,7 +1245,7 @@ void PatternModel::setSubnoteMetadata(int row, int column, int subnote, const QS
             if (d->stepData.contains(stepPosition)) {
                 d->stepData[stepPosition].invalidateProbabilityPosition(subnote);
             }
-        } else if (key == "delay") {
+        } else if (key == "delay" || key == "enabled") {
             d->invalidatePosition();
         }
         setMetadata(row, column, metadata);
