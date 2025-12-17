@@ -199,7 +199,8 @@ QVariantMap NotesModel::roles() const
     static const QVariantMap roles{
         {"note", NoteRole},
         {"metadata", MetadataRole},
-        {"rowModel", RowModelRole}
+        {"rowModel", RowModelRole},
+        {"keyedData", KeyedDataRole}
     };
     return roles;
 }
@@ -209,7 +210,8 @@ QHash<int, QByteArray> NotesModel::roleNames() const
     static const QHash<int, QByteArray> roles{
         {NoteRole, "note"},
         {MetadataRole, "metadata"},
-        {RowModelRole, "rowModel"}
+        {RowModelRole, "rowModel"},
+        {KeyedDataRole, "keyedData"}
     };
     return roles;
 }
@@ -259,6 +261,9 @@ QVariant NotesModel::data(const QModelIndex& index, int role) const
                 break;
             case MetadataRole:
                 result = entry.metaData;
+                break;
+            case KeyedDataRole:
+                result = entry.keyedData;
                 break;
             case RowModelRole:
             {
@@ -446,7 +451,7 @@ void NotesModel::setMetadata(int row, int column, QVariant metadata)
     }
 }
 
-QVariant NotesModel::getKeyedMetadata(int row, int column, const QString &key) const
+QVariant NotesModel::getKeyedDataValue(int row, int column, const QString &key) const
 {
     QVariant data;
     if (!d->parentModel) {
@@ -477,7 +482,7 @@ QVariantHash NotesModel::getKeyedData(int row, int column) const
     return data;
 }
 
-void NotesModel::setKeyedMetadata(int row, int column, const QString &key, const QVariant &metadata)
+void NotesModel::setKeyedDataValue(int row, int column, const QString &key, const QVariant &metadata)
 {
     static const QLatin1String jsvalueType{"QJSValue"};
     if (!d->parentModel) {
@@ -503,7 +508,6 @@ void NotesModel::setKeyedMetadata(int row, int column, const QString &key, const
         }
     }
 }
-
 
 void NotesModel::setRowData(int row, QVariantList notes, QVariantList metadata, QVariantList keyedData)
 {

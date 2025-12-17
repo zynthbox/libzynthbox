@@ -46,6 +46,7 @@ public:
         NoteRole = Qt::UserRole + 1,
         MetadataRole,
         RowModelRole,
+        KeyedDataRole,
     };
     QVariantMap roles() const;
     QHash<int, QByteArray> roleNames() const override;
@@ -149,7 +150,7 @@ public:
      * @param key The name for the piece of metadata
      * @param value The piece of metadata you wish to set (pass an empty string to unset the key)
      */
-    Q_INVOKABLE void setKeyedMetadata(int row, int column, const QString& key, const QVariant& metadata);
+    Q_INVOKABLE void setKeyedDataValue(int row, int column, const QString& key, const QVariant& metadata);
     /**
      * \brief Get a piece of named metadata for the given position
      * @note Not valid on child models (see parentModel())
@@ -158,7 +159,7 @@ public:
      * @parm key The name of the piece of metadata
      * @return A QVariant, which is invalid if the key doesn't exist, and otherwise contains the value
      */
-    Q_INVOKABLE QVariant getKeyedMetadata(int row, int column, const QString& key) const;
+    Q_INVOKABLE QVariant getKeyedDataValue(int row, int column, const QString& key) const;
     /**
      * \brief Get all the hash containing all the keyed data for the given position
      * @note Not valid on child models (see parentModel())
