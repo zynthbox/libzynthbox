@@ -459,6 +459,33 @@ public:
     Q_INVOKABLE void nudge(int firstStep, int lastStep, int amount, const QVariantList &noteFilter = {});
 
     /**
+     * \brief Transpose the notes of the given step (or a specific subnote on that step) by the given amount, according to the pattern's key/scale
+     * @note If you attempt to transpose past the ends of the note scale. For example, if you have a C-1 and a C4, and attempt to
+     *       transpose it down, both notes will remain where they are. If conversely you have a C-1 and a C#-1, and you attempt to
+     *       transpose only the C#-1 down, that would (see note below) result in the new note ending up outside the scale, and so
+     *       we will refuse that operation and you will simply end up with the notes staying where they were.
+     * @note Subnote-only transposition will skip existing notes (you can only have one note with the same note value in your pattern)
+     *       For example, if you have a C4 and a C#4 in your chromatic-scaled pattern, and you attempt to transpose the C4 upward by one
+     *       step, it will become a D4 (as opposed to a second C#4).
+     * @note If you attempt to transpose by a higher amount than 1 step, we will transpose by as much as can be done, while still
+     *       keeping the integrity of the note layout intact (so if we are asked to transpose by 4 steps, but we can only transpose by
+     *       2 while still keeping the other rules we've set out, we will transpose by 2 steps).
+     * @note If you want to transpose a number of subnotes, but not all, you will need to do them one by one. However, you should do them
+     *       in the order they need to be moved (that is, if moving up, move the highest first, and if moving down move the lowest first).
+     *       This will ensure that the notes are left in the correct location.
+     *       TODO This should have a helper function which just does this
+     * @param row The row of the position to transpose
+     * @param column The column of the position to transpose
+     * @param transposeAmount The amount in scale steps to transpose, negative for down, positive for up (so if your pattern is
+     *        chromatic, the notes are simply transposed by semitones, but if it is another scale, the notes will be moved along the scale)
+     * @param subNoteIndex Optionally the subnote that you wish to transpose (leaving all other subnotes alone). -1 will result in the
+     *        entire step being transposed together
+     * @return This will be the subnote index of the first note which was transposed. This will be useful mainly when moving a specific
+     *        subnote (as otherwise this will always be subnote 0)
+     */
+    Q_INVOKABLE int transposeStep(const int &row, const int &column, const int &transposeAmount, const int &subNoteIndex = -1);
+
+    /**
      * \brief Resets all the model's content-related properties to their defaults
      *
      * The properties which are reset by this function are:

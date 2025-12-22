@@ -1377,6 +1377,82 @@ void PatternModel::nudge(int firstStep, int lastStep, int amount, const QVariant
     }
 }
 
+int PatternModel::transposeStep(const int& row, const int& column, const int& transposeAmount, const int& subNoteIndex)
+{
+    int firstTransposedSubnoteIndex{0};
+    startLongOperation();
+    if (transposeAmount < -1) {
+        // Then we're transposing down by more than one step, do this recursively
+        transposeStep(row, column, transposeAmount + 1, subNoteIndex);
+    } else if (1 < transposeAmount) {
+        // Then we're transposing up by more than one step, do this recursively
+        transposeStep(row, column, transposeAmount - 1, subNoteIndex);
+    } else {
+        Note *theNote{qobject_cast<Note*>(getNote(row, column))};
+        if (theNote) {
+            QVariantList theSubnotes = theNote->subnotes();
+            // If there isn't a note, then there's nothing to be done
+            if (-1 < subNoteIndex && subNoteIndex < theSubnotes.count()) {
+                // For a single subnote, we need to take a bit of special care (so we don't end up with notes on top of each other)
+                // Pull out the old data first, so we hold it all while working...
+                Note *oldSubnote = theSubnotes.at(subNoteIndex).value<Note*>();
+                QVariantHash oldSubnoteMetadata = subnoteMetadata(row, column, subNoteIndex, QString{}).toHash();
+                QVariantList theMetadata = getMetadata(row, column).toList();
+                Note *newSubnote{nullptr};
+                int actualTransposeAmount{transposeAmount};
+                const int lowestOnScaleNote{KeyScales::instance()->onScaleNote(0, d->scale, d->pitch, d->octave)};
+                const int highestOnScaleNote{KeyScales::instance()->onScaleNote(127, d->scale, d->pitch, d->octave)};
+                while (true) {
+                    // Now, make sure that if the new note has the same note value as another nearby note, that we keep trying to transpose until either we're good, *or* we hit an out-of-range note value, and then bail out with the original position as the new position
+                    newSubnote = qobject_cast<Note*>(PlayGridManager::instance()->getNote(KeyScales::instance()->transposeNote(oldSubnote->midiNote(), actualTransposeAmount, d->scale, d->pitch, d->octave), oldSubnote->sketchpadTrack()));
+                    // Test to see whether there's an existing entry which the same note value as the new note value that we would like to have...
+                    int clashingIndex = subnoteIndex(row, column, newSubnote->midiNote());
+                    if (clashingIndex == -1) {
+                        // Success! No clashing notes, go right ahead and insert this one
+                        break;
+                    } else {
+                        // Transpose by one more step (since the function recurses to perform its job, we can safely assume this will be either +1 or -1)
+                        actualTransposeAmount += transposeAmount;
+                        if ((transposeAmount == -1 && newSubnote->midiNote() <= lowestOnScaleNote) || (transposeAmount == 1 && highestOnScaleNote <= newSubnote->midiNote())) {
+                            // Oh dear, there's a clashing subnote, and we're right at the end of the scale, that's not amazing, we'll have to bail out and not perform the transposition...
+                            newSubnote = nullptr;
+                            break;
+                        }
+                    }
+                }
+                if (newSubnote) {
+                    // Now remove the subnote, and insert our transposed note into its new home
+                    removeSubnote(row, column, subNoteIndex);
+                    firstTransposedSubnoteIndex = insertSubnoteSorted(row, column, newSubnote);
+                    // Ensure that the metadata matches what we had - either simply set it all back again if the index hasn't changed...
+                    if (subNoteIndex != firstTransposedSubnoteIndex) {
+                        // ...or move the old data into the new position if the index has, in fact, changed
+                        theMetadata.move(subNoteIndex, firstTransposedSubnoteIndex);
+                    }
+                    // Directly doing this, as we're manually handling the rest
+                    NotesModel::setMetadata(row, column, theMetadata);
+                } else {
+                    // If there isn't a subnote to insert, it means we bailed all the way out
+                    firstTransposedSubnoteIndex = subNoteIndex;
+                }
+            } else {
+                // When transposing everything, we only need to tests to ensure that the notes aren't right at the end of our scale (that is, that we are actually ok to move them)
+                QVariantList newSubnotes;
+                for (int subnoteIndex = 0; subnoteIndex < theSubnotes.count(); ++subnoteIndex) {
+                    Note *oldSubnote = theSubnotes.at(subnoteIndex).value<Note*>();
+                    newSubnotes << QVariant::fromValue<QObject*>(PlayGridManager::instance()->getNote(KeyScales::instance()->transposeNote(oldSubnote->midiNote(), transposeAmount, d->scale, d->pitch, d->octave), oldSubnote->sketchpadTrack()));
+                }
+                // Directly doing this, as we're manually handling the rest
+                NotesModel::setNote(row, column, PlayGridManager::instance()->getCompoundNote(newSubnotes));
+            }
+        }
+        d->invalidatePosition(row, column);
+    }
+    endLongOperation();
+    registerChange();
+    return firstTransposedSubnoteIndex;
+}
+
 void PatternModel::resetPattern(bool clearNotes)
 {
     startLongOperation();
