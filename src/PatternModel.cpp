@@ -2411,7 +2411,7 @@ inline void PatternModel::Private::noteLengthDetails(int stepLength, qint64 &nex
     }
 }
 
-void PatternModel::playStep(const int& step)
+void PatternModel::playStep(const int& step, const bool &playAsSequencer)
 {
     if (-1 < step && step < (width() * height())) {
         StepData &stepData = d->getOrCreateStepData(step + (d->bankOffset * d->width));
@@ -2432,7 +2432,11 @@ void PatternModel::playStep(const int& step)
         }
         QHash<int, juce::MidiBuffer>::const_iterator position;
         for (position = stepData.positionBuffers.constBegin(); position != stepData.positionBuffers.constEnd(); ++position) {
-            d->syncTimer->scheduleControllerMidiBuffer(position.value(), quint64(qMax(0, position.key())), d->sketchpadTrack);
+            if (playAsSequencer) {
+                d->syncTimer->scheduleMidiBuffer(position.value(), quint64(qMax(0, position.key())), d->sketchpadTrack);
+            } else {
+                d->syncTimer->scheduleControllerMidiBuffer(position.value(), quint64(qMax(0, position.key())), d->sketchpadTrack);
+            }
         }
         const int row = (step / d->width) % d->availableBars;
         const int column = step - (row * d->width);

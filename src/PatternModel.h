@@ -446,8 +446,9 @@ public:
      * \brief Send the data for the given step to SyncTimer
      * Useful for performing test plays of a step's data
      * @param step The index of the step you wish to play
+     * @param playAsSequencer Usually we will play test-play steps using the controller, but if you want, you can perform the test through the sequencer (in particular, useful when doing auto-testing when editing a step)
      */
-    Q_INVOKABLE void playStep(const int &step);
+    Q_INVOKABLE void playStep(const int &step, const bool &playAsSequencer = false);
 
     /**
      * \brief Move the steps between firstStep and lastStep by the given amount, shifting overflow to the opposite end of the range
