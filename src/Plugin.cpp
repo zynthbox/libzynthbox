@@ -47,6 +47,7 @@
 #include "NotesModel.h"
 #include "PatternImageProvider.h"
 #include "PatternModel.h"
+#include "PatternModelVisualiserItem.h"
 #include "PlayGrid.h"
 #include "SettingsContainer.h"
 #include "SegmentHandler.h"
@@ -275,6 +276,7 @@ void Plugin::initialize()
     qRegisterMetaType<JackPassthrough*>("JackPassthrough");
     qRegisterMetaType<MidiRouter*>("MidiRouter");
     qRegisterMetaType<PatternModel*>("PatternModel");
+    qRegisterMetaType<PatternModelVisualiserItem*>("PatternModelVisualiserItem");
     qRegisterMetaType<PlayGridManager*>("PlayGridManager");
     qRegisterMetaType<SegmentHandler*>("SegmentHandler");
     qRegisterMetaType<SyncTimer*>("SyncTimer");
@@ -361,6 +363,7 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
     qmlRegisterUncreatableType<SysexMessage>(uri, 1, 0, "SysexMessage", "Fetch these using the functions on the object in the sysexHelper property on MidiRouterDevice instances");
     qmlRegisterType<GainHandler>(uri, 1, 0, "GainHandler");
     qmlRegisterType<PlayGrid>(uri, 1, 0, "PlayGrid");
+    qmlRegisterType<PatternModelVisualiserItem>(uri, 1, 0, "PatternModelVisualiserItem");
     qmlRegisterType<ProcessWrapper>(uri, 1, 0, "ProcessWrapper");
     qmlRegisterSingletonType<PlayGridManager>(uri, 1, 0, "PlayGridManager", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
         Q_UNUSED(scriptEngine)

@@ -40,6 +40,7 @@ target_sources(libzynthbox
         NotesModel.cpp
         PatternImageProvider.cpp
         PatternModel.cpp
+        PatternModelVisualiserItem.cpp
         PlayfieldManager.cpp
         PlayGrid.cpp
         PlayGridManager.cpp
