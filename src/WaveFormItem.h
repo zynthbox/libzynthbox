@@ -1,7 +1,7 @@
 /*
     ==============================================================================
 
-    ClipAudioSource.h
+    WaveFormItem.h
     Created: 19/8/2021
     Author:  Marco Martin <mart@kde.org>
     Author:  Dan Leinir Turthra Jensen <admin@leinir.dk>
