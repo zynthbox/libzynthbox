@@ -611,6 +611,18 @@ public:
      */
     Q_INVOKABLE double nextStepLengthStep(const double &startingPoint, const int &direction) const;
 
+    /**
+     * \brief The human-readable name for the given probability style (or an empty string if out of range)
+     * @param probabilityIndex The index of the probability style you want a name for
+     * @return The human-readable name (or an empty string) for the given probability index
+     */
+    Q_INVOKABLE QString probabilityName(const int &probabilityIndex) const;
+    /**
+     * \brief The maximum value for the probability setting
+     * @return The highest number that should be used for a probability
+     */
+    Q_INVOKABLE int probabilityMax() const;
+
     void setSwing(int swing);
     int swing() const;
     Q_SIGNAL void swingChanged();

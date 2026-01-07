@@ -330,6 +330,54 @@ static const QList<QList<double>> probabilitySequenceData{
     {1, 1, 1, 1, 1, 1, 0}, // Play 6, Skip 1
     {1, 1, 1, 1, 1, 1, 1, 0}, // Play 7, Skip 1
 };
+static const QList<QString> probabilitySequenceNames{
+    QLatin1String{"100%"},// (the default, really just here to take up space and avoid having to off-by-one some stuff
+    QLatin1String{"90%"},
+    QLatin1String{"80%"},
+    QLatin1String{"70%"},
+    QLatin1String{"60%"},
+    QLatin1String{"50%"},
+    QLatin1String{"40%"},
+    QLatin1String{"30%"},
+    QLatin1String{"20%"},
+    QLatin1String{"10%"},
+    QLatin1String{"Same As Previous"},// - Will use the most recently evaluated probability result for the same pattern (that is, not the most recently scheduled note)
+    QLatin1String{"Play 1, Skip 1"},
+    QLatin1String{"Play 1, 50% Next"},
+    QLatin1String{"Play 1, Skip 2"},
+    QLatin1String{"Play 1, Skip 3"},
+    QLatin1String{"Play 1, Skip 4"},
+    QLatin1String{"Play 1, Skip 5"},
+    QLatin1String{"Play 1, Skip 6"},
+    QLatin1String{"Play 1, Skip 7"},
+    QLatin1String{"Skip 1, Play 1"},
+    QLatin1String{"50% One, 100% Next"},
+    QLatin1String{"Skip 2, Play 1"},
+    QLatin1String{"Skip 3, Play 1"},
+    QLatin1String{"Skip 4, Play 1"},
+    QLatin1String{"Skip 5, Play 1"},
+    QLatin1String{"Skip 6, Play 1"},
+    QLatin1String{"Skip 7, Play 1"},
+    QLatin1String{"Play 2, Skip 1"},
+    QLatin1String{"Play 2, Skip 2"},
+    QLatin1String{"Play 2, Skip 3"},
+    QLatin1String{"Skip 1, Play 2"},
+    QLatin1String{"Skip 2, Play 2"},
+    QLatin1String{"Skip 3, Play 2"},
+    QLatin1String{"Play 3, Skip 1"},
+    QLatin1String{"Play 3, Skip 2"},
+    QLatin1String{"Play 3, Skip 3"},
+    QLatin1String{"Skip 1, Play 3"},
+    QLatin1String{"Skip 2, Play 3"},
+    QLatin1String{"Skip 3, Play 3"},
+    QLatin1String{"Play 4, Skip 1"},
+    QLatin1String{"Play 4, Skip 2"},
+    QLatin1String{"Play 4, Skip 3"},
+    QLatin1String{"Play 4, Skip 4"},
+    QLatin1String{"Play 5, Skip 1"},
+    QLatin1String{"Play 6, Skip 1"},
+    QLatin1String{"Play 7, Skip 1"},
+};
 /**
  * \brief Tiny class for handling progressing through the steps of a "probability" sequence
  * This could eventually serve as the basis for an arpegiator implementation, but that's later
@@ -1734,6 +1782,16 @@ double PatternModel::nextStepLengthStep(const double &startingPoint, const int& 
         }
     }
     return returnValue;
+}
+
+QString PatternModel::probabilityName(const int& probabilityIndex) const
+{
+    return probabilitySequenceNames.value(probabilityIndex);
+}
+
+int PatternModel::probabilityMax() const
+{
+    return probabilitySequenceNames.count();
 }
 
 void PatternModel::setSwing(int swing)
