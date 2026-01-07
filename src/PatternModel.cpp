@@ -1791,7 +1791,7 @@ QString PatternModel::probabilityName(const int& probabilityIndex) const
 
 int PatternModel::probabilityMax() const
 {
-    return probabilitySequenceNames.count();
+    return probabilitySequenceNames.count() - 1;
 }
 
 void PatternModel::setSwing(int swing)
