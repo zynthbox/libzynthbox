@@ -542,8 +542,6 @@ public:
     int playingRow{0};
     int playingColumn{0};
     int previouslyUpdatedMidiChannel{-1};
-    bool updateMostRecentStartTimestamp{true};
-    qint64 mostRecentStartTimestamp{0};
 
     PatternModel *performanceClone{nullptr};
     bool performanceActive{false};
@@ -908,9 +906,6 @@ PatternModel::PatternModel(SequenceModel* parent)
         }
         if (d->isPlaying != isPlaying) {
             d->isPlaying = isPlaying;
-            if (isPlaying) {
-                d->updateMostRecentStartTimestamp = true;
-            }
             QMetaObject::invokeMethod(this, "isPlayingChanged", Qt::QueuedConnection);
         }
     };
@@ -1427,7 +1422,7 @@ void PatternModel::nudge(int firstStep, int lastStep, int amount, const QVariant
 
 int PatternModel::transposeStep(const int& row, const int& column, const int& transposeAmount, const int& subNoteIndex, const bool &transposeOctave)
 {
-    qDebug() << Q_FUNC_INFO << row << column << transposeAmount << subNoteIndex << transposeOctave;
+    // qDebug() << Q_FUNC_INFO << row << column << transposeAmount << subNoteIndex << transposeOctave;
     int firstTransposedSubnoteIndex{0};
     startLongOperation();
     if (transposeAmount < -1) {
@@ -2547,10 +2542,6 @@ void PatternModel::playStep(const int& step, const bool &playAsSequencer)
 void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progressionLength) const
 {
     if (!d->zlSyncManager->channelMuted && isPlaying()) {
-        if (d->updateMostRecentStartTimestamp) {
-            d->updateMostRecentStartTimestamp = false;
-            d->mostRecentStartTimestamp = sequencePosition;
-        }
         // For a pattern on tracks set to target other tracks, we need to use that track's targeting settings, not our own
         const ZynthboxBasics::Track targetTrack{MidiRouter::instance()->sketchpadTrackTargetTrack(ZynthboxBasics::Track(d->sketchpadTrack))};
         const bool lockMidiChannelToClipIndex{targetTrack == ZynthboxBasics::Track(d->sketchpadTrack)
@@ -2611,8 +2602,6 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
                 }
             }
         }
-    } else {
-        d->updateMostRecentStartTimestamp = true;
     }
 }
 
@@ -2707,10 +2696,11 @@ void ZLPatternSynchronisationManager::addRecordedNote(void *recordedNote)
     newNote->endTimestamp = quantizingAmount * qRound(double(newNote->endTimestamp) / quantizingAmount);
 
     // convert the timer ticks to pattern ticks, and adjust for whatever was the most recent restart of the pattern's playback
-    newNote->timestamp = (newNote->timestamp - quint64(q->d->mostRecentStartTimestamp)) / quint64(q->d->patternTickToSyncTimerTick);
-    newNote->endTimestamp = (newNote->endTimestamp - quint64(q->d->mostRecentStartTimestamp)) / quint64(q->d->patternTickToSyncTimerTick);
+    const qint64 playbackOffset{q->d->playfieldManager->clipOffset(q->d->song, q->d->sketchpadTrack, q->d->clipIndex) - (q->d->segmentHandler->songMode() ? q->d->segmentHandler->startOffset() : 0)};
+    newNote->timestamp = (newNote->timestamp - quint64(playbackOffset)) / quint64(q->d->patternTickToSyncTimerTick);
+    newNote->endTimestamp = (newNote->endTimestamp - quint64(playbackOffset)) / quint64(q->d->patternTickToSyncTimerTick);
 
-    const double normalisedTimestamp{double(qint64(newNote->timestamp) % (q->patternLength() * noteDuration))};
+    const double normalisedTimestamp{(double(qint64(newNote->timestamp) % (q->patternLength() * noteDuration)))};
     newNote->step = normalisedTimestamp / noteDuration;
     newNote->delay = normalisedTimestamp - (newNote->step * noteDuration);
     newNote->duration = newNote->endTimestamp - newNote->timestamp;
@@ -2742,7 +2732,7 @@ void ZLPatternSynchronisationManager::addRecordedNote(void *recordedNote)
         const int oldDuration = q->subnoteMetadata(newNote->row, newNote->column, subnoteIndex, "duration").toInt();
         const int oldDelay = q->subnoteMetadata(newNote->row, newNote->column, subnoteIndex, "delay").toInt();
         if (oldVelocity == newNote->velocity && oldDuration == newNote->duration && oldDelay == newNote->delay) {
-            qDebug() <<  Q_FUNC_INFO << "This is a note we already have in the pattern, with the same data set on it, so no need to do anything with that" << newNote << newNote->timestamp << newNote->endTimestamp << newNote->step << newNote->row << newNote->column << newNote->midiNote << newNote->velocity << newNote->delay << newNote->duration;
+            // qDebug() <<  Q_FUNC_INFO << "This is a note we already have in the pattern, with the same data set on it, so no need to do anything with that" << newNote << newNote->timestamp << newNote->endTimestamp << newNote->step << newNote->row << newNote->column << newNote->midiNote << newNote->velocity << newNote->delay << newNote->duration;
             subnoteIndex = -1;
         }
     }
@@ -2751,7 +2741,7 @@ void ZLPatternSynchronisationManager::addRecordedNote(void *recordedNote)
         q->setSubnoteMetadata(newNote->row, newNote->column, subnoteIndex, "velocity", newNote->velocity);
         q->setSubnoteMetadata(newNote->row, newNote->column, subnoteIndex, "duration", newNote->duration);
         q->setSubnoteMetadata(newNote->row, newNote->column, subnoteIndex, "delay", newNote->delay);
-        qDebug() << Q_FUNC_INFO << "Handled a recorded new note:" << newNote << newNote->timestamp << newNote->endTimestamp << newNote->step << newNote->row << newNote->column << newNote->midiNote << newNote->velocity << newNote->delay << newNote->duration;
+        // qDebug() << Q_FUNC_INFO << "Handled a recorded new note:" << newNote << newNote->timestamp << newNote->endTimestamp << newNote->step << newNote->row << newNote->column << newNote->midiNote << newNote->velocity << newNote->delay << newNote->duration;
     }
 
     // And at the end, get rid of the thing
