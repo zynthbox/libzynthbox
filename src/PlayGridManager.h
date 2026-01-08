@@ -90,6 +90,10 @@ class PlayGridManager : public QObject
      * \brief A list with the names of all the midi notes which are currently active on on a hardware output port
      */
     Q_PROPERTY(QStringList hardwareOutActiveNotes READ hardwareOutActiveNotes NOTIFY hardwareOutActiveNotesChanged)
+    /**
+     * \brief A list with the midi note values for notes which are currently active on any controller (whether internal or external)
+     */
+    Q_PROPERTY(QVariantList activeControllerNotes READ activeControllerNotes NOTIFY activeControllerNotesChanged)
 
     /**
      * \brief The global instance of the core Sketchpad gui control object
@@ -302,6 +306,8 @@ public:
     Q_SIGNAL void hardwareInActiveNotesChanged();
     QStringList hardwareOutActiveNotes() const;
     Q_SIGNAL void hardwareOutActiveNotesChanged();
+    QVariantList activeControllerNotes();
+    Q_SIGNAL void activeControllerNotesChanged();
 
     QObject *zlSketchpad() const;
     void setZlSketchpad(QObject *zlSketchpad);

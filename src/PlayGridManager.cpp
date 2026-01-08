@@ -136,6 +136,16 @@ public:
         connect(&watcher, &QFileSystemWatcher::directoryChanged, q, [this](){
             updatePlaygrids();
         });
+        auto activeControllerNotesUpdater = [this, q](){
+            QVariantList activated;
+            for (int i = 0; i < 128; ++i) {
+                if (internalControllerPassthroughNoteActivations[i] || hardwareInNoteActivations[i]) {
+                    activated << QVariant::fromValue<int>(i);
+                }
+            }
+            activeControllerNotes = activated;
+            Q_EMIT q->activeControllerNotesChanged();
+        };
         activeNotesUpdater = new QTimer(q);
         activeNotesUpdater->setSingleShot(true);
         activeNotesUpdater->setInterval(0);
@@ -165,6 +175,7 @@ public:
         internalControllerPassthroughActiveNotesUpdater = new QTimer(q);
         internalControllerPassthroughActiveNotesUpdater->setSingleShot(true);
         internalControllerPassthroughActiveNotesUpdater->setInterval(0);
+        connect(internalControllerPassthroughActiveNotesUpdater, &QTimer::timeout, q, activeControllerNotesUpdater);
         connect(internalControllerPassthroughActiveNotesUpdater, &QTimer::timeout, q, [this, q](){
             QStringList activated;
             for (int i = 0; i < 128; ++i) {
@@ -178,6 +189,7 @@ public:
         hardwareInActiveNotesUpdater = new QTimer(q);
         hardwareInActiveNotesUpdater->setSingleShot(true);
         hardwareInActiveNotesUpdater->setInterval(0);
+        connect(hardwareInActiveNotesUpdater, &QTimer::timeout, q, activeControllerNotesUpdater);
         connect(hardwareInActiveNotesUpdater, &QTimer::timeout, q, [this, q](){
             QStringList activated;
             for (int i = 0; i < 128; ++i) {
@@ -258,6 +270,7 @@ public:
     int hardwareOutNoteActivations[128];
     QTimer *hardwareOutActiveNotesUpdater;
     QStringList hardwareOutActiveNotes;
+    QVariantList activeControllerNotes;
 
     int currentSketchpadTrack{0};
 
@@ -1052,6 +1065,11 @@ QStringList PlayGridManager::hardwareInActiveNotes() const
 QStringList PlayGridManager::hardwareOutActiveNotes() const
 {
     return d->hardwareOutActiveNotes;
+}
+
+QVariantList PlayGridManager::activeControllerNotes()
+{
+    return d->activeControllerNotes;
 }
 
 void PlayGridManager::updateNoteState(QVariantMap metadata)
