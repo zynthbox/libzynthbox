@@ -481,10 +481,12 @@ public:
      *        chromatic, the notes are simply transposed by semitones, but if it is another scale, the notes will be moved along the scale)
      * @param subNoteIndex Optionally the subnote that you wish to transpose (leaving all other subnotes alone). -1 will result in the
      *        entire step being transposed together
+     * @param transposeOctave Setting this to true will cause the function to transpose by octaves (which bypasses the key-correct
+     *        transposition and simply moves the notes by an entire octave).
      * @return This will be the subnote index of the first note which was transposed. This will be useful mainly when moving a specific
      *        subnote (as otherwise this will always be subnote 0)
      */
-    Q_INVOKABLE int transposeStep(const int &row, const int &column, const int &transposeAmount, const int &subNoteIndex = -1);
+    Q_INVOKABLE int transposeStep(const int &row, const int &column, const int &transposeAmount, const int &subNoteIndex = -1, const bool &transposeOctave = false);
 
     /**
      * \brief Resets all the model's content-related properties to their defaults

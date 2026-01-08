@@ -1425,77 +1425,119 @@ void PatternModel::nudge(int firstStep, int lastStep, int amount, const QVariant
     }
 }
 
-int PatternModel::transposeStep(const int& row, const int& column, const int& transposeAmount, const int& subNoteIndex)
+int PatternModel::transposeStep(const int& row, const int& column, const int& transposeAmount, const int& subNoteIndex, const bool &transposeOctave)
 {
+    qDebug() << Q_FUNC_INFO << row << column << transposeAmount << subNoteIndex << transposeOctave;
     int firstTransposedSubnoteIndex{0};
     startLongOperation();
     if (transposeAmount < -1) {
         // Then we're transposing down by more than one step, do this recursively
-        transposeStep(row, column, transposeAmount + 1, subNoteIndex);
+        transposeStep(row, column, transposeAmount + 1, subNoteIndex, transposeOctave);
     } else if (1 < transposeAmount) {
         // Then we're transposing up by more than one step, do this recursively
-        transposeStep(row, column, transposeAmount - 1, subNoteIndex);
-    } else {
-        Note *theNote{qobject_cast<Note*>(getNote(row, column))};
-        if (theNote) {
-            QVariantList theSubnotes = theNote->subnotes();
-            // If there isn't a note, then there's nothing to be done
-            if (-1 < subNoteIndex && subNoteIndex < theSubnotes.count()) {
-                // For a single subnote, we need to take a bit of special care (so we don't end up with notes on top of each other)
-                // Pull out the old data first, so we hold it all while working...
-                Note *oldSubnote = theSubnotes.at(subNoteIndex).value<Note*>();
-                QVariantHash oldSubnoteMetadata = subnoteMetadata(row, column, subNoteIndex, QString{}).toHash();
-                QVariantList theMetadata = getMetadata(row, column).toList();
-                Note *newSubnote{nullptr};
-                int actualTransposeAmount{transposeAmount};
-                const int lowestOnScaleNote{KeyScales::instance()->onScaleNote(0, d->scale, d->pitch, d->octave)};
-                const int highestOnScaleNote{KeyScales::instance()->onScaleNote(127, d->scale, d->pitch, d->octave)};
-                while (true) {
-                    // Now, make sure that if the new note has the same note value as another nearby note, that we keep trying to transpose until either we're good, *or* we hit an out-of-range note value, and then bail out with the original position as the new position
-                    newSubnote = qobject_cast<Note*>(PlayGridManager::instance()->getNote(KeyScales::instance()->transposeNote(oldSubnote->midiNote(), actualTransposeAmount, d->scale, d->pitch, d->octave), oldSubnote->sketchpadTrack()));
-                    // Test to see whether there's an existing entry which the same note value as the new note value that we would like to have...
-                    int clashingIndex = subnoteIndex(row, column, newSubnote->midiNote());
-                    if (clashingIndex == -1) {
-                        // Success! No clashing notes, go right ahead and insert this one
-                        break;
+        transposeStep(row, column, transposeAmount - 1, subNoteIndex, transposeOctave);
+    }
+    Note *theNote{qobject_cast<Note*>(getNote(row, column))};
+    if (theNote) {
+        // If there isn't a note, then there's nothing to be done
+        QVariantList theSubnotes = theNote->subnotes();
+        const int lowestOnScaleNote{KeyScales::instance()->onScaleNote(0, d->scale, d->pitch, d->octave)};
+        const int highestOnScaleNote{KeyScales::instance()->onScaleNote(127, d->scale, d->pitch, d->octave)};
+        if (-1 < subNoteIndex && subNoteIndex < theSubnotes.count()) {
+            // For a single subnote, we need to take a bit of special care (so we don't end up with notes on top of each other)
+            // Pull out the old data first, so we hold it all while working...
+            Note *oldSubnote = theSubnotes.at(subNoteIndex).value<Note*>();
+            QVariantHash oldSubnoteMetadata = subnoteMetadata(row, column, subNoteIndex, QString{}).toHash();
+            QVariantList theMetadata = getMetadata(row, column).toList();
+            Note *newSubnote{nullptr};
+            int actualTransposeAmount{transposeAmount};
+            while (true) {
+                // Now, make sure that if the new note has the same note value as another nearby note, that we keep trying to transpose until either we're good, *or* we hit an out-of-range note value, and then bail out with the original position as the new position
+                if (transposeOctave) {
+                    int newMidiNote{oldSubnote->midiNote() + (actualTransposeAmount * 12)};
+                    if (-1 < newMidiNote && newMidiNote < 128) {
+                        newSubnote = qobject_cast<Note*>(PlayGridManager::instance()->getNote(newMidiNote, oldSubnote->sketchpadTrack()));
                     } else {
-                        // Transpose by one more step (since the function recurses to perform its job, we can safely assume this will be either +1 or -1)
-                        actualTransposeAmount += transposeAmount;
-                        if ((transposeAmount == -1 && newSubnote->midiNote() <= lowestOnScaleNote) || (transposeAmount == 1 && highestOnScaleNote <= newSubnote->midiNote())) {
-                            // Oh dear, there's a clashing subnote, and we're right at the end of the scale, that's not amazing, we'll have to bail out and not perform the transposition...
-                            newSubnote = nullptr;
-                            break;
-                        }
+                        // We are unable to perform this transposition, as the destination is outside the midi note range
+                        newSubnote = nullptr;
+                        break;
+                    }
+                } else {
+                    newSubnote = qobject_cast<Note*>(PlayGridManager::instance()->getNote(KeyScales::instance()->transposeNote(oldSubnote->midiNote(), actualTransposeAmount, d->scale, d->pitch, d->octave), oldSubnote->sketchpadTrack()));
+                }
+                // Test to see whether there's an existing entry which the same note value as the new note value that we would like to have...
+                int clashingIndex = subnoteIndex(row, column, newSubnote->midiNote());
+                if (clashingIndex == -1) {
+                    // Success! No clashing notes, go right ahead and insert this one
+                    break;
+                } else {
+                    // Transpose by one more step (since the function recurses to perform its job, we can safely assume this will be either +1 or -1)
+                    actualTransposeAmount += transposeAmount;
+                    if ((transposeAmount == -1 && newSubnote->midiNote() <= lowestOnScaleNote) || (transposeAmount == 1 && highestOnScaleNote <= newSubnote->midiNote())) {
+                        // Oh dear, there's a clashing subnote, and we're right at the end of the scale, that's not amazing, we'll have to bail out and not perform the transposition...
+                        newSubnote = nullptr;
+                        break;
                     }
                 }
-                if (newSubnote) {
-                    // Now remove the subnote, and insert our transposed note into its new home
-                    removeSubnote(row, column, subNoteIndex);
-                    firstTransposedSubnoteIndex = insertSubnoteSorted(row, column, newSubnote);
-                    // Ensure that the metadata matches what we had - either simply set it all back again if the index hasn't changed...
-                    if (subNoteIndex != firstTransposedSubnoteIndex) {
-                        // ...or move the old data into the new position if the index has, in fact, changed
-                        theMetadata.move(subNoteIndex, firstTransposedSubnoteIndex);
-                    }
-                    // Directly doing this, as we're manually handling the rest
-                    NotesModel::setMetadata(row, column, theMetadata);
-                } else {
-                    // If there isn't a subnote to insert, it means we bailed all the way out
-                    firstTransposedSubnoteIndex = subNoteIndex;
+            }
+            if (newSubnote) {
+                // Now remove the subnote, and insert our transposed note into its new home
+                removeSubnote(row, column, subNoteIndex);
+                firstTransposedSubnoteIndex = insertSubnoteSorted(row, column, newSubnote);
+                // Ensure that the metadata matches what we had - either simply set it all back again if the index hasn't changed...
+                if (subNoteIndex != firstTransposedSubnoteIndex) {
+                    // ...or move the old data into the new position if the index has, in fact, changed
+                    theMetadata.move(subNoteIndex, firstTransposedSubnoteIndex);
+                }
+                // Directly doing this, as we're manually handling the rest
+                NotesModel::setMetadata(row, column, theMetadata);
+            } else {
+                // If there isn't a subnote to insert, it means we bailed all the way out
+                firstTransposedSubnoteIndex = subNoteIndex;
+            }
+        } else if (theSubnotes.count() > 0) {
+            // When transposing everything, we only need to tests to ensure that the notes aren't right at the end of our scale (that is, that we are actually ok to move them)
+            QVariantList newSubnotes;
+            bool transpositionSuccessful{true};
+            // Make sure we actually *can* transpose in a meaningful way
+            if (transposeAmount == -1) {
+                // We are transposing down, test the first note for applicability
+                Note *firstSubnote{theSubnotes.first().value<Note*>()};
+                if (firstSubnote->midiNote() <= lowestOnScaleNote) {
+                    transpositionSuccessful = false;
                 }
             } else {
-                // When transposing everything, we only need to tests to ensure that the notes aren't right at the end of our scale (that is, that we are actually ok to move them)
-                QVariantList newSubnotes;
+                Note *lastSubnote{theSubnotes.last().value<Note*>()};
+                if (highestOnScaleNote <= lastSubnote->midiNote()) {
+                    transpositionSuccessful = false;
+                }
+            }
+            if (transpositionSuccessful) {
                 for (int subnoteIndex = 0; subnoteIndex < theSubnotes.count(); ++subnoteIndex) {
                     Note *oldSubnote = theSubnotes.at(subnoteIndex).value<Note*>();
-                    newSubnotes << QVariant::fromValue<QObject*>(PlayGridManager::instance()->getNote(KeyScales::instance()->transposeNote(oldSubnote->midiNote(), transposeAmount, d->scale, d->pitch, d->octave), oldSubnote->sketchpadTrack()));
+                    QObject *newSubnote{nullptr};
+                    if (transposeOctave) {
+                        int newMidiNote{oldSubnote->midiNote() + (transposeAmount * 12)};
+                        if (-1 < newMidiNote && newMidiNote < 128) {
+                            newSubnote = qobject_cast<Note*>(PlayGridManager::instance()->getNote(newMidiNote, oldSubnote->sketchpadTrack()));
+                        } else {
+                            // We are unable to perform this transposition, as the destination is outside the midi note range
+                            transpositionSuccessful = false;
+                            break;
+                        }
+                    } else {
+                        newSubnote = PlayGridManager::instance()->getNote(KeyScales::instance()->transposeNote(oldSubnote->midiNote(), transposeAmount, d->scale, d->pitch, d->octave), oldSubnote->sketchpadTrack());
+                    }
+                    newSubnotes << QVariant::fromValue<QObject*>(newSubnote);
                 }
+            }
+            if (transpositionSuccessful) {
                 // Directly doing this, as we're manually handling the rest
                 NotesModel::setNote(row, column, PlayGridManager::instance()->getCompoundNote(newSubnotes));
             }
         }
-        d->invalidatePosition(row, column);
     }
+    d->invalidatePosition(row, column);
     endLongOperation();
     registerChange();
     return firstTransposedSubnoteIndex;
