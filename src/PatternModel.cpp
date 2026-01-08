@@ -1256,6 +1256,25 @@ void PatternModel::removeSubnoteByNoteValue(const int& noteValue, const int& fir
             removeSubnote(row, column, subnote);
         }
         endLongOperation();
+        // Also ensure that if we're live-recording, and the note we were asked to remove is
+        // being held, we don't end up adding the notes we've just been asked to remove
+        const QVariantList &heldNotes = d->playGridManager->activeControllerNotes();
+        for (const QVariant &heldNoteVariant : qAsConst(heldNotes)) {
+            const int heldNote{heldNoteVariant.toInt()};
+            if (heldNote == noteValue) {
+                // This is one of the notes we were asked to remove. Now make sure
+                // it isn't also in our list of notes that we're trying to live record
+                QMutableListIterator<NewNoteData*> iterator(d->recordingLiveNotes);
+                NewNoteData *newNote{nullptr};
+                while (iterator.hasNext()) {
+                    iterator.next();
+                    newNote = iterator.value();
+                    if (newNote->midiNote == noteValue && newNote->sketchpadTrack == d->sketchpadTrack) {
+                        iterator.remove();
+                    }
+                }
+            }
+        }
     }
 }
 
