@@ -140,7 +140,7 @@ public:
             QVariantList activated;
             for (int i = 0; i < 128; ++i) {
                 if (internalControllerPassthroughNoteActivations[i] || hardwareInNoteActivations[i]) {
-                    activated << QVariant::fromValue<int>(i);
+                    activated << i;
                 }
             }
             activeControllerNotes = activated;
