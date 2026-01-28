@@ -23,7 +23,7 @@ you will likely need to install those packages. On zynthian, you can do this by
 running:
 
 ```
-apt install extra-cmake-modules libkf5pty-dev qtbase5-dev kirigami2-dev qtdeclarative5-dev librtmidi-dev libwebkit2gtk-4.0-dev libpyside2-dev libshiboken2-dev libclang-dev llvm-dev libappimage-dev
+apt install extra-cmake-modules libkf5pty-dev qtbase5-dev kirigami2-dev qtdeclarative5-dev librtmidi-dev libwebkit2gtk-4.0-dev libpyside2-dev libshiboken2-dev libclang-dev llvm-dev libappimage-dev qtquickcontrols2-5-dev libqt5svg5-dev libkf5plasma-dev
 ```
 
 Once installed, you should be able to use the components simply by adding
