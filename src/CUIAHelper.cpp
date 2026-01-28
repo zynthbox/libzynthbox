@@ -122,6 +122,8 @@ public:
         {CUIAHelper::Knob3DownEvent, QLatin1String{"Knob 4: Down"}},
         {CUIAHelper::Knob3TouchedEvent, QLatin1String{"Knob 4: Touch"}},
         {CUIAHelper::Knob3ReleasedEvent, QLatin1String{"Knob 4: Release"}},
+        {CUIAHelper::SwitchKnob3DownEvent, QLatin1String{"Knob 4: Pressed"}},
+        {CUIAHelper::SwitchKnob3ReleasedEvent, QLatin1String{"Knob 4: Released"}},
         {CUIAHelper::IncreaseEvent, QLatin1String{"Increase Value"}},
         {CUIAHelper::DecreaseEvent, QLatin1String{"Decrease Value"}},
         {CUIAHelper::SwitchPressedEvent, QLatin1String{"Switch Pressed"}},
@@ -265,6 +267,8 @@ public:
         {CUIAHelper::Knob3DownEvent, QLatin1String{"KNOB3_DOWN"}},
         {CUIAHelper::Knob3TouchedEvent, QLatin1String{"KNOB3_TOUCHED"}},
         {CUIAHelper::Knob3ReleasedEvent, QLatin1String{"KNOB3_RELEASED"}},
+        {CUIAHelper::SwitchKnob3DownEvent, QLatin1String{"SWITCH_KNOB3_DOWN"}},
+        {CUIAHelper::SwitchKnob3ReleasedEvent, QLatin1String{"SWITCH_KNOB3_RELEASED"}},
         {CUIAHelper::IncreaseEvent, QLatin1String{"INCREASE"}},
         {CUIAHelper::DecreaseEvent, QLatin1String{"DECREASE"}},
         // The following need handling in "special ways" at the consumer (python) level, as they all come with particular values
@@ -593,22 +597,22 @@ QString CUIAHelper::switchName(const int& switchIndex) const
             name = QLatin1String{"Unnamed Switch Index 4"};
             break;
         case 5:
-            name = QLatin1String{"Track 1 button"};
+            name = QLatin1String{"Number 1 button"};
             break;
         case 6:
-            name = QLatin1String{"Track 2 button"};
+            name = QLatin1String{"Number 2 button"};
             break;
         case 7:
-            name = QLatin1String{"Track 3 button"};
+            name = QLatin1String{"Number 3 button"};
             break;
         case 8:
-            name = QLatin1String{"Track 4 button"};
+            name = QLatin1String{"Number 4 button"};
             break;
         case 9:
-            name = QLatin1String{"Track 5 button"};
+            name = QLatin1String{"Number 5 button"};
             break;
         case 10:
-            name = QLatin1String{"Track * button"};
+            name = QLatin1String{"Star button"};
             break;
         case 11:
             name = QLatin1String{"Mode button"};

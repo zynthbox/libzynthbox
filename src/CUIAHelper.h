@@ -116,6 +116,8 @@ public:
         Knob3DownEvent,
         Knob3TouchedEvent,
         Knob3ReleasedEvent,
+        SwitchKnob3DownEvent,
+        SwitchKnob3ReleasedEvent,
 
         // Active-screen indicators
         ScreenAdminEvent,
