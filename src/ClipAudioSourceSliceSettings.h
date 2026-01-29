@@ -369,13 +369,13 @@ public:
      * @param midiNote The midi note for which to start playback
      * @param velocity The midi velocity to play the slice at
      */
-    void play(const int &midiNote, const int &velocity) const;
+    Q_INVOKABLE void play(const int &midiNote, const int &velocity) const;
     /**
      * \brief Sends a stop command to the timer for this specific slice, for the given note
      * @note If the playback style is one-shot, this will be ignored
      * @param midiNote The midi note for which to stop playback
      */
-    void stop(const int &midiNote) const;
+    Q_INVOKABLE void stop(const int &midiNote) const;
 
     ClipAudioSource::PlaybackStyle playbackStyle() const;
     ClipAudioSource::PlaybackStyle effectivePlaybackStyle() const;
