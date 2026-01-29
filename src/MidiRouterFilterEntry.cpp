@@ -220,6 +220,10 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                 // This is done at match time (otherwise we'll end up potentially writing a whole bunch of extra events we don't want)
                 switch (rule->m_cuiaEvent) {
                     // These are all the "stardard" events that don't take any parameters
+                    case CUIAHelper::StartPlaybackEvent:
+                    case CUIAHelper::StopPlaybackEvent:
+                    case CUIAHelper::StartRecordingEvent:
+                    case CUIAHelper::StopRecordingEvent:
                     case CUIAHelper::PowerOffEvent:
                     case CUIAHelper::RebootEvent:
                     case CUIAHelper::RestartUiEvent:
@@ -229,12 +233,15 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::AllNotesOffEvent:
                     case CUIAHelper::AllSoundsOffEvent:
                     case CUIAHelper::AllOffEvent:
-                    case CUIAHelper::StopRecordEvent:
                     case CUIAHelper::SelectItemEvent:
-                    case CUIAHelper::SelectUpEvent:
-                    case CUIAHelper::SelectDownEvent:
-                    case CUIAHelper::NavigateLeftEvent:
-                    case CUIAHelper::NavigateRightEvent:
+                    case CUIAHelper::SwitchArrowUpDownEvent:
+                    case CUIAHelper::SwitchArrowUpReleasedEvent:
+                    case CUIAHelper::SwitchArrowLeftDownEvent:
+                    case CUIAHelper::SwitchArrowLeftReleasedEvent:
+                    case CUIAHelper::SwitchArrowDownDownEvent:
+                    case CUIAHelper::SwitchArrowDownReleasedEvent:
+                    case CUIAHelper::SwitchArrowRightDownEvent:
+                    case CUIAHelper::SwitchArrowRightReleasedEvent:
                     case CUIAHelper::LayerUpEvent:
                     case CUIAHelper::LayerDownEvent:
                     case CUIAHelper::SnapshotUpEvent:
@@ -248,12 +255,12 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::SwitchMenuReleasedEvent:
                     case CUIAHelper::SwitchLayerShortEvent:
                     case CUIAHelper::SwitchLayerBoldEvent:
-                    case CUIAHelper::SwitchBackShortEvent:
-                    case CUIAHelper::SwitchBackBoldEvent:
+                    case CUIAHelper::SwitchBackDownEvent:
+                    case CUIAHelper::SwitchBackReleasedEvent:
                     case CUIAHelper::SwitchSnapshotShortEvent:
                     case CUIAHelper::SwitchSnapshotBoldEvent:
-                    case CUIAHelper::SwitchSelectShortEvent:
-                    case CUIAHelper::SwitchSelectBoldEvent:
+                    case CUIAHelper::SwitchSelectDownEvent:
+                    case CUIAHelper::SwitchSelectReleasedEvent:
                     case CUIAHelper::SwitchModeDownEvent:
                     case CUIAHelper::SwitchModeReleasedEvent:
                     case CUIAHelper::SwitchStarDownEvent:
@@ -292,11 +299,14 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::SwitchStep16ReleasedEvent:
                     case CUIAHelper::SwitchAltDownEvent:
                     case CUIAHelper::SwitchAltReleasedEvent:
-                    case CUIAHelper::SwitchRecordEvent:
-                    case CUIAHelper::SwitchMetronomeShortEvent:
-                    case CUIAHelper::SwitchMetronomeBoldEvent:
-                    case CUIAHelper::SwitchPlayEvent:
-                    case CUIAHelper::SwitchStopEvent:
+                    case CUIAHelper::SwitchRecordDownEvent:
+                    case CUIAHelper::SwitchRecordReleasedEvent:
+                    case CUIAHelper::SwitchMetronomeDownEvent:
+                    case CUIAHelper::SwitchMetronomeReleasedEvent:
+                    case CUIAHelper::SwitchPlayDownEvent:
+                    case CUIAHelper::SwitchPlayReleasedEvent:
+                    case CUIAHelper::SwitchStopDownEvent:
+                    case CUIAHelper::SwitchStopReleasedEvent:
                     case CUIAHelper::ScreenAdminEvent:
                     case CUIAHelper::ScreenAudioSettingsEvent:
                     case CUIAHelper::ScreenBankEvent:
@@ -312,11 +322,16 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::ModalSnapshotLoadEvent:
                     case CUIAHelper::ModalSnapshotSaveEvent:
                     case CUIAHelper::ScreenAlsaMixerEvent:
-                    case CUIAHelper::SwitchTrack1Event:
-                    case CUIAHelper::SwitchTrack2Event:
-                    case CUIAHelper::SwitchTrack3Event:
-                    case CUIAHelper::SwitchTrack4Event:
-                    case CUIAHelper::SwitchTrack5Event:
+                    case CUIAHelper::SwitchNumber1DownEvent:
+                    case CUIAHelper::SwitchNumber1ReleasedEvent:
+                    case CUIAHelper::SwitchNumber2DownEvent:
+                    case CUIAHelper::SwitchNumber2ReleasedEvent:
+                    case CUIAHelper::SwitchNumber3DownEvent:
+                    case CUIAHelper::SwitchNumber3ReleasedEvent:
+                    case CUIAHelper::SwitchNumber4DownEvent:
+                    case CUIAHelper::SwitchNumber4ReleasedEvent:
+                    case CUIAHelper::SwitchNumber5DownEvent:
+                    case CUIAHelper::SwitchNumber5ReleasedEvent:
                     case CUIAHelper::TrackPreviousEvent:
                     case CUIAHelper::TrackNextEvent:
                     case CUIAHelper::SwitchGlobalDownEvent:
@@ -337,6 +352,8 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::Knob3DownEvent:
                     case CUIAHelper::Knob3TouchedEvent:
                     case CUIAHelper::Knob3ReleasedEvent:
+                    case CUIAHelper::SwitchKnob3DownEvent:
+                    case CUIAHelper::SwitchKnob3ReleasedEvent:
                     case CUIAHelper::IncreaseEvent:
                     case CUIAHelper::DecreaseEvent:
                         m_routerDevice->cuiaRing.write(rule->m_cuiaEvent, m_routerDevice->id());
