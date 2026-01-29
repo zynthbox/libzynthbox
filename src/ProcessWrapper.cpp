@@ -205,6 +205,8 @@ public:
                     updatedState = ProcessWrapper::StartingState;
                     break;
                 case QProcess::Running:
+                    // Set the tty window size to very wide, to try and avoid cutting things off if at all possible
+                    process->pty()->setWinSize(24, 4096);
                     // Not updating the state here, because this is done by testing the initial transaction instead
                     updatedState = state;
                     // If we've got any transactions waiting to start, let's sort that out
