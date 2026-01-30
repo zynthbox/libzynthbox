@@ -181,7 +181,7 @@ public:
         {CUIAHelper::AllNotesOffEvent, QLatin1String{"ALL_NOTES_OFF"}},
         {CUIAHelper::AllSoundsOffEvent, QLatin1String{"ALL_SOUNDS_OFF"}},
         {CUIAHelper::AllOffEvent, QLatin1String{"ALL_OFF"}},
-        {CUIAHelper::SwitchArrowUpPressedEvent, QLatin1String{"SWITCH_ARROW_UP_PRESSED}},
+        {CUIAHelper::SwitchArrowUpPressedEvent, QLatin1String{"SWITCH_ARROW_UP_PRESSED"}},
         {CUIAHelper::SwitchArrowUpReleasedEvent, QLatin1String{"SWITCH_ARROW_UP_RELEASED"}},
         {CUIAHelper::SwitchArrowDownPressedEvent, QLatin1String{"SWITCH_ARROW_DOWN_PRESSED"}},
         {CUIAHelper::SwitchArrowDownReleasedEvent, QLatin1String{"SWITCH_ARROW_DOWN_RELEASED"}},
