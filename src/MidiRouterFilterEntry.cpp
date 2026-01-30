@@ -234,13 +234,13 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::AllSoundsOffEvent:
                     case CUIAHelper::AllOffEvent:
                     case CUIAHelper::SelectItemEvent:
-                    case CUIAHelper::SwitchArrowUpDownEvent:
+                    case CUIAHelper::SwitchArrowUpPressedEvent:
                     case CUIAHelper::SwitchArrowUpReleasedEvent:
-                    case CUIAHelper::SwitchArrowLeftDownEvent:
+                    case CUIAHelper::SwitchArrowLeftPressedEvent:
                     case CUIAHelper::SwitchArrowLeftReleasedEvent:
-                    case CUIAHelper::SwitchArrowDownDownEvent:
+                    case CUIAHelper::SwitchArrowDownPressedEvent:
                     case CUIAHelper::SwitchArrowDownReleasedEvent:
-                    case CUIAHelper::SwitchArrowRightDownEvent:
+                    case CUIAHelper::SwitchArrowRightPressedEvent:
                     case CUIAHelper::SwitchArrowRightReleasedEvent:
                     case CUIAHelper::LayerUpEvent:
                     case CUIAHelper::LayerDownEvent:
@@ -251,61 +251,61 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::ToggleKeyboardEvent:
                     case CUIAHelper::ShowKeyboardEvent:
                     case CUIAHelper::HideKeyboardEvent:
-                    case CUIAHelper::SwitchMenuDownEvent:
+                    case CUIAHelper::SwitchMenuPressedEvent:
                     case CUIAHelper::SwitchMenuReleasedEvent:
                     case CUIAHelper::SwitchLayerShortEvent:
                     case CUIAHelper::SwitchLayerBoldEvent:
-                    case CUIAHelper::SwitchBackDownEvent:
+                    case CUIAHelper::SwitchBackPressedEvent:
                     case CUIAHelper::SwitchBackReleasedEvent:
                     case CUIAHelper::SwitchSnapshotShortEvent:
                     case CUIAHelper::SwitchSnapshotBoldEvent:
-                    case CUIAHelper::SwitchSelectDownEvent:
+                    case CUIAHelper::SwitchSelectPressedEvent:
                     case CUIAHelper::SwitchSelectReleasedEvent:
-                    case CUIAHelper::SwitchModeDownEvent:
+                    case CUIAHelper::SwitchModePressedEvent:
                     case CUIAHelper::SwitchModeReleasedEvent:
-                    case CUIAHelper::SwitchStarDownEvent:
+                    case CUIAHelper::SwitchStarPressedEvent:
                     case CUIAHelper::SwitchStarReleasedEvent:
-                    case CUIAHelper::SwitchStep1DownEvent:
+                    case CUIAHelper::SwitchStep1PressedEvent:
                     case CUIAHelper::SwitchStep1ReleasedEvent:
-                    case CUIAHelper::SwitchStep2DownEvent:
+                    case CUIAHelper::SwitchStep2PressedEvent:
                     case CUIAHelper::SwitchStep2ReleasedEvent:
-                    case CUIAHelper::SwitchStep3DownEvent:
+                    case CUIAHelper::SwitchStep3PressedEvent:
                     case CUIAHelper::SwitchStep3ReleasedEvent:
-                    case CUIAHelper::SwitchStep4DownEvent:
+                    case CUIAHelper::SwitchStep4PressedEvent:
                     case CUIAHelper::SwitchStep4ReleasedEvent:
-                    case CUIAHelper::SwitchStep5DownEvent:
+                    case CUIAHelper::SwitchStep5PressedEvent:
                     case CUIAHelper::SwitchStep5ReleasedEvent:
-                    case CUIAHelper::SwitchStep6DownEvent:
+                    case CUIAHelper::SwitchStep6PressedEvent:
                     case CUIAHelper::SwitchStep6ReleasedEvent:
-                    case CUIAHelper::SwitchStep7DownEvent:
+                    case CUIAHelper::SwitchStep7PressedEvent:
                     case CUIAHelper::SwitchStep7ReleasedEvent:
-                    case CUIAHelper::SwitchStep8DownEvent:
+                    case CUIAHelper::SwitchStep8PressedEvent:
                     case CUIAHelper::SwitchStep8ReleasedEvent:
-                    case CUIAHelper::SwitchStep9DownEvent:
+                    case CUIAHelper::SwitchStep9PressedEvent:
                     case CUIAHelper::SwitchStep9ReleasedEvent:
-                    case CUIAHelper::SwitchStep10DownEvent:
+                    case CUIAHelper::SwitchStep10PressedEvent:
                     case CUIAHelper::SwitchStep10ReleasedEvent:
-                    case CUIAHelper::SwitchStep11DownEvent:
+                    case CUIAHelper::SwitchStep11PressedEvent:
                     case CUIAHelper::SwitchStep11ReleasedEvent:
-                    case CUIAHelper::SwitchStep12DownEvent:
+                    case CUIAHelper::SwitchStep12PressedEvent:
                     case CUIAHelper::SwitchStep12ReleasedEvent:
-                    case CUIAHelper::SwitchStep13DownEvent:
+                    case CUIAHelper::SwitchStep13PressedEvent:
                     case CUIAHelper::SwitchStep13ReleasedEvent:
-                    case CUIAHelper::SwitchStep14DownEvent:
+                    case CUIAHelper::SwitchStep14PressedEvent:
                     case CUIAHelper::SwitchStep14ReleasedEvent:
-                    case CUIAHelper::SwitchStep15DownEvent:
+                    case CUIAHelper::SwitchStep15PressedEvent:
                     case CUIAHelper::SwitchStep15ReleasedEvent:
-                    case CUIAHelper::SwitchStep16DownEvent:
+                    case CUIAHelper::SwitchStep16PressedEvent:
                     case CUIAHelper::SwitchStep16ReleasedEvent:
-                    case CUIAHelper::SwitchAltDownEvent:
+                    case CUIAHelper::SwitchAltPressedEvent:
                     case CUIAHelper::SwitchAltReleasedEvent:
-                    case CUIAHelper::SwitchRecordDownEvent:
+                    case CUIAHelper::SwitchRecordPressedEvent:
                     case CUIAHelper::SwitchRecordReleasedEvent:
-                    case CUIAHelper::SwitchMetronomeDownEvent:
+                    case CUIAHelper::SwitchMetronomePressedEvent:
                     case CUIAHelper::SwitchMetronomeReleasedEvent:
-                    case CUIAHelper::SwitchPlayDownEvent:
+                    case CUIAHelper::SwitchPlayPressedEvent:
                     case CUIAHelper::SwitchPlayReleasedEvent:
-                    case CUIAHelper::SwitchStopDownEvent:
+                    case CUIAHelper::SwitchStopPressedEvent:
                     case CUIAHelper::SwitchStopReleasedEvent:
                     case CUIAHelper::ScreenAdminEvent:
                     case CUIAHelper::ScreenAudioSettingsEvent:
@@ -322,19 +322,19 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::ModalSnapshotLoadEvent:
                     case CUIAHelper::ModalSnapshotSaveEvent:
                     case CUIAHelper::ScreenAlsaMixerEvent:
-                    case CUIAHelper::SwitchNumber1DownEvent:
+                    case CUIAHelper::SwitchNumber1PressedEvent:
                     case CUIAHelper::SwitchNumber1ReleasedEvent:
-                    case CUIAHelper::SwitchNumber2DownEvent:
+                    case CUIAHelper::SwitchNumber2PressedEvent:
                     case CUIAHelper::SwitchNumber2ReleasedEvent:
-                    case CUIAHelper::SwitchNumber3DownEvent:
+                    case CUIAHelper::SwitchNumber3PressedEvent:
                     case CUIAHelper::SwitchNumber3ReleasedEvent:
-                    case CUIAHelper::SwitchNumber4DownEvent:
+                    case CUIAHelper::SwitchNumber4PressedEvent:
                     case CUIAHelper::SwitchNumber4ReleasedEvent:
-                    case CUIAHelper::SwitchNumber5DownEvent:
+                    case CUIAHelper::SwitchNumber5PressedEvent:
                     case CUIAHelper::SwitchNumber5ReleasedEvent:
                     case CUIAHelper::TrackPreviousEvent:
                     case CUIAHelper::TrackNextEvent:
-                    case CUIAHelper::SwitchGlobalDownEvent:
+                    case CUIAHelper::SwitchGlobalPressedEvent:
                     case CUIAHelper::SwitchGlobalReleasedEvent:
                     case CUIAHelper::Knob0UpEvent:
                     case CUIAHelper::Knob0DownEvent:
@@ -352,7 +352,7 @@ void MidiRouterFilterEntry::mangleEvent(const jack_midi_event_t& event) const
                     case CUIAHelper::Knob3DownEvent:
                     case CUIAHelper::Knob3TouchedEvent:
                     case CUIAHelper::Knob3ReleasedEvent:
-                    case CUIAHelper::SwitchKnob3DownEvent:
+                    case CUIAHelper::SwitchKnob3PressedEvent:
                     case CUIAHelper::SwitchKnob3ReleasedEvent:
                     case CUIAHelper::IncreaseEvent:
                     case CUIAHelper::DecreaseEvent:
