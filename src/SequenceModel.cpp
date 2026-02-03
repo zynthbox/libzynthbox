@@ -181,7 +181,7 @@ public:
     bool isPlaying{false};
     int sceneIndex{-1};
     bool shouldMakeSounds{true};
-    bool isLoading{false};
+    bool isLoading{true};
 
     void ensureFilePath(const QString &explicitFile) {
         if (!explicitFile.isEmpty()) {
