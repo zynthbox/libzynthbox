@@ -26,7 +26,7 @@
 
 using namespace juce;
 
-#define SubChannelCount 10 // One for each sample slot, and one for each sketch slot
+#define SubChannelCount 15 // One for each sample slot, and one for each sketch slot
 class Grainerator;
 struct SubChannel {
 public:
@@ -57,7 +57,7 @@ public:
     jack_port_t *midiInPort{nullptr};
     SubChannel subChannels[SubChannelCount];
     SamplerVoicePoolRing *voicePool{nullptr};
-    QList<ClipAudioSource*> trackSamples;
+    QList<ClipAudioSource*> trackSamples[2];
     QList<ClipAudioSource*> trackSketches;
     ClipAudioSource::SamplePickingStyle samplePickingStyle{ClipAudioSource::AllPickingStyle};
     /**
@@ -384,52 +384,59 @@ SamplerChannel::~SamplerChannel() {
 void SamplerChannel::ensureOutputPorts()
 {
     ClipAudioSource* sample{nullptr};
+    bool subchannelHasSamples[SubChannelCount]{}; // Bunch of zeroed out entries, so we can ensure we clean up later (doing it in two goes ensures we can have multiple samples on each subchannel, such as we have for the global ones)
     for (int subChannelIndex = 0; subChannelIndex < SubChannelCount; ++subChannelIndex) {
-        if (subChannelIndex < 5) {
+        if (subChannelIndex < ZynthboxSlotCount * 2) {
             sample = nullptr;
-            for (ClipAudioSource *testSample : qAsConst(trackSamples)) {
-                if (testSample->sketchpadSlot() == subChannelIndex) {
+            const int slotColumn = subChannelIndex < ZynthboxSlotCount ? subChannelIndex : subChannelIndex - ZynthboxSlotCount;
+            const int slotRow = subChannelIndex < ZynthboxSlotCount ? 0 : 1;
+            for (ClipAudioSource *testSample : qAsConst(trackSamples[slotRow])) {
+                if (testSample->sketchpadSlot() == slotColumn && testSample->sketchpadSlotRow() == slotRow) {
                     sample = testSample;
                     break;
                 }
             }
             if (sample) {
-                // Naming the first five ports laneX (where X is the slot number of the sample that goes into it)
-                subChannels[subChannelIndex].leftPort = jack_port_register(jackClient, QString("%1-lane%2-left").arg(clientName).arg(QString::number(subChannelIndex + 1)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-                subChannels[subChannelIndex].rightPort = jack_port_register(jackClient, QString("%1-lane%2-right").arg(clientName).arg(QString::number(subChannelIndex + 1)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-            } else {
-                // If there is no sample for this output port, remove the port
-                if (subChannels[subChannelIndex].leftPort) {
-                    jack_port_unregister(jackClient, subChannels[subChannelIndex].leftPort);
-                    subChannels[subChannelIndex].leftPort = nullptr;
+                // Naming the first five ports sampleX (where X is the slot number of the sample that goes into it)
+                if (subChannels[subChannelIndex].leftPort == nullptr) {
+                    subChannels[subChannelIndex].leftPort = jack_port_register(jackClient, QString("%1-sample%2-left").arg(clientName).arg(QString::number(subChannelIndex + 1)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
                 }
-                if (subChannels[subChannelIndex].rightPort) {
-                    jack_port_unregister(jackClient, subChannels[subChannelIndex].rightPort);
-                    subChannels[subChannelIndex].rightPort = nullptr;
+                if (subChannels[subChannelIndex].rightPort == nullptr) {
+                    subChannels[subChannelIndex].rightPort = jack_port_register(jackClient, QString("%1-sample%2-right").arg(clientName).arg(QString::number(subChannelIndex + 1)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
                 }
+                subchannelHasSamples[subChannelIndex] = true;
             }
         } else {
             sample = nullptr;
             for (ClipAudioSource *testSample : qAsConst(trackSketches)) {
-                if (testSample->sketchpadSlot() == subChannelIndex - 5) {
+                if (testSample->sketchpadSlot() == subChannelIndex - (ZynthboxSlotCount * 2)) {
                     sample = testSample;
                     break;
                 }
             }
             if (sample) {
                 // Naming the second set of five ports sketchX (where X is the slot number of the sketch that goes into it)
-                subChannels[subChannelIndex].leftPort = jack_port_register(jackClient, QString("%1-sketch%2-left").arg(clientName).arg(QString::number(subChannelIndex - 4)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-                subChannels[subChannelIndex].rightPort = jack_port_register(jackClient, QString("%1-sketch%2-right").arg(clientName).arg(QString::number(subChannelIndex - 4)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-            } else {
-                // If there is no sample for this output port, remove the port
-                if (subChannels[subChannelIndex].leftPort) {
-                    jack_port_unregister(jackClient, subChannels[subChannelIndex].leftPort);
-                    subChannels[subChannelIndex].leftPort = nullptr;
+                if (subChannels[subChannelIndex].leftPort == nullptr) {
+                    subChannels[subChannelIndex].leftPort = jack_port_register(jackClient, QString("%1-sketch%2-left").arg(clientName).arg(QString::number(subChannelIndex - (ZynthboxSlotCount * 2) + 1)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
                 }
-                if (subChannels[subChannelIndex].rightPort) {
-                    jack_port_unregister(jackClient, subChannels[subChannelIndex].rightPort);
-                    subChannels[subChannelIndex].rightPort = nullptr;
+                if (subChannels[subChannelIndex].rightPort == nullptr) {
+                    subChannels[subChannelIndex].rightPort = jack_port_register(jackClient, QString("%1-sketch%2-right").arg(clientName).arg(QString::number(subChannelIndex - (ZynthboxSlotCount * 2) + 1)).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
                 }
+                subchannelHasSamples[subChannelIndex] = true;
+                // qDebug() << Q_FUNC_INFO << "Registered ports for subChannelIndex" << subChannelIndex << "for looping sample" << sample->sketchpadTrack() << sample->sketchpadSlot() << "on sampler channel with midi channel" << midiChannel;
+            }
+        }
+    }
+    for (int subChannelIndex = 0; subChannelIndex < SubChannelCount; ++subChannelIndex) {
+        if (subchannelHasSamples[subChannelIndex] == false) {
+            // If there is no sample for this output port, and we actually have some ports, unregister those ports
+            if (subChannels[subChannelIndex].leftPort) {
+                jack_port_unregister(jackClient, subChannels[subChannelIndex].leftPort);
+                subChannels[subChannelIndex].leftPort = nullptr;
+            }
+            if (subChannels[subChannelIndex].rightPort) {
+                jack_port_unregister(jackClient, subChannels[subChannelIndex].rightPort);
+                subChannels[subChannelIndex].rightPort = nullptr;
             }
         }
     }
@@ -442,62 +449,64 @@ void SamplerChannel::midiMessageToClipCommands(ClipCommandRing* listToPopulate, 
     const bool stopPlayback{byte1 < 0x90 || byte3 == 0};
     const float velocity{float(byte3) / float(127)};
     const int midiChannel{(byte1 & 0xf)};
-    for (ClipAudioSource *clip : qAsConst(trackSamples)) {
-        // There must be a clip or it just doesn't matter, and then the note must fit inside the clip's keyzone
-        if (clip) {
-            // qDebug() << Q_FUNC_INFO << samplePickingStyle << midiChannel << clip->sketchpadSlot() << clip->getFilePath();
-            // If the picking style is Same, we require that the midi channel matches the slot of the clip we're playing
-            if (samplePickingStyle != ClipAudioSource::SamePickingStyle || clip->sketchpadSlot() == midiChannel) {
-                const QList<ClipAudioSourceSliceSettings*> slices{clip->sliceSettingsActual()};
-                const int &sliceCount{clip->sliceCount()};
-                const int extraSliceCount{sliceCount + 1};
-                bool matchedSlice{false};
-                // This little trick (going to slice count + 1) ensures that we run through the slices in defined order, and also process the root slice last
-                for (int sliceIndex = 0; sliceIndex < extraSliceCount; ++sliceIndex) {
-                    const ClipAudioSourceSliceSettings *slice{sliceIndex == sliceCount ? clip->rootSliceActual() : slices.at(sliceIndex)};
-                    if (slice->keyZoneStart() <= byte2 && byte2 <= slice->keyZoneEnd()) {
-                        // Since the stop velocity is actually "lift", we can't count on it to match whatever the start velocity was, so... let's stop all notes that match
-                        if (stopPlayback || (slice->velocityMinimum() <= byte3 && byte3 <= slice->velocityMaximum())) {
-                            if (slice->effectivePlaybackStyle() == ClipAudioSource::OneshotPlaybackStyle && stopPlayback) {
-                                // if stop command and clip playback style is Oneshot, don't submit the stop command - just let it run out
-                                // to force one-shots to stop, all-notes-off is handled by SamplerSynth directly
-                            } else {
-                                // subvoice -1 is conceptually the prime voice, anything from 0 inclusive to the amount non-inclusive are the subvoices
-                                for (int subvoice = -1; subvoice < slice->subvoiceCountPlayback(); ++subvoice) {
-                                    ClipCommand *command = ClipCommand::channelCommand(clip, midiChannel);
-                                    command->startPlayback = !stopPlayback;
-                                    command->stopPlayback = stopPlayback;
-                                    command->subvoice = subvoice;
-                                    command->slice = slice->index();
-                                    command->exclusivityGroup = slice->exclusivityGroup();
-                                    if (command->startPlayback) {
-                                        command->changeVolume = true;
-                                        command->volume = velocity;
+    for (int slotRow = 0; slotRow < 2; ++slotRow) {
+        for (ClipAudioSource *clip : qAsConst(trackSamples[slotRow])) {
+            // There must be a clip or it just doesn't matter, and then the note must fit inside the clip's keyzone
+            if (clip) {
+                // qDebug() << Q_FUNC_INFO << samplePickingStyle << midiChannel << clip->sketchpadSlot() << clip->getFilePath();
+                // If the picking style is Same, we require that the midi channel matches the slot of the clip we're playing
+                if (samplePickingStyle != ClipAudioSource::SamePickingStyle || clip->sketchpadSlot() == midiChannel) {
+                    const QList<ClipAudioSourceSliceSettings*> slices{clip->sliceSettingsActual()};
+                    const int &sliceCount{clip->sliceCount()};
+                    const int extraSliceCount{sliceCount + 1};
+                    bool matchedSlice{false};
+                    // This little trick (going to slice count + 1) ensures that we run through the slices in defined order, and also process the root slice last
+                    for (int sliceIndex = 0; sliceIndex < extraSliceCount; ++sliceIndex) {
+                        const ClipAudioSourceSliceSettings *slice{sliceIndex == sliceCount ? clip->rootSliceActual() : slices.at(sliceIndex)};
+                        if (slice->keyZoneStart() <= byte2 && byte2 <= slice->keyZoneEnd()) {
+                            // Since the stop velocity is actually "lift", we can't count on it to match whatever the start velocity was, so... let's stop all notes that match
+                            if (stopPlayback || (slice->velocityMinimum() <= byte3 && byte3 <= slice->velocityMaximum())) {
+                                if (slice->effectivePlaybackStyle() == ClipAudioSource::OneshotPlaybackStyle && stopPlayback) {
+                                    // if stop command and clip playback style is Oneshot, don't submit the stop command - just let it run out
+                                    // to force one-shots to stop, all-notes-off is handled by SamplerSynth directly
+                                } else {
+                                    // subvoice -1 is conceptually the prime voice, anything from 0 inclusive to the amount non-inclusive are the subvoices
+                                    for (int subvoice = -1; subvoice < slice->subvoiceCountPlayback(); ++subvoice) {
+                                        ClipCommand *command = ClipCommand::channelCommand(clip, midiChannel);
+                                        command->startPlayback = !stopPlayback;
+                                        command->stopPlayback = stopPlayback;
+                                        command->subvoice = subvoice;
+                                        command->slice = slice->index();
+                                        command->exclusivityGroup = slice->exclusivityGroup();
+                                        if (command->startPlayback) {
+                                            command->changeVolume = true;
+                                            command->volume = velocity;
+                                        }
+                                        if (command->stopPlayback) {
+                                            // Don't actually set volume, just store the volume for velocity purposes... yes this is kind of a hack
+                                            command->volume = velocity;
+                                        }
+                                        command->midiNote = byte2;
+                                        command->changeLooping = true;
+                                        command->looping = slice->looping();
+                                        matchedClip = matchedSlice = true;
+                                        listToPopulate->write(command, 0);
+                                        // qDebug() << Q_FUNC_INFO << "Wrote command to list for" << clip << "slice" << slice << "subvoice" << subvoice;
                                     }
-                                    if (command->stopPlayback) {
-                                        // Don't actually set volume, just store the volume for velocity purposes... yes this is kind of a hack
-                                        command->volume = velocity;
-                                    }
-                                    command->midiNote = byte2;
-                                    command->changeLooping = true;
-                                    command->looping = slice->looping();
-                                    matchedClip = matchedSlice = true;
-                                    listToPopulate->write(command, 0);
-                                    // qDebug() << Q_FUNC_INFO << "Wrote command to list for" << clip << "slice" << slice << "subvoice" << subvoice;
                                 }
-                            }
-                            // If our selection mode is a one-slice-only mode, bail now (that is,
-                            // only AllPickingStyle wants us to pick more than one slice)
-                            if (matchedSlice && clip->slicePickingStyle() != ClipAudioSource::AllPickingStyle) {
-                                break;
+                                // If our selection mode is a one-slice-only mode, bail now (that is,
+                                // only AllPickingStyle wants us to pick more than one slice)
+                                if (matchedSlice && clip->slicePickingStyle() != ClipAudioSource::AllPickingStyle) {
+                                    break;
+                                }
                             }
                         }
                     }
-                }
-                // If our selection mode is a one-sample-only mode, bail now (that is,
-                // only AllPickingStyle wants us to pick more than one sample)
-                if (matchedClip && samplePickingStyle != ClipAudioSource::AllPickingStyle) {
-                    break;
+                    // If our selection mode is a one-sample-only mode, bail now (that is,
+                    // only AllPickingStyle wants us to pick more than one sample)
+                    if (matchedClip && samplePickingStyle != ClipAudioSource::AllPickingStyle) {
+                        break;
+                    }
                 }
             }
         }
@@ -512,9 +521,12 @@ bool compareSampleSlots(ClipAudioSource* first, ClipAudioSource* second)
 void SamplerChannel::resortSamples()
 {
     // TODO Resorting samples could cause some amount of havoc on the system, so first we need to ensure that we stop all active voices on this channel
-    QList<ClipAudioSource*> newList = trackSamples;
-    std::sort(newList.begin(), newList.end(), &compareSampleSlots);
-    trackSamples = newList;
+    for (int slotRow = 0; slotRow < 2; ++slotRow) {
+        QList<ClipAudioSource*> newList = trackSamples[slotRow];
+        std::sort(newList.begin(), newList.end(), &compareSampleSlots);
+        trackSamples[slotRow] = newList;
+    }
+    ensureOutputPorts();
 }
 
 int SamplerChannel::process(jack_nframes_t nframes) {
@@ -675,6 +687,7 @@ int SamplerChannel::process(jack_nframes_t nframes) {
                             voice->next->previous = voice->previous;
                         }
                         // Now we've nipped the voice out of the list, put it back in the pool
+                        voice->next = voice->previous = nullptr;
                         voicePool->write(voice);
                     }
                     voice = voice->next;
@@ -744,12 +757,12 @@ int SamplerSynthPrivate::process(jack_nframes_t nframes)
             }
         }
         // Process each of the channels in turn
-        jack_default_audio_sample_t *leftBuffers[11][SubChannelCount]{{nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}};
-        jack_default_audio_sample_t *rightBuffers[11][SubChannelCount]{{nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}};
+        jack_default_audio_sample_t *leftBuffers[11][SubChannelCount]{{nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}};
+        jack_default_audio_sample_t *rightBuffers[11][SubChannelCount]{{nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}, {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr}};
         int channelIndex{0};
         for(SamplerChannel *channel : qAsConst(channels)) {
             int subChannelIndex{0};
-            for (SubChannel &subChannel : channel->subChannels) {
+            for (const SubChannel &subChannel : qAsConst(channel->subChannels)) {
                 if (subChannel.leftPort && subChannel.rightPort) {
                     leftBuffers[channelIndex][subChannelIndex] = (jack_default_audio_sample_t*)jack_port_get_buffer(subChannel.leftPort, nframes);
                     rightBuffers[channelIndex][subChannelIndex] = (jack_default_audio_sample_t*)jack_port_get_buffer(subChannel.rightPort, nframes);
@@ -768,10 +781,10 @@ int SamplerSynthPrivate::process(jack_nframes_t nframes)
             if (sound && sound->isValid) {
                 ClipAudioSource *clip = soundIterator->first;
                 const int channelIndex{clip->sketchpadTrack() + 1};
-                const int laneIndex{clip->laneAffinity()};
-                // if (throttler == 0) { qDebug() << Q_FUNC_INFO << "Working on clip" << clip << "with channel" << channelIndex << "and lane" << laneIndex; }
-                if (leftBuffers[channelIndex][laneIndex] && rightBuffers[channelIndex][laneIndex]) {
-                    jack_default_audio_sample_t *laneOutputBuffers[2]{leftBuffers[channelIndex][laneIndex], rightBuffers[channelIndex][laneIndex]};
+                const int channelAffinity{((clip->registerForPolyphonicPlayback() ? clip->sketchpadSlotRow() : ZynthboxSampleSlotRowCount) * ZynthboxSlotCount) + clip->sketchpadSlot()};
+                // if (throttler == 0) { qDebug() << Q_FUNC_INFO << "Working on clip" << clip << "with channel" << channelIndex << "and sub-channel affinity" << channelAffinity << "and one of our buffers is" << leftBuffers[channelIndex][channelAffinity]; }
+                if (leftBuffers[channelIndex][channelAffinity] && rightBuffers[channelIndex][channelAffinity]) {
+                    jack_default_audio_sample_t *laneOutputBuffers[2]{leftBuffers[channelIndex][channelAffinity], rightBuffers[channelIndex][channelAffinity]};
                     jack_default_audio_sample_t *soundBuffers[2]{sound->leftBuffer, sound->rightBuffer};
                     clip->finaliseProcess(soundBuffers, laneOutputBuffers, nframes);
                 }
@@ -802,6 +815,8 @@ double SamplerChannel::sampleRate() const
 
 void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick)
 {
+    // const int channelAffinity{((clipCommand->clip->registerForPolyphonicPlayback() ? clipCommand->clip->sketchpadSlotRow() : ZynthboxSampleSlotRowCount) * ZynthboxSlotCount) + clipCommand->clip->sketchpadSlot()};
+    // qDebug() << Q_FUNC_INFO << clipCommand << "handling clip" << clipCommand->startPlayback << clipCommand->stopPlayback << clipCommand->clip << "with subchannel" << channelAffinity;
     if (clipCommand->startPlayback && clipCommand->exclusivityGroup > -1) {
         // If we are starting playback, and we have an exclusivity group, test all the active
         // voices to see whether they need to do something about what they're doing just now
@@ -815,10 +830,10 @@ void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick
     }
     bool needsHandling{true};
     if (clipCommand->stopPlayback || clipCommand->startPlayback) {
-        const int laneAffinity{clipCommand->clip->laneAffinity()};
+        const int channelAffinity{((clipCommand->clip->registerForPolyphonicPlayback() ? clipCommand->clip->sketchpadSlotRow() : ZynthboxSampleSlotRowCount) * ZynthboxSlotCount) + clipCommand->clip->sketchpadSlot()};
         // If the clip had nothing to stop for restarting, we still need to start it, so let's handle that
         if (clipCommand->stopPlayback) {
-            SamplerSynthVoice *voice = subChannels[laneAffinity].firstActiveVoice;
+            SamplerSynthVoice *voice = subChannels[channelAffinity].firstActiveVoice;
             while (voice) {
                 const ClipCommand *currentVoiceCommand = voice->mostRecentStartCommand;
                 if (voice->isTailingOff == false && currentVoiceCommand && currentVoiceCommand->equivalentTo(clipCommand)) {
@@ -833,12 +848,13 @@ void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick
         }
         if (needsHandling && clipCommand->startPlayback) {
             bool needNewVoice{true};
-            SamplerSynthVoice *voice = subChannels[laneAffinity].firstActiveVoice;
+            SamplerSynthVoice *voice = subChannels[channelAffinity].firstActiveVoice;
             while (voice) {
                 if (voice->availableAfter < currentTick) {
                     voice->handleCommand(clipCommand, currentTick);
                     needNewVoice = false;
                     needsHandling = false;
+                    // qDebug() << Q_FUNC_INFO << "Did a repeated thing for" << clipCommand << "handling clip" << clipCommand->startPlayback << clipCommand->stopPlayback << clipCommand->clip << "with subchannel" << channelAffinity << "using previously existing voice" << voice;
                     break;
                 }
                 voice = voice->next;
@@ -848,12 +864,13 @@ void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick
                 if (voicePool->read(&voice)) {
                     // Insert at the start of the list - it makes no functional difference whether it's at the start or end, they're always iterated fully for processing anyway
                     voice->previous = nullptr;
-                    voice->next = subChannels[laneAffinity].firstActiveVoice;
-                    if (subChannels[laneAffinity].firstActiveVoice) {
-                        subChannels[laneAffinity].firstActiveVoice->previous = voice;
+                    voice->next = subChannels[channelAffinity].firstActiveVoice;
+                    if (subChannels[channelAffinity].firstActiveVoice) {
+                        subChannels[channelAffinity].firstActiveVoice->previous = voice;
                     }
-                    subChannels[laneAffinity].firstActiveVoice = voice;
+                    subChannels[channelAffinity].firstActiveVoice = voice;
                     voice->handleCommand(clipCommand, currentTick);
+                    // qDebug() << Q_FUNC_INFO << "Needed a new voice, so did a thing for" << clipCommand << "handling clip" << clipCommand->startPlayback << clipCommand->stopPlayback << clipCommand->clip << "with subchannel" << channelAffinity << "using voice" << voice;
                     needsHandling = false;
                 } else {
                     qWarning() << Q_FUNC_INFO << "Failed to get a new voice - apparently we've used up all" << SamplerVoicePoolSize;
@@ -981,7 +998,7 @@ void SamplerSynth::registerClip(ClipAudioSource *clip)
         // Make sure the channel knows what samples to work with - but only samples, we don't want the loops to end up in here
         SamplerChannel * channel = d->channels[clip->sketchpadTrack() + 1];
         if (clip->registerForPolyphonicPlayback()) {
-            QList<ClipAudioSource*> newTrackSamples = channel->trackSamples;
+            QList<ClipAudioSource*> newTrackSamples = channel->trackSamples[clip->sketchpadSlotRow()];
             // Insert into the list according to the sample's slot position
             int insertionIndex = 0;
             for (; insertionIndex < newTrackSamples.count(); ++insertionIndex) {
@@ -991,9 +1008,10 @@ void SamplerSynth::registerClip(ClipAudioSource *clip)
             }
             newTrackSamples.insert(insertionIndex, clip);
             // qDebug() << Q_FUNC_INFO << newTrackSamples << insertionIndex << clip;
-            channel->trackSamples = newTrackSamples;
+            channel->trackSamples[clip->sketchpadSlotRow()] = newTrackSamples;
             // If the slot changes, we'll need to re-sort our list
             connect(clip, &ClipAudioSource::sketchpadSlotChanged, this, [channel](){ channel->resortSamples(); });
+            connect(clip, &ClipAudioSource::sketchpadSlotRowChanged, this, [channel](){ channel->resortSamples(); });
         } else {
             QList<ClipAudioSource*> newTrackSketches = channel->trackSketches;
             // Insert into the list according to the sketch's slot position
@@ -1031,10 +1049,12 @@ void SamplerSynth::unregisterClip(ClipAudioSource *clip)
         d->positionModels.removeAll(clip->playbackPositionsModel());
         // If that clip was in our track samples, make sure it isn't there any longer
         SamplerChannel * channel = d->channels[clip->sketchpadTrack() + 1];
-        QList<ClipAudioSource*> newTrackSamples = channel->trackSamples;
-        if (newTrackSamples.contains(clip)) {
-            newTrackSamples.removeAll(clip);
-            channel->trackSamples = newTrackSamples;
+        for (int sampleRow = 0; sampleRow < 2; sampleRow++) {
+            QList<ClipAudioSource*> newTrackSamples = channel->trackSamples[sampleRow];
+            if (newTrackSamples.contains(clip)) {
+                newTrackSamples.removeAll(clip);
+                channel->trackSamples[sampleRow] = newTrackSamples;
+            }
         }
         channel->ensureOutputPorts();
     }
@@ -1060,7 +1080,7 @@ void SamplerSynth::handleClipCommand(ClipCommand *clipCommand, quint64 currentTi
     if (d->clipSounds.contains(clipCommand->clip) && clipCommand->midiChannel + 1 < d->channels.count()) {
         SamplerChannel *channel = d->channels[clipCommand->midiChannel + 1];
         if (channel->commandRing.writeHead->processed) {
-            // qDebug() << Q_FUNC_INFO << "Wrote clip command" << clipCommand << "at tick" << currentTick << "on channel" << channel;
+            // qDebug() << Q_FUNC_INFO << "Wrote clip command" << clipCommand << "at tick" << currentTick << "on channel" << channel << "for clip" << clipCommand->clip << "for track/polyphonic/slot/row" << clipCommand->clip->sketchpadTrack() << clipCommand->clip->registerForPolyphonicPlayback() << clipCommand->clip->sketchpadSlot() << clipCommand->clip->sketchpadSlotRow();
             channel->commandRing.write(clipCommand, currentTick);
         } else {
             qWarning() << Q_FUNC_INFO << "Big problem! Attempted to add a clip command to the queue, but we've not handled the one that's already in the queue.";
