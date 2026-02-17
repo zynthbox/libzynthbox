@@ -1804,7 +1804,8 @@ double PatternModel::stepLength() const
 
 QString PatternModel::stepLengthName(const double& stepLength) const
 {
-    static const QMap<double, QString> lengthNames{{384, "4"}, {288, "3"}, {192, "2"}, {168, "7/4"}, {160, "5/3"}, {144, "3/2"}, {128, "4/3"}, {120, "5/4"}, {96, "1"}, {64, "2/3"}, {48, "1/2"}, {32, "1/3"}, {24, "1/4"}, {16, "1/6"}, {12, "1/8"}, {8, "1/12"}, {6, "1/16"}, {4, "1/24"}, {3, "1/32"}, {2, "1/48"}, {1, "1/96"}};
+    // Step length names should be read out in fractions of a note, so let's have a nice little rundown of useful ones first...
+    static const QMap<double, QString> lengthNames{{384, "1"}, {288, "3/4"}, {192, "1/2"}, {168, "7/16"}, {160, "5/12"}, {144, "3/8"}, {128, "1/3"}, {120, "5/16"}, {96, "1/4"}, {64, "1/6"}, {48, "1/8"}, {32, "1/12"}, {24, "1/16"}, {16, "1/24"}, {12, "1/32"}, {8, "1/48"}, {6, "1/64"}, {4, "1/96"}, {3, "1/128"}, {2, "1/192"}, {1, "1/384"}};
     if (lengthNames.contains(stepLength)) {
         return lengthNames[stepLength];
     } else if (stepLength > 96) {
