@@ -360,6 +360,7 @@ SamplerSynthVoice::~SamplerSynthVoice()
 // - When testing if a voice is available, check the voice's availableAfter against timestamp: if (timestamp > voice->availableAfter) { voice->handleCommand(clipCommand, timestamp); }
 void SamplerSynthVoice::handleCommand(ClipCommand* clipCommand, jack_nframes_t timestamp)
 {
+    // qDebug() << Q_FUNC_INFO << "Handling command" << clipCommand << "for cas" << clipCommand->clip << "on track/polyphonic/slot/row" << clipCommand->clip->sketchpadTrack() << clipCommand->clip->registerForPolyphonicPlayback() << clipCommand->clip->sketchpadSlot() << clipCommand->clip->sketchpadSlotRow();
     d->commandRing.write(clipCommand, timestamp);
     if (clipCommand->stopPlayback == true) {
         // Available after the tailoff period
@@ -495,7 +496,9 @@ static inline float nextSample(const float *source, const int &sourceLength, dou
 
 void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t timestamp)
 {
+    // qDebug() << Q_FUNC_INFO << "Starting note for clipCommand" << clipCommand << "with clip" << clipCommand->clip << "on track/polyphonic/slot/row" << clipCommand->clip->sketchpadTrack() << clipCommand->clip->registerForPolyphonicPlayback() << clipCommand->clip->sketchpadSlot() << clipCommand->clip->sketchpadSlotRow();
     if (auto sound = d->samplerSynth->clipToSound(clipCommand->clip)) {
+        // qDebug() << Q_FUNC_INFO << "Got a sound, this is lovely, and our initial gain is" << clipCommand->volume;
         d->sound = sound;
         d->clip = sound->clip();
         d->slice = d->clip->sliceFromIndex(clipCommand->slice);
