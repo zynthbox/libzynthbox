@@ -87,6 +87,13 @@ class ClipAudioSource : public QObject {
      */
     Q_PROPERTY(int sketchpadSlot READ sketchpadSlot WRITE setSketchpadSlot NOTIFY sketchpadSlotChanged)
     /**
+     * \brief The row of slots the sample is loaded into on its sketchpad track
+     * @default 0
+     * @minimum 0
+     * @maximum 1
+     */
+    Q_PROPERTY(int sketchpadSlotRow READ sketchpadSlotRow WRITE setSketchpadSlotRow NOTIFY sketchpadSlotRowChanged)
+    /**
      * \brief The lane the clip should be played one (for samples, the sample slot index in SketchPad, for sketch slots add 5 to the index)
      * @default 0
      * @minimum 0
@@ -189,12 +196,13 @@ public:
    * @param filepath The full path of the file to construct a ClipAudioSource instance for
    * @param sketchpadTrack The sketchpad track this object is associated with (-1 for global, 0 through 9 for the actual tracks)
    * @param sketchpadSlot The slot this object exists in on its given sketchpad track (used for selection purposes during polyphonic, chromatic playback, see SamplePickingStyle)
+   * @param sketchpadSlot The slot row this object exists in on its given sketchpad track (used for selection purposes during polyphonic, chromatic playback, see SamplePickingStyle)
    * @param registerForPolyphonicPlayback Whether to make this instance available for polyphonic, chromatic playback on the given track (set to false for e.g. loops and metronome samples)
    * @param muted Whether to start the clip off as muted
    * @param parent The QObject parent
    * @return The newly created ClipAudioSource instance based on the given settings
    */
-  explicit ClipAudioSource(const char *filepath, const int &sketchpadTrack, const int &sketchpadSlot, const bool &registerForPolyphonicPlayback = true, bool muted = false, QObject *parent = nullptr);
+  explicit ClipAudioSource(const char *filepath, const int &sketchpadTrack, const int &sketchpadSlot, const int &sketchpadSlotRow, const bool &registerForPolyphonicPlayback = true, bool muted = false, QObject *parent = nullptr);
   ~ClipAudioSource() override;
 
   enum SamplePickingStyle {
@@ -299,6 +307,9 @@ public:
   int sketchpadSlot() const;
   void setSketchpadSlot(const int &newValue);
   Q_SIGNAL void sketchpadSlotChanged();
+  int sketchpadSlotRow() const;
+  void setSketchpadSlotRow(const int &newValue);
+  Q_SIGNAL void sketchpadSlotRowChanged();
 
   bool registerForPolyphonicPlayback() const;
 

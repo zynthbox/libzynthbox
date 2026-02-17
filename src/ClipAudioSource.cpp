@@ -107,6 +107,7 @@ public:
   QString processingDescription;
   int sketchpadTrack{-1};
   int sketchpadSlot{0};
+  int sketchpadSlotRow{0};
   bool registerForPolyphonicPlayback{true};
   int laneAffinity{0};
   ClipAudioSourcePositionsModel *positionsModel{nullptr};
@@ -232,7 +233,7 @@ private:
   }
 };
 
-ClipAudioSource::ClipAudioSource(const char *filepath, const int &sketchpadTrack, const int &sketchpadSlot, const bool &registerForPolyphonicPlayback, bool muted, QObject *parent)
+ClipAudioSource::ClipAudioSource(const char *filepath, const int &sketchpadTrack, const int &sketchpadSlot, const int &sketchpadSlotRow, const bool &registerForPolyphonicPlayback, bool muted, QObject *parent)
     : QObject(parent)
     , d(new Private(this))
 {
@@ -242,6 +243,7 @@ ClipAudioSource::ClipAudioSource(const char *filepath, const int &sketchpadTrack
   d->id = Plugin::instance()->nextClipId();
   d->sketchpadTrack = sketchpadTrack;
   d->sketchpadSlot = sketchpadSlot;
+  d->sketchpadSlotRow = sketchpadSlotRow;
   d->registerForPolyphonicPlayback = registerForPolyphonicPlayback;
   Plugin::instance()->addCreatedClipToMap(this);
 
@@ -511,6 +513,19 @@ void ClipAudioSource::setSketchpadSlot(const int& newValue)
   if (d->sketchpadSlot != adjusted) {
     d->sketchpadSlot = adjusted;
     Q_EMIT sketchpadSlotChanged();
+  }
+}
+
+int ClipAudioSource::sketchpadSlotRow() const
+{
+  return d->sketchpadSlotRow;
+}
+
+void ClipAudioSource::setSketchpadSlotRow(const int& newValue)
+{
+  if (d->sketchpadSlotRow != newValue) {
+    d->sketchpadSlotRow = newValue;
+    Q_EMIT sketchpadSlotRowChanged();
   }
 }
 
