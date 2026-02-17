@@ -571,6 +571,11 @@ int Plugin::sketchpadSlotCount() const
     return ZynthboxSlotCount;
 }
 
+int Plugin::sketchpadSampleSlotRowCount() const
+{
+    return ZynthboxSampleSlotRowCount;
+}
+
 int Plugin::clipMaximumPositionCount() const
 {
     return ZynthboxClipMaximumPositionCount;

@@ -5,6 +5,7 @@
 #define ZynthboxSongCount 1
 #define ZynthboxTrackCount 10
 #define ZynthboxSlotCount 5
+#define ZynthboxSampleSlotRowCount 2
 #define ZynthboxClipMaximumPositionCount 256
 
 class ZynthboxBasics : public QObject

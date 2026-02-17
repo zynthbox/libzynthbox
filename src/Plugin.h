@@ -75,6 +75,10 @@ class Plugin : public QObject {
      */
     Q_PROPERTY(int sketchpadSlotCount READ sketchpadSlotCount CONSTANT)
     /**
+     * \brief The amount of rows of samples on a Zynthbox Track
+     */
+    Q_PROPERTY(int sketchpadSampleSlotRowCount READ sketchpadSampleSlotRowCount CONSTANT)
+    /**
      * \brief The number of positions held by a ClipAudioSourcePositionsModel
      */
     Q_PROPERTY(int clipMaximumPositionCount READ clipMaximumPositionCount CONSTANT)
@@ -120,6 +124,7 @@ public:
     int sketchpadSongCount() const;
     int sketchpadTrackCount() const;
     int sketchpadSlotCount() const;
+    int sketchpadSampleSlotRowCount() const;
     int clipMaximumPositionCount() const;
 
     QQmlEngine *qmlEngine() const;
