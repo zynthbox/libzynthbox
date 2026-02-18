@@ -22,4 +22,4 @@ make -j$(nproc) install AM_UPDATE_INFO_DIR=no "INSTALL=install --strip-program=t
 )
 
 # Start the stopped processes
-systemctl start jack2 zynthbox-qml zynthian-webconf zynthian-webconf-fmserver
+systemctl start jack2 mod-ttymidi zynthbox-qml zynthian-webconf zynthian-webconf-fmserver
