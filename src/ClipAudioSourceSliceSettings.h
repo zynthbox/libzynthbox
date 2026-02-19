@@ -476,6 +476,8 @@ public:
     void setPan(const float &pan);
     Q_SIGNAL void panChanged();
 
+    // The root note adjusted based on inheritance (used by SamplerSynth during playback)
+    int effectiveRootNote() const;
     int rootNote() const;
     void setRootNote(const int &rootNote);
     Q_SIGNAL void rootNoteChanged();

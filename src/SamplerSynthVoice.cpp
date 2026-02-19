@@ -548,7 +548,7 @@ void SamplerSynthVoice::startNote(ClipCommand *clipCommand, jack_nframes_t times
         d->playbackData.forwardTailingOffPosition = d->playbackData.stopPosition - (double(d->adsr.getParameters().release * d->playbackData.sourceSampleRate) / d->sound->stretchRate());
         d->playbackData.backwardTailingOffPosition = d->playbackData.startPosition + (double(d->adsr.getParameters().release * d->playbackData.sourceSampleRate) / d->sound->stretchRate());
 
-        d->pitchRatio = std::pow(2.0, (clipCommand->midiNote - d->slice->rootNote()) / 12.0);
+        d->pitchRatio = std::pow(2.0, (clipCommand->midiNote - d->slice->effectiveRootNote()) / 12.0);
         if (d->clipCommand->changePitch && d->clipCommand->pitchChange < 0) {
             d->sourceSamplePosition = d->playbackData.stopPosition;
         } else {
@@ -731,7 +731,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
         while (d->pitchRing.readHead->processed == false && d->pitchRing.readHead->time == frame) {
             const float pitch = d->pitchRing.read(&dataChannel, &dataNote);
             if (isTailingOff == false && (d->clipCommand && (dataChannel == -1 || (d->clipCommand && dataChannel == d->clipCommand->midiChannel)))) {
-                d->pitchRatio = std::pow(2.0, (std::clamp(pitch + double(d->clipCommand->midiNote), 0.0, 127.0) - double(d->slice->rootNote())) / 12.0);
+                d->pitchRatio = std::pow(2.0, (std::clamp(pitch + double(d->clipCommand->midiNote), 0.0, 127.0) - double(d->slice->effectiveRootNote())) / 12.0);
             }
         }
         while (d->aftertouchRing.readHead->processed == false && d->aftertouchRing.readHead->time == frame) {

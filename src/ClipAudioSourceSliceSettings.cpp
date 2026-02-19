@@ -571,6 +571,14 @@ void ClipAudioSourceSliceSettings::setPan(const float &pan)
     }
 }
 
+int ClipAudioSourceSliceSettings::effectiveRootNote() const
+{
+    if (d->rootNote == -1) {
+        d->clip->rootSliceActual()->rootNote();
+    }
+    return d->rootNote;
+}
+
 int ClipAudioSourceSliceSettings::rootNote() const
 {
     if (d->rootNote == -1 && d->index != -1) {
