@@ -229,10 +229,13 @@ bool ClipAudioSourceSliceSettings::isRootSlice() const
 void ClipAudioSourceSliceSettings::play(const int& midiNote, const int& velocity) const
 {
     ClipCommand *command = ClipCommand::channelCommand(d->clip, d->clip->sketchpadTrack());
+    // FIXME Honour subvoices as well, otherwise things won't sound at all proper... Also, when doing this, store the commands in a list when sent out, and then use that to determine what to stop in the function below
     command->midiNote = qMax(0, qMin(midiNote, 127));
     command->changeVolume = true;
     command->volume = float(qMax(0, qMin(velocity, 127))) / 127.0f;
     command->startPlayback = true;
+    command->changeLooping = true;
+    command->looping = looping();
     SyncTimer::instance()->scheduleClipCommand(command, 0);
 }
 
