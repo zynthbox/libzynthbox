@@ -218,7 +218,7 @@ public Q_SLOTS:
             SamplerSynth::instance()->setSamplePickingStyle(q->sketchpadTrack(), samplePickingStyle);
             MidiRouter::instance()->setSketchpadTrackSlotPickingStyle(ZynthboxBasics::Track(q->sketchpadTrack()), samplePickingStyle);
             const QVariantList channelSamples = zlChannel->property("samples").toList();
-            QList<int> slotIndices{0, 1, 2, 3, 4};
+            QList<int> slotIndices{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
             switch(samplePickingStyle) {
                 case ClipAudioSource::AllPickingStyle:
                 case ClipAudioSource::FirstPickingStyle:
@@ -237,6 +237,7 @@ public Q_SLOTS:
                     clipIds << cppObjId;
                 }
             }
+            // qDebug() << Q_FUNC_INFO << "New clip IDs for" << q->sketchpadTrack() << q->clipName() << "with picking style" << zlSamplePickingStyle << samplePickingStyle << clipIds;
         }
         q->setClipIds(clipIds);
     }
@@ -2297,6 +2298,9 @@ QObject *PatternModel::gridModel() const
             int howManyRows{int(sqrt(notesToFit.length()))};
             int i{0};
             d->gridModel->clear();
+            // Some logic thoughts:
+            // - If we are specifically in SampleTriggerDestination, then *only* show the notes actually relevant to the clips on the track
+            // - Maybe what we want is the full span, but we want to limit the upper and lower range to the lowermost and highest notes matching at least one sample
             for (int row = 0; row < howManyRows; ++row) {
                 QVariantList notes;
                 QVariantList metadata;
@@ -2348,10 +2352,13 @@ QObject *PatternModel::gridModel() const
         auto updateClips = [this,refilTimer](){
             for (ClipAudioSource *clip : d->clips) {
                 if (clip) {
+                    clip->disconnect(refilTimer);
                     connect(clip->rootSliceActual(), &ClipAudioSourceSliceSettings::keyZoneStartChanged, refilTimer, QOverload<>::of(&QTimer::start));
                     connect(clip->rootSliceActual(), &ClipAudioSourceSliceSettings::keyZoneEndChanged, refilTimer, QOverload<>::of(&QTimer::start));
+                    connect(clip->rootSliceActual(), &ClipAudioSourceSliceSettings::rootNoteChanged, refilTimer, QOverload<>::of(&QTimer::start));
                 }
             }
+            refilTimer->start();
         };
         connect(this, &PatternModel::clipIdsChanged, d->gridModel, updateClips);
         updateClips();
