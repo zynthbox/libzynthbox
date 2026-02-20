@@ -226,25 +226,52 @@ bool ClipAudioSourceSliceSettings::isRootSlice() const
     return d->index == -1;
 }
 
+QList<ClipCommand*> clipCommands(ClipAudioSource *clip, const ClipAudioSourceSliceSettings *slice, const int &midiNote, const float &velocity)
+{
+    QList<ClipCommand*> result;
+    const bool stopPlayback{velocity == 0};
+    // subvoice -1 is conceptually the prime voice, anything from 0 inclusive to the amount non-inclusive are the subvoices
+    for (int subvoice = -1; subvoice < slice->subvoiceCountPlayback(); ++subvoice) {
+        ClipCommand *command = ClipCommand::channelCommand(clip, clip->sketchpadTrack());
+        command->startPlayback = !stopPlayback;
+        command->stopPlayback = stopPlayback;
+        command->subvoice = subvoice;
+        command->slice = slice->index();
+        command->exclusivityGroup = slice->exclusivityGroup();
+        if (command->startPlayback) {
+            command->changeVolume = true;
+            command->volume = velocity;
+        }
+        if (command->stopPlayback) {
+            // Don't actually set volume, just store the volume for velocity purposes... yes this is kind of a hack
+            command->volume = velocity;
+        }
+        command->midiNote = midiNote;
+        command->changeLooping = true;
+        command->looping = slice->looping();
+        result << command;
+        // qDebug() << Q_FUNC_INFO << "Wrote command to list for" << clip << "slice" << slice << "subvoice" << subvoice;
+    }
+    return result;
+}
+
 void ClipAudioSourceSliceSettings::play(const int& midiNote, const int& velocity) const
 {
-    ClipCommand *command = ClipCommand::channelCommand(d->clip, d->clip->sketchpadTrack());
-    // FIXME Honour subvoices as well, otherwise things won't sound at all proper... Also, when doing this, store the commands in a list when sent out, and then use that to determine what to stop in the function below
-    command->midiNote = qMax(0, qMin(midiNote, 127));
-    command->changeVolume = true;
-    command->volume = float(qMax(0, qMin(velocity, 127))) / 127.0f;
-    command->startPlayback = true;
-    command->changeLooping = true;
-    command->looping = looping();
-    SyncTimer::instance()->scheduleClipCommand(command, 0);
+    const QList<ClipCommand*> commands = clipCommands(d->clip, this, qMax(0, qMin(midiNote, 127)), float(qMax(0, qMin(velocity, 127))) / 127.0f);
+    for (ClipCommand *command : commands) {
+        SyncTimer::instance()->scheduleClipCommand(command, 0);
+    }
 }
 
 void ClipAudioSourceSliceSettings::stop(const int& midiNote) const
 {
-    ClipCommand *command = ClipCommand::channelCommand(d->clip, d->clip->sketchpadTrack());
-    command->midiNote = qMax(0, qMin(midiNote, 127));
-    command->stopPlayback = true;
-    SyncTimer::instance()->scheduleClipCommand(command, 0);
+    // For one-shots, ignore stop calls (as that is handled directly by SamplerSynth)
+    if (effectivePlaybackStyle() != ClipAudioSource::OneshotPlaybackStyle) {
+        const QList<ClipCommand*> commands = clipCommands(d->clip, this, qMax(0, qMin(midiNote, 127)), 0);
+        for (ClipCommand *command : commands) {
+            SyncTimer::instance()->scheduleClipCommand(command, 0);
+        }
+    }
 }
 
 ClipAudioSource::PlaybackStyle ClipAudioSourceSliceSettings::playbackStyle() const
