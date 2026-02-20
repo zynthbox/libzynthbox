@@ -2309,11 +2309,11 @@ QObject *PatternModel::gridModel() const
                         break;
                     }
                     Note* note = qobject_cast<Note*>(PlayGridManager::instance()->getNote(notesToFit[i], d->sketchpadTrack));
-                    notes << QVariant::fromValue<QObject*>(note);
                     QList<ClipAudioSource*> clips = d->clipsForMidiNote(note->midiNote());
                     if (noteDestination() == SampleTriggerDestination) {
-                        QString noteTitle{midiNoteNames[note->midiNote()]};
                         if (clips.length() > 0) {
+                            // Only add to the notes list if there's actually a sample that'll be played for this note
+                            QString noteTitle{midiNoteNames[note->midiNote()]};
                             for (ClipAudioSource* clip : clips) {
                                 int clipIndex = d->clips.indexOf(clip);
                                 QString actualNote{};
@@ -2325,12 +2325,11 @@ QObject *PatternModel::gridModel() const
                                 }
                                 noteTitle += QString("\nSample %1%2").arg(QString::number(clipIndex + 1)).arg(actualNote);
                             }
-                        // } else {
-                            // No need to write this out explicitly...
-                            // noteTitle += QString{"\n(no sample)"};
+                            notes << QVariant::fromValue<QObject*>(note);
+                            metadata << QVariantMap{{"displayText", QVariant::fromValue<QString>(noteTitle)}};
                         }
-                        metadata << QVariantMap{{"displayText", QVariant::fromValue<QString>(noteTitle)}};
                     } else {
+                        notes << QVariant::fromValue<QObject*>(note);
                         metadata << QVariantMap();
                     }
                     ++i;
