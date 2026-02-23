@@ -11,6 +11,7 @@ target_sources(libzynthbox
         AudioTagHelper.cpp
         Chords.cpp
         ClipAudioSource.cpp
+        ClipAudioSourceNotesModel.cpp
         ClipAudioSourcePositionsModel.cpp
         ClipAudioSourcePositionsModelEntry.cpp
         ClipAudioSourceSliceSettings.cpp

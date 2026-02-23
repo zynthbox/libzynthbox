@@ -39,6 +39,7 @@
 
 #include "ClipCommand.h"
 #include "ClipAudioSource.h"
+#include "ClipAudioSourceNotesModel.h"
 #include "ClipAudioSourceSliceSettings.h"
 #include "MidiRouter.h"
 #include "SamplerSynth.h"
@@ -515,6 +516,7 @@ public:
         }
         noteDataPoolReadHead = noteDataPoolWriteHead = noteDataPool;
         patternTickToSyncTimerTick = syncTimer->getMultiplier() / 32;
+        clipNotesModel = new ClipAudioSourceNotesModel(q);
     }
     ~Private() {
         for (int i = 0; i < NoteDataPoolSize; ++i) {
@@ -856,6 +858,9 @@ public:
     KeyScales::Octave octave{PatternModelDefaults::octave};
     PatternModel::KeyScaleLockStyle lockToKeyAndScale{PatternModel::KeyScaleLockOff};
 
+    int firstSampleNote{0};
+    int lastSampleNote{127};
+    ClipAudioSourceNotesModel *clipNotesModel{nullptr};
     int gridModelStartNote{PatternModelDefaults::gridModelStartNote};
     int gridModelEndNote{PatternModelDefaults::gridModelEndNote};
     NotesModel *gridModel{nullptr};
@@ -2076,9 +2081,12 @@ void PatternModel::setClipIds(const QVariantList &clipIds)
                 connect(newClip, &QObject::destroyed, this, [this, newClip](){ d->clips.removeAll(newClip); });
             }
         }
+        // Hook up to the keyzone changes on all slices (and also the total count, so we can update our list when that changes as well)
+        // The model needs to contain all midi notes which have a slice associated, and a list of those slices (remember to remove those on destroyed), and all the clips (for easy access)
         d->clips = newClips;
         Q_EMIT clipIdsChanged();
     }
+    d->clipNotesModel->setClipIds(clipIds);
 }
 
 QVariantList PatternModel::clipIds() const
@@ -2258,6 +2266,21 @@ void PatternModel::setLockToKeyAndScale(const PatternModel::KeyScaleLockStyle& l
     }
 }
 
+int PatternModel::firstSampleNote() const
+{
+    return d->firstSampleNote;
+}
+
+int PatternModel::lastSampleNote() const
+{
+    return d->lastSampleNote;
+}
+
+QObject * PatternModel::clipNotesModel() const
+{
+    return d->clipNotesModel;
+}
+
 int PatternModel::gridModelStartNote() const
 {
     return d->gridModelStartNote;
@@ -2352,9 +2375,7 @@ QObject *PatternModel::gridModel() const
             for (ClipAudioSource *clip : d->clips) {
                 if (clip) {
                     clip->disconnect(refilTimer);
-                    connect(clip->rootSliceActual(), &ClipAudioSourceSliceSettings::keyZoneStartChanged, refilTimer, QOverload<>::of(&QTimer::start));
-                    connect(clip->rootSliceActual(), &ClipAudioSourceSliceSettings::keyZoneEndChanged, refilTimer, QOverload<>::of(&QTimer::start));
-                    connect(clip->rootSliceActual(), &ClipAudioSourceSliceSettings::rootNoteChanged, refilTimer, QOverload<>::of(&QTimer::start));
+                    connect(clip, &ClipAudioSource::sliceDataChanged, refilTimer, QOverload<>::of(&QTimer::start));
                 }
             }
             refilTimer->start();

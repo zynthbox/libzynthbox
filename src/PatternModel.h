@@ -178,7 +178,8 @@ class PatternModel : public NotesModel
      */
     Q_PROPERTY(bool enabled READ enabled WRITE setEnabled NOTIFY enabledChanged)
     /**
-     * \brief The IDs of the clips being used for the sample trigger and slice note destination modes
+     * \brief The IDs of the ClipAudioSource instances being used for the sample trigger and slice note destination modes
+     * @see Plugin::getClipById(int)
      */
     Q_PROPERTY(QVariantList clipIds READ clipIds WRITE setClipIds NOTIFY clipIdsChanged)
     /**
@@ -241,6 +242,27 @@ class PatternModel : public NotesModel
      * @default PatternModel::KeyScaleLockOff
      */
     Q_PROPERTY(PatternModel::KeyScaleLockStyle lockToKeyAndScale READ lockToKeyAndScale WRITE setLockToKeyAndScale NOTIFY lockToKeyAndScaleChanged)
+
+    /**
+     * \brief The first midi note that will trigger a sample/slice for this pattern
+     * This is used to ensure the grid model doesn't scroll out of range on tracks in sample mode, and for the drum sequencer
+     * @minimum 0
+     * @maximum 127
+     * @default 0
+     */
+    Q_PROPERTY(int firstSampleNote READ firstSampleNote NOTIFY firstSampleNoteChanged)
+    /**
+     * \brief The last midi note that will trigger a sample/slice for this pattern
+     * This is used to ensure the grid model doesn't scroll out of range on tracks in sample mode, and for the drum sequencer
+     * @minimum 0
+     * @maximum 127
+     * @default 127
+     */
+    Q_PROPERTY(int lastSampleNote READ lastSampleNote NOTIFY lastSampleNoteChanged)
+    /**
+     * \brief An instance of ClipAudioSourceNotesModel which is automatically updated for this pattern's samples
+     */
+    Q_PROPERTY(QObject* clipNotesModel READ clipNotesModel CONSTANT)
 
     /**
      * \brief The first note used to fill out the grid model
@@ -711,6 +733,12 @@ public:
     KeyScaleLockStyle lockToKeyAndScale() const;
     void setLockToKeyAndScale(const KeyScaleLockStyle &lockToKeyAndScale);
     Q_SIGNAL void lockToKeyAndScaleChanged();
+
+    int firstSampleNote() const;
+    Q_SIGNAL void firstSampleNoteChanged();
+    int lastSampleNote() const;
+    Q_SIGNAL void lastSampleNoteChanged();
+    QObject *clipNotesModel() const;
 
     int gridModelStartNote() const;
     void setGridModelStartNote(int gridModelStartNote);
