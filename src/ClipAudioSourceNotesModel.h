@@ -30,7 +30,9 @@ class ClipAudioSourceNotesModelPrivate;
  */
 class ClipAudioSourceNotesModel : public QAbstractListModel {
     Q_OBJECT
+    Q_PROPERTY(QVariantMap roles READ roles CONSTANT)
     Q_PROPERTY(QVariantList clipIds READ clipIds WRITE setClipIds NOTIFY clipIdsChanged)
+    Q_PROPERTY(int lastModified READ lastModified NOTIFY lastModifiedChanged)
 public:
     explicit ClipAudioSourceNotesModel(QObject *parent = nullptr);
     ~ClipAudioSourceNotesModel() override;
@@ -45,10 +47,14 @@ public:
     QHash<int, QByteArray> roleNames() const override;
     Q_INVOKABLE int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     Q_INVOKABLE QVariant data(const QModelIndex &index, int role) const override;
+    Q_INVOKABLE QModelIndex index(int row, int column = 0, const QModelIndex &parent = QModelIndex()) const override;
 
     QVariantList clipIds() const;
     void setClipIds(const QVariantList &newValue);
     Q_SIGNAL void clipIdsChanged();
+
+    int lastModified() const;
+    Q_SIGNAL void lastModifiedChanged();
 private:
     ClipAudioSourceNotesModelPrivate *d{nullptr};
 };

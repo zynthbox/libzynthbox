@@ -24,6 +24,7 @@
 #include "ClipAudioSourceSliceSettings.h"
 #include "Plugin.h"
 
+#include <QDateTime>
 #include <QTimer>
 
 struct ClipAudioSourceNotesModelEntry {
@@ -51,6 +52,7 @@ public:
     ClipAudioSourceNotesModelEntry entries[128];
     QVariantList clipIDs;
     QList<ClipAudioSource*> clips;
+    int lastModified{0};
     QTimer refreshTimer;
 
     void refreshData() {
@@ -88,6 +90,8 @@ public:
             if (hasChanged) {
                 QModelIndex idx{q->index(midiNote)};
                 q->dataChanged(idx, idx);
+                lastModified = QDateTime::currentMSecsSinceEpoch();
+                Q_EMIT q->lastModifiedChanged();
             }
         }
     }
@@ -158,6 +162,15 @@ QVariant ClipAudioSourceNotesModel::data(const QModelIndex& index, int role) con
     return result;
 }
 
+QModelIndex ClipAudioSourceNotesModel::index(int row, int column, const QModelIndex& parent) const
+{
+    QModelIndex idx;
+    if (parent.isValid() == false && -1 < row && row < 128 && column == 0) {
+        idx = createIndex(row, column);
+    }
+    return idx;
+}
+
 QVariantList ClipAudioSourceNotesModel::clipIds() const
 {
     return d->clipIDs;
@@ -199,4 +212,9 @@ void ClipAudioSourceNotesModel::setClipIds(const QVariantList& newValue)
         d->refreshTimer.start();
         Q_EMIT clipIdsChanged();
     }
+}
+
+int ClipAudioSourceNotesModel::lastModified() const
+{
+    return d->lastModified;
 }
