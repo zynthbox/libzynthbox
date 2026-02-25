@@ -112,6 +112,7 @@
     <object-type name="ZynthboxBasics">
         <enum-type name="Track" />
         <enum-type name="Slot" />
+        <enum-type name="TrackRackType" />
     </object-type>
     <object-type name="FifoHandler">
         <enum-type name="Direction" />

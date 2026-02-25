@@ -22,6 +22,12 @@ public:
     explicit ZynthboxBasics(QObject *parent = nullptr);
     ~ZynthboxBasics() override;
 
+    enum TrackRackType {
+        SynthRackType,
+        SampleRackType,
+    };
+    Q_ENUM(TrackRackType)
+
     enum Track {
         NoTrack = -3,
         AnyTrack = -2,
