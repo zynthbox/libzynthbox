@@ -85,7 +85,7 @@ static const QHash<KeyScales::Pitch, int> pitchValuesHash{
 };
 static const KeyScales::Pitch pitchForMidiValue[12]{
     KeyScales::PitchC,
-    KeyScales::PitchDFlat,
+    KeyScales::PitchCSharp,
     KeyScales::PitchD,
     KeyScales::PitchDSharp,
     KeyScales::PitchE,
