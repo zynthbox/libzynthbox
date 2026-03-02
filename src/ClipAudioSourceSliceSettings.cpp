@@ -48,6 +48,7 @@ public:
     ClipAudioSource::PlaybackStyle playbackStyle{ClipAudioSource::NonLoopingPlaybackStyle};
     bool looping{false};
     float loopDelta{0.0f};
+    float loopDeltaBeats{0.0f};
     int loopDeltaSamples{0};
     float loopDelta2{0.0f};
     int loopDelta2Samples{0};
@@ -349,6 +350,11 @@ float ClipAudioSourceSliceSettings::loopDeltaSeconds() const
     return d->loopDelta;
 }
 
+float ClipAudioSourceSliceSettings::loopDeltaBeats() const
+{
+    return d->loopDeltaBeats;
+}
+
 int ClipAudioSourceSliceSettings::loopDeltaSamples() const
 {
     return d->loopDeltaSamples;
@@ -358,7 +364,19 @@ void ClipAudioSourceSliceSettings::setLoopDeltaSeconds(const float& newLoopDelta
 {
     if (d->loopDelta != newLoopDelta) {
         d->loopDelta = newLoopDelta;
+        d->loopDeltaBeats = double(SyncTimer::instance()->secondsToSubbeatCount(d->clip->bpm() == 0 ? SyncTimer::instance()->getBpm() : d->clip->bpm(), d->loopDelta)) / double(SyncTimer::instance()->getMultiplier());
         d->loopDeltaSamples = newLoopDelta * d->clip->sampleRate();
+        Q_EMIT loopDeltaChanged();
+        Q_EMIT d->clip->sliceDataChanged();
+    }
+}
+
+void ClipAudioSourceSliceSettings::setLoopDeltaBeats(const float& newLoopDeltaBeats)
+{
+    if (d->loopDeltaBeats != newLoopDeltaBeats) {
+        d->loopDeltaBeats = newLoopDeltaBeats;
+        d->loopDelta = SyncTimer::instance()->subbeatCountToSeconds(quint64(d->clip->bpm() == 0 ? SyncTimer::instance()->getBpm() : d->clip->bpm()), quint64((newLoopDeltaBeats * SyncTimer::instance()->getMultiplier())));
+        d->loopDeltaSamples = d->loopDelta * d->clip->sampleRate();
         Q_EMIT loopDeltaChanged();
         Q_EMIT d->clip->sliceDataChanged();
     }
@@ -369,6 +387,7 @@ void ClipAudioSourceSliceSettings::setLoopDeltaSamples(const int& newLoopDeltaSa
     if (d->loopDeltaSamples != newLoopDeltaSamples) {
         d->loopDeltaSamples = newLoopDeltaSamples;
         d->loopDelta = double(newLoopDeltaSamples) / d->clip->sampleRate();
+        d->loopDeltaBeats = double(SyncTimer::instance()->secondsToSubbeatCount(d->clip->bpm() == 0 ? SyncTimer::instance()->getBpm() : d->clip->bpm(), d->loopDelta)) / double(SyncTimer::instance()->getMultiplier());
         Q_EMIT loopDeltaChanged();
         Q_EMIT d->clip->sliceDataChanged();
     }

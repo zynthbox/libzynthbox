@@ -105,6 +105,7 @@ class ClipAudioSourceSliceSettings : public QObject
      * @default 0.0
      */
     Q_PROPERTY(float loopDeltaSeconds READ loopDeltaSeconds WRITE setLoopDeltaSeconds NOTIFY loopDeltaChanged)
+    Q_PROPERTY(float loopDeltaBeats READ loopDeltaBeats WRITE setLoopDeltaBeats NOTIFY loopDeltaChanged)
     Q_PROPERTY(int loopDeltaSamples READ loopDeltaSamples WRITE setLoopDeltaSamples NOTIFY loopDeltaChanged)
     /**
      * \brief The position of the loop point where looping playback will stop at once released (in seconds, delta from playback stop)
@@ -397,8 +398,10 @@ public:
     Q_SIGNAL void loopingChanged();
 
     float loopDeltaSeconds() const;
+    float loopDeltaBeats() const;
     int loopDeltaSamples() const;
     void setLoopDeltaSeconds(const float &newLoopDelta);
+    void setLoopDeltaBeats(const float &newLoopDeltaBeats);
     void setLoopDeltaSamples(const int &newLoopDeltaSamples);
     Q_SIGNAL void loopDeltaChanged();
 
