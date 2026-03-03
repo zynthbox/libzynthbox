@@ -388,6 +388,16 @@ const char *ClipAudioSource::getFilePath() const {
   return d->filePath.toUtf8();
 }
 
+QString ClipAudioSource::fileName() const
+{
+  return QString::fromUtf8(d->fileName.toUTF8());
+}
+
+const int ClipAudioSource::fileSize() const
+{
+  return d->givenFile.getSize();
+}
+
 tracktion_engine::AudioFile ClipAudioSource::getPlaybackFile() const {
   return tracktion_engine::AudioFile(*d->audioFile);
 }

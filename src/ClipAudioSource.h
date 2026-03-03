@@ -72,6 +72,18 @@ class ClipAudioSource : public QObject {
     Q_PROPERTY(float durationSeconds READ getDuration NOTIFY durationChanged)
     Q_PROPERTY(int durationSamples READ getDurationSamples NOTIFY durationChanged)
     /**
+     * \brief The on-disk filename for this clip (without path)
+     */
+    Q_PROPERTY(QString fileName READ fileName CONSTANT)
+    /**
+     * \brief The on-disk size in bytes of this clip's file
+     */
+    Q_PROPERTY(int fileSize READ fileSize CONSTANT)
+    /**
+     * \brief The clip's samplerate as found on disk
+     */
+    Q_PROPERTY(double sampleRate READ sampleRate CONSTANT)
+    /**
      * \brief The sketchpad track this clip is associated with
      * @note changing this while the clip is playing will potentially cause some weird sounds to happen, so probably try and avoid that
      * @default -1 (global playback)
@@ -278,6 +290,8 @@ public:
 
   const char *getFileName() const;
   const char *getFilePath() const;
+  const int fileSize() const;
+  QString fileName() const;
 
   const double &sampleRate() const;
 
