@@ -713,11 +713,12 @@ public:
                             const Note *subnote = subnotes[subnoteIndex].value<Note*>();
                             const QVariantHash &metaHash = meta[subnoteIndex].toHash();
                             if (subnote) {
-                                const qint64 delay{(metaHash.value(delayString, 0).toInt() * patternTickToSyncTimerTick) + subsequentStep.swingOffset};
+                                const qint64 delay{(metaHash.value(delayString, 0).toInt()) + subsequentStep.swingOffset};
                                 // Only handle if the delay is zero or in the future (since if it's in
                                 // the past, we'd be handling it twice, and at the wrong time)
                                 // qDebug() << Q_FUNC_INFO << "Delay is" << delay;
                                 if (delay >= 0) {
+                                    // qDebug() << Q_FUNC_INFO << "Delay" << delay << "is zero or positive, so sending step";
                                     subnoteSender(subnote, metaHash, delay, subsequentStep, subnoteIndex);
                                 }
                             }
@@ -745,10 +746,11 @@ public:
                             const Note *subnote = subnotes[subnoteIndex].value<Note*>();
                             const QVariantHash &metaHash = meta[subnoteIndex].toHash();
                             if (subnote) {
-                                const qint64 delay{(metaHash.value(delayString, 0).toInt() * patternTickToSyncTimerTick) + subsequentStep.swingOffset};
+                                const qint64 delay{(metaHash.value(delayString, 0).toInt()) + subsequentStep.swingOffset};
                                 // qDebug() << Q_FUNC_INFO << "Delay is" << delay;
-                                if (delay < 0) {
-                                    subnoteSender(subnote, metaHash, positionAdjustment +  delay, subsequentStep, subnoteIndex);
+                                if (delay < 0 && positionAdjustment + delay < noteDuration) {
+                                    // qDebug() << Q_FUNC_INFO << "Delay is negative and within the current step for subsequent" << subsequentStepIndex << "sending step with position adjusted to" << positionAdjustment + delay;
+                                    subnoteSender(subnote, metaHash, positionAdjustment + delay, subsequentStep, subnoteIndex);
                                 }
                             }
                         }
