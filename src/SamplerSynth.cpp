@@ -766,8 +766,13 @@ int SamplerSynthPrivate::process(jack_nframes_t nframes)
                 if (subChannel.leftPort && subChannel.rightPort) {
                     leftBuffers[channelIndex][subChannelIndex] = (jack_default_audio_sample_t*)jack_port_get_buffer(subChannel.leftPort, nframes);
                     rightBuffers[channelIndex][subChannelIndex] = (jack_default_audio_sample_t*)jack_port_get_buffer(subChannel.rightPort, nframes);
-                    memset(leftBuffers[channelIndex][subChannelIndex], 0, nframes * sizeof (jack_default_audio_sample_t));
-                    memset(rightBuffers[channelIndex][subChannelIndex], 0, nframes * sizeof (jack_default_audio_sample_t));
+                    // While this shouldn't really be happening... apparently it does occasionally when we're loading/removing samples
+                    if (leftBuffers[channelIndex][subChannelIndex]) {
+                        memset(leftBuffers[channelIndex][subChannelIndex], 0, nframes * sizeof (jack_default_audio_sample_t));
+                    }
+                    if (rightBuffers[channelIndex][subChannelIndex]) {
+                        memset(rightBuffers[channelIndex][subChannelIndex], 0, nframes * sizeof (jack_default_audio_sample_t));
+                    }
                 }
                 ++subChannelIndex;
             }
