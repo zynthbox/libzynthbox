@@ -9,10 +9,10 @@ if(INCLUDE_QML_STACK_TRACE_HELPER)
     )
     target_include_directories(libzynthbox
         PRIVATE
-            /usr/include/arm-linux-gnueabihf/qt5/QtQml/5.15.8
-            /usr/include/arm-linux-gnueabihf/qt5/QtQml/5.15.8/QtQml
-            /usr/include/arm-linux-gnueabihf/qt5/QtCore/5.15.8
-            /usr/include/arm-linux-gnueabihf/qt5/QtCore/5.15.8/QtCore
+            /usr/include/aarch64-linux-gnu/qt5/QtQml/5.15.15
+            /usr/include/aarch64-linux-gnu/qt5/QtQml/5.15.15/QtQml
+            /usr/include/aarch64-linux-gnu/qt5/QtCore/5.15.15
+            /usr/include/aarch64-linux-gnu/qt5/QtCore/5.15.15/QtCore
     )
 endif()
 
