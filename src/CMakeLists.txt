@@ -2,6 +2,20 @@ set(TYPESYSTEM_FILE ${CMAKE_CURRENT_SOURCE_DIR}/plugin_typesystem.xml)
 
 add_library(libzynthbox SHARED)
 
+if(INCLUDE_QML_STACK_TRACE_HELPER)
+    target_sources(libzynthbox
+        PRIVATE
+            QmlStackTraceHelper.cpp
+    )
+    target_include_directories(libzynthbox
+        PRIVATE
+            /usr/include/arm-linux-gnueabihf/qt5/QtQml/5.15.8
+            /usr/include/arm-linux-gnueabihf/qt5/QtQml/5.15.8/QtQml
+            /usr/include/arm-linux-gnueabihf/qt5/QtCore/5.15.8
+            /usr/include/arm-linux-gnueabihf/qt5/QtCore/5.15.8/QtCore
+    )
+endif()
+
 target_sources(libzynthbox
     PRIVATE
         AdjectiveNoun.cpp
@@ -129,10 +143,6 @@ target_link_libraries(libzynthbox
 target_include_directories(libzynthbox
     PRIVATE
         ${Jack_INCLUDE_DIRS}
-        /usr/include/arm-linux-gnueabihf/qt5/QtQml/5.15.8
-        /usr/include/arm-linux-gnueabihf/qt5/QtQml/5.15.8/QtQml
-        /usr/include/arm-linux-gnueabihf/qt5/QtCore/5.15.8
-        /usr/include/arm-linux-gnueabihf/qt5/QtCore/5.15.8/QtCore
     INTERFACE
         $<TARGET_PROPERTY:libzynthbox,INCLUDE_DIRECTORIES>
 )

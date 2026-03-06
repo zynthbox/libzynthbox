@@ -23,6 +23,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${ECM_MODULE_PATH} ${CMAKE_CURRENT_LI
 
 option(GENERATE_PYTHON_BINDINGS "When on, the python module for libZynthbox will be generated (which requires Shiboken2 to be installed)" ON)
 option(PRINT_DEBUG_LOGS "When on, a bunch of debug logs will get printed. Default : Off" OFF)
+option(INCLUDE_QML_STACK_TRACE_HELPER "When on, the KDAB qml backtrace printer for handy debugging with gdb is included in the build (requires: qtdeclarative5-private-dev qtbase5-private-dev)" OFF)
 
 include(FindPkgConfig)
 include(KDEInstallDirs)
