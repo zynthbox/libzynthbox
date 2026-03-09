@@ -1061,6 +1061,12 @@ void SamplerSynth::unregisterClip(ClipAudioSource *clip)
                 channel->trackSamples[sampleRow] = newTrackSamples;
             }
         }
+        // If that clip was in our track sketches, make sure it isn't there any longer
+        QList<ClipAudioSource*> newTrackSketches = channel->trackSketches;
+        if (newTrackSketches.contains(clip)) {
+            newTrackSketches.removeAll(clip);
+            channel->trackSketches = newTrackSketches;
+        }
         channel->ensureOutputPorts();
     }
 }
