@@ -7,12 +7,10 @@ if(INCLUDE_QML_STACK_TRACE_HELPER)
         PRIVATE
             QmlStackTraceHelper.cpp
     )
-    target_include_directories(libzynthbox
+    target_link_libraries(libzynthbox
         PRIVATE
-            /usr/include/aarch64-linux-gnu/qt5/QtQml/5.15.15
-            /usr/include/aarch64-linux-gnu/qt5/QtQml/5.15.15/QtQml
-            /usr/include/aarch64-linux-gnu/qt5/QtCore/5.15.15
-            /usr/include/aarch64-linux-gnu/qt5/QtCore/5.15.15/QtCore
+            Qt5::CorePrivate
+            Qt5::QmlPrivate
     )
 endif()
 
