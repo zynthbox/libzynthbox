@@ -5,8 +5,7 @@ set -ex
 SCRIPTPATH="$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 
 # Stop all running heavy processes
-systemctl stop --user pipewire mod-ttymidi zynthbox-qml
-systemctl stop zynthian-webconf zynthian-webconf-fmserver
+systemctl stop --user pipewire mod-ttymidi zynthbox-qml zynthian-webconf
 
 (
 # Create build dir and cd into it
@@ -23,5 +22,4 @@ make -j$(nproc) install AM_UPDATE_INFO_DIR=no "INSTALL=install --strip-program=t
 )
 
 # Start the stopped processes
-systemctl start --user pipewire mod-ttymidi zynthbox-qml
-systemctl start zynthian-webconf zynthian-webconf-fmserver
+systemctl start --user pipewire mod-ttymidi zynthbox-qml zynthian-webconf
