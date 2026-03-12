@@ -1097,9 +1097,9 @@ void PatternModel::cloneOther(PatternModel *otherPattern)
         setBankOffset(otherPattern->bankOffset());
         setBankLength(otherPattern->bankLength());
         setEnabled(otherPattern->enabled()); // FIXME This is... not proper, is it?
-        setScale(otherPattern->scale());
-        setOctave(otherPattern->octave());
-        setPitch(otherPattern->pitch());
+        setScaleKey(otherPattern->scaleKey());
+        setOctaveKey(otherPattern->octaveKey());
+        setPitchKey(otherPattern->pitchKey());
         setDefaultNoteDuration(otherPattern->defaultNoteDuration());
         setGridModelStartNote(otherPattern->gridModelStartNote());
         setGridModelEndNote(otherPattern->gridModelEndNote());
@@ -1813,19 +1813,20 @@ double PatternModel::stepLength() const
 QString PatternModel::stepLengthName(const double& stepLength) const
 {
     // Step length names should be read out in fractions of a note, so let's have a nice little rundown of useful ones first...
-    static const QMap<double, QString> lengthNames{{384, "1"}, {288, "3/4"}, {192, "1/2"}, {168, "7/16"}, {160, "5/12"}, {144, "3/8"}, {128, "1/3"}, {120, "5/16"}, {96, "1/4"}, {64, "1/6"}, {48, "1/8"}, {32, "1/12"}, {24, "1/16"}, {16, "1/24"}, {12, "1/32"}, {8, "1/48"}, {6, "1/64"}, {4, "1/96"}, {3, "1/128"}, {2, "1/192"}, {1, "1/384"}};
+    // The ones with T on the name are the triplet variants of that fraction of a note
+    static const QMap<double, QString> lengthNames{{384, "1"}, {288, "3/4"}, {256, "1/2T"}, {192, "1/2"}, {168, "7/16"}, {160, "5/12"}, {144, "3/8"}, {128, "1/4T"}, {120, "5/16"}, {96, "1/4"}, {64, "1/8T"}, {48, "1/8"}, {32, "1/16T"}, {24, "1/16"}, {16, "1/32T"}, {12, "1/32"}, {8, "1/64T"}, {6, "1/64"}, {4, "1/128T"}, {3, "1/128"}, {2, "1/192"}, {1, "1/384"}};
     if (lengthNames.contains(stepLength)) {
         return lengthNames[stepLength];
-    } else if (stepLength > 96) {
-        const int beatCount{int(stepLength) / 96};
-        return QString::fromUtf8("%1♩%2/96").arg(beatCount).arg(int(stepLength - (beatCount * 96)) % 96);
+    } else if (stepLength > 384) {
+        const int beatCount{int(stepLength) / 384};
+        return QString::fromUtf8("%1♩%2/384").arg(beatCount).arg(int(stepLength - (beatCount * 384)) % 384);
     }
-    return QString::fromUtf8("%1/96").arg(stepLength);
+    return QString::fromUtf8("%1/384").arg(stepLength);
 }
 
 double PatternModel::nextStepLengthStep(const double &startingPoint, const int& direction) const
 {
-    static const QList<double> stepLengthSteps{1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 288, 384};
+    static const QList<double> stepLengthSteps{1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 288, 384};
     double returnValue = startingPoint;
     if (direction > 0) {
         // Increasing the step position to the next nearest upward position (or self if there isn't one)
