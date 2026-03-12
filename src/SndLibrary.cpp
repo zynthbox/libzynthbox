@@ -21,6 +21,7 @@
 #include <QAbstractProxyModel>
 #include <taglib/taglib.h>
 #include <taglib/wavfile.h>
+#include <taglib/vorbisfile.h>
 #include <taglib/tpropertymap.h>
 #include <taglib/tstring.h>
 
@@ -194,9 +195,18 @@ void SndLibrary::processSndFiles(const QStringList sources)
 }
 
 void SndLibrary::processSndFile(const QString absolutePath)
-{    
-    TagLib::RIFF::WAV::File tagLibFile(qPrintable(absolutePath));
-    TagLib::PropertyMap tags = tagLibFile.properties();
+{
+    TagLib::PropertyMap tags;
+    if (absolutePath.toLower().endsWith(".wav")) {
+        TagLib::RIFF::WAV::File tagLibFile(qPrintable(absolutePath));
+        tags = tagLibFile.properties();
+    } else if (absolutePath.toLower().endsWith(".ogg")) {
+        TagLib::Vorbis::File tagLibFile(qPrintable(absolutePath));
+        tags = tagLibFile.properties();
+    } else {
+        qWarning() << Q_FUNC_INFO << "Failed to process sound file - it was not a recognised filetype:" << absolutePath.split(".").last();
+        return;
+    }
     const QString category = TStringToQString(tags["ZYNTHBOX_SOUND_CATEGORY"].front());
     processSndFile(absolutePath, category);
 }
