@@ -388,7 +388,8 @@ void SamplerSynthVoice::handleCommand(ClipCommand* clipCommand, jack_nframes_t t
 void SamplerSynthVoice::checkExclusivity(ClipCommand* clipCommand, jack_nframes_t timestamp)
 {
     // If the command calls for the same exclusivity group that we are in, stop playback of our current thing
-    if (d->clipCommand->exclusivityGroup == clipCommand->exclusivityGroup) {
+    // Also, if this is a one-shot, and we've got matching slices on the same clip, also stop (because one-shots only want one active at the same time, modulo envelopes)
+    if (d->clip && (d->clipCommand->exclusivityGroup == clipCommand->exclusivityGroup || (d->clip == clipCommand->clip && d->clipCommand->slice == clipCommand->slice && d->slice->effectivePlaybackStyle() == ClipAudioSource::OneshotPlaybackStyle))) {
         ClipCommand* newCommand{d->syncTimer->getClipCommand()};
         newCommand->stopPlayback = true;
         newCommand->clip = d->clipCommand->clip;

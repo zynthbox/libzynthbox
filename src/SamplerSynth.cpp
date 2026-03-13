@@ -822,7 +822,7 @@ void SamplerChannel::handleCommand(ClipCommand *clipCommand, quint64 currentTick
 {
     // const int channelAffinity{((clipCommand->clip->registerForPolyphonicPlayback() ? clipCommand->clip->sketchpadSlotRow() : ZynthboxSampleSlotRowCount) * ZynthboxSlotCount) + clipCommand->clip->sketchpadSlot()};
     // qDebug() << Q_FUNC_INFO << clipCommand << "handling clip" << clipCommand->startPlayback << clipCommand->stopPlayback << clipCommand->clip << "with subchannel" << channelAffinity;
-    if (clipCommand->startPlayback && clipCommand->exclusivityGroup > -1) {
+    if (clipCommand->startPlayback && (clipCommand->exclusivityGroup > -1 || clipCommand->clip->sliceFromIndex(clipCommand->slice)->effectivePlaybackStyle() == ClipAudioSource::OneshotPlaybackStyle)) {
         // If we are starting playback, and we have an exclusivity group, test all the active
         // voices to see whether they need to do something about what they're doing just now
         for (const SubChannel &subChannel : qAsConst(subChannels)) {
