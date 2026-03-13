@@ -73,6 +73,7 @@ public:
         }
         entry->samplerVoice = samplerVoice;
         entry->processed = false;
+        ++availableVoices;
     }
     /**
      * \brief Attempt to read the data out of the ring, until there are no more unprocessed entries
@@ -85,6 +86,7 @@ public:
             *samplerVoice = entry->samplerVoice;
             entry->samplerVoice = nullptr;
             entry->processed = true;
+            --availableVoices;
             return true;
         }
         return false;
@@ -93,4 +95,5 @@ public:
     Entry *readHead{nullptr};
     Entry *writeHead{nullptr};
     QString name;
+    int availableVoices{0};
 };

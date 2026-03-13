@@ -581,6 +581,11 @@ int Plugin::clipMaximumPositionCount() const
     return ZynthboxClipMaximumPositionCount;
 }
 
+int Plugin::activeSamplerVoices() const
+{
+    return SamplerSynth::instance()->activeVoices();
+}
+
 QQmlEngine * Plugin::qmlEngine() const
 {
     if (m_qmlEngine == nullptr) {

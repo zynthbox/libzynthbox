@@ -32,6 +32,23 @@ public:
      */
     double sampleRate() const;
 
+    /**
+     * \brief Returns the current number of available voices
+     * @return The current number of available voices
+     */
+    int availableVoices() const;
+    /**
+     * \brief Returns the total number of voices
+     * @return The total number of voices
+     */
+    int totalVoices() const;
+    /**
+     * \brief Returns the current number of active voices
+     * This is simply totalVoices-availableVoices
+     * @return The current number of active voices
+     */
+    int activeVoices() const;
+
     void registerClip(ClipAudioSource *clip);
     void unregisterClip(ClipAudioSource *clip);
     SamplerSynthSound *clipToSound(ClipAudioSource *clip) const;

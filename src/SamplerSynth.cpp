@@ -987,6 +987,21 @@ double SamplerSynth::sampleRate() const
     return d->sampleRate;
 }
 
+int SamplerSynth::availableVoices() const
+{
+    return d->voicePool.availableVoices;
+}
+
+int SamplerSynth::totalVoices() const
+{
+    return SamplerVoicePoolSize;
+}
+
+int SamplerSynth::activeVoices() const
+{
+    return SamplerVoicePoolSize - d->voicePool.availableVoices;
+}
+
 void SamplerSynth::registerClip(ClipAudioSource *clip)
 {
     QMutexLocker locker(&d->synthMutex);

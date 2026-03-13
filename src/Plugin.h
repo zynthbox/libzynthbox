@@ -126,6 +126,7 @@ public:
     int sketchpadSlotCount() const;
     int sketchpadSampleSlotRowCount() const;
     int clipMaximumPositionCount() const;
+    Q_INVOKABLE int activeSamplerVoices() const;
 
     QQmlEngine *qmlEngine() const;
 private:
