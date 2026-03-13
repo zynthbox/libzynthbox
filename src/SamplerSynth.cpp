@@ -717,7 +717,7 @@ public:
     jack_nframes_t sampleRate{0};
     SamplerVoicePoolRing voicePool;
 
-    QHash<ClipAudioSource*, SamplerSynthSound*> clipSounds;
+    SamplerSoundList clipSounds;
     QList<ClipAudioSourcePositionsModel*> positionModels;
     te::Engine *engine{nullptr};
 
@@ -749,11 +749,13 @@ int SamplerSynthPrivate::process(jack_nframes_t nframes)
         * - Update the clip's position models most recent position update
         */
         // First clear all the sounds' internal buffers, where that makes sense
-        for (auto soundIterator = clipSounds.constKeyValueBegin(); soundIterator != clipSounds.constKeyValueEnd(); ++soundIterator) {
-            SamplerSynthSound *sound = soundIterator->second;
-            if (sound && sound->isValid) {
-                memset(sound->leftBuffer, 0, nframes * sizeof (jack_default_audio_sample_t));
-                memset(sound->rightBuffer, 0, nframes * sizeof (jack_default_audio_sample_t));
+        for (const SamplerSoundList::Entry &entry : clipSounds.ringData) {
+            if (entry.empty == false) {
+                SamplerSynthSound *sound = entry.samplerSound;
+                if (sound && sound->isValid) {
+                    memset(sound->leftBuffer, 0, nframes * sizeof (jack_default_audio_sample_t));
+                    memset(sound->rightBuffer, 0, nframes * sizeof (jack_default_audio_sample_t));
+                }
             }
         }
         // Process each of the channels in turn
@@ -781,10 +783,10 @@ int SamplerSynthPrivate::process(jack_nframes_t nframes)
         }
         // Finalise processing on each individual sound
         // static int throttler{0}; ++throttler; if (throttler > 200) { throttler = 0; };
-        for (auto soundIterator = clipSounds.constKeyValueBegin(); soundIterator != clipSounds.constKeyValueEnd(); ++soundIterator) {
-            SamplerSynthSound *sound = soundIterator->second;
-            if (sound && sound->isValid) {
-                ClipAudioSource *clip = soundIterator->first;
+        for (const SamplerSoundList::Entry &entry : clipSounds.ringData) {
+            if (entry.empty == false) {
+                SamplerSynthSound *sound = entry.samplerSound;
+                ClipAudioSource *clip = entry.audioSource;
                 const int channelIndex{clip->sketchpadTrack() + 1};
                 const int channelAffinity{((clip->registerForPolyphonicPlayback() ? clip->sketchpadSlotRow() : ZynthboxSampleSlotRowCount) * ZynthboxSlotCount) + clip->sketchpadSlot()};
                 // if (throttler == 0) { qDebug() << Q_FUNC_INFO << "Working on clip" << clip << "with channel" << channelIndex << "and sub-channel affinity" << channelAffinity << "and one of our buffers is" << leftBuffers[channelIndex][channelAffinity]; }
@@ -1005,15 +1007,17 @@ int SamplerSynth::activeVoices() const
 void SamplerSynth::registerClip(ClipAudioSource *clip)
 {
     QMutexLocker locker(&d->synthMutex);
-    if (!d->clipSounds.contains(clip)) {
-        SamplerSynthSound *sound = new SamplerSynthSound(clip);
+    SamplerSynthSound *sound{nullptr};
+    d->clipSounds.find(clip, &sound);
+    if (!sound) {
+        sound = new SamplerSynthSound(clip);
         sound->leftPort = jack_port_register(d->jackClient, QString("Clip%1-SidechannelLeft").arg(clip->id()).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
         sound->rightPort = jack_port_register(d->jackClient, QString("Clip%1-SidechannelRight").arg(clip->id()).toUtf8(), JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
         clip->setSidechainPorts(sound->leftPort, sound->rightPort);
         clip->reconnectSidechainPorts(d->jackClient);
         connect(clip, &ClipAudioSource::compressorSidechannelLeftChanged, this, [this, clip](){ clip->reconnectSidechainPorts(d->jackClient); });
         connect(clip, &ClipAudioSource::compressorSidechannelRightChanged, this, [this, clip](){ clip->reconnectSidechainPorts(d->jackClient); });
-        d->clipSounds[clip] = sound;
+        d->clipSounds.insert(sound, clip);
         d->positionModels << clip->playbackPositionsModel();
         // Make sure the channel knows what samples to work with - but only samples, we don't want the loops to end up in here
         SamplerChannel * channel = d->channels[clip->sketchpadTrack() + 1];
@@ -1054,9 +1058,10 @@ void SamplerSynth::registerClip(ClipAudioSource *clip)
 void SamplerSynth::unregisterClip(ClipAudioSource *clip)
 {
     QMutexLocker locker(&d->synthMutex);
-    if (d->clipSounds.contains(clip)) {
+    SamplerSynthSound *sound{nullptr};
+    d->clipSounds.find(clip, &sound);
+    if (sound) {
         clip->setSidechainPorts(nullptr, nullptr);
-        SamplerSynthSound *sound = d->clipSounds[clip];
         if (sound->leftPort) {
             jack_port_unregister(d->jackClient, sound->leftPort);
             sound->leftPort = nullptr;
@@ -1065,7 +1070,7 @@ void SamplerSynth::unregisterClip(ClipAudioSource *clip)
             jack_port_unregister(d->jackClient, sound->rightPort);
             sound->rightPort = nullptr;
         }
-        d->clipSounds.remove(clip);
+        d->clipSounds.remove(sound, clip);
         d->positionModels.removeAll(clip->playbackPositionsModel());
         // If that clip was in our track samples, make sure it isn't there any longer
         SamplerChannel * channel = d->channels[clip->sketchpadTrack() + 1];
@@ -1088,10 +1093,9 @@ void SamplerSynth::unregisterClip(ClipAudioSource *clip)
 
 SamplerSynthSound * SamplerSynth::clipToSound(ClipAudioSource* clip) const
 {
-    if (d->clipSounds.contains(clip)) {
-        return d->clipSounds[clip];
-    }
-    return nullptr;
+    SamplerSynthSound *sound{nullptr};
+    d->clipSounds.find(clip, &sound);
+    return sound;
 }
 
 void SamplerSynth::setSamplePickingStyle(const int& channel, const ClipAudioSource::SamplePickingStyle& samplePickingStyle) const
@@ -1103,7 +1107,9 @@ void SamplerSynth::setSamplePickingStyle(const int& channel, const ClipAudioSour
 
 void SamplerSynth::handleClipCommand(ClipCommand *clipCommand, quint64 currentTick)
 {
-    if (d->clipSounds.contains(clipCommand->clip) && clipCommand->midiChannel + 1 < d->channels.count()) {
+    SamplerSynthSound *sound{nullptr};
+    d->clipSounds.find(clipCommand->clip, &sound);
+    if (sound && clipCommand->midiChannel + 1 < d->channels.count()) {
         SamplerChannel *channel = d->channels[clipCommand->midiChannel + 1];
         if (channel->commandRing.writeHead->processed) {
             // qDebug() << Q_FUNC_INFO << "Wrote clip command" << clipCommand << "at tick" << currentTick << "on channel" << channel << "for clip" << clipCommand->clip << "for track/polyphonic/slot/row" << clipCommand->clip->sketchpadTrack() << clipCommand->clip->registerForPolyphonicPlayback() << clipCommand->clip->sketchpadSlot() << clipCommand->clip->sketchpadSlotRow();
