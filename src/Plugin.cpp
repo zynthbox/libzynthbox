@@ -76,6 +76,7 @@
 #include "SndLibraryModel.h"
 #include "SysexHelper.h"
 #include "SysexMessage.h"
+#include "AudioFileConverter.h"
 
 #include "folderlistmodel/qquickfolderlistmodel.h"
 
@@ -478,6 +479,13 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
         Q_UNUSED(engine)
         Q_UNUSED(scriptEngine)
         SndLibrary *sndLibrary = SndLibrary::instance();
+        QQmlEngine::setObjectOwnership(sndLibrary, QQmlEngine::CppOwnership);
+        return sndLibrary;
+    });
+    qmlRegisterSingletonType<AudioFileConverter>(uri, 1, 0, "AudioFileConverter", [](QQmlEngine *engine, QJSEngine *scriptEngine) -> QObject * {
+        Q_UNUSED(engine)
+        Q_UNUSED(scriptEngine)
+        AudioFileConverter *sndLibrary = AudioFileConverter::instance();
         QQmlEngine::setObjectOwnership(sndLibrary, QQmlEngine::CppOwnership);
         return sndLibrary;
     });

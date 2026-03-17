@@ -8,6 +8,7 @@
 
 #include <AdjectiveNoun.h>
 #include <AppImageHelper.h>
+#include <AudioFileConverter.h>
 #include <AudioLevels.h>
 #include <AudioLevelsChannel.h>
 #include <AudioTagHelper.h>

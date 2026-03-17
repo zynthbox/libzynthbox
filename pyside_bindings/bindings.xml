@@ -7,6 +7,10 @@
 
     <object-type name="AdjectiveNoun"></object-type>
     <object-type name="AppImageHelper"></object-type>
+    <object-type name="AudioFileConverter">
+        <enum-type name="AudioFormat" />
+        <enum-type name="ConversionState" />
+    </object-type>
     <object-type name="AudioLevels"></object-type>
     <object-type name="AudioLevelsChannel"></object-type>
     <object-type name="AudioTagHelper"></object-type>

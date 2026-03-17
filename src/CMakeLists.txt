@@ -18,6 +18,7 @@ target_sources(libzynthbox
     PRIVATE
         AdjectiveNoun.cpp
         AppImageHelper.cpp
+        AudioFileConverter.cpp
         AudioLevels.cpp
         AudioLevelsChannel.cpp
         AudioTagHelper.cpp
