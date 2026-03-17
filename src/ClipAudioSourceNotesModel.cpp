@@ -56,6 +56,7 @@ public:
     QTimer refreshTimer;
 
     void refreshData() {
+        bool anyChanges{false};
         for (int midiNote = 0; midiNote < 128; ++midiNote) {
             bool hasChanged{false};
             ClipAudioSourceNotesModelEntry &entry{entries[midiNote]};
@@ -90,9 +91,12 @@ public:
             if (hasChanged) {
                 QModelIndex idx{q->index(midiNote)};
                 q->dataChanged(idx, idx);
-                lastModified = QDateTime::currentMSecsSinceEpoch();
-                Q_EMIT q->lastModifiedChanged();
+                anyChanges = true;
             }
+        }
+        if (anyChanges) {
+            lastModified = QDateTime::currentMSecsSinceEpoch();
+            Q_EMIT q->lastModifiedChanged();
         }
     }
 };
