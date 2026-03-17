@@ -21,7 +21,7 @@ const QMap<QString, QString> AudioTagHelper::readWavMetadata(const QString& file
 {
     QMap<QString, QString> result;
     TagLib::PropertyMap tags;
-    if (filepath.toLower().endsWith(".wav")) {
+    if (filepath.toLower().endsWith(".wav") || filepath.toLower().endsWith(".snd")) {
         TagLib::RIFF::WAV::File tagLibFile(qPrintable(filepath));
         tags = tagLibFile.properties();
     } else if (filepath.toLower().endsWith(".ogg")) {
@@ -41,7 +41,7 @@ const QMap<QString, QString> AudioTagHelper::readWavMetadata(const QString& file
 void AudioTagHelper::saveWavMetadata(const QString &filepath, const QMap<QString, QString> &metadata)
 {
     TagLib::PropertyMap tags;
-    if (filepath.toLower().endsWith(".wav")) {
+    if (filepath.toLower().endsWith(".wav") || filepath.toLower().endsWith(".snd")) {
         TagLib::RIFF::WAV::File tagLibFile(qPrintable(filepath));
         tags = tagLibFile.properties();
         for (auto it = metadata.constKeyValueBegin(); it != metadata.constKeyValueEnd(); ++it) {
