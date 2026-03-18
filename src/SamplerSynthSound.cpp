@@ -36,6 +36,25 @@ private:
     Private* d{nullptr};
 };
 
+class SamplerSynthSoundAudioLoader : public QObject, public QRunnable {
+    Q_OBJECT
+public:
+    explicit SamplerSynthSoundAudioLoader(SamplerSynthSoundPrivate *parent = nullptr);
+    ~SamplerSynthSoundAudioLoader() override;
+
+    void run() override;
+    Q_SLOT void abort();
+    Q_SIGNAL void done();
+    bool isAborted();
+
+    juce::AudioBuffer<float> *buffer{nullptr};
+    juce::FileInputSource *thumbnailSource{nullptr};
+    SamplerSynthSoundPrivate *soundPrivate{nullptr};
+
+    bool m_abort{false};
+    QMutex m_abortMutex;
+};
+
 class SamplerSynthSoundPrivate : public QObject {
 Q_OBJECT
 public:
@@ -70,52 +89,23 @@ public:
     juce::FileInputSource *thumbnailSource{nullptr};
     tracktion_engine::TracktionThumbnail thumbnail;
 
+    SamplerSynthSoundAudioLoader *soundLoaderWorker{nullptr};
     void loadSoundData() {
-        clip->startProcessing("Loading...");
-        thumbnail.clear();
-        QFileInfo clipInfo{clip->getPlaybackFile().getFile().getFullPathName().toRawUTF8()};
-        if (clipInfo.exists()) {
-            AudioFormatReader *format{nullptr};
-            juce::File file = clip->getPlaybackFile().getFile();
-            tracktion_engine::AudioFileInfo fileInfo = clip->getPlaybackFile().getInfo();
-            if (fileInfo.format) {
-                MemoryMappedAudioFormatReader *memoryFormat = fileInfo.format->createMemoryMappedReader(file);
-                if (memoryFormat && memoryFormat->mapEntireFile()) {
-                    format = memoryFormat;
-                }
-                if (!format) {
-                    format = fileInfo.format->createReaderFor(file.createInputStream().release(), true);
-                }
-                if (format) {
-                    sourceSampleRate = format->sampleRate;
-                    if (sourceSampleRate > 0 && format->lengthInSamples > 0)
-                    {
-                        sampleRateRatio = sourceSampleRate / SamplerSynth::instance()->sampleRate();
-                        length = (int) format->lengthInSamples;
-                        juce::AudioBuffer<float> *newBuffer = new juce::AudioBuffer<float>(jmin(2, int(format->numChannels)), length);
-                        format->read(newBuffer, 0, length, 0, true, true);
-                        data.reset(newBuffer);
-                        q->isValid = true;
-                    }
-                    qDebug() << Q_FUNC_INFO << "Loaded data at sample rate" << sourceSampleRate << "from playback file" << clip->getPlaybackFile().getFile().getFullPathName().toRawUTF8();
-                    delete format;
-                    juce::FileInputSource *newSource{new juce::FileInputSource(file)};
-                    thumbnail.setSource(newSource);
-                    if (thumbnailSource) {
-                        delete thumbnailSource;
-                    }
-                    thumbnailSource = newSource;
-                } else {
-                    qWarning() << Q_FUNC_INFO << "Failed to create a format reader for" << file.getFullPathName().toUTF8();
-                }
-            } else {
-                // TODO We'll need some way of forwarding error states to the UI, so people can try and help themselves out when they drop samples onto their sd card which are broken in some way or another...
-                qWarning() << Q_FUNC_INFO << "The file information format for" << file.getFullPathName().toUTF8() << "is null - the file exists, and is" << clipInfo.size() << "bytes";
+        soundLoaderWorker = new SamplerSynthSoundAudioLoader(this);
+        connect(soundLoaderWorker, &SamplerSynthSoundAudioLoader::done, this, &SamplerSynthSoundPrivate::soundDataLoadingCompleted, Qt::QueuedConnection);
+        QThreadPool::globalInstance()->start(soundLoaderWorker);
+    }
+    void soundDataLoadingCompleted() {
+        if (soundLoaderWorker->isAborted() == false) {
+            data.reset(soundLoaderWorker->buffer);
+            q->isValid = true;
+            thumbnail.setSource(soundLoaderWorker->thumbnailSource);
+            if (thumbnailSource) {
+                delete thumbnailSource;
             }
-        } else {
-            qWarning() << Q_FUNC_INFO << "Aborting - file was missing for" << clip->getFilePath();
+            thumbnailSource = soundLoaderWorker->thumbnailSource;
         }
-        clip->endProcessing();
+        soundLoaderWorker->deleteLater();
     }
 
     QTimer playbackDataUpdater;
@@ -167,7 +157,7 @@ SamplerSynthSound::SamplerSynthSound(ClipAudioSource *clip)
     leftBuffer = new float[d->audioBufferLength]();
     rightBuffer = new float[d->audioBufferLength]();
     d->clip = clip;
-    d->loadSoundData();
+    QTimer::singleShot(0, d, &SamplerSynthSoundPrivate::loadSoundData);
     QObject::connect(clip, &ClipAudioSource::playbackFileChanged, &d->soundLoader, [this](){ isValid = false; d->soundLoader.start(1); }, Qt::QueuedConnection);
     QObject::connect(clip, &ClipAudioSource::speedRatioChanged, d, [this](){ d->updatePlaybackData(); });
     QObject::connect(clip->rootSliceActual(), &ClipAudioSourceSliceSettings::timeStretchStyleChanged, d, [this](){ d->updatePlaybackData(); });
@@ -233,6 +223,85 @@ const double & SamplerSynthSound::sampleRateRatio() const
 tracktion_engine::TracktionThumbnail * SamplerSynthSound::thumbnail()
 {
     return &d->thumbnail;
+}
+
+SamplerSynthSoundAudioLoader::SamplerSynthSoundAudioLoader(SamplerSynthSoundPrivate* parent)
+    : QObject(parent)
+    , soundPrivate(parent)
+{
+    static int consequtive{0};
+    ++consequtive;
+    setObjectName(QString("AudioLoader-%1").arg(consequtive));
+    setAutoDelete(false);
+}
+
+SamplerSynthSoundAudioLoader::~SamplerSynthSoundAudioLoader()
+{
+}
+
+void SamplerSynthSoundAudioLoader::run()
+{
+    soundPrivate->clip->startProcessing("Loading...");
+    soundPrivate->thumbnail.clear();
+    const juce::File file = soundPrivate->clip->getPlaybackFile().getFile();
+    QFileInfo clipInfo{file.getFullPathName().toRawUTF8()};
+    if (clipInfo.exists()) {
+        AudioFormatReader *format{nullptr};
+        tracktion_engine::AudioFileInfo fileInfo = soundPrivate->clip->getPlaybackFile().getInfo();
+        if (fileInfo.format) {
+            format = fileInfo.format->createReaderFor(file.createInputStream().release(), true);
+            if (format) {
+                soundPrivate->sourceSampleRate = format->sampleRate;
+                if (soundPrivate->sourceSampleRate > 0 && format->lengthInSamples > 0) {
+                    soundPrivate->sampleRateRatio = soundPrivate->sourceSampleRate / SamplerSynth::instance()->sampleRate();
+                    soundPrivate->length = (int) format->lengthInSamples;
+                    juce::AudioBuffer<float> *newBuffer = new juce::AudioBuffer<float>(jmin(2, int(format->numChannels)), soundPrivate->length);
+                    static const int chunkSize{1024};
+                    int currentStartSample{0};
+                    while (currentStartSample < soundPrivate->length) {
+                        const int remainingChunk = soundPrivate->length - currentStartSample;
+                        format->read(newBuffer, currentStartSample, qMin(chunkSize, remainingChunk), currentStartSample, true, true);
+                        currentStartSample += chunkSize;
+                        if (isAborted()) {
+                            break;
+                        }
+                    }
+                    if (isAborted() == false) {
+                        buffer = newBuffer;
+                        qDebug() << Q_FUNC_INFO << "Loaded data at sample rate" << soundPrivate->sourceSampleRate << "from playback file" << file.getFullPathName().toRawUTF8();
+                    } else {
+                        qDebug() << Q_FUNC_INFO << "Aborted sound load from playback file" << file.getFullPathName().toRawUTF8();
+                    }
+                }
+                delete format;
+                if (isAborted() == false) {
+                    thumbnailSource = new juce::FileInputSource(file);
+                }
+            } else {
+                qWarning() << Q_FUNC_INFO << "Failed to create a format reader for" << file.getFullPathName().toUTF8();
+            }
+        } else {
+            // TODO We'll need some way of forwarding error states to the UI, so people can try and help themselves out when they drop samples onto their sd card which are broken in some way or another...
+            qWarning() << Q_FUNC_INFO << "The file information format for" << file.getFullPathName().toUTF8() << "is null - the file exists, and is" << clipInfo.size() << "bytes";
+        }
+    } else {
+        qWarning() << Q_FUNC_INFO << "Aborting - file was missing for" << soundPrivate->clip->getFilePath();
+    }
+    soundPrivate->clip->endProcessing();
+    // And finally, tell anybody who cares that we're done
+    Q_EMIT done();
+}
+
+void SamplerSynthSoundAudioLoader::abort()
+{
+    QMutexLocker locker(&m_abortMutex);
+    m_abort = true;
+}
+
+bool SamplerSynthSoundAudioLoader::isAborted()
+{
+    QMutexLocker locker(&m_abortMutex);
+    return m_abort;
 }
 
 class SamplerSynthSoundTimestretcher::Private {
