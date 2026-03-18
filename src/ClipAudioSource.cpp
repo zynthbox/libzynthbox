@@ -405,6 +405,9 @@ tracktion_engine::AudioFile ClipAudioSource::getPlaybackFile() const {
 void ClipAudioSource::play(bool forceLooping, int midiChannel) {
   IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Starting clip " << this << d->filePath << " which is really " << d->audioFile << " in a " << (forceLooping ? "looping" : "non-looping") << " manner from " << d->rootSlice->startPositionSeconds() << " and for " << d->rootSlice->lengthSeconds() << " seconds";
 
+  while (processingProgress() > -1) {
+    qApp->processEvents();
+  }
   ClipCommand *command = ClipCommand::channelCommand(this, midiChannel);
   command->midiNote = 60;
   command->changeVolume = true;

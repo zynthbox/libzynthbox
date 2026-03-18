@@ -763,7 +763,7 @@ void SamplerSynthVoice::process(jack_default_audio_sample_t */*leftBuffer*/, jac
             }
         }
         // Don't actually perform playback operations unless we've got something to play
-        if (d->clip) {
+        if (d->clip && d->sound->isValid) {
             // If we're using timestretching for our clip shifting, then we should not also be applying the clip's pitch shifting here
             const float clipPitchChange = d->clip->rootSliceActual()->timeStretchStyle() == ClipAudioSource::TimeStretchOff
                 ? (d->clipCommand->changePitch ? d->clipCommand->pitchChange * d->clip->rootSliceActual()->pitchChangePrecalc() : d->clip->rootSliceActual()->pitchChangePrecalc()) * (d->subvoiceSettings ? d->subvoiceSettings->pitchChangePrecalc() : 1.0f)
