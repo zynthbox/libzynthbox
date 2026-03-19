@@ -16,6 +16,7 @@
 #include <QDataStream>
 #include <QDateTime>
 #include <QDebug>
+#include <QTimer>
 
 #include <unistd.h>
 
@@ -222,6 +223,12 @@ public:
       q->setSpeedRatio(1.0);
     }
   }
+
+  bool deferredForceLooping{true};
+  int deferredPlayMidiChannel{-1};
+  void deferredPlay() {
+    q->play(deferredForceLooping, deferredPlayMidiChannel);
+  }
 private:
   void timerCallback() override {
     // Calling this from a timer will lead to a bad time, make sure it happens somewhere more reasonable (like on the object's own thread, which in this case is the qml engine thread)
@@ -405,22 +412,25 @@ tracktion_engine::AudioFile ClipAudioSource::getPlaybackFile() const {
 void ClipAudioSource::play(bool forceLooping, int midiChannel) {
   IF_DEBUG_CLIP qDebug() << Q_FUNC_INFO << "Starting clip " << this << d->filePath << " which is really " << d->audioFile << " in a " << (forceLooping ? "looping" : "non-looping") << " manner from " << d->rootSlice->startPositionSeconds() << " and for " << d->rootSlice->lengthSeconds() << " seconds";
 
-  while (processingProgress() > -1) {
-    qApp->processEvents();
-  }
-  ClipCommand *command = ClipCommand::channelCommand(this, midiChannel);
-  command->midiNote = 60;
-  command->changeVolume = true;
-  command->volume = 1.0f;
-  command->changeLooping = true;
-  if (forceLooping) {
-    command->looping = true;
-    command->stopPlayback = true; // this stops any current loop plays, and immediately starts a new one
+  if (processingProgress() > -1) {
+    d->deferredForceLooping = forceLooping;
+    d->deferredPlayMidiChannel = midiChannel;
+    QTimer::singleShot(0, this, [this](){ d->deferredPlay(); });
   } else {
-    command->looping = d->rootSlice->looping();
+    ClipCommand *command = ClipCommand::channelCommand(this, midiChannel);
+    command->midiNote = 60;
+    command->changeVolume = true;
+    command->volume = 1.0f;
+    command->changeLooping = true;
+    if (forceLooping) {
+      command->looping = true;
+      command->stopPlayback = true; // this stops any current loop plays, and immediately starts a new one
+    } else {
+      command->looping = d->rootSlice->looping();
+    }
+    command->startPlayback = true;
+    d->syncTimer->scheduleClipCommand(command, 0);
   }
-  command->startPlayback = true;
-  d->syncTimer->scheduleClipCommand(command, 0);
 }
 
 void ClipAudioSource::stop(int midiChannel) {
