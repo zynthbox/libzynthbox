@@ -533,11 +533,7 @@ public:
             for (MidiRouterDevice *device : qAsConst(devices)) {
                 device->processEnd();
             }
-            static int cpuLoadThrottle{0};
-            if (++cpuLoadThrottle > 100) {
-                cpuLoadThrottle = 0;
-                processingLoad = jack_cpu_load(jackClient);
-            }
+            processingLoad = qMax(qMax(0.0f, processingLoad - 0.3f), qMin(100.0f, jack_cpu_load(jackClient)));
 
 #if ZLROUTER_WATCHDOG
             mostRecentEventsForZynthian = jack_midi_get_event_count(zynthianOutputBuffer);
@@ -1059,7 +1055,7 @@ void MidiRouter::run() {
             QMetaObject::invokeMethod(device, &MidiRouterDevice::handlePostponedEvents, Qt::QueuedConnection);
         }
         static int cpuLoadThrottle{0};
-        if (++cpuLoadThrottle > 100) {
+        if (++cpuLoadThrottle > 50) {
             cpuLoadThrottle = 0;
             Q_EMIT processingLoadChanged();
         }
