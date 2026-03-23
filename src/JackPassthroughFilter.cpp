@@ -184,8 +184,8 @@ QString JackPassthroughFilter::filterTypeName(FilterType filterType) const
 {
     static const QHash<FilterType, QString> names{
         {NoFilterType, "No Filter"},
-        {HighPassType, "High Pass"},
-        {HighPass1stType, "1st High Pass"},
+        {HighPassType, "Low Cut"},
+        {HighPass1stType, "1st Low Cut"},
         {LowShelfType, "Low Shelf"},
         {BandPassType, "Band Pass"},
         {AllPassType, "All Pass"},
@@ -193,15 +193,15 @@ QString JackPassthroughFilter::filterTypeName(FilterType filterType) const
         {NotchType, "Notch"},
         {PeakType, "Peak"},
         {HighShelfType, "High Shelf"},
-        {LowPass1stType, "1st Low Pass"},
-        {LowPassType, "Low Pass"}
+        {LowPass1stType, "1st High Cut"},
+        {LowPassType, "High Cut"}
     };
     return names[filterType];
 }
 
 QStringList JackPassthroughFilter::filterTypeNames() const
 {
-    static const QStringList names{"No Filter", "High Pass", "1st High Pass", "Low Shelf", "Band Pass", "All Pass", "1st All Pass", "Notch", "Peak", "High Shelf", "1st Low Pass", "Low Pass"};
+    static const QStringList names{"No Filter", "Low Cut", "1st Low Cut", "Low Shelf", "Band Pass", "All Pass", "1st All Pass", "Notch", "Peak", "High Shelf", "1st High Cut", "High Cut"};
     return names;
 }
 
