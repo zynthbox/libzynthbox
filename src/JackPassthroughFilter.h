@@ -35,6 +35,7 @@ class JackPassthroughFilter : public QObject {
      */
     Q_PROPERTY(float frequencyAbsolute READ frequencyAbsolute WRITE setFrequencyAbsolute NOTIFY frequencyChanged)
     Q_PROPERTY(float quality READ quality WRITE setQuality NOTIFY qualityChanged)
+    Q_PROPERTY(float qualityAbsolute READ qualityAbsolute WRITE setQualityAbsolute NOTIFY qualityChanged)
     Q_PROPERTY(float gain READ gain WRITE setGain NOTIFY gainChanged)
     Q_PROPERTY(float gainDb READ gainDb NOTIFY gainChanged)
     /**
@@ -94,6 +95,8 @@ public:
     Q_SIGNAL void frequencyChanged();
     float quality() const;
     void setQuality(const float &quality);
+    float qualityAbsolute() const;
+    void setQualityAbsolute(const float &qualityAbsolute);
     Q_SIGNAL void qualityChanged();
     float gain() const;
     float gainDb() const;

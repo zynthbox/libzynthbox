@@ -211,15 +211,20 @@ void JackPassthroughVisualiserItem::setEqCurveThickness(const int& eqCurveThickn
     }
 }
 
-static float getPositionForFrequency(float freq) {
-    static const juce::NormalisableRange<float> frequencyRangeNormalised = logRange(20.0f, 20000.0f);
-    return frequencyRangeNormalised.convertTo0to1(freq);
-}
+// static float getPositionForFrequency(float freq) {
+//     static const juce::NormalisableRange<float> frequencyRangeNormalised = logRange(20.0f, 20000.0f);
+//     return frequencyRangeNormalised.convertTo0to1(freq);
+// }
 
-static float getPositionForGain(float gain, float top, float bottom) {
-    static float maxDB{24.0f};
-    return juce::jmap(juce::Decibels::gainToDecibels(gain, -maxDB), -maxDB, maxDB, bottom, top);
-}
+// static float getPositionForQuality(float q) {
+//     static const juce::NormalisableRange<float> qualityRangeNormalised = logRange(0.0001f, 10.0f);
+//     return qualityRangeNormalised.convertTo0to1(q);
+// }
+
+// static float getPositionForGain(float gain, float top, float bottom) {
+//     static float maxDB{24.0f};
+//     return juce::jmap(juce::Decibels::gainToDecibels(gain, -maxDB), -maxDB, maxDB, bottom, top);
+// }
 
 void JackPassthroughVisualiserItem::paint(QPainter* painter)
 {
@@ -252,8 +257,8 @@ void JackPassthroughVisualiserItem::paint(QPainter* painter)
                 painter->setPen(pen);
                 painter->drawPolyline(path);
                 painter->setBrush(filter->selected() ? filter->color() : QColorConstants::Transparent);
-                auto x = juce::roundToInt(frame.width() * getPositionForFrequency(filter->frequency()));
-                auto y = juce::roundToInt(getPositionForGain(filter->gain(), 0, float(frame.height())));
+                auto x = juce::roundToInt(frame.width() * filter->frequencyAbsolute());
+                auto y = juce::roundToInt(frame.height() * (1 - filter->qualityAbsolute()));
                 painter->drawLine(x, 0, x, y - 5);
                 painter->drawLine(x, y + 4, x, frame.height());
                 painter->drawEllipse(x - 4, y - 4, 7, 7);

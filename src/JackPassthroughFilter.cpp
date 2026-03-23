@@ -34,6 +34,7 @@ public:
     JackPassthroughFilterPrivate(JackPassthroughFilter *q)
         : q(q)
     {
+        qualityAbsolute = qualityRangeNormalised.convertTo0to1(inverseRootTwo);
         frequencies.resize(300);
         for (size_t i = 0; i < frequencies.size(); ++i) {
             frequencies[i] = frequencyRangeNormalised.convertFrom0to1(double(i) / 300.0);
@@ -52,8 +53,10 @@ public:
     JackPassthroughFilter::FilterType filterType;
     float frequency;
     juce::NormalisableRange<float> frequencyRangeNormalised = logRange(20.0f, 20000.0f);
+    juce::NormalisableRange<float> qualityRangeNormalised = logRange(0.1f, 10.0f);
     float frequencyAbsolute;
     float quality{inverseRootTwo};
+    float qualityAbsolute{0};
     float gain{1.0f};
     bool active{true}; // The global setting is off, but when enabling the qualiser, we want all of the filters to be active by default
     bool soloed{false};
@@ -313,11 +316,25 @@ float JackPassthroughFilter::quality() const
 
 void JackPassthroughFilter::setQuality(const float& quality)
 {
-    if (d->quality != quality && 0.0f <= quality && quality <= 10.0f) {
-        d->quality = quality;
+    if (d->quality != quality && 0.1f <= quality && quality <= 10.0f) {
+        // We clamp Q to 0.1, to avoid awfulness when we hit 0.0 (because maths, and also it kind of means we end up more properly fitting a 0-1 range)
+        d->quality = qMax(0.1f, qMin(quality, 10.0f));
+        d->qualityAbsolute = d->qualityRangeNormalised.convertTo0to1(d->quality);
         Q_EMIT qualityChanged();
         d->updateCoefficients();
         setSelected(true);
+    }
+}
+
+float JackPassthroughFilter::qualityAbsolute() const
+{
+    return d->qualityAbsolute;
+}
+
+void JackPassthroughFilter::setQualityAbsolute(const float& qualityAbsolute)
+{
+    if (d->qualityAbsolute != qualityAbsolute) {
+        setQuality(d->qualityRangeNormalised.convertFrom0to1(qMax(0.0f, qMin(qualityAbsolute, 1.0f))));
     }
 }
 
