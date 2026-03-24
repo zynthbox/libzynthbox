@@ -281,6 +281,75 @@ void JackPassthroughFilter::setFilterType(const FilterType& filterType)
     }
 }
 
+bool JackPassthroughFilter::hasQuality() const
+{
+    bool result{false};
+    switch(d->filterType) {
+        case JackPassthroughFilter::NoFilterType:
+        case JackPassthroughFilter::LowPass1stType:
+        case JackPassthroughFilter::AllPass1stType:
+        case JackPassthroughFilter::HighPass1stType:
+            break;
+        case JackPassthroughFilter::LowPassType:
+        case JackPassthroughFilter::LowShelfType:
+        case JackPassthroughFilter::BandPassType:
+        case JackPassthroughFilter::AllPassType:
+        case JackPassthroughFilter::NotchType:
+        case JackPassthroughFilter::PeakType:
+        case JackPassthroughFilter::HighShelfType:
+        case JackPassthroughFilter::HighPassType:
+            result = true;
+            break;
+    }
+    return result;
+}
+
+bool JackPassthroughFilter::hasGain() const
+{
+    bool result{false};
+    switch(d->filterType) {
+        case JackPassthroughFilter::NoFilterType:
+        case JackPassthroughFilter::LowPassType:
+        case JackPassthroughFilter::LowPass1stType:
+        case JackPassthroughFilter::BandPassType:
+        case JackPassthroughFilter::AllPassType:
+        case JackPassthroughFilter::AllPass1stType:
+        case JackPassthroughFilter::NotchType:
+        case JackPassthroughFilter::HighPass1stType:
+        case JackPassthroughFilter::HighPassType:
+            break;
+        case JackPassthroughFilter::LowShelfType:
+        case JackPassthroughFilter::PeakType:
+        case JackPassthroughFilter::HighShelfType:
+            result = true;
+            break;
+    }
+    return result;
+}
+
+int JackPassthroughFilter::secondaryProperty() const
+{
+    bool result{0};
+    switch(d->filterType) {
+        case JackPassthroughFilter::NoFilterType:
+        case JackPassthroughFilter::LowPassType:
+        case JackPassthroughFilter::LowPass1stType:
+        case JackPassthroughFilter::BandPassType:
+        case JackPassthroughFilter::AllPassType:
+        case JackPassthroughFilter::AllPass1stType:
+        case JackPassthroughFilter::NotchType:
+        case JackPassthroughFilter::HighPass1stType:
+        case JackPassthroughFilter::HighPassType:
+            break;
+        case JackPassthroughFilter::LowShelfType:
+        case JackPassthroughFilter::PeakType:
+        case JackPassthroughFilter::HighShelfType:
+            result = 1;
+            break;
+    }
+    return result;
+}
+
 float JackPassthroughFilter::frequency() const
 {
     return d->frequency;

@@ -258,7 +258,12 @@ void JackPassthroughVisualiserItem::paint(QPainter* painter)
                 painter->drawPolyline(path);
                 painter->setBrush(filter->selected() ? filter->color() : QColorConstants::Transparent);
                 auto x = juce::roundToInt(frame.width() * filter->frequencyAbsolute());
-                auto y = juce::roundToInt(frame.height() * (1 - filter->qualityAbsolute()));
+                int y{0};
+                if (filter->secondaryProperty() == 0) {
+                    y = juce::roundToInt(frame.height() * (1 - filter->qualityAbsolute()));
+                } else {
+                    y = juce::roundToInt(frame.height() * (1 - filter->gainAbsolute()));
+                }
                 painter->drawLine(x, 0, x, y - 5);
                 painter->drawLine(x, y + 4, x, frame.height());
                 painter->drawEllipse(x - 4, y - 4, 7, 7);

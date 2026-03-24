@@ -22,6 +22,16 @@ class JackPassthroughFilter : public QObject {
     Q_PROPERTY(QObject* previous READ previous NOTIFY previousChanged)
     Q_PROPERTY(QObject* next READ next NOTIFY nextChanged)
     Q_PROPERTY(FilterType filterType READ filterType WRITE setFilterType NOTIFY filterTypeChanged)
+    Q_PROPERTY(bool hasQuality READ hasQuality NOTIFY filterTypeChanged)
+    Q_PROPERTY(bool hasGain READ hasGain NOTIFY filterTypeChanged)
+    /**
+     * \brief Which of the properties should be used for the secondary value (e.g. quality or gain)
+     * @min 0
+     * @max 1
+     * 0 meaning quality
+     * 1 meaning gain
+     */
+    Q_PROPERTY(int secondaryProperty READ secondaryProperty NOTIFY filterTypeChanged)
     /**
      * \brief The frequency of the filter
      * @minimum 20
@@ -88,6 +98,9 @@ public:
     FilterType filterType() const;
     void setFilterType(const FilterType &filterType);
     Q_SIGNAL void filterTypeChanged();
+    bool hasQuality() const;
+    bool hasGain() const;
+    int secondaryProperty() const;
     float frequency() const;
     void setFrequency(const float &frequency);
     float frequencyAbsolute() const;
