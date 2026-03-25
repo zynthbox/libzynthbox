@@ -969,6 +969,8 @@ PatternModel::PatternModel(SequenceModel* parent)
     connect(this, &PatternModel::octaveChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::scaleChanged, this, &NotesModel::registerChange);
     connect(this, &PatternModel::lockToKeyAndScaleChanged, this, &NotesModel::registerChange);
+    connect(this, &PatternModel::gridModelStartNoteChanged, this, &NotesModel::registerChange);
+    connect(this, &PatternModel::gridModelEndNoteChanged, this, &NotesModel::registerChange);
 
     connect(this, &QObject::objectNameChanged, this, &PatternModel::nameChanged);
     connect(this, &QObject::objectNameChanged, this, &PatternModel::thumbnailUrlChanged);
