@@ -590,6 +590,9 @@ public:
                     aliases[1] = (char *)malloc(size_t(jack_port_name_size()));
                     int num_aliases = jack_port_get_aliases(hardwarePort, aliases);
                     static const QString ttyMidiPortName{"ttymidi:MIDI_"};
+                    static const QString usbMidiGadgetName{"Midi-Bridge:f_midi"};
+                    static const QString captureString{" (capture)"};
+                    static const QString playbackString{" (playback)"};
                     if (portName.startsWith(ttyMidiPortName)) {
                         humanReadableName = QString{"Midi 5-Pin"};
                         hardwareId = zynthianId = ttyMidiPortName.left(ttyMidiPortName.length() - 1);
@@ -597,7 +600,13 @@ public:
                         int i;
                         for (i = 0; i < num_aliases; i++) {
                             QStringList hardwareIdSplit;
-                            QStringList splitAlias = QString::fromUtf8(aliases[i]).split('-');
+                            QString aliasString = QString::fromUtf8(aliases[i]);
+                            if (aliasString.endsWith(captureString)) {
+                                aliasString.remove(aliasString.length() - captureString.length() - 1, captureString.length());
+                            } else if (aliasString.endsWith(playbackString)) {
+                                aliasString.remove(aliasString.length() - playbackString.length() - 1, playbackString.length());
+                            }
+                            QStringList splitAlias = aliasString.split('-');
                             if (splitAlias.length() > 5) {
                                 for (int i = 0; i < 5; ++i) {
                                     if (i > 0) {
@@ -608,18 +617,20 @@ public:
                                 }
                                 zynthianId = splitAlias.join("_");
                                 hardwareId = hardwareIdSplit.join("-");
-                                static const QString usbMidiGadgetName{"f_midi"};
-                                if (zynthianId == usbMidiGadgetName) {
+                                if (portName.startsWith(usbMidiGadgetName)) {
+                                    // The USB port naming is "Midi-Bridge:f_midi-XY (playback or capture)", where XY can be either single or double digits,
+                                    // so if we simply remove the common start, take the next two, trim it, and turn that into an integer, that'll do the trick
+                                    int usbGadgetIndex{portName.midRef(usbMidiGadgetName.length() + 1, 2).trimmed().toInt()};
                                     // If the USB ports exist, we should hook those up
-                                    // - The first one is our "master" track, which should always play to the current track
+                                    // - The first one is our "master" track, which should always play to the current track, and function as a clock source (either for consumption, or for sending)
                                     // - The others in turn are equivalents to each track, and should always send to that track
-                                    if (usbMidiGadgetCount == 0) {
+                                    if (usbGadgetIndex == 0) {
                                         // Then it's the system main port, which should always play to the current track
                                         humanReadableName = QString{"USB MIDI Main"};
                                     } else {
                                         // Then it's a track-equivalent port, which should always play to that track
-                                        humanReadableName = QString{"USB MIDI Track %1"}.arg(usbMidiGadgetCount);
-                                        forceDestinationTrack = ZynthboxBasics::Track(usbMidiGadgetCount - 1);
+                                        humanReadableName = QString{"USB MIDI Track %1"}.arg(usbGadgetIndex);
+                                        forceDestinationTrack = ZynthboxBasics::Track(usbGadgetIndex - 1);
                                     }
                                     forceInputEnabled = forceOutputEnabled = isUsbMidiGadget = true;
                                 } else {
@@ -629,8 +640,32 @@ public:
                             }
                         }
                     } else {
-                        QStringList splitAlias = portName.split('-');
-                        humanReadableName = splitAlias.join(" ");
+                        QString aliasString{portName};
+                        if (aliasString.endsWith(captureString)) {
+                            aliasString.remove(aliasString.length() - captureString.length(), captureString.length());
+                        } else if (aliasString.endsWith(playbackString)) {
+                            aliasString.remove(aliasString.length() - playbackString.length(), playbackString.length());
+                        }
+                        QStringList splitAlias = aliasString.split('-');
+                        if (aliasString.startsWith(usbMidiGadgetName)) {
+                            // The USB port naming is "Midi-Bridge:f_midi-XY (playback or capture)", where XY can be either single or double digits,
+                            // so if we simply remove the common start, take the next two, trim it, and turn that into an integer, that'll do the trick
+                            int usbGadgetIndex{aliasString.midRef(usbMidiGadgetName.length() + 1, 2).trimmed().toInt()};
+                            // If the USB ports exist, we should hook those up
+                            // - The first one is our "master" track, which should always play to the current track, and function as a clock source (either for consumption, or for sending)
+                            // - The others in turn are equivalents to each track, and should always send to that track
+                            if (usbGadgetIndex == 0) {
+                                // Then it's the system main port, which should always play to the current track
+                                humanReadableName = QString{"USB MIDI Main"};
+                            } else {
+                                // Then it's a track-equivalent port, which should always play to that track
+                                humanReadableName = QString{"USB MIDI Track %1"}.arg(usbGadgetIndex);
+                                forceDestinationTrack = ZynthboxBasics::Track(usbGadgetIndex - 1);
+                            }
+                            forceInputEnabled = forceOutputEnabled = isUsbMidiGadget = true;
+                        } else {
+                            humanReadableName = splitAlias.join(" ");
+                        }
                         zynthianId = splitAlias.join("_");
                         hardwareId = zynthianId;
                     }
@@ -687,7 +722,7 @@ public:
                         connectPorts(portName, QString("ZLRouter:%1").arg(inputPortName));
                         if (portIsUnknown || currentState != device->inputEnabled()) {
                             // Only debug this out if there's a change or the device is new
-                            qDebug() << Q_FUNC_INFO << "Updated" << device << device->humanReadableName() << "input port" << device->inputPortName() << "enabled state to" << device->inputEnabled();
+                            qDebug() << Q_FUNC_INFO << "Updated" << portName << device << device->humanReadableName() << "input port" << device->inputPortName() << "enabled state to" << device->inputEnabled();
                         }
                     } else if (jackPortFlags & JackPortIsInput) {
                         bool currentState{device->outputEnabled()};
@@ -697,7 +732,7 @@ public:
                         connectPorts(QString("ZLRouter:%1").arg(outputPortName), portName);
                         if (portIsUnknown || currentState != device->outputEnabled()) {
                             // Only debug this out if there's a change or the device is new
-                            qDebug() << Q_FUNC_INFO << "Updated" << device << device->humanReadableName() << "output port" << device->outputPortName() << "enabled state to" << device->outputEnabled();
+                            qDebug() << Q_FUNC_INFO << "Updated" << portName << device << device->humanReadableName() << "output port" << device->outputPortName() << "enabled state to" << device->outputEnabled();
                         }
                     }
                     if (connectedDevices.contains(device) == false) {
