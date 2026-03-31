@@ -422,7 +422,7 @@ void MidiRouterDevice::writeEventToOutput(jack_midi_event_t& event, const MidiRo
 void MidiRouterDevice::writeEventToOutputActual(jack_midi_event_t& event)
 {
     const bool isNoteMessage = event.buffer[0] > 0x7F && event.buffer[0] < 0xA0;
-    if (isNoteMessage == false || d->acceptsNote[event.buffer[1]]) {
+    if ((isNoteMessage == false || d->acceptsNote[event.buffer[1]]) && d->outputBuffer) {
         const jack_midi_data_t untransposedNote{event.buffer[1]};
         if (isNoteMessage) {
             event.buffer[1] = std::clamp(int(event.buffer[1]) + d->transposeAmount, 0, 127);
