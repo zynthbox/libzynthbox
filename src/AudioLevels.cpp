@@ -173,8 +173,21 @@ AudioLevels::AudioLevels(QObject *parent)
                     AudioLevelsChannel *channel = new AudioLevelsChannel(d->jackClient, clientName, audioLevelSketchpadTracks[channelIndex], m_formatManager, m_thumbnailsCache);
                     if (channelIndex == 0) {
                         d->jackClient = channel->jackClient;
-                        d->connectPorts("system:capture_1", "AudioLevels:SystemCapture-left_in");
-                        d->connectPorts("system:capture_2", "AudioLevels:SystemCapture-right_in");
+                        const char **ports = jack_get_ports(d->jackClient, "system:", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput);
+                        if (ports) {
+                            const QStringList systemCaptureInputPorts{"AudioLevels:SystemCapture-left_in", "AudioLevels:SystemCapture-right_in"};
+                            int i{0};
+                            for (const char **p = ports; *p; p++) {
+                                if (i > 1) {
+                                    qWarning() << Q_FUNC_INFO << "Too many system capture ports, that's a bit odd, but we only want a stereo pair. This most recent one was" << *p;
+                                    break;
+                                }
+                                d->connectPorts(*p, systemCaptureInputPorts[i]);
+                                ++i;
+                            }
+                        } else {
+                            qWarning() << Q_FUNC_INFO << "Didn't find any system capture ports";
+                        }
                     } else if (channelIndex == 1) {
                         d->globalPlaybackWriter = channel->diskRecorder();
                     } else if (channelIndex == 2) {
