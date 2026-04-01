@@ -35,6 +35,7 @@ class Note : public QObject
     Q_PROPERTY(int activeChannel READ activeChannel NOTIFY activeChannelChanged)
     Q_PROPERTY(bool isPlaying READ isPlaying NOTIFY isPlayingChanged)
     Q_PROPERTY(int pitch READ pitch NOTIFY pitchChanged)
+    Q_PROPERTY(int modulation READ modulation NOTIFY modulationChanged)
     Q_PROPERTY(int polyphonicAftertouch READ polyphonicAftertouch NOTIFY polyphonicAftertouchChanged)
     Q_PROPERTY(QVariantList subnotes READ subnotes WRITE setSubnotes NOTIFY subnotesChanged)
     // This is arbitrary metadata... do we want to keep this?
@@ -86,6 +87,11 @@ public:
     int pitch() const;
     Q_SIGNAL void pitchChanged();
     Q_INVOKABLE void sendPitchChange(const int &pitch);
+
+    void registerModulation(const int &modulation);
+    int modulation() const;
+    Q_SIGNAL void modulationChanged();
+    Q_INVOKABLE void sendModulation(const int &modulation);
 
     void registerPolyphonicAftertouch(const int &polyphonicAftertouch);
     int polyphonicAftertouch() const;

@@ -338,7 +338,15 @@ public:
                             }
                         }
                     } else if (0xAF < byte1 && byte1 < 0xC0) {
-                        if (byte2 == 0x7B) {
+                        if (byte2 == 0x01) {
+                            // Modulation wheel or lever
+                            const int midiChannel{byte1 & 0xF};
+                            for (Note *note : qAsConst(notes)) {
+                                if (note->sketchpadTrack() == sketchpadTrack && note->activeChannel() == midiChannel) {
+                                    note->registerModulation(byte3);
+                                }
+                            }
+                        } else if (byte2 == 0x7B) {
                             // All Notes Off
                             for (Note *note : qAsConst(notes)) {
                                 if (note->sketchpadTrack() == sketchpadTrack) {
