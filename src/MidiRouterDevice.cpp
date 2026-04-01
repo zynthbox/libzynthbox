@@ -185,19 +185,27 @@ public:
             settings.beginGroup("MIDIDeviceSettings");
             settings.beginGroup(q->zynthianId());
             // Fetch the basics for the device itself
+            QVariantList midiChannelTargetTrackVariant = settings.value("midiChannelTargetTrack", {}).toList();
+            if (midiChannelTargetTrackVariant.count() == 16) {
+                for (int channelIndex = 0; channelIndex < 16; ++channelIndex) {
+                    midiChannelTargetTrack[channelIndex] = midiChannelTargetTrackVariant[channelIndex].toBool();
+                }
+                Q_EMIT q->midiChannelTargetTracksChanged();
+            } else if (midiChannelTargetTrackVariant.count() != 0) {
+                qWarning() << Q_FUNC_INFO << humanReadableName << q->objectName() << "Fetched the receiveFromChannel values - we've ended up with an unacceptable number of entries, and the retrieved value was" << midiChannelTargetTrackVariant;
+            }
             QVariantList receiveFromChannelVariant = settings.value("receiveFromChannel", {}).toList();
             if (receiveFromChannelVariant.count() == 16) {
                 for (int channelIndex = 0; channelIndex < 16; ++channelIndex) {
-                    receiveFromChannel[channelIndex] = std::clamp(receiveFromChannelVariant[channelIndex].toInt(), 0, 16);
+                    receiveFromChannel[channelIndex] = receiveFromChannelVariant[channelIndex].toBool();
                 }
-                Q_EMIT q->midiChannelTargetTracksChanged();
             } else if (receiveFromChannelVariant.count() != 0) {
                 qWarning() << Q_FUNC_INFO << humanReadableName << q->objectName() << "Fetched the receiveFromChannel values - we've ended up with an unacceptable number of entries, and the retrieved value was" << receiveFromChannelVariant;
             }
             QVariantList sendToChannelVariant = settings.value("sendToChannel", {}).toList();
             if (sendToChannelVariant.count() == 16) {
                 for (int channelIndex = 0; channelIndex < 16; ++channelIndex) {
-                    sendToChannel[channelIndex] = std::clamp(sendToChannelVariant[channelIndex].toInt(), 0, 16);
+                    sendToChannel[channelIndex] = sendToChannelVariant[channelIndex].toBool();
                 }
                 Q_EMIT q->channelsToSendToChanged();
             } else if (sendToChannelVariant.count() != 0) {
@@ -246,11 +254,13 @@ public:
             settings.beginGroup("MIDIDeviceSettings");
             settings.beginGroup(q->zynthianId());
             // Store the basics for the device itself
-            QVariantList receiveFromChannelVariant, sendToChannelVariant;
+            QVariantList receiveFromChannelVariant, sendToChannelVariant, midiChannelTargetTrackVariant;
             for (int channelIndex = 0; channelIndex < 16; ++channelIndex) {
                 receiveFromChannelVariant << receiveFromChannel[channelIndex];
                 sendToChannelVariant << sendToChannel[channelIndex];
+                midiChannelTargetTrackVariant << midiChannelTargetTrack[channelIndex];
             }
+            settings.setValue("midiChannelTargetTrack", midiChannelTargetTrackVariant);
             settings.setValue("receiveFromChannel", receiveFromChannelVariant);
             settings.setValue("sendToChannel", sendToChannelVariant);
             settings.setValue("sendTimecode", sendTimecode);
@@ -452,7 +462,7 @@ void MidiRouterDevice::writeEventToOutputActual(jack_midi_event_t& event)
             }
         #if DebugRouterDevice
         } else {
-            if (DebugRouterDevice) { qDebug() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Wrote event to buffer at time" << QString::number(event.time).rightJustified(4, ' ') << "on channel" << currentChannel << "for port" << (output ? output->portName : "no-port-details") << "with data" << event.buffer[0] << event.buffer[1]; }
+            if (DebugRouterDevice) { qDebug() << Q_FUNC_INFO << d->humanReadableName << objectName() << "Wrote event to buffer at time" << QString::number(event.time).rightJustified(4, ' ') << "for port" << (d->outputPort ? d->outputPortName : "no-port-details") << "with data" << event.buffer[0] << event.buffer[1]; }
         #endif
         }
         if (d->mostRecentOutputTime < event.time) {
