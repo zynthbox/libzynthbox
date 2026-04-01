@@ -374,22 +374,22 @@ public:
                                     internalControllerPassthroughListener.addMessage(true, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
                                 }
                             }
-                            if (inputDeviceIsHardware == false && eventChannel == masterChannel) {
-                                // qDebug() << Q_FUNC_INFO << "Event comes from internal device " << eventDevice << "and is on the master channel, send to all enabled outputs:" << allEnabledOutputs;
-                                for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
-                                    device->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                }
-                            }
+                            // if (inputDeviceIsHardware == false && eventChannel == masterChannel) {
+                            //     // qDebug() << Q_FUNC_INFO << "Event comes from internal device " << eventDevice << "and is on the master channel, send to all enabled outputs:" << allEnabledOutputs;
+                            //     for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
+                            //         device->writeEventToOutput(*event, eventDeviceFilterEntry);
+                            //     }
+                            // }
                             if (eventDevice->filterZynthianOutputByChannel()) {
                                 passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
                                 zynthianOutputs[eventChannel]->writeEventToOutput(*event, eventDeviceFilterEntry);
                                 // Since we've already sent out all the master channel messages anyway, don't write them again
-                                if (isCCMessage && eventChannel != masterChannel) {
+                                // if (isCCMessage && eventChannel != masterChannel) {
                                     // qDebug() << Q_FUNC_INFO << "SyncTimer master track event is CC and is NOT on the master channel, send to all enabled outputs:" << allEnabledOutputs;
-                                    for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
-                                        // TODO We'll likely want to filter this on device type ControllerType at some point, but for now everything gets it
-                                        device->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                    }
+                                // }
+                                for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
+                                    // TODO We'll likely want to filter this on device type ControllerType at some point, but for now everything gets it
+                                    device->writeEventToOutput(*event, eventDeviceFilterEntry);
                                 }
                                 passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
                             } else {
@@ -492,8 +492,6 @@ public:
                         const bool isBeatClock = (byte0 == 0xf2 || byte0 == 0xf8 || byte0 == 0xfa || byte0 == 0xfb || byte0 == 0xfc);
                         const bool isTimecode = (byte0 == 0xf9);
                         currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
-                        if (usbMidiPorts[0] && eventDevice != usbMidiPorts[0]) usbMidiPorts[0]->writeEventToOutput(*event, eventDeviceFilterEntry);
-                        if (usbMidiPorts[currentSketchpadTrack + 1] && eventDevice != usbMidiPorts[currentSketchpadTrack + 1]) usbMidiPorts[currentSketchpadTrack + 1]->writeEventToOutput(*event, eventDeviceFilterEntry);
                         if (inputDeviceIsHardware) {
                             hardwareInListener.addMessage(false, false, timestamp, timestampUsecs, *event, eventChannel, currentSketchpadTrack, eventDevice);
                         }
@@ -571,7 +569,8 @@ public:
         QList<MidiRouterDevice*> newDevices;
         MidiRouterDevice *newUsbGadgets[ZynthboxTrackCount + 1];
         for (int i = 0; i < ZynthboxTrackCount + 1; ++i) {
-            newUsbGadgets[i] = nullptr;
+            // Initialise the new list to match the old one (since it's more like an edit-in-place type situation)
+            newUsbGadgets[i] = usbMidiPorts[i];
         }
         if (ports == nullptr) {
             qDebug() << Q_FUNC_INFO << "No physical ports found";
@@ -669,6 +668,10 @@ public:
                         zynthianId = splitAlias.join("_");
                         hardwareId = zynthianId;
                     }
+                    static const QString midiBridgeString{"Midi Bridge:"};
+                    if (humanReadableName.startsWith(midiBridgeString)) {
+                        humanReadableName.remove(0, midiBridgeString.length());
+                    }
                     free(aliases[0]);
                     free(aliases[1]);
                     int jackPortFlags = jack_port_flags(hardwarePort);
@@ -705,7 +708,11 @@ public:
                                     device->setSendTimecode(false);
                                     device->setVisible(false);
                                 }
-                                newUsbGadgets[usbMidiGadgetCount] = device;
+                                if (usbMidiGadgetCount < 11) {
+                                    newUsbGadgets[usbMidiGadgetCount] = device;
+                                } else {
+                                    qWarning() << Q_FUNC_INFO << "We have more than 11 USB MIDI gadget entries, this will break very badly. We are ignoring the surplus, but the source of this should be investigated";
+                                }
                                 ++usbMidiGadgetCount;
                             }
                             device->completeInitialisation();
@@ -969,7 +976,7 @@ MidiRouter::MidiRouter(QObject *parent)
                 timecodeDevice->setDeviceType(MidiRouterDevice::TimeCodeGeneratorType);
                 timecodeDevice->setZynthianId("TransportManager");
                 timecodeDevice->setHumanReadableName("Zynthbox TransportManager");
-                    // This does not want to actually receive any timecode signals, otherwise it gets weird
+                // This does not want to actually receive any timecode signals, otherwise it gets weird
                 timecodeDevice->setSendTimecode(false);
                 timecodeDevice->setSendBeatClock(false);
                 timecodeDevice->setInputPortName("TransportManager-in");
@@ -1018,6 +1025,7 @@ MidiRouter::MidiRouter(QObject *parent)
                 masterDevice->setInputPortName("SyncTimer-MasterTrack-Sequencer");
                 masterDevice->setInputEnabled(true);
                 masterDevice->setZynthianMasterChannel(d->masterChannel);
+                masterDevice->setReceiveBeatClock(true);
                 masterDevice->setFilterZynthianOutputByChannel(true);
                 d->internalDevices << masterDevice;
                 d->connectPorts("SyncTimer:MasterTrack-Sequencer", "ZLRouter:SyncTimer-MasterTrack-Sequencer");
