@@ -925,7 +925,7 @@ MidiRouter::MidiRouter(QObject *parent)
     , d(new MidiRouterPrivate(this))
 {
     QCoreApplication::setOrganizationName("zynthbox");
-    QCoreApplication::setApplicationName("libzynthbox");
+    QCoreApplication::setApplicationName("zynthbox-qml");
     qRegisterMetaType<MidiRouter::ListenerPort>();
     qRegisterMetaType<MidiRouterFilterEntryRewriter::RuleType>();
     qRegisterMetaType<MidiRouterFilterEntryRewriter::EventSize>();

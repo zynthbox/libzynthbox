@@ -153,7 +153,7 @@ Plugin::Plugin(QObject *parent)
 Plugin *Plugin::instance()
 {
     QCoreApplication::setOrganizationName("zynthbox");
-    QCoreApplication::setApplicationName("libzynthbox");
+    QCoreApplication::setApplicationName("zynthbox-qml");
     Plugin* sin = singletonInstance.load(std::memory_order_acquire);
     if (!sin) {
         std::lock_guard<std::mutex> myLock(singletonMutex);
