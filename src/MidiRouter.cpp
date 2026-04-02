@@ -221,8 +221,10 @@ public:
 
     MidiRouterDevice *zynthianOutputs[16];
     SketchpadTrackInfo *sketchpadTracks[ZynthboxTrackCount];
+    SketchpadTrackInfo *syncTimerTrack{nullptr};
     SketchpadTrackInfo *passthroughOutputPort{nullptr};
     MidiRouterDevice *currentTrackMirror{nullptr};
+    MidiRouterDevice *timecodeDevice{nullptr};
     MidiRouterDevice *usbMidiPorts[ZynthboxTrackCount + 1];
 
     MidiListenerPort passthroughListener;
@@ -288,12 +290,17 @@ public:
         // starting up, and we kind of need to settle down before then, and a good indicator something went wrong
         // is that the subbeatLengthInMicroseconds variable is zero, and so we can use that to make sure things are
         // reasonably sane before trying to do anything.
-        if (subbeatLengthInMicroseconds > 0) {
+        if (subbeatLengthInMicroseconds > 0 && constructing == false) {
             jack_midi_event_t *event{nullptr};
             MidiRouterDevice *eventDevice{nullptr};
             SketchpadTrackInfo *currentTrack{nullptr};
             bool inputDeviceIsHardware{false};
             bool inputDeviceIsSequencer{false};
+            MidiRouterDevice *midiTickSource{timecodeDevice};
+            MidiRouterDevice *midiBeatSource{syncTimerTrack->syncTimerSequencer};
+            if (clockSource == MidiRouter::ExternalClockSource || (clockSource == MidiRouter::AutoClockSource && externalClockSourceDevice != nullptr)) {
+                midiTickSource = midiBeatSource = externalClockSourceDevice;
+            }
             for (MidiRouterDevice *device : qAsConst(devices)) {
                 device->processBegin(nframes);
             }
@@ -374,19 +381,9 @@ public:
                                     internalControllerPassthroughListener.addMessage(true, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
                                 }
                             }
-                            // if (inputDeviceIsHardware == false && eventChannel == masterChannel) {
-                            //     // qDebug() << Q_FUNC_INFO << "Event comes from internal device " << eventDevice << "and is on the master channel, send to all enabled outputs:" << allEnabledOutputs;
-                            //     for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
-                            //         device->writeEventToOutput(*event, eventDeviceFilterEntry);
-                            //     }
-                            // }
                             if (eventDevice->filterZynthianOutputByChannel()) {
                                 passthroughListener.addMessage(!inputDeviceIsHardware, isNoteMessage, timestamp, timestampUsecs, *event, eventChannel, sketchpadTrack, eventDevice);
                                 zynthianOutputs[eventChannel]->writeEventToOutput(*event, eventDeviceFilterEntry);
-                                // Since we've already sent out all the master channel messages anyway, don't write them again
-                                // if (isCCMessage && eventChannel != masterChannel) {
-                                    // qDebug() << Q_FUNC_INFO << "SyncTimer master track event is CC and is NOT on the master channel, send to all enabled outputs:" << allEnabledOutputs;
-                                // }
                                 for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
                                     // TODO We'll likely want to filter this on device type ControllerType at some point, but for now everything gets it
                                     device->writeEventToOutput(*event, eventDeviceFilterEntry);
@@ -491,34 +488,47 @@ public:
                         const double timestampUsecs = current_usecs + (microsecondsPerFrame * double(event->time));
                         const bool isBeatClock = (byte0 == 0xf2 || byte0 == 0xf8 || byte0 == 0xfa || byte0 == 0xfb || byte0 == 0xfc);
                         const bool isTimecode = (byte0 == 0xf9);
-                        currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
-                        if (inputDeviceIsHardware) {
-                            hardwareInListener.addMessage(false, false, timestamp, timestampUsecs, *event, eventChannel, currentSketchpadTrack, eventDevice);
+                        bool sendEvent{true};
+                        // Ensure that we filter out any time-related events that aren't from our designated timing source
+                        if (isBeatClock && eventDevice != midiBeatSource) {
+                            sendEvent = false;
+                        } else if (isTimecode && eventDevice != midiTickSource) {
+                            sendEvent = false;
                         }
-                        for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
-                            if (isBeatClock && device->sendBeatClock() == false) {
-                                continue;
-                            } else if (isTimecode && device->sendTimecode() == false) {
-                                continue;
+                        if (sendEvent) {
+                            currentTrackMirror->writeEventToOutput(*event, eventDeviceFilterEntry);
+                            if (inputDeviceIsHardware) {
+                                hardwareInListener.addMessage(false, false, timestamp, timestampUsecs, *event, eventChannel, currentSketchpadTrack, eventDevice);
                             }
-                            if (device != eventDevice) {
-                                device->writeEventToOutput(*event, eventDeviceFilterEntry);
-                            }
-                        }
-                        if (isBeatClock || isTimecode) {
-                            for (MidiRouterDevice *zynthianDevice : qAsConst(zynthianOutputs)) {
-                                zynthianDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
-                            }
-                        } else {
-                            currentTrack = sketchpadTracks[currentSketchpadTrack];
-                            for (const int &zynthianChannel : currentTrack->zynthianChannels) {
-                                if (zynthianChannel == -1) {
+                            for (MidiRouterDevice *device : qAsConst(allEnabledOutputs)) {
+                                if (isBeatClock && device->sendBeatClock() == false) {
+                                    continue;
+                                } else if (isTimecode && device->sendTimecode() == false) {
+                                    continue;
+                                } else if (isBeatClock && midiBeatSource == syncTimerTrack->syncTimerSequencer && device == timecodeDevice) {
+                                    // Special-case for our beat source being internal, and the destination device being the transport manager device
+                                    // That is, we don't want to feed the transport manager the synctimer's beat output
                                     continue;
                                 }
-                                zynthianOutputs[zynthianChannel]->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                if (device != eventDevice) {
+                                    device->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                }
                             }
+                            if (isBeatClock || isTimecode) {
+                                for (MidiRouterDevice *zynthianDevice : qAsConst(zynthianOutputs)) {
+                                    zynthianDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                }
+                            } else {
+                                currentTrack = sketchpadTracks[currentSketchpadTrack];
+                                for (const int &zynthianChannel : currentTrack->zynthianChannels) {
+                                    if (zynthianChannel == -1) {
+                                        continue;
+                                    }
+                                    zynthianOutputs[zynthianChannel]->writeEventToOutput(*event, eventDeviceFilterEntry);
+                                }
+                            }
+                            passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
                         }
-                        passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
                     } else {
                         qWarning() << "ZLRouter: Something's badly wrong and we've ended up with a message supposedly on channel" << eventChannel;
                     }
@@ -972,19 +982,21 @@ MidiRouter::MidiRouter(QObject *parent)
                 qInfo() << "ZLRouter: Successfully created and set up the ZLRouter's Jack client";
                 zl_set_jack_client_affinity(d->jackClient);
                 // Set up the timecode generator thing as a router device
-                MidiRouterDevice *timecodeDevice = new MidiRouterDevice(d->jackClient, this);
-                timecodeDevice->setDeviceType(MidiRouterDevice::TimeCodeGeneratorType);
-                timecodeDevice->setZynthianId("TransportManager");
-                timecodeDevice->setHumanReadableName("Zynthbox TransportManager");
-                // This does not want to actually receive any timecode signals, otherwise it gets weird
-                timecodeDevice->setSendTimecode(false);
-                timecodeDevice->setSendBeatClock(false);
-                timecodeDevice->setInputPortName("TransportManager-in");
-                timecodeDevice->setInputEnabled(true);
-                timecodeDevice->setOutputPortName("TransportManager-out");
-                timecodeDevice->setOutputEnabled(true);
-                timecodeDevice->setZynthianMasterChannel(d->masterChannel);
-                d->internalDevices << timecodeDevice;
+                d->timecodeDevice = new MidiRouterDevice(d->jackClient, this);
+                d->timecodeDevice->setDeviceType(MidiRouterDevice::TimeCodeGeneratorType);
+                d->timecodeDevice->setZynthianId("TransportManager");
+                d->timecodeDevice->setHumanReadableName("Zynthbox TransportManager");
+                // If the transport manager isn't our clock source, it will want to receive the clock information
+                // from our external source (we don't write to the sending device, so we won't be feeding it back
+                // its own things)
+                d->timecodeDevice->setSendTimecode(true);
+                d->timecodeDevice->setSendBeatClock(true);
+                d->timecodeDevice->setInputPortName("TransportManager-in");
+                d->timecodeDevice->setInputEnabled(true);
+                d->timecodeDevice->setOutputPortName("TransportManager-out");
+                d->timecodeDevice->setOutputEnabled(true);
+                d->timecodeDevice->setZynthianMasterChannel(d->masterChannel);
+                d->internalDevices << d->timecodeDevice;
                 d->connectPorts("TransportManager:midi_out", "ZLRouter:TransportManager-in");
                 d->connectPorts("ZLRouter:TransportManager-out", "TransportManager:midi_in");
                 // Set up SyncTimer as a router device
@@ -1017,6 +1029,11 @@ MidiRouter::MidiRouter(QObject *parent)
                 // SyncTimer also has a master track for controlling things that are not directly tied to
                 // a track (such as, for example, cc values for specific zynthian-controlled
                 // synths, or things which are actually global, like the bpm)
+                d->syncTimerTrack = new SketchpadTrackInfo(0);
+                d->syncTimerTrack->portName = QString("SyncTimer");
+                d->syncTimerTrack->routerDevice = new MidiRouterDevice(d->jackClient, this);
+                d->syncTimerTrack->routerDevice->setOutputPortName(d->passthroughOutputPort->portName.toUtf8());
+                d->syncTimerTrack->routerDevice->setOutputEnabled(true);
                 MidiRouterDevice *masterDevice = new MidiRouterDevice(d->jackClient, this);
                 masterDevice->setZynthianId("SyncTimer-MasterTrack-Sequencer");
                 masterDevice->setHumanReadableName("SyncTimer Master Track Sequencer");
@@ -1028,6 +1045,7 @@ MidiRouter::MidiRouter(QObject *parent)
                 masterDevice->setReceiveBeatClock(true);
                 masterDevice->setFilterZynthianOutputByChannel(true);
                 d->internalDevices << masterDevice;
+                d->syncTimerTrack->syncTimerSequencer = masterDevice;
                 d->connectPorts("SyncTimer:MasterTrack-Sequencer", "ZLRouter:SyncTimer-MasterTrack-Sequencer");
                 masterDevice = new MidiRouterDevice(d->jackClient, this);
                 masterDevice->setZynthianId("SyncTimer-MasterTrack-Controller");
@@ -1038,6 +1056,7 @@ MidiRouter::MidiRouter(QObject *parent)
                 masterDevice->setZynthianMasterChannel(d->masterChannel);
                 masterDevice->setFilterZynthianOutputByChannel(true);
                 d->internalDevices << masterDevice;
+                d->syncTimerTrack->syncTimerController = masterDevice;
                 d->connectPorts("SyncTimer:MasterTrack-Controller", "ZLRouter:SyncTimer-MasterTrack-Controller");
                 // Set the devices to just be the internal devices, and then connect any hardware
                 d->devices = d->internalDevices;
