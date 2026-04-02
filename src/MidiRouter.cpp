@@ -296,9 +296,11 @@ public:
             SketchpadTrackInfo *currentTrack{nullptr};
             bool inputDeviceIsHardware{false};
             bool inputDeviceIsSequencer{false};
+            // TODO: We need to do some magic here to make the automatic clock source logic work... but explicitly
+            // having an external source, and falling back to internal when that isn't available, will do us for now
             MidiRouterDevice *midiTickSource{timecodeDevice};
             MidiRouterDevice *midiBeatSource{syncTimerTrack->syncTimerSequencer};
-            if (clockSource == MidiRouter::ExternalClockSource || (clockSource == MidiRouter::AutoClockSource && externalClockSourceDevice != nullptr)) {
+            if (clockSource == MidiRouter::ExternalClockSource && externalClockSourceDevice != nullptr) {
                 midiTickSource = midiBeatSource = externalClockSourceDevice;
             }
             for (MidiRouterDevice *device : qAsConst(devices)) {
