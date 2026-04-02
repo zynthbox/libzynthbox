@@ -18,6 +18,7 @@
 
 #include <QDebug>
 #include <QProcessEnvironment>
+#include <QSettings>
 #include <QTimer>
 
 #include <jack/jack.h>
@@ -923,12 +924,17 @@ MidiRouter::MidiRouter(QObject *parent)
     : QThread(parent)
     , d(new MidiRouterPrivate(this))
 {
+    QCoreApplication::setOrganizationName("zynthbox");
+    QCoreApplication::setApplicationName("libzynthbox");
     qRegisterMetaType<MidiRouter::ListenerPort>();
     qRegisterMetaType<MidiRouterFilterEntryRewriter::RuleType>();
     qRegisterMetaType<MidiRouterFilterEntryRewriter::EventSize>();
     qRegisterMetaType<MidiRouterFilterEntryRewriter::EventByte>();
     qRegisterMetaType<MidiRouterFilterEntryRewriter::ValueSpecifier>();
     connect(this, &MidiRouter::currentSketchpadTrackChanged, this, &MidiRouter::currentSketchpadTrackTargetTracksChanged);
+    QSettings settings;
+    settings.beginGroup("MIDIDeviceSettings");
+    setClockSource(MidiRouter::ClockSource(settings.value("clockSource", MidiRouter::InternalClockSource).toInt()));
     reloadConfiguration();
     TransportManager::instance(d->syncTimer)->initialize();
     // Open the client.
@@ -1044,7 +1050,9 @@ MidiRouter::MidiRouter(QObject *parent)
                 masterDevice->setInputPortName("SyncTimer-MasterTrack-Sequencer");
                 masterDevice->setInputEnabled(true);
                 masterDevice->setZynthianMasterChannel(d->masterChannel);
-                masterDevice->setReceiveBeatClock(true);
+                // Don't set this for receiving beat clock, as it'll override any externally
+                // connected devices on startup (which is specifically what we don't want to happen)
+                // masterDevice->setReceiveBeatClock(true);
                 masterDevice->setFilterZynthianOutputByChannel(true);
                 d->internalDevices << masterDevice;
                 d->syncTimerTrack->syncTimerSequencer = masterDevice;
@@ -1356,6 +1364,9 @@ void MidiRouter::setClockSource(const MidiRouter::ClockSource& clockSource)
 {
     if (d->clockSource != clockSource) {
         d->clockSource = clockSource;
+        QSettings settings;
+        settings.beginGroup("MIDIDeviceSettings");
+        settings.setValue("clockSource", d->clockSource);
         Q_EMIT clockSourceChanged();
     }
 }

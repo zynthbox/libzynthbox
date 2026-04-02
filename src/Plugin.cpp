@@ -152,6 +152,8 @@ Plugin::Plugin(QObject *parent)
 
 Plugin *Plugin::instance()
 {
+    QCoreApplication::setOrganizationName("zynthbox");
+    QCoreApplication::setApplicationName("libzynthbox");
     Plugin* sin = singletonInstance.load(std::memory_order_acquire);
     if (!sin) {
         std::lock_guard<std::mutex> myLock(singletonMutex);
@@ -193,9 +195,6 @@ void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QS
 
 void Plugin::initialize()
 {
-    QCoreApplication::setOrganizationName("zynthbox");
-    QCoreApplication::setApplicationName("libzynthbox");
-
     // qInstallMessageHandler(myMessageOutput);
     qDebug() << "libzynthbox Initialisation Started";
     juceEventLoop.start();

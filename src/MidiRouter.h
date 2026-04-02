@@ -361,4 +361,5 @@ public:
 private:
     MidiRouterPrivate *d{nullptr};
 };
+Q_DECLARE_METATYPE(MidiRouter::ClockSource)
 Q_DECLARE_METATYPE(MidiRouter::ListenerPort)
