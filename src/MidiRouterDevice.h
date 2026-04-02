@@ -62,7 +62,9 @@ class MidiRouterDevice : public QObject {
      * \brief The number of pulses per quarter-note this device provides/expects
      * TODO sending is currently limited to our internal 24ppqn clock, this is for handling incoming time signals
      * @note This must be an "interesting" number related to 96 (meaning either a division or multiple of 96), so we can line it up with our internal clock without running into floating point precision trouble or hoop-jumping
-     * Setting this to any value other than those in the allowed list will cause the value to snap to the next value down
+     * Setting this to any value other than those in the allowed list will cause the value to snap to the next value in the direction of movement
+     * @see nextPpqn()
+     * @see previousPpqn()
      * @default 24
      * @minimum 1
      * @maximum 960
@@ -522,6 +524,8 @@ public:
 
     int ppqn() const;
     void setPpqn(const int &ppqn);
+    Q_INVOKABLE void nextPpqn();
+    Q_INVOKABLE void previousPpqn();
     Q_SIGNAL void ppqnChanged();
 
     void setWriteMidiEvents(const bool &writeMidiEvents);

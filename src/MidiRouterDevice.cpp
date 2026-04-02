@@ -502,12 +502,6 @@ void MidiRouterDevice::nextInputEvent()
         currentInputEvent.size = 0;
     }
     d->nextInputEventIndex++;
-    // If our current event is a beat clock one (that is, specifically the beat clock message, not other transport control messages)
-    // And also, if this device is not supposed to be a beat clock source,
-    // we should try skip the message and try again
-    if (currentInputEvent.size > 0 && currentInputEvent.buffer[0] == 0xf8 && d->receiveBeatClock == false) {
-        nextInputEvent();
-    }
 }
 
 void MidiRouterDevice::processEnd()
@@ -883,12 +877,40 @@ int MidiRouterDevice::ppqn() const
     return d->ppqn;
 }
 
+static const QList<int> allowedPpqnValues{1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 96, 192, 288, 384, 480, 576, 672, 768, 864, 960};
 void MidiRouterDevice::setPpqn(const int& ppqn)
 {
-    if (d->ppqn != ppqn) {
-        d->ppqn = ppqn;
-        Q_EMIT ppqnChanged();
+    const int adjustedPpqn{qMax(1, qMin(ppqn, 960))};
+    if (d->ppqn != adjustedPpqn) {
+        if (allowedPpqnValues.contains(adjustedPpqn)) {
+            d->ppqn = adjustedPpqn;
+            Q_EMIT ppqnChanged();
+        } else if (adjustedPpqn < d->ppqn) {
+            while (adjustedPpqn < d->ppqn) {
+                int currentPpqnIndex{allowedPpqnValues.indexOf(d->ppqn)};
+                d->ppqn = allowedPpqnValues[qMax(0, currentPpqnIndex - 1)];
+            }
+            Q_EMIT ppqnChanged();
+        } else {
+            while (d->ppqn < adjustedPpqn) {
+                int currentPpqnIndex{allowedPpqnValues.indexOf(d->ppqn)};
+                d->ppqn = allowedPpqnValues[qMin(currentPpqnIndex + 1, allowedPpqnValues.count() - 1)];
+            }
+            Q_EMIT ppqnChanged();
+        }
     }
+}
+
+void MidiRouterDevice::nextPpqn()
+{
+    int currentPpqnIndex{allowedPpqnValues.indexOf(d->ppqn)};
+    setPpqn(allowedPpqnValues[qMin(currentPpqnIndex + 1, allowedPpqnValues.count() - 1)]);
+}
+
+void MidiRouterDevice::previousPpqn()
+{
+    int currentPpqnIndex{allowedPpqnValues.indexOf(d->ppqn)};
+    setPpqn(allowedPpqnValues[qMax(0, currentPpqnIndex - 1)]);
 }
 
 void MidiRouterDevice::setWriteMidiEvents(const bool& writeMidiEvents)
