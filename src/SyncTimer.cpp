@@ -633,22 +633,22 @@ public:
         if (externalBpm > -1) {
             const quint64 mostRecentlyClockedSyncTimerTick{transportManager->mostRecentlyClockedSyncTimerTick()};
             // If we have not yet applied the adjustments for the current playhead, and we have a remote clock tick to test against...
-            if (stepPositionAdjustedAppliedForStep < jackCumulativePlayhead && mostRecentlyClockedSyncTimerTick <= jackCumulativePlayhead) {
+            if (stepPositionAdjustedAppliedForStep < jackPlayheadReturn && mostRecentlyClockedSyncTimerTick <= jackPlayheadReturn) {
                 quint64 storedJackPlayheadForTimerTick{jackPlayheadForTimerTick[mostRecentlyClockedSyncTimerTick]};
-                quint64 mostRecentTickJackFrame{transportManager->mostRecentTickJackFrame()};
+                quint64 jackFrameForLastSyncTimerTick{transportManager->jackFrameForLastSyncTimerTick()};
                 // If these two don't match, it means we have a discrepancy, and we should adjust our current playhead's position by that amount,
                 // forward or backward as appropriate... and also remember to actually ensure we adjust our playback as appropriate, not *just*
                 // the first one, in case it ends up not matching (so if we're attempting to schedule behind, make sure the next one is also
                 // scheduled backward, and if we're scheduling forward outside our current period, adjust the next step's playback position)
                 // NOTE Also remember to update the usecs position for (for stepNextPlaybackPosition and whatnot)
-                if (storedJackPlayheadForTimerTick < mostRecentTickJackFrame) {
+                if (storedJackPlayheadForTimerTick < jackFrameForLastSyncTimerTick) {
                     // We are behind, so we need to adjust our timing to push the next steps forward (so, positive adjustment)
-                    stepPositionAdjustment += int(mostRecentTickJackFrame - storedJackPlayheadForTimerTick);
-                } else if (storedJackPlayheadForTimerTick > mostRecentTickJackFrame) {
+                    stepPositionAdjustment += int(jackFrameForLastSyncTimerTick - storedJackPlayheadForTimerTick);
+                } else if (storedJackPlayheadForTimerTick > jackFrameForLastSyncTimerTick) {
                     // We are ahead, so we need to adjust our timing to pull the next steps back (so, negative adjustment)
-                    stepPositionAdjustment -= int(storedJackPlayheadForTimerTick - mostRecentTickJackFrame);
+                    stepPositionAdjustment -= int(storedJackPlayheadForTimerTick - jackFrameForLastSyncTimerTick);
                 }
-                stepPositionAdjustedAppliedForStep = jackCumulativePlayhead;
+                stepPositionAdjustedAppliedForStep = jackPlayheadReturn;
             }
         }
 

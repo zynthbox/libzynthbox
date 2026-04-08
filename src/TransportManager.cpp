@@ -28,8 +28,8 @@ public:
     uint32_t mostRecentEventCount{0};
     jack_time_t nextMidiTick{0};
     const jack_midi_data_t midiTickEvent{0xf9};
-    jack_time_t previousMidiClockFrame{0};
-    double previousMidiClockDeltas[16]{0};
+    jack_time_t previousMidiClockTime{0};
+    jack_nframes_t previousMidiClockFrames[16]{0};
     double bpm{-1};
     jack_nframes_t jackFrameForLastRestart{0};
     jack_nframes_t midiTicksSinceLastRestart{0};
@@ -101,46 +101,68 @@ public:
                             // That should basically not be possible, and we can't really work with that
                             continue;
                         }
-                        const jack_time_t currentMidiClockFrame{(current_frames + event.time)};
-                        const double currentDelta{double((current_frames + event.time) - previousMidiClockFrame)};
-                        // Logic is, have a rolling number of timestamp deltas up to 16, depending on a couple of things:
+                        const jack_nframes_t currentMidiClockFrame{(current_frames + event.time)};
+                        // const jack_time_t currentTimestamp{jack_frames_to_time(client, currentMidiClockFrame)};
+                        // Logic is, have a rolling number of timestamps up to 16, depending on a couple of things:
                         // - If there is only a small amount of change, assume this is not a jump in bpm, and instead that it is a smooth slide to another (or jitter), and allow that
                         // - If there is a larger jump in the timestamp delta between the previous and the incoming one, assume we are jumping to a new bpm, clear out previous timestamps, and start calculations from scratch
-                        // If we have no previous deltas (that is, the first one is 0), use our current
-                        // delta as the average so we at least have *something* to work with
-                        double averageDelta{currentDelta};
-                        for (int availableDeltas = 0; availableDeltas < 16; ++availableDeltas) {
-                            if (previousMidiClockDeltas[availableDeltas] == 0) {
-                                averageDelta /= double(availableDeltas + 1);
+                        // If we have no previous deltas (that is, the first one is 0), we've nothing against which to calculate our new average delta
+                        // Rotate all entries one step to the right (ignoring any overflow)
+                        memmove(previousMidiClockFrames + 1, previousMidiClockFrames, sizeof(jack_nframes_t)*15);
+                        // Once rotated, set the first element to our new delta
+                        previousMidiClockFrames[0] = currentMidiClockFrame;
+                        double averageDelta{0};
+                        int availableTimestamps{0};
+                        for (; availableTimestamps < 16; ++availableTimestamps) {
+                            if (previousMidiClockFrames[availableTimestamps] == 0) {
                                 break;
-                            } else {
-                                averageDelta += previousMidiClockDeltas[availableDeltas];
+                            } else if (availableTimestamps > 0) {
+                                averageDelta += previousMidiClockFrames[availableTimestamps - 1] - previousMidiClockFrames[availableTimestamps];
                             }
                         }
-                        if (abs(currentDelta - averageDelta) > 10) {
-                            // If the delta is large, then we're being asked to jump immediately to another bpm
-                            // Set all entries in our history to 0
-                            memset(previousMidiClockDeltas, 0, sizeof(double)*16);
-                        } else {
-                            // If the delta change is tiny, assume we want either a smooth bpm transition, or that it's jitter
-                            // Rotate all entries one step to the right (ignoring any overflow)
-                            memmove(previousMidiClockDeltas + 1, previousMidiClockDeltas, sizeof(double)*15);
-                        }
-                        // Once rotated (or zeroed), set the first element to our new delta
-                        previousMidiClockDeltas[0] = currentDelta;
-                        previousMidiClockFrame = currentMidiClockFrame;
-                        // Now we've got everything done, update our BPM to whatever is appropriate for the new average delta
-                        const double newBpm{(1000.0 / (microsecondsPerFrame * averageDelta) / double(clockSourcePPQN)) * 60.0};
-                        if (newBpm != bpm) {
-                            bpm = newBpm;
-                            QMetaObject::invokeMethod(syncTimer, &SyncTimer::effectiveBpmChanged, Qt::QueuedConnection);
+                        if (availableTimestamps > 1) {
+                            averageDelta /= double(availableTimestamps - 1);
+                            // FIXME The 200 here is very arbitrary, really should be bpm and ppqn dependent... (so higher bpm allows a smaller delta-delta, and lower bpm allows a higher delta-delta)
+                            if (abs((int32_t(previousMidiClockFrames[0]) - int32_t(previousMidiClockFrames[1])) - averageDelta) > 200) {
+                                // If the difference between the average delta and the most recent one is particularly large,
+                                // we can assume that we're being asked to jump immediately to another bpm:
+                                // qDebug() << Q_FUNC_INFO << "Average delta did a big jump (" << (int32_t(previousMidiClockFrames[0]) - int32_t(previousMidiClockFrames[1])) - averageDelta << "), reset and recalculate to avoid floating for the next 14 updates";
+                                // Set all entries in our history to 0
+                                memset(previousMidiClockFrames, 0, sizeof(jack_nframes_t)*16);
+                                // and reset the most recent to current
+                                previousMidiClockFrames[0] = currentMidiClockFrame;
+                            } else {
+                                // Now we've got everything done, update our BPM to whatever is appropriate for the new average delta
+                                const double sampleRate = jack_get_sample_rate(client);
+                                const double newBpm{(sampleRate * 60.0) / (averageDelta * double(clockSourcePPQN))};
+                                if (newBpm != bpm) {
+                                    if (49 < newBpm && newBpm < 201) {
+                                        // New BPM is within our accepted range
+                                        bpm = newBpm;
+                                        QMetaObject::invokeMethod(syncTimer, &SyncTimer::effectiveBpmChanged, Qt::QueuedConnection);
+                                    } else if (newBpm < 50) {
+                                        // Below 50
+                                        if (bpm != 50) {
+                                            bpm = 50;
+                                            QMetaObject::invokeMethod(syncTimer, &SyncTimer::effectiveBpmChanged, Qt::QueuedConnection);
+                                        }
+                                    } else {
+                                        // Above 200
+                                        if (bpm != 200) {
+                                            bpm = 200;
+                                            QMetaObject::invokeMethod(syncTimer, &SyncTimer::effectiveBpmChanged, Qt::QueuedConnection);
+                                        }
+                                    }
+                                }
+                                // static int throttleThing{5};
+                                // if (throttleThing++ > 10) {
+                                //     qDebug() << Q_FUNC_INFO << "New BPM according to external clock is" << bpm << "with source ppqn" << clockSourcePPQN << "and calculated BPM" << newBpm << "with average delta" << averageDelta << "and current clock frame" << currentMidiClockFrame << "and previous clock frames:\n" << previousMidiClockFrames[0] << previousMidiClockFrames[1] << previousMidiClockFrames[2] << previousMidiClockFrames[3] << previousMidiClockFrames[4] << previousMidiClockFrames[5] << previousMidiClockFrames[6] << previousMidiClockFrames[7] << previousMidiClockFrames[8] << previousMidiClockFrames[9] << previousMidiClockFrames[10] << previousMidiClockFrames[11] << previousMidiClockFrames[12] << previousMidiClockFrames[13] << previousMidiClockFrames[14] << previousMidiClockFrames[15];
+                                //     throttleThing = 0;
+                                // }
+                            }
                         }
                         ++midiTicksSinceLastRestart;
                         mostRecentTickJackFrame = currentMidiClockFrame;
-                        static int throttleThing{0};
-                        if (throttleThing++ > 10) {
-                            qDebug() << Q_FUNC_INFO << "New BPM according to external clock is" << bpm;
-                        }
                         // Update the SyncTimer tick data, so it can keep itself in sync
                         if (internalPPQN > clockSourcePPQN) {
                             // If the internal PPQN is higher than the clock source, make sure we're counting up the most recent time we got a clock event by by the number of sync timer steps that are in the clock source's clock period
@@ -172,11 +194,15 @@ public:
                                 jack_transport_stop(client);
                                 jack_transport_start(client);
                                 midiTicksSinceLastRestart = 0;
+                                mostRecentlyClockedSyncTimerTick = 0;
+                                jackFrameForLastSyncTimerTick = 0;
                             }
                             TimerCommand *startCommand = syncTimer->getTimerCommand();
                             startCommand->operation = TimerCommand::StartPlaybackOperation;
                             syncTimer->scheduleTimerCommand(0, startCommand);
                         }
+                        // Also reset the clock times for bpm estimation (as we'll need to be starting from scratch with that)
+                        memset(previousMidiClockFrames, 0, sizeof(jack_nframes_t)*16);
                         break;
                     case 0xfc: // stop
                         // Spec says to ignore stop messages if they arrive while playback is already stopped
@@ -185,7 +211,11 @@ public:
                             TimerCommand *stopCommand = syncTimer->getTimerCommand();
                             stopCommand->operation = TimerCommand::StopPlaybackOperation;
                             syncTimer->scheduleTimerCommand(0, stopCommand);
+                        } else {
+                            syncTimer->sendAllNotesOffEverywhereImmediately();
                         }
+                        // Also reset the clock times for bpm estimation (as we'll need to be starting from scratch with that)
+                        memset(previousMidiClockFrames, 0, sizeof(jack_nframes_t)*16);
                         break;
                     case 0xf9: // tick
                         // qDebug() << Q_FUNC_INFO << "Received MIDI Tick";
@@ -334,6 +364,11 @@ uint32_t TransportManager::jackFrameForLastRestart() const
 quint64 TransportManager::mostRecentlyClockedSyncTimerTick() const
 {
     return d->mostRecentlyClockedSyncTimerTick;
+}
+
+uint32_t TransportManager::jackFrameForLastSyncTimerTick() const
+{
+    return d->mostRecentTickJackFrame;
 }
 
 int TransportManager::externalPPQN() const
