@@ -598,6 +598,7 @@ public:
                 transportManager->restartTransport();
                 mostRecentlyUpdatedJackPlayheadForTimerTick = 0;
                 stepPositionAdjustment = 0;
+                stepPositionAdjustedAppliedForStep = 0;
                 for (int step = 0; step < StepRingCount; ++step) {
                     jackPlayheadForTimerTick[step] = UINT_MAX;
                 }
@@ -633,7 +634,7 @@ public:
         if (externalBpm > -1) {
             const quint64 mostRecentlyClockedSyncTimerTick{transportManager->mostRecentlyClockedSyncTimerTick()};
             // If we have not yet applied the adjustments for the current playhead, and we have a remote clock tick to test against...
-            if (stepPositionAdjustedAppliedForStep < jackPlayheadReturn && mostRecentlyClockedSyncTimerTick <= jackPlayheadReturn) {
+            if (stepPositionAdjustedAppliedForStep < jackPlayhead && mostRecentlyClockedSyncTimerTick < jackPlayhead) {
                 quint64 storedJackPlayheadForTimerTick{jackPlayheadForTimerTick[mostRecentlyClockedSyncTimerTick]};
                 quint64 jackFrameForLastSyncTimerTick{transportManager->jackFrameForLastSyncTimerTick()};
                 // If these two don't match, it means we have a discrepancy, and we should adjust our current playhead's position by that amount,
@@ -644,11 +645,13 @@ public:
                 if (storedJackPlayheadForTimerTick < jackFrameForLastSyncTimerTick) {
                     // We are behind, so we need to adjust our timing to push the next steps forward (so, positive adjustment)
                     stepPositionAdjustment += int(jackFrameForLastSyncTimerTick - storedJackPlayheadForTimerTick);
+                    // qDebug() << Q_FUNC_INFO << "Adjusting step position forward by" << int(jackFrameForLastSyncTimerTick - storedJackPlayheadForTimerTick);
                 } else if (storedJackPlayheadForTimerTick > jackFrameForLastSyncTimerTick) {
                     // We are ahead, so we need to adjust our timing to pull the next steps back (so, negative adjustment)
                     stepPositionAdjustment -= int(storedJackPlayheadForTimerTick - jackFrameForLastSyncTimerTick);
+                    // qDebug() << Q_FUNC_INFO << "Adjusting step position backward by" << int(storedJackPlayheadForTimerTick - jackFrameForLastSyncTimerTick);
                 }
-                stepPositionAdjustedAppliedForStep = jackPlayheadReturn;
+                stepPositionAdjustedAppliedForStep = jackPlayhead;
             }
         }
 
