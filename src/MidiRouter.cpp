@@ -486,7 +486,7 @@ public:
                                 }
                             }
                         }
-                    } else if (event->size == 1 || event->size == 2) {
+                    } else if (event->size == 1 || event->size == 2 || (event->size == 3 && byte0 == 0xf2)) {
                         const double timestamp = current_frames + event->time;
                         const double timestampUsecs = current_usecs + (microsecondsPerFrame * double(event->time));
                         const bool isBeatClock = (byte0 == 0xf2 || byte0 == 0xf8 || byte0 == 0xfa || byte0 == 0xfb || byte0 == 0xfc);
@@ -533,7 +533,7 @@ public:
                             passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
                         }
                     } else {
-                        qWarning() << "ZLRouter: Something's badly wrong and we've ended up with a message supposedly on channel" << eventChannel;
+                        qWarning() << "ZLRouter: Something's badly wrong and we've ended up with a message supposedly on channel" << eventChannel << event->size << event->buffer[0] << (event->size > 1 ? event->buffer[1] : 0) << (event->size > 2 ? event->buffer[2] : 0);
                     }
                 }
                 // Set us back up for the next run
