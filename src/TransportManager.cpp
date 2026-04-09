@@ -42,8 +42,8 @@ public:
     int clockSourcePPQN{-1};
     int internalPPQN{0};
     quint64 syncTimerIncrementPerTick{0};
-    quint64 songPositionIncrementPerTick{0};
-    quint64 songPositionCounter{0};
+    qint64 songPositionIncrementPerTick{0};
+    qint64 songPositionCounter{0};
     static const int songPositionPPQN{4};
     static const int songPositionToTimerTickMultiplier{24};
     // We assume that we start up in a stopped state (which matches our playback timer as well)
@@ -73,14 +73,14 @@ public:
                     {
                         // The SSP is a 14 bit value which holds the position of the song in a number of MIDI Beats (a midi beat being one 16th of a note/bar, or a quarter of a quarter note to use ppqn terms)
                         const int newSongPosition = (event.buffer[2]<<7) | event.buffer[1];
-                        if (syncTimer->timerRunning()) {
-                            // Find the difference between the old and new song positions, and adjust the PlayfieldManager's global offset by that amount (PlayfieldManager's offset uses 96ppqn, so each MIDI Beat is 16 offset)
-                            qDebug() << Q_FUNC_INFO << "Received Song Position Pointer (SPP):" << newSongPosition << "making it bar.beat" << QString("%1.%2").arg(int(newSongPosition / 16 + 1)).arg(newSongPosition % 16 + 1) << "or offset" << newSongPosition * songPositionToTimerTickMultiplier << "giving us a final adjustment of" << (newSongPosition - songPosition) * songPositionToTimerTickMultiplier;
-                            PlayfieldManager::instance()->adjustGlobalOffset((songPosition - newSongPosition) * songPositionToTimerTickMultiplier);
-                        } else {
-                            // If we're not running, simply set the offset to the new position
+                        if (mostRecentPlaybackControlEvent == 0xfc) {
+                            // If we're not running (that is, the most recent playback control message was a stop), simply set the offset to the new position
                             qDebug() << Q_FUNC_INFO << "Received Song Position Pointer (SPP):" << newSongPosition << "making it bar.beat" << QString("%1.%2").arg(int(newSongPosition / 16 + 1)).arg(newSongPosition % 16 + 1) << "or offset" << newSongPosition * songPositionToTimerTickMultiplier;
                             PlayfieldManager::instance()->setGlobalOffset(newSongPosition * songPositionToTimerTickMultiplier);
+                        } else {
+                            // Find the difference between the old and new song positions, and adjust the PlayfieldManager's global offset by that amount (PlayfieldManager's offset uses 96ppqn, so each MIDI Beat is 16 offset)
+                            qDebug() << Q_FUNC_INFO << "Received Song Position Pointer (SPP):" << newSongPosition << "making it bar.beat" << QString("%1.%2").arg(int(newSongPosition / 16 + 1)).arg(newSongPosition % 16 + 1) << "or offset" << newSongPosition * songPositionToTimerTickMultiplier << "giving us a final adjustment of" << (newSongPosition - songPosition) * songPositionToTimerTickMultiplier;
+                            PlayfieldManager::instance()->adjustGlobalOffset((newSongPosition - songPosition) * songPositionToTimerTickMultiplier);
                         }
                         songPosition = newSongPosition;
                         // Reset the position counter, to ensure the song position stays in sync with the clock progression as expected
