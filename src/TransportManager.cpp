@@ -2,6 +2,7 @@
 #include "SyncTimer.h"
 #include "TimerCommand.h"
 #include "MidiRouterDevice.h"
+#include "PlayfieldManager.h"
 #include "JackThreadAffinitySetter.h"
 
 #include <QDebug>
@@ -31,6 +32,7 @@ public:
     jack_time_t previousMidiClockTime{0};
     jack_nframes_t previousMidiClockFrames[16]{0};
     double bpm{-1};
+    qint64 songPosition{0};
     jack_nframes_t jackFrameForLastRestart{0};
     jack_nframes_t midiTicksSinceLastRestart{0};
     jack_nframes_t mostRecentTickJackFrame{0};
@@ -40,13 +42,19 @@ public:
     int clockSourcePPQN{-1};
     int internalPPQN{0};
     quint64 syncTimerIncrementPerTick{0};
+    quint64 songPositionIncrementPerTick{0};
+    quint64 songPositionCounter{0};
+    static const int songPositionPPQN{4};
+    static const int songPositionToTimerTickMultiplier{24};
+    // We assume that we start up in a stopped state (which matches our playback timer as well)
+    // This also gets reset when the clock source changes
+    jack_midi_data_t mostRecentPlaybackControlEvent{0xfc};
     int process(jack_nframes_t nframes) {
         jack_nframes_t current_frames;
         jack_time_t current_usecs;
         jack_time_t next_usecs;
         float period_usecs;
         jack_get_cycle_times(client, &current_frames, &current_usecs, &next_usecs, &period_usecs);
-        const double microsecondsPerFrame = double(next_usecs - current_usecs) / double(nframes);
 
         // Handle transport input as thrown at us by others
         void *inputBuffer = jack_port_get_buffer(inPort, nframes);
@@ -60,23 +68,25 @@ public:
                 }
                 break;
             } else {
-                // switch (event.size) {
-                //     case 1:
-                //         qDebug() << Q_FUNC_INFO << "Event data (size 1)" << QString("0x%1").arg(event.buffer[0], 2, 16, QLatin1Char('0'));
-                //         break;
-                //     case 2:
-                //         qDebug() << Q_FUNC_INFO << "Event data (size 2)" << QString("0x%1").arg(event.buffer[0], 2, 16, QLatin1Char('0')) << QString("0x%1").arg(event.buffer[1], 2, 16, QLatin1Char('0'));
-                //         break;
-                //     case 3:
-                //         qDebug() << Q_FUNC_INFO << "Event data (size 3)" << QString("0x%1").arg(event.buffer[0], 2, 16, QLatin1Char('0')) << QString("0x%1").arg(event.buffer[1], 2, 16, QLatin1Char('0')) << QString("0x%1").arg(event.buffer[2], 2, 16, QLatin1Char('0'));
-                //         break;
-                //     default:
-                //         qDebug() << Q_FUNC_INFO << "Weird event received we don't know anything about... apparently size" << event.size;
-                // }
                 switch(event.buffer[0]) {
-                    case 0xf2: // position
-                        // (event->buffer[2]<<7) | event->buffer[1];
+                    case 0xf2: // Song Position Pointer
+                    {
+                        // The SSP is a 14 bit value which holds the position of the song in a number of MIDI Beats (a midi beat being one 16th of a note/bar, or a quarter of a quarter note to use ppqn terms)
+                        const int newSongPosition = (event.buffer[2]<<7) | event.buffer[1];
+                        if (syncTimer->timerRunning()) {
+                            // Find the difference between the old and new song positions, and adjust the PlayfieldManager's global offset by that amount (PlayfieldManager's offset uses 96ppqn, so each MIDI Beat is 16 offset)
+                            qDebug() << Q_FUNC_INFO << "Received Song Position Pointer (SPP):" << newSongPosition << "making it bar.beat" << QString("%1.%2").arg(int(newSongPosition / 16 + 1)).arg(newSongPosition % 16 + 1) << "or offset" << newSongPosition * songPositionToTimerTickMultiplier << "giving us a final adjustment of" << (newSongPosition - songPosition) * songPositionToTimerTickMultiplier;
+                            PlayfieldManager::instance()->adjustGlobalOffset((songPosition - newSongPosition) * songPositionToTimerTickMultiplier);
+                        } else {
+                            // If we're not running, simply set the offset to the new position
+                            qDebug() << Q_FUNC_INFO << "Received Song Position Pointer (SPP):" << newSongPosition << "making it bar.beat" << QString("%1.%2").arg(int(newSongPosition / 16 + 1)).arg(newSongPosition % 16 + 1) << "or offset" << newSongPosition * songPositionToTimerTickMultiplier;
+                            PlayfieldManager::instance()->setGlobalOffset(newSongPosition * songPositionToTimerTickMultiplier);
+                        }
+                        songPosition = newSongPosition;
+                        // Reset the position counter, to ensure the song position stays in sync with the clock progression as expected
+                        songPositionCounter = 0;
                         break;
+                    }
                     case 0xf8: // clock
                     {
                         // qDebug() << Q_FUNC_INFO << "Clock signal received";
@@ -89,6 +99,13 @@ public:
                                 } else {
                                     // If the external PPQN is the same or higher, then the increment is 1, but we use this variable to test when to update next
                                     syncTimerIncrementPerTick = quint64(clockSourcePPQN / internalPPQN);
+                                }
+                                if (songPositionPPQN > clockSourcePPQN) {
+                                    // If the song position PPQN is higher than the clock source (unlikely, but...), our increment is the number of song position ticks per each clock event
+                                    songPositionIncrementPerTick = quint64(songPositionPPQN / clockSourcePPQN);
+                                } else {
+                                    // If the song position PPQN is the same of higher, then the increment is 1, but we use this variable to test when to update next
+                                    songPositionIncrementPerTick = quint64(clockSourcePPQN / songPositionPPQN);
                                 }
                             } else {
                                 // This is super extra bad, we apparently got a tick, but don't have a source...
@@ -161,6 +178,24 @@ public:
                                 // }
                             }
                         }
+                        // Advance the song position based on PPQN (song position is always 4ppqn, so count up accordingly, and reset that counter when song position is changed explicitly)
+                        if (songPositionPPQN > clockSourcePPQN) {
+                            // If the song position PPQN is higher than the clock source, make sure we're counting up the song position by the relevant amount of ticks
+                            songPosition += songPositionIncrementPerTick;
+                        } else {
+                            // If the clock source is higher, count up and then test whether we've hit the tick amount, at which point reset and increase the song position
+                            ++songPositionCounter;
+                            if (songPositionCounter == songPositionIncrementPerTick) {
+                                ++songPosition;
+                                songPositionCounter = 0;
+                            }
+                        }
+                        // Update the SyncTimer tick adjustment values, so it can catch up (or fall behind) according to whatever the midi ticks are telling us to do
+                        // That is, when we get a midi clock event, make sure we count up and push ticks to SyncTimer, so things can be scheduled as required.
+                        // Optimally we want to also do some interpolation logic here, so we can intersperse ticks inside that timer... perhaps we can do
+                        // that by synctimer knowing the BPM, and adjusting to each tick (either by pushing forward or backward) when it slips out of sync
+                        // with the midi ticks, and otherwise "simply" operate entirely on BPM value the way we're doing already? That seems like it'd
+                        // likely work reasonably well and scale both up and down...
                         ++midiTicksSinceLastRestart;
                         mostRecentTickJackFrame = currentMidiClockFrame;
                         // Update the SyncTimer tick data, so it can keep itself in sync
@@ -175,19 +210,15 @@ public:
                                 jackFrameForLastSyncTimerTick = currentMidiClockFrame;
                             }
                         }
-                        // TODO Do we want to have a separate BPM value as defined by external clock, and then when in external clock mode, don't let the user set the thing, and instead display that value where-ever we display the BPM? Probably yes...
-                        // TODO When we get a midi clock event, make sure we count up and push ticks to SyncTimer, so things can be scheduled as required.
-                        // Optimally we want to also do some interpolation logic here, so we can intersperse ticks inside that timer... perhaps we can do
-                        // that by synctimer knowing the BPM, and adjusting to each tick (either by pushing forward or backward) when it slips out of sync
-                        // with the midi ticks, and otherwise "simply" operate entirely on BPM value the way we're doing already? That seems like it'd
-                        // likely work reasonably well and scale both up and down...
                         break;
                     }
                     case 0xfa: // start
                     case 0xfb: // continue
                         // Spec says to ignore start messages if they arrive while playback is happening
-                        qDebug() << Q_FUNC_INFO << "Received MIDI START message";
-                        if (!syncTimer->timerRunning()) {
+                        qDebug() << Q_FUNC_INFO << (event.buffer[0] == 0xfa ? "Received MIDI START message" : "Received MIDI CONTINUE message");
+                        // MIDI standard says to ignore START and CONTINUE messages if they arrive during playback, so...
+                        // In particular, this allows us to do the STOP, SPP, CONTINUE dance (such as how Reaper does scrubbing)
+                        if (mostRecentPlaybackControlEvent == 0xfc) {
                             jackFrameForLastRestart = current_frames + event.time;
                             if (clockSourceDevice) {
                                 // If we have a clock source, then *this* is when we're resetting things, not when the start command is actually handled
@@ -197,12 +228,18 @@ public:
                                 mostRecentlyClockedSyncTimerTick = 0;
                                 jackFrameForLastSyncTimerTick = 0;
                             }
+                            if (event.buffer[0] == 0xfa) {
+                                // MIDI standard says to always start at position 0 when we have a START message
+                                songPosition = 0;
+                            }
+                            PlayfieldManager::instance()->setGlobalOffset(songPosition * songPositionToTimerTickMultiplier);
                             TimerCommand *startCommand = syncTimer->getTimerCommand();
                             startCommand->operation = TimerCommand::StartPlaybackOperation;
                             syncTimer->scheduleTimerCommand(0, startCommand);
                         }
                         // Also reset the clock times for bpm estimation (as we'll need to be starting from scratch with that)
                         memset(previousMidiClockFrames, 0, sizeof(jack_nframes_t)*16);
+                        mostRecentPlaybackControlEvent = event.buffer[0];
                         break;
                     case 0xfc: // stop
                         // Spec says to ignore stop messages if they arrive while playback is already stopped
@@ -214,8 +251,11 @@ public:
                         } else {
                             syncTimer->sendAllNotesOffEverywhereImmediately();
                         }
+                        // When stopping, reset the song position to 0 (usually this will be done anyway, but this helps us avoid weirdness with PlayfieldManager's global offset, which also is zeroed on stop
+                        songPosition = 0;
                         // Also reset the clock times for bpm estimation (as we'll need to be starting from scratch with that)
                         memset(previousMidiClockFrames, 0, sizeof(jack_nframes_t)*16);
+                        mostRecentPlaybackControlEvent = event.buffer[0];
                         break;
                     case 0xf9: // tick
                         // qDebug() << Q_FUNC_INFO << "Received MIDI Tick";
@@ -382,6 +422,8 @@ void TransportManager::setClockSource(MidiRouterDevice* device)
         d->clockSourceDevice->disconnect(this);
     }
     d->clockSourceDevice = device;
+    // Reset the most recent control event, expecting playback to be stopped
+    d->mostRecentPlaybackControlEvent = 0xfc;
     if (d->clockSourceDevice) {
         connect(d->clockSourceDevice, &MidiRouterDevice::ppqnChanged, this, [this](){
             d->clockSourcePPQN = d->clockSourceDevice->ppqn();
