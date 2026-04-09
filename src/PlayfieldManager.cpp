@@ -84,6 +84,7 @@ public:
     ~PlayfieldManagerPrivate() {}
     PlayfieldManager *q{nullptr};
     ZLPlayfieldManagerSynchronisationManager *zlSyncManager{nullptr};
+    qint64 globalOffset{0};
     SketchpadState currentState;
     SketchpadState nextBarState;
     SyncTimer *syncTimer{SyncTimer::instance()};
@@ -282,6 +283,23 @@ QObject * PlayfieldManager::sketchpad() const
     return d->zlSyncManager->zlSketchpad;
 }
 
+const qint64 PlayfieldManager::globalOffset() const
+{
+    return d->globalOffset;
+}
+
+void PlayfieldManager::setGlobalOffset(const qint64& offset)
+{
+    if (d->globalOffset != offset) {
+        d->globalOffset = offset;
+    }
+}
+
+void PlayfieldManager::adjustGlobalOffset(const qint64& offsetAdjustment)
+{
+    setGlobalOffset(d->globalOffset + offsetAdjustment);
+}
+
 void PlayfieldManager::setClipPlaystate(const int& sketchpadSong, const int& sketchpadTrack, const int& clip, const PlaybackState& newState, const PlayfieldStatePosition& position, const qint64 &offset)
 {
     // qDebug() << Q_FUNC_INFO << sketchpadSong << sketchpadTrack << clip << newState << position;
@@ -321,10 +339,10 @@ const PlayfieldManager::PlaybackState PlayfieldManager::clipPlaystate(const int&
     return PlayfieldManager::StoppedState;
 }
 
-const qint64 PlayfieldManager::clipOffset(const int& sketchpadSong, const int& sketchpadTrack, const int& clip) const
+const qint64 PlayfieldManager::clipOffset(const int& sketchpadSong, const int& sketchpadTrack, const int& clip, const bool &includeGlobal) const
 {
     if (-1 < sketchpadSong && sketchpadSong < ZynthboxSongCount && -1 < sketchpadTrack && sketchpadTrack < ZynthboxTrackCount && -1 < clip && clip < ZynthboxSlotCount) {
-        return d->currentState.songs[sketchpadSong].tracks[sketchpadTrack].clips[clip].offset;
+        return d->currentState.songs[sketchpadSong].tracks[sketchpadTrack].clips[clip].offset - (includeGlobal ? d->globalOffset : 0);
     }
     return 0;
 }
@@ -343,6 +361,7 @@ void PlayfieldManager::progressPlayback()
 void PlayfieldManager::stopPlayback()
 {
     d->playhead = 0;
+    d->globalOffset = 0;
     d->nextBarState.reset(-1);
     d->currentState.reset();
 }

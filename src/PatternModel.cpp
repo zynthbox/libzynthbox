@@ -2604,7 +2604,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
         bool relevantToUs{false};
         for (int progressionIncrement = 0; progressionIncrement <= progressionLength; ++progressionIncrement) {
             // As we might change the offset on some step, we'll need that in here
-            const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->sketchpadTrack, d->clipIndex) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
+            const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->sketchpadTrack, d->clipIndex, true) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
             // check whether the sequencePosition + progressionIncrement matches our note length
             qint64 nextPosition = sequencePosition - playbackOffset + progressionIncrement;
             d->noteLengthDetails(d->stepLength, nextPosition, relevantToUs, noteDuration);
@@ -2660,7 +2660,7 @@ void PatternModel::handleSequenceAdvancement(qint64 sequencePosition, int progre
 void PatternModel::updateSequencePosition(qint64 sequencePosition)
 {
     if (isPlaying() || sequencePosition == 0) {
-        const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->sketchpadTrack, d->clipIndex) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
+        const qint64 playbackOffset{d->playfieldManager->clipOffset(d->song, d->sketchpadTrack, d->clipIndex, true) - (d->segmentHandler->songMode() ? d->segmentHandler->startOffset() : 0)};
         bool relevantToUs{false};
         qint64 nextPosition{sequencePosition - playbackOffset};
         qint64 noteDuration{0};
@@ -2748,7 +2748,7 @@ void ZLPatternSynchronisationManager::addRecordedNote(void *recordedNote)
     newNote->endTimestamp = quantizingAmount * qRound(double(newNote->endTimestamp) / quantizingAmount);
 
     // convert the timer ticks to pattern ticks, and adjust for whatever was the most recent restart of the pattern's playback
-    const qint64 playbackOffset{q->d->playfieldManager->clipOffset(q->d->song, q->d->sketchpadTrack, q->d->clipIndex) - (q->d->segmentHandler->songMode() ? q->d->segmentHandler->startOffset() : 0)};
+    const qint64 playbackOffset{q->d->playfieldManager->clipOffset(q->d->song, q->d->sketchpadTrack, q->d->clipIndex, true) - (q->d->segmentHandler->songMode() ? q->d->segmentHandler->startOffset() : 0)};
     newNote->timestamp = (newNote->timestamp - quint64(playbackOffset)) / quint64(q->d->patternTickToSyncTimerTick);
     newNote->endTimestamp = (newNote->endTimestamp - quint64(playbackOffset)) / quint64(q->d->patternTickToSyncTimerTick);
 

@@ -70,6 +70,25 @@ public:
     Q_ENUM(PlayfieldStatePosition)
 
     /**
+     * \brief A playback offset that will be applied to all clips in addition to their own offset
+     * @note This is reset when playback is stopped
+     * @return The current global offset
+     */
+    Q_INVOKABLE const qint64 globalOffset() const;
+    /**
+     * \brief Adjusts the playback offset of all clips
+     */
+    Q_INVOKABLE void setGlobalOffset(const qint64 &offset);
+    /**
+     * \brief Adjust the global offset by the given amount
+     * This is a convenience function for making an adjustment to the
+     * global offset, and is equivalent to setting it to the current
+     * offset plus the given offset adjustment.
+     * @param offsetAdjustment The amount by which you want to adjust the global offset
+     */
+    Q_INVOKABLE void adjustGlobalOffset(const qint64 &offsetAdjustment);
+
+    /**
      * \brief Set whether or not a clip should play (optionally immediately)
      *
      * @param sketchpadSong The song in the sketchpad that should have its state changed (this will invariably be 0 at the moment)
@@ -96,9 +115,10 @@ public:
      * @param sketchpadSong The song in the sketchpad that should have its state changed (this will invariably be 0 at the moment)
      * @param sketchpadTrack The sketchpad track the clip is on
      * @param clip The clip in the track whose state needs changing
+     * @param includeGlobal If set to true, the call will return the clip's offset with the global offset included
      * @return The playback offset of the clip in timer ticks (essentially, at which tick did the clip start playback)
      */
-    Q_INVOKABLE const qint64 clipOffset(const int &sketchpadSong, const int &sketchpadTrack, const int &clip) const;
+    Q_INVOKABLE const qint64 clipOffset(const int &sketchpadSong, const int &sketchpadTrack, const int &clip, const bool &includeGlobal = false) const;
 
     /**
      * \brief Emitted after the playfield state has changed
