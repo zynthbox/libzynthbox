@@ -1412,6 +1412,14 @@ double SyncTimer::effectiveBpm() const
     return timerThread->getBpm();
 }
 
+int SyncTimer::songPosition() const
+{
+    if (d->transportManager->bpm() > -1) {
+        return d->transportManager->songPosition();
+    }
+    return -1;
+}
+
 quint64 SyncTimer::scheduleAheadAmount() const
 {
     return d->scheduleAheadAmount;

@@ -83,6 +83,7 @@ public:
                             PlayfieldManager::instance()->adjustGlobalOffset((newSongPosition - songPosition) * songPositionToTimerTickMultiplier);
                         }
                         songPosition = newSongPosition;
+                        QMetaObject::invokeMethod(syncTimer, &SyncTimer::songPositionChanged, Qt::QueuedConnection);
                         // Reset the position counter, to ensure the song position stays in sync with the clock progression as expected
                         songPositionCounter = 0;
                         break;
@@ -182,11 +183,13 @@ public:
                         if (songPositionPPQN > clockSourcePPQN) {
                             // If the song position PPQN is higher than the clock source, make sure we're counting up the song position by the relevant amount of ticks
                             songPosition += songPositionIncrementPerTick;
+                            QMetaObject::invokeMethod(syncTimer, &SyncTimer::songPositionChanged, Qt::QueuedConnection);
                         } else {
                             // If the clock source is higher, count up and then test whether we've hit the tick amount, at which point reset and increase the song position
                             ++songPositionCounter;
                             if (songPositionCounter == songPositionIncrementPerTick) {
                                 ++songPosition;
+                                QMetaObject::invokeMethod(syncTimer, &SyncTimer::songPositionChanged, Qt::QueuedConnection);
                                 songPositionCounter = 0;
                             }
                         }
@@ -231,6 +234,7 @@ public:
                             if (event.buffer[0] == 0xfa) {
                                 // MIDI standard says to always start at position 0 when we have a START message
                                 songPosition = 0;
+                                QMetaObject::invokeMethod(syncTimer, &SyncTimer::songPositionChanged, Qt::QueuedConnection);
                             }
                             PlayfieldManager::instance()->setGlobalOffset(songPosition * songPositionToTimerTickMultiplier);
                             TimerCommand *startCommand = syncTimer->getTimerCommand();
@@ -253,6 +257,7 @@ public:
                         }
                         // When stopping, reset the song position to 0 (usually this will be done anyway, but this helps us avoid weirdness with PlayfieldManager's global offset, which also is zeroed on stop
                         songPosition = 0;
+                        QMetaObject::invokeMethod(syncTimer, &SyncTimer::songPositionChanged, Qt::QueuedConnection);
                         // Also reset the clock times for bpm estimation (as we'll need to be starting from scratch with that)
                         memset(previousMidiClockFrames, 0, sizeof(jack_nframes_t)*16);
                         mostRecentPlaybackControlEvent = event.buffer[0];
@@ -409,6 +414,11 @@ quint64 TransportManager::mostRecentlyClockedSyncTimerTick() const
 uint32_t TransportManager::jackFrameForLastSyncTimerTick() const
 {
     return d->mostRecentTickJackFrame;
+}
+
+const qint64 & TransportManager::songPosition() const
+{
+    return d->songPosition;
 }
 
 int TransportManager::externalPPQN() const

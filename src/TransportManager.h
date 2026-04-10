@@ -55,6 +55,12 @@ public:
     uint32_t jackFrameForLastSyncTimerTick() const;
 
     /**
+     * \brief The current song position as given to us by the clock source, and counted by us internally
+     * @return The song position in MIDI Beats (i.e. 16th notes)
+     */
+    const qint64 &songPosition() const;
+
+    /**
      * \brief The pulses per quarter note used by the external device
      * This will be -1 if there is no external device
      */

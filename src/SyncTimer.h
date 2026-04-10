@@ -34,6 +34,12 @@ class SyncTimer : public QObject {
    * If that device is present and *not* providing MIDI clock, this will result in the effective BPM becoming 0
    */
   Q_PROPERTY(double effectiveBpm READ effectiveBpm NOTIFY effectiveBpmChanged)
+  /**
+   * \brief If we're clocked externally, the song position given to us by the that clock source (in MIDI Beats, i.e. 16th notes)
+   * This value is -1 if we are not clocked externally
+   * @default -1
+   */
+  Q_PROPERTY(int songPosition READ songPosition NOTIFY songPositionChanged)
   Q_PROPERTY(quint64 scheduleAheadAmount READ scheduleAheadAmount NOTIFY scheduleAheadAmountChanged)
   Q_PROPERTY(bool audibleMetronome READ audibleMetronome WRITE setAudibleMetronome NOTIFY audibleMetronomeChanged)
 public:
@@ -107,6 +113,8 @@ public:
   bool externalClockActive() const;
   double effectiveBpm() const;
   Q_SIGNAL void effectiveBpmChanged();
+  int songPosition() const;
+  Q_SIGNAL void songPositionChanged();
 
   /**
    * \brief Returns the number of timer ticks you should schedule midi events for to ensure they won't get missed
