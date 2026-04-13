@@ -117,6 +117,8 @@
         <enum-type name="Track" />
         <enum-type name="Slot" />
         <enum-type name="TrackRackType" />
+        <enum-type name="Button" />
+        <enum-type name="KitVersion" />
     </object-type>
     <object-type name="FifoHandler">
         <enum-type name="Direction" />

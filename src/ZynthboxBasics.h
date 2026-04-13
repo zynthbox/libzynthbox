@@ -59,8 +59,70 @@ public:
     };
     Q_ENUM(Slot)
 
+    enum Button {
+        ButtonInvalid = -1,
+        ButtonMenu = 0,
+        ButtonNum1,
+        ButtonNum2,
+        ButtonNum3,
+        ButtonNum4,
+        ButtonNum5,
+        ButtonStar,
+        ButtonMode,
+        ButtonStep1,
+        ButtonStep2,
+        ButtonStep3,
+        ButtonStep4,
+        ButtonStep5,
+        ButtonStep6,
+        ButtonStep7,
+        ButtonStep8,
+        ButtonStep9,
+        ButtonStep10,
+        ButtonStep11,
+        ButtonStep12,
+        ButtonStep13,
+        ButtonStep14,
+        ButtonStep15,
+        ButtonStep16,
+        ButtonAlt,
+        ButtonRecord,
+        ButtonPlay,
+        ButtonMetronome,
+        ButtonStop,
+        ButtonBack,
+        ButtonUp,
+        ButtonSelect,
+        ButtonLeft,
+        ButtonDown,
+        ButtonRight,
+        ButtonGlobal,
+    };
+    Q_ENUM(Button)
+
+    enum KitVersion {
+        KitCustom = 0,
+        KitZ2V4,
+        KitZ2V5,
+        KitZ2V5B
+    };
+    Q_ENUM(KitVersion)
+
     Q_INVOKABLE QString slotLabelText(const Slot &slot) const;
     Q_INVOKABLE QString clipLabelText(const Slot &slot) const;
     Q_INVOKABLE QString soundSlotLabelText(const Slot &slot) const;
     Q_INVOKABLE QString fxLabelText(const Slot &slot) const;
+
+    /**
+     * /brief Returns the button ID for the given button, or -1 if the button is not valid for the current kit version.
+     * The button ID is determined based on the current kit version.
+     * 
+     * /param button The ZynthboxBasics::Button enum for which to retrieve the ID.
+     * /return The button ID corresponding to the given button and current kit version, or -1 if the button is not valid.
+     */
+    Q_INVOKABLE int buttonId(const Button &button) const;
+
+private:
+    class Private;
+    Private *d;
 };

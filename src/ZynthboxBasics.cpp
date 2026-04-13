@@ -1,11 +1,108 @@
+#include <QtGlobal>
+#include <QMetaEnum>
+#include <QMap>
+#include <QDebug>
 #include "ZynthboxBasics.h"
+
+class ZynthboxBasics::Private
+{
+public:
+    Private() {
+        QMetaEnum kitVersionMetaEnum = QMetaEnum::fromType<ZynthboxBasics::KitVersion>();
+        int value = kitVersionMetaEnum.keyToValue(std::getenv("ZYNTHIAN_KIT_VERSION"));
+        if (value != -1) {
+            kitVersion = static_cast<ZynthboxBasics::KitVersion>(value);
+        }
+    }
+
+    ZynthboxBasics::KitVersion kitVersion{ZynthboxBasics::KitVersion::KitCustom};
+    QMap<ZynthboxBasics::Button, int> buttonIdMapZ2V4 {
+        { ZynthboxBasics::ButtonMenu, 0 },
+        { ZynthboxBasics::ButtonNum1, 1 },
+        { ZynthboxBasics::ButtonNum2, 2 },
+        { ZynthboxBasics::ButtonNum3, 3 },
+        { ZynthboxBasics::ButtonNum4, 4 },
+        { ZynthboxBasics::ButtonNum5, 5 },
+        { ZynthboxBasics::ButtonStar, 6 },
+        { ZynthboxBasics::ButtonMode, 7 },
+        { ZynthboxBasics::ButtonStep1, 8 },
+        { ZynthboxBasics::ButtonStep2, 9 },
+        { ZynthboxBasics::ButtonStep3, 10 },
+        { ZynthboxBasics::ButtonStep4, 11 },
+        { ZynthboxBasics::ButtonStep5, 12 },
+        { ZynthboxBasics::ButtonStep6, -1 },
+        { ZynthboxBasics::ButtonStep7, -1 },
+        { ZynthboxBasics::ButtonStep8, -1 },
+        { ZynthboxBasics::ButtonStep9, -1 },
+        { ZynthboxBasics::ButtonStep10, -1 },
+        { ZynthboxBasics::ButtonStep11, -1 },
+        { ZynthboxBasics::ButtonStep12, -1 },
+        { ZynthboxBasics::ButtonStep13, -1 },
+        { ZynthboxBasics::ButtonStep14, -1 },
+        { ZynthboxBasics::ButtonStep15, -1 },
+        { ZynthboxBasics::ButtonStep16, -1 },
+        { ZynthboxBasics::ButtonAlt, 13 },
+        { ZynthboxBasics::ButtonRecord, 14 },
+        { ZynthboxBasics::ButtonPlay, 15 },
+        { ZynthboxBasics::ButtonMetronome, 16 },
+        { ZynthboxBasics::ButtonStop, 17 },
+        { ZynthboxBasics::ButtonBack, 18 },
+        { ZynthboxBasics::ButtonUp, 19 },
+        { ZynthboxBasics::ButtonSelect, 20 },
+        { ZynthboxBasics::ButtonLeft, 21 },
+        { ZynthboxBasics::ButtonDown, 22 },
+        { ZynthboxBasics::ButtonRight, 23 },
+        { ZynthboxBasics::ButtonGlobal, 24 }
+    };
+    QMap<ZynthboxBasics::Button, int> buttonIdMapZ2V5 {
+        { ZynthboxBasics::ButtonMenu, 0 },
+        { ZynthboxBasics::ButtonNum1, 1 },
+        { ZynthboxBasics::ButtonNum2, 2 },
+        { ZynthboxBasics::ButtonNum3, 3 },
+        { ZynthboxBasics::ButtonNum4, 4 },
+        { ZynthboxBasics::ButtonNum5, 5 },
+        { ZynthboxBasics::ButtonStar, 6 },
+        { ZynthboxBasics::ButtonMode, 7 },
+        { ZynthboxBasics::ButtonStep1, 8 },
+        { ZynthboxBasics::ButtonStep2, 9 },
+        { ZynthboxBasics::ButtonStep3, 10 },
+        { ZynthboxBasics::ButtonStep4, 11 },
+        { ZynthboxBasics::ButtonStep5, 12 },
+        { ZynthboxBasics::ButtonStep6, 13 },
+        { ZynthboxBasics::ButtonStep7, 14 },
+        { ZynthboxBasics::ButtonStep8, 15 },
+        { ZynthboxBasics::ButtonStep9, 16 },
+        { ZynthboxBasics::ButtonStep10, 17 },
+        { ZynthboxBasics::ButtonStep11, 18 },
+        { ZynthboxBasics::ButtonStep12, 19 },
+        { ZynthboxBasics::ButtonStep13, 20 },
+        { ZynthboxBasics::ButtonStep14, 21 },
+        { ZynthboxBasics::ButtonStep15, 22 },
+        { ZynthboxBasics::ButtonStep16, 23 },
+        { ZynthboxBasics::ButtonAlt, 24 },
+        { ZynthboxBasics::ButtonRecord, 25 },
+        { ZynthboxBasics::ButtonPlay, 26 },
+        { ZynthboxBasics::ButtonMetronome, 27 },
+        { ZynthboxBasics::ButtonStop, 28 },
+        { ZynthboxBasics::ButtonBack, 29 },
+        { ZynthboxBasics::ButtonUp, 30 },
+        { ZynthboxBasics::ButtonSelect, 31 },
+        { ZynthboxBasics::ButtonLeft, 32 },
+        { ZynthboxBasics::ButtonDown, 33 },
+        { ZynthboxBasics::ButtonRight, 34 },
+        { ZynthboxBasics::ButtonGlobal, 35 }
+    };
+};
 
 ZynthboxBasics::ZynthboxBasics(QObject* parent)
     : QObject(parent)
+    , d(new Private())
 { }
 
 ZynthboxBasics::~ZynthboxBasics()
-{ }
+{
+    delete d;
+}
 
 QString ZynthboxBasics::trackLabelText(const Track& track) const
 {
@@ -130,4 +227,24 @@ QString ZynthboxBasics::fxLabelText(const Slot& slot) const
             return QLatin1String{"FX Slot 5"};
     }
     return QLatin1String{"Unknown FX Slot"};
+}
+
+int ZynthboxBasics::buttonId(const Button &button) const
+{
+    int returnVal = -1;
+
+    switch (d->kitVersion) {
+        case KitVersion::KitZ2V4:
+            returnVal = d->buttonIdMapZ2V4.value(button, -1);
+            break;
+        case KitVersion::KitZ2V5:
+        case KitVersion::KitZ2V5B:
+            returnVal = d->buttonIdMapZ2V5.value(button, -1);
+            break;
+        default:
+            returnVal = -1;
+            break;
+    }
+
+    return returnVal;
 }
