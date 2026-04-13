@@ -117,8 +117,8 @@ public:
      * /brief Returns the button ID for the given button, or -1 if the button is not valid for the current kit version.
      * The button ID is determined based on the current kit version.
      * 
-     * /param button The ZynthboxBasics::Button enum for which to retrieve the ID.
-     * /return The button ID corresponding to the given button and current kit version, or -1 if the button is not valid.
+     * @param button The ZynthboxBasics::Button enum for which to retrieve the ID.
+     * @return The button ID corresponding to the given button and current kit version, or -1 if the button is not valid.
      */
     Q_INVOKABLE int buttonId(const Button &button) const;
 
