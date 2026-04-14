@@ -43,6 +43,7 @@ target_sources(libzynthbox
         JackPassthroughVisualiserItem.cpp
         JackThreadAffinitySetter.cpp
         KeyScales.cpp
+        LedManager.cpp
         MidiRecorder.cpp
         MidiRouter.cpp
         MidiRouterDevice.cpp

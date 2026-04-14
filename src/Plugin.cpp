@@ -77,6 +77,7 @@
 #include "SysexHelper.h"
 #include "SysexMessage.h"
 #include "AudioFileConverter.h"
+#include "LedManager.h"
 
 #include "folderlistmodel/qquickfolderlistmodel.h"
 
@@ -352,6 +353,7 @@ void Plugin::registerTypes(QQmlEngine *engine, const char *uri)
     qmlRegisterUncreatableType<MidiRouterDeviceModel>(uri, 1, 0, "MidiRouterDeviceModel", "Use model on MidiRouter to get the devices model");
     qmlRegisterUncreatableType<SettingsContainer>(uri, 1, 0, "SettingsContainer", "This is for internal use only");
     qmlRegisterUncreatableType<JackPassthroughFilter>(uri, 1, 0, "JackPassthroughFilter", "Find a list of these in the passthrough clients' equaliserSettings property");
+    qmlRegisterUncreatableType<LedManager>(uri, 1, 0, "LedManager", "LedManager is an attached property. Accessible as Zynthbox.LedManager on any QML object");
     qmlRegisterUncreatableType<MidiRouterDevice>(uri, 1, 0, "MidiRouterDevice", "Accessible through MidiRouterDeviceModel");
     qmlRegisterUncreatableType<MidiRouterFilter>(uri, 1, 0, "MidiRouterFilter", "Accessible through MidiRouterDevice (in turn accessible through MidiRouterDeviceModel)");
     qmlRegisterUncreatableType<MidiRouterFilterEntry>(uri, 1, 0, "MidiRouterFilterEntry", "Accessible through MidiRouterFilter");
