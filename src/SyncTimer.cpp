@@ -510,6 +510,8 @@ public:
     jack_client_t* jackClient{nullptr};
     jack_port_t* jackPort[ZynthboxTrackCount + 1];
     jack_port_t* jackPortController[ZynthboxTrackCount + 1];
+    int songPosition{0};
+    static const int songPositionToTimerTickMultiplier{24};
     quint64 jackPlayhead{0};
     quint64 jackCumulativePlayhead{0};
     // Used to calculate the quantized block rate BPM for the jack transport position's beats_per_minute field (jackBeatsPerMinute)
@@ -602,6 +604,7 @@ public:
                 for (int step = 0; step < StepRingCount; ++step) {
                     jackPlayheadForTimerTick[step] = UINT_MAX;
                 }
+                PlayfieldManager::instance()->setGlobalOffset((songPosition * songPositionToTimerTickMultiplier));
             }
             jackMostRecentNextUsecs = next_usecs;
         }
@@ -631,29 +634,31 @@ public:
 
         // If we are using an external clock, make sure that if we are ahead of that clock, our
         // steps line up in time with what TransportManager says reality is supposed to be
-        if (externalBpm > -1) {
-            const quint64 mostRecentlyClockedSyncTimerTick{transportManager->mostRecentlyClockedSyncTimerTick()};
-            // If we have not yet applied the adjustments for the current playhead, and we have a remote clock tick to test against...
-            if (stepPositionAdjustedAppliedForStep < jackPlayhead && mostRecentlyClockedSyncTimerTick < jackPlayhead) {
-                quint64 storedJackPlayheadForTimerTick{jackPlayheadForTimerTick[mostRecentlyClockedSyncTimerTick]};
-                quint64 jackFrameForLastSyncTimerTick{transportManager->jackFrameForLastSyncTimerTick()};
-                // If these two don't match, it means we have a discrepancy, and we should adjust our current playhead's position by that amount,
-                // forward or backward as appropriate... and also remember to actually ensure we adjust our playback as appropriate, not *just*
-                // the first one, in case it ends up not matching (so if we're attempting to schedule behind, make sure the next one is also
-                // scheduled backward, and if we're scheduling forward outside our current period, adjust the next step's playback position)
-                // NOTE Also remember to update the usecs position for (for stepNextPlaybackPosition and whatnot)
-                if (storedJackPlayheadForTimerTick < jackFrameForLastSyncTimerTick) {
-                    // We are behind, so we need to adjust our timing to push the next steps forward (so, positive adjustment)
-                    stepPositionAdjustment += int(jackFrameForLastSyncTimerTick - storedJackPlayheadForTimerTick);
-                    // qDebug() << Q_FUNC_INFO << "Adjusting step position forward by" << int(jackFrameForLastSyncTimerTick - storedJackPlayheadForTimerTick);
-                } else if (storedJackPlayheadForTimerTick > jackFrameForLastSyncTimerTick) {
-                    // We are ahead, so we need to adjust our timing to pull the next steps back (so, negative adjustment)
-                    stepPositionAdjustment -= int(storedJackPlayheadForTimerTick - jackFrameForLastSyncTimerTick);
-                    // qDebug() << Q_FUNC_INFO << "Adjusting step position backward by" << int(storedJackPlayheadForTimerTick - jackFrameForLastSyncTimerTick);
-                }
-                stepPositionAdjustedAppliedForStep = jackPlayhead;
-            }
-        }
+        // TODO Move this down to be handled per-step instead, since the information is scheduled in now...
+        // Also, make sure we are pulling jackPlayheadAtStart and using that for our comparisons (since that's how MIDI would count things)
+        // if (externalBpm > -1) {
+        //     const quint64 mostRecentlySynchronisedSyncTimerTick{transportManager->mostRecentlyClockedSyncTimerTick()};
+        //     // If we have not yet applied the adjustments for the current playhead, and we have a remote clock tick to test against...
+        //     if (stepPositionAdjustedAppliedForStep < mostRecentlySynchronisedSyncTimerTick && mostRecentlySynchronisedSyncTimerTick < jackPlayhead) {
+        //         quint64 storedJackPlayheadForTimerTick{jackPlayheadForTimerTick[mostRecentlySynchronisedSyncTimerTick % StepRingCount]};
+        //         quint64 jackFrameForLastSyncTimerTick{transportManager->jackFrameForLastSyncTimerTick()};
+        //         // If these two don't match, it means we have a discrepancy, and we should adjust our current playhead's position by that amount,
+        //         // forward or backward as appropriate... and also remember to actually ensure we adjust our playback as appropriate, not *just*
+        //         // the first one, in case it ends up not matching (so if we're attempting to schedule behind, make sure the next one is also
+        //         // scheduled backward, and if we're scheduling forward outside our current period, adjust the next step's playback position)
+        //         // NOTE Also remember to update the usecs position for (for stepNextPlaybackPosition and whatnot)
+        //         if (storedJackPlayheadForTimerTick < jackFrameForLastSyncTimerTick) {
+        //             // We are behind, so we need to adjust our timing to push the next steps forward (so, positive adjustment)
+        //             stepPositionAdjustment += int(jackFrameForLastSyncTimerTick - storedJackPlayheadForTimerTick);
+        //             qDebug() << Q_FUNC_INFO << "Adjusting step position for" << mostRecentlySynchronisedSyncTimerTick << "for playhead" << jackPlayhead << "forward by" << int(jackFrameForLastSyncTimerTick - storedJackPlayheadForTimerTick);
+        //         } else if (storedJackPlayheadForTimerTick > jackFrameForLastSyncTimerTick) {
+        //             // We are ahead, so we need to adjust our timing to pull the next steps back (so, negative adjustment)
+        //             stepPositionAdjustment -= int(storedJackPlayheadForTimerTick - jackFrameForLastSyncTimerTick);
+        //             qDebug() << Q_FUNC_INFO << "Adjusting step position for" << mostRecentlySynchronisedSyncTimerTick << "for playhead" << jackPlayhead << "backward by" << int(storedJackPlayheadForTimerTick - jackFrameForLastSyncTimerTick);
+        //         }
+        //         stepPositionAdjustedAppliedForStep = mostRecentlySynchronisedSyncTimerTick;
+        //     }
+        // }
 
         // As long as the next playback position is before this period is supposed to end, and we have frames for it, let's post some events
         while (stepNextPlaybackPosition < next_usecs && firstAvailableFrame < nframes) {
@@ -679,7 +684,11 @@ public:
                 if (formerFirstAvailableFrames < actualFrameAdjustment) {
                     const jack_nframes_t stillToAdjust{actualFrameAdjustment - formerFirstAvailableFrames};
                     actualFrameAdjustment = actualFrameAdjustment - stillToAdjust;
+                    qDebug() << Q_FUNC_INFO << "Adjusting things backwards" << stepPositionAdjustment << actualFrameAdjustment << stillToAdjust;
                     stepPositionAdjustment = -int(stillToAdjust);
+                } else {
+                    qDebug() << Q_FUNC_INFO << "Adjusting things backwards (final adjustment)" << stepPositionAdjustment << actualFrameAdjustment;
+                    stepPositionAdjustment = 0;
                 }
                 relativePosition -= actualFrameAdjustment;
                 firstAvailableFrame = relativePosition;
@@ -691,7 +700,11 @@ public:
                 if (maximumFrameAdjustment < actualFrameAdjustment) {
                     const jack_nframes_t stillToAdjust{actualFrameAdjustment - maximumFrameAdjustment};
                     actualFrameAdjustment = maximumFrameAdjustment;
+                    qDebug() << Q_FUNC_INFO << "Adjusting things forward" << stepPositionAdjustment << actualFrameAdjustment << stillToAdjust;
                     stepPositionAdjustment = int(stillToAdjust);
+                } else {
+                    qDebug() << Q_FUNC_INFO << "Adjusting things forward (final adjustment)" << stepPositionAdjustment << actualFrameAdjustment;
+                    stepPositionAdjustment = 0;
                 }
                 relativePosition += actualFrameAdjustment;
                 firstAvailableFrame = relativePosition;
@@ -781,6 +794,7 @@ public:
                             }
                             break;
                         case TimerCommand::StopPlaybackOperation:
+                            qDebug() << Q_FUNC_INFO << "Stop playback operation" << command;
                             if (stopPlayback(firstAvailableFrame + current_frames, stepNextPlaybackPosition)) {
                                 jack_midi_event_write(bufferSequencer[ZynthboxTrackCount], relativePosition, &jackMidiStopMessage, 1);
                             }
@@ -882,6 +896,15 @@ public:
                                 }
                                 break;
                             }
+                        case TimerCommand::SetSongPositionOperation:
+                            qDebug() << Q_FUNC_INFO << "Received Song Position Pointer (SPP):" << command->parameter << "making it bar.beat" << QString("%1.%2").arg(int(command->parameter / 16 + 1)).arg(command->parameter % 16 + 1) << "or offset" << command->parameter * songPositionToTimerTickMultiplier;
+                            songPosition = command->parameter;
+                            QMetaObject::invokeMethod(q, &SyncTimer::songPositionChanged, Qt::QueuedConnection);
+                            PlayfieldManager::instance()->setGlobalOffset((songPosition * songPositionToTimerTickMultiplier) - qint64(jackPlayhead));
+                            break;
+                        case TimerCommand::RegisterMidiClockSyncOperation:
+                            
+                            break;
                         case TimerCommand::StartClipOperation:
                         case TimerCommand::StopClipOperation:
                         case TimerCommand::InvalidOperation:
@@ -976,7 +999,7 @@ public:
         if (timerThread->isPaused()) {
             SegmentHandler *handler = SegmentHandler::instance();
             if (command->parameter == 1) {
-                handler->startPlayback(command->parameter2, command->bigParameter);
+                handler->startPlaybackActual(command->parameter2, command->bigParameter);
             } else {
                 qDebug() << Q_FUNC_INFO << "Starting metronome and playback";
                 PlayGridManager *pgm = PlayGridManager::instance();
@@ -1001,13 +1024,13 @@ public:
             }
             return true;
         } else {
-            qDebug() << Q_FUNC_INFO << "Attempted to start playback without playback running";
+            qDebug() << Q_FUNC_INFO << "Attempted to start playback with playback running, leaving the current state as is";
             return false;
         }
     }
     bool stopPlayback(jack_nframes_t currentFrame, jack_time_t currentFrameUsecs) {
         if (timerThread->isPaused()) {
-            qDebug() << Q_FUNC_INFO << "Attempted to stop playback when playback was already stopped";
+            qDebug() << Q_FUNC_INFO << "Attempted to stop playback when playback was already stopped, leaving the current state as is" << jackCumulativePlayhead << currentFrame << currentFrameUsecs;
             return false;
         } else {
             PlayGridManager *pgm = PlayGridManager::instance();
@@ -1027,7 +1050,7 @@ public:
                 for (QObject *object : qAsConst(sequenceModels)) {
                     SequenceModel *sequence{qobject_cast<SequenceModel*>(object)};
                     if (sequence) {
-                        sequence->stopSequencePlayback();
+                        sequence->disconnectSequencePlayback();
                     } else {
                         qWarning() << Q_FUNC_INFO << "Sequence for track" << i << "could not be fetched, and playback could not be stopped";
                     }
@@ -1044,7 +1067,6 @@ public:
                     QMetaObject::invokeMethod(pgm->zlSketchpad(), "stopRecording", Qt::QueuedConnection);
                 }
                 QMetaObject::invokeMethod(pgm->zlSketchpad(), "stopAllPlayback", Qt::DirectConnection);
-                pgm->stopMetronome();
                 q->stop();
                 PlayfieldManager::instance()->stopPlayback();
                 q->sendAllNotesOffEverywhereImmediately();
@@ -1414,10 +1436,7 @@ double SyncTimer::effectiveBpm() const
 
 int SyncTimer::songPosition() const
 {
-    if (d->transportManager->bpm() > -1) {
-        return d->transportManager->songPosition();
-    }
-    return -1;
+    return d->songPosition;
 }
 
 quint64 SyncTimer::scheduleAheadAmount() const
@@ -1559,7 +1578,9 @@ const quint64 SyncTimer::timerTickForJackPlayhead(const quint64& jackPlayhead, q
     for (; position < StepRingCount; ++position) {
         quint64 checkingPosition{(d->mostRecentlyUpdatedJackPlayheadForTimerTick - position) % StepRingCount};
         if (d->jackPlayheadForTimerTick[checkingPosition] <= jackPlayhead) {
-            *remainder = jackPlayhead - d->jackPlayheadForTimerTick[checkingPosition];
+            if (remainder) {
+                *remainder = jackPlayhead - d->jackPlayheadForTimerTick[checkingPosition];
+            }
             position = checkingPosition;
             break;
         }

@@ -329,15 +329,9 @@ public:
 
     QObject *syncTimer();
 
-    // Hook up the playgrid manager to the global timer, without actually starting it
-    Q_INVOKABLE void hookUpTimer();
     // Hook up the playgrid to the global timer, and request that it be started
     Q_INVOKABLE void startMetronome();
-    // TODO This is a temporary thing while we get the c++ side integrated properly
-    Q_SIGNAL void requestMetronomeStart();
     Q_INVOKABLE void stopMetronome();
-    // TODO This is a temporary thing while we get the c++ side integrated properly
-    Q_SIGNAL void requestMetronomeStop();
 
     /**
      * \brief Fired for each tick of the metronome

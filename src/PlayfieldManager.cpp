@@ -361,7 +361,6 @@ void PlayfieldManager::progressPlayback()
 void PlayfieldManager::stopPlayback()
 {
     d->playhead = 0;
-    d->globalOffset = 0;
     d->nextBarState.reset(-1);
     d->currentState.reset();
 }

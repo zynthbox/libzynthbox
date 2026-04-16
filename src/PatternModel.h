@@ -822,6 +822,10 @@ public:
      * \brief When turning off playback, this function will turn off any notes that are waiting to be turned off
      */
     void handleSequenceStop();
+    /**
+     * \brief This will reset any tested probability type things (used e.g. when all-notes-off is received)
+     */
+    void resetSequenceProbabilities();
 
     Q_SLOT void handleMidiMessage(const MidiRouter::ListenerPort &port, const quint64 &timestamp, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const int& sketchpadTrack, const QString& hardwareDeviceId);
 private:

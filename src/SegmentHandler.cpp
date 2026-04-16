@@ -551,6 +551,28 @@ int SegmentHandler::playheadSegment() const
 
 void SegmentHandler::startPlayback(qint64 startOffset, quint64 duration)
 {
+    d->syncTimer->scheduleStartPlayback(0, true, startOffset, duration);
+}
+
+qint64 SegmentHandler::startOffset() const
+{
+    return d->startOffset;
+}
+
+void SegmentHandler::stopPlayback()
+{
+    // Disconnect the global sequences
+    for (SequenceModel* sequence : qAsConst(d->sequenceModels)) {
+        sequence->disconnectSequencePlayback();
+    }
+    d->movePlayhead(-1, true);
+    PlayfieldManager::instance()->stopPlayback();
+    d->songMode = false;
+    Q_EMIT songModeChanged();
+}
+
+void SegmentHandler::startPlaybackActual(qint64 startOffset, quint64 duration)
+{
     d->songMode = true;
     Q_EMIT songModeChanged();
     d->startOffset = startOffset;
@@ -581,27 +603,8 @@ void SegmentHandler::startPlayback(qint64 startOffset, quint64 duration)
                 qWarning() << Q_FUNC_INFO << "Sequence in object" << object << "was apparently not a SequenceModel, and playback could not be prepared";
             }
         }
-        d->playGridManager->hookUpTimer();
         d->syncTimer->start();
     }
-}
-
-qint64 SegmentHandler::startOffset() const
-{
-    return d->startOffset;
-}
-
-void SegmentHandler::stopPlayback()
-{
-    // Disconnect the global sequences
-    for (SequenceModel* sequence : qAsConst(d->sequenceModels)) {
-        sequence->disconnectSequencePlayback();
-    }
-    d->playGridManager->stopMetronome();
-    d->movePlayhead(-1, true);
-    PlayfieldManager::instance()->stopPlayback();
-    d->songMode = false;
-    Q_EMIT songModeChanged();
 }
 
 void SegmentHandler::progressPlayback() const

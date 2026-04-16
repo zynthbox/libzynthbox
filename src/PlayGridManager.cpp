@@ -358,8 +358,14 @@ public:
                             }
                             activeNotesUpdater->start();
                             // Also use this to reset any patterns to their start state (for example if you've tested steps with probability on them)
+                            static const int PATTERN_COUNT{ZynthboxTrackCount * ZynthboxSlotCount};
                             for (SequenceModel *sequence : qAsConst(sequenceModels)) {
-                                sequence->stopSequencePlayback();
+                                for (int i = 0; i < PATTERN_COUNT; ++i) {
+                                    PatternModel *pattern = qobject_cast<PatternModel*>(sequence->get(i));
+                                    if (pattern) {
+                                        pattern->resetSequenceProbabilities();
+                                    }
+                                }
                             }
                         }
                     } else if (0xDF < byte1 && byte1 < 0xF0) {
@@ -491,8 +497,26 @@ PlayGridManager::PlayGridManager(QObject* parent)
     , d(new Private(this))
 {
     d->syncTimer = qobject_cast<SyncTimer*>(SyncTimer::instance());
+    timer_callback_ticker = this;
     connect(d->syncTimer, &SyncTimer::timerTick, this, &timer_callback, Qt::DirectConnection);
     connect(d->syncTimer, &SyncTimer::timerRunningChanged, this, &PlayGridManager::metronomeActiveChanged);
+    connect(d->syncTimer, &SyncTimer::timerRunningChanged, this, [this](){
+        if (d->syncTimer->timerRunning() == false) {
+            Q_EMIT metronomeTick(0);
+            d->metronomeBeat128th = 0;
+            Q_EMIT metronomeBeat128thChanged(d->metronomeBeat128th);
+            d->metronomeBeat64th = 0;
+            Q_EMIT metronomeBeat64thChanged(d->metronomeBeat64th);
+            d->metronomeBeat32nd = 0;
+            Q_EMIT metronomeBeat32ndChanged(d->metronomeBeat32nd);
+            d->metronomeBeat16th = 0;
+            Q_EMIT metronomeBeat16thChanged(d->metronomeBeat16th);
+            d->metronomeBeat8th = 0;
+            Q_EMIT metronomeBeat8thChanged(d->metronomeBeat8th);
+            d->metronomeBeat4th = 0;
+            Q_EMIT metronomeBeat4thChanged(d->metronomeBeat4th);
+        }
+    });
 
     // QDir defaultSequenceLocation{QString("%1/sequences/default-sequences").arg(QString(qgetenv("ZYNTHIAN_MY_DATA_DIR")))};
     // if (!defaultSequenceLocation.exists()) {
@@ -1215,46 +1239,15 @@ int PlayGridManager::metronomeBeat128th() const
     return d->metronomeBeat128th;
 }
 
-void hookUpAndMaybeStartTimer(PlayGridManager* pgm, bool startTimer = false)
-{
-    // If we've already registered ourselves to get a callback, don't do that again, it just gets silly
-    if (!timer_callback_ticker) {
-        // TODO Send start metronome request to libzl directly
-        timer_callback_ticker = pgm;
-    }
-    if (startTimer) {
-        Q_EMIT pgm->requestMetronomeStart();
-    }
-}
-
-void PlayGridManager::hookUpTimer()
-{
-    hookUpAndMaybeStartTimer(this);
-}
-
 void PlayGridManager::startMetronome()
 {
-    hookUpAndMaybeStartTimer(this, true);
+    SyncTimer::instance()->scheduleStartPlayback(0);
 }
 
 void PlayGridManager::stopMetronome()
 {
-    // TODO Send stop metronome request to libzl
-    timer_callback_ticker = nullptr;
-    Q_EMIT requestMetronomeStop();
-    QMetaObject::invokeMethod(this, "metronomeActiveChanged", Qt::QueuedConnection);
-    d->metronomeBeat4th = 0;
-    d->metronomeBeat8th = 0;
-    d->metronomeBeat16th = 0;
-    d->metronomeBeat32nd = 0;
-    d->metronomeBeat64th = 0;
-    d->metronomeBeat128th = 0;
-    Q_EMIT metronomeBeat4thChanged(0);
-    Q_EMIT metronomeBeat8thChanged(0);
-    Q_EMIT metronomeBeat16thChanged(0);
-    Q_EMIT metronomeBeat32ndChanged(0);
-    Q_EMIT metronomeBeat64thChanged(0);
-    Q_EMIT metronomeBeat128thChanged(0);
+    qDebug() << Q_FUNC_INFO;
+    d->syncTimer->scheduleStopPlayback(0);
 }
 
 bool PlayGridManager::metronomeActive() const

@@ -94,8 +94,16 @@ public:
     /**
      * \brief Stops playback
      */
-    Q_INVOKABLE void stopPlayback();
+    void stopPlayback();
 
+protected:
+    friend class SyncTimerPrivate;
+    /**
+     * \brief Performs the playback start operation (called by SyncTimer)
+     */
+    void startPlaybackActual(qint64 startOffset, quint64 duration);
+
+    friend class PlayGridManager;
     /**
      * \brief Called explicitly by PlayGridManager, to ensure SegmentHandler's progression happens at the right point
      */

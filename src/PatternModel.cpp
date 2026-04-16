@@ -2684,9 +2684,14 @@ void PatternModel::updateSequencePosition(qint64 sequencePosition)
 
 void PatternModel::handleSequenceStop()
 {
+    resetSequenceProbabilities();
+    setRecordLive(false);
+}
+
+void PatternModel::resetSequenceProbabilities()
+{
     d->invalidateProbabilities();
     d->mostRecentProbabilityResult = true;
-    setRecordLive(false);
 }
 
 void PatternModel::handleMidiMessage(const MidiRouter::ListenerPort &port, const quint64 &timestamp, const unsigned char &byte1, const unsigned char &byte2, const unsigned char &byte3, const int& sketchpadTrack, const QString& hardwareDeviceId)

@@ -433,8 +433,6 @@ public:
    * @param delay The amount of ticks to delay the stop of playback
    */
   Q_INVOKABLE void scheduleStopPlayback(quint64 delay);
-  Q_SIGNAL void pleaseStartPlayback();
-  Q_SIGNAL void pleaseStopPlayback();
 protected:
   // This allows MidiRouter to process SyncTimer explicitly (this way we avoid having to pass through jack, which already has plenty of clients to worry about)
   friend class MidiRouterPrivate;

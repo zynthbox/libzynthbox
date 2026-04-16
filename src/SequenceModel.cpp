@@ -37,7 +37,6 @@
 #include <QRegularExpression>
 #include <QTimer>
 
-#define ZynthboxSlotCount 5
 #define PATTERN_COUNT (ZynthboxTrackCount * ZynthboxSlotCount)
 static const QStringList globalSequenceNames{"global", "global2", "global3", "global4", "global5", "global6", "global7", "global8", "global9", "global10"};
 static const QStringList clipNames{"a", "b", "c", "d", "e"};
@@ -228,11 +227,6 @@ SequenceModel::SequenceModel(PlayGridManager* parent)
     d->zlSyncManager = new ZLSequenceSynchronisationManager(this);
     d->syncTimer = SyncTimer::instance();
     d->segmentHandler = SegmentHandler::instance();
-    connect(d->syncTimer, &SyncTimer::timerRunningChanged, this, [this](){
-        if (!d->syncTimer->timerRunning()) {
-            stopSequencePlayback();
-        }
-    }, Qt::DirectConnection);
     // Save yourself anytime changes, but not too often, and only after a second... Let's be a bit gentle here
     QTimer *saveThrottle = new QTimer(this);
     saveThrottle->setSingleShot(true);
@@ -799,13 +793,12 @@ void SequenceModel::prepareSequencePlayback()
         connect(playGridManager(), &PlayGridManager::metronomeTick, this, &SequenceModel::advanceSequence, Qt::DirectConnection);
         connect(playGridManager(), &PlayGridManager::metronomeTick, this, &SequenceModel::updatePatternPositions, Qt::DirectConnection);
     }
-    playGridManager()->hookUpTimer();
 }
 
 void SequenceModel::startSequencePlayback()
 {
     prepareSequencePlayback();
-    playGridManager()->startMetronome();
+    SyncTimer::instance()->scheduleStartPlayback(0);
 }
 
 void SequenceModel::disconnectSequencePlayback()
@@ -831,10 +824,9 @@ void SequenceModel::disconnectSequencePlayback()
 
 void SequenceModel::stopSequencePlayback()
 {
+    qDebug() << Q_FUNC_INFO;
     disconnectSequencePlayback();
-    if (d->isPlaying) {
-        playGridManager()->stopMetronome();
-    }
+    SyncTimer::instance()->scheduleStopPlayback(0);
 }
 
 void SequenceModel::resetSequence()

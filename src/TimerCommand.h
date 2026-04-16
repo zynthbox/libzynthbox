@@ -30,6 +30,8 @@ struct alignas(64) TimerCommand {
         MidiRecorderStartOperation = 30, ///@< Start recording a midi channel. parameter is the sketchpad track to record (-1 for global channel, 0 through 9 for sketchpad tracks)
         MidiRecorderStopOperation = 31, ///@< Stop any ongoing midi recordings
         SendMidiMessageOperation = 100, ///@< Send a midi message (will be inserted at the list of the current frame's other messages). Parameter is the sketchpadTrack to send the message out on, and the three further int parameters can be either a number from 0 through 255 (for midi) or any other value for to say the handling should stop there. E.g. you might send parameter=1, parameter2=176, parameter3=120, parameter4=-1 for length 2 message which sends all sounds off on channel 0 on sketchpad track 2
+        SetSongPositionOperation = 101, ///@< Sets the song position explicitly to the value in parameter (a number of MIDI Beats)
+        RegisterMidiClockSyncOperation = 102, ///@< INTERNAL - Used to forward MIDI Clock message information from the transport manager's ingest process to SyncTimer (parameter holding the jack frame for the relevant tick, and parameter2 holding the number of sync timer tick as counted from the most recent call to continue or start playback)
         RegisterCASOperation = 10001, ///@< INTERNAL - Register a ClipAudioSource with SamplerSynth, so it can be used for playback - dataParameter should contain a ClipAudioSource* object instance
         UnregisterCASOperation = 10002, ///@< INTERNAL - Unregister a ClipAudioSource with SamplerSynth, so it can be used for playback - dataParameter should contain a ClipAudioSource* object instance
     };
