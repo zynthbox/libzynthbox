@@ -205,10 +205,29 @@ public:
     void setButtonGlobalColor(QColor &color);
     Q_SIGNAL void buttonGlobalColorChanged();
 
+    /**
+     * /brief Signal emitted when the color of a button LED changes
+     * Handle this signal to get notified when any of the button LED colors change.
+     * 
+     * @param button The button whose LED color changed
+     * @param color The new color of the button's LED
+     */
     Q_SIGNAL void ledColorChanged(ZynthboxBasics::Button button, QColor &color);
 
+    /**
+     * /brief Resets the color of a specific button LED
+     * 
+     * @param button The button whose LED color should be reset to its default value
+     */
     Q_INVOKABLE void resetColor(ZynthboxBasics::Button button);
+    /**
+     * /brief Resets the colors of all button LEDs
+     */
     Q_INVOKABLE void resetAllColors();
+    /**
+     * /brief Gets the current colors of all button LEDs as a QVariantMap
+     * The keys of the map are button identifiers (as strings) and the values are the corresponding LED colors (as QColor).
+     */
     Q_INVOKABLE QVariantMap ledColors() const;
 
 private:
