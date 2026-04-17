@@ -2,16 +2,22 @@
 #include <QMetaEnum>
 #include <QMap>
 #include <QDebug>
+#include <QString>
 #include "ZynthboxBasics.h"
 
 class ZynthboxBasics::Private
 {
 public:
     Private() {
-        QMetaEnum kitVersionMetaEnum = QMetaEnum::fromType<ZynthboxBasics::KitVersion>();
-        int value = kitVersionMetaEnum.keyToValue(std::getenv("ZYNTHIAN_KIT_VERSION"));
-        if (value != -1) {
-            kitVersion = static_cast<ZynthboxBasics::KitVersion>(value);
+        QString envKitVersionStr = qEnvironmentVariable("ZYNTHIAN_KIT_VERSION", "Custom");
+        if (envKitVersionStr == QStringLiteral("Z2_V4")) {
+            kitVersion = ZynthboxBasics::KitVersion::KitZ2V4;
+        } else if (envKitVersionStr == QStringLiteral("Z2_V5")) {
+            kitVersion = ZynthboxBasics::KitVersion::KitZ2V5;
+        } else if (envKitVersionStr == QStringLiteral("Z2_V5B")) {
+            kitVersion = ZynthboxBasics::KitVersion::KitZ2V5B;
+        } else {
+            kitVersion = ZynthboxBasics::KitVersion::KitCustom;
         }
     }
 
