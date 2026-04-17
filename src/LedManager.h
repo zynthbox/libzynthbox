@@ -15,6 +15,10 @@ class LedManager : public QObject
 
     /**
      * /brief LED colors for the buttons on the Zynthbox
+     * Each button has a corresponding LED color property that can be read and set.
+     * Additionally, a general signal is emitted whenever any button LED color changes, providing the button identifier and the new color.
+     * 
+     * To reset overridden color for the default color to take over, set the color value to QColor(0, 0, 0, 0)
      */
     Q_PROPERTY(QColor buttonMenuColor READ buttonMenuColor WRITE setButtonMenuColor NOTIFY buttonMenuColorChanged)
     Q_PROPERTY(QColor buttonNum1Color READ buttonNum1Color WRITE setButtonNum1Color NOTIFY buttonNum1ColorChanged)
@@ -215,20 +219,23 @@ public:
     Q_SIGNAL void ledColorChanged(ZynthboxBasics::Button button, QColor &color);
 
     /**
-     * /brief Resets the color of a specific button LED
-     * 
-     * @param button The button whose LED color should be reset to its default value
+     * /brief Sets the color of a specific button LED
+     * Use this method to set the color of any button LED by providing the button enum and the desired color.
+     * Setting the color to QColor(0, 0, 0, 0) will clear any override for that button and allow the default color to take effect.
      */
-    Q_INVOKABLE void resetColor(ZynthboxBasics::Button button);
-    /**
-     * /brief Resets the colors of all button LEDs
-     */
-    Q_INVOKABLE void resetAllColors();
+    Q_INVOKABLE void setButtonColor(ZynthboxBasics::Button button, QColor color);
+
     /**
      * /brief Gets the current colors of all button LEDs as a QVariantMap
      * The keys of the map are button identifiers (as strings) and the values are the corresponding LED colors (as QColor).
      */
     Q_INVOKABLE QVariantMap ledColors() const;
+
+    /**
+     * /brief Clears all overridden LED colors, allowing default colors to take effect
+     * Setting an individual button color to QColor(0, 0, 0, 0) will also clear the override for that specific button.
+     */
+    Q_INVOKABLE void clearAllLedColors();
 
 private:
     class Private;
