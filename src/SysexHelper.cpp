@@ -265,13 +265,13 @@ void SysexHelper::process(void* outputBuffer) const
             } else if (errorCode == -EINVAL) {
                 // This happens when there is either an invalid buffer that we're being asked to write to, or we are asked to write past the end of the buffer's frame size, or we are asked to write before the most recent event's time
                 if (outputBuffer == nullptr) {
-                    qDebug() << Q_FUNC_INFO << "Attempted to write to an null buffer, which will fail badly. This is likely to happen during startup, so we will try again.";
+                    qDebug() << Q_FUNC_INFO << d->device->humanReadableName() << "Attempted to write to an invalid buffer, which will fail badly. The buffer passed to the function was" << outputBuffer;
                     break; // We explicitly do not mark the read head as having been read, which means the above is true
                 } else {
-                    qDebug() << Q_FUNC_INFO << "We have apparently been asked to write past the end of the buffer's length (but we are writing to time 0), or there are events in there already that have a later time (but how)?";
+                    qDebug() << Q_FUNC_INFO << d->device->humanReadableName() << "We have apparently been asked to write past the end of the buffer's length (but we are writing to time 0), or there are events in there already that have a later time (but how)?";
                 }
             } else if (errorCode != 0) {
-                qDebug() << Q_FUNC_INFO << "Some other error, what in the world is it, when we're only supposed (according to the docs) to get -ENOBUFFS, but also get -EINVAL sometimes?" << errorCode;
+                qDebug() << Q_FUNC_INFO << d->device->humanReadableName() << "Some other error, what in the world is it, when we're only supposed (according to the docs) to get -ENOBUFFS, but also get -EINVAL sometimes?" << errorCode;
             }
             if (d->outputRing.readHead->message->deleteOnSend()) {
                 d->outputRing.readHead->message->deleteLater();

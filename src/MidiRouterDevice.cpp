@@ -376,8 +376,10 @@ void MidiRouterDevice::processBegin(const jack_nframes_t &nframes)
         }
         midiOutputRing.markAsRead();
     }
-    // Send out any queued up sysex messages
-    d->sysexHelper->process(d->outputBuffer);
+    // Send out any queued up sysex messages (if we have a buffer to write them to)
+    if (d->outputBuffer) {
+        d->sysexHelper->process(d->outputBuffer);
+    }
     // Set up the input buffer and fetch the first event (if there are any)
     d->nextInputEventIndex = 0;
     currentInputEvent.size = 0;
