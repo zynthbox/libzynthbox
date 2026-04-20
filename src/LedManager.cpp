@@ -385,6 +385,7 @@ void LedManager::setButtonColor(ZynthboxBasics::Button button, QColor color) {
             case ZynthboxBasics::Button::ButtonGlobal:
                 Q_EMIT buttonGlobalColorChanged();
                 break;
+            case ZynthboxBasics::Button::ButtonInvalid:
             default:
                 break;
         }
