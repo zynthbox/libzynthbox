@@ -247,6 +247,7 @@ int ZynthboxBasics::buttonId(const Button &button) const
         case KitVersion::KitZ2V5B:
             returnVal = d->buttonIdMapZ2V5.value(button, -1);
             break;
+        case KitVersion::KitCustom:
         default:
             returnVal = -1;
             break;
