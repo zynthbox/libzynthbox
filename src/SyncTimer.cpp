@@ -361,6 +361,7 @@ public:
         StepData* previous{&stepRing[StepRingCount - 1]};
         for (quint64 i = 0; i < StepRingCount; ++i) {
             jackPlayheadForTimerTick[i] = UINT64_MAX;
+            jackPlayheadForCumulativeTimerTick[i] = UINT64_MAX;
             stepRing[i].index = i;
             stepRing[i].d = this;
             previous->next = &stepRing[i];
@@ -533,7 +534,9 @@ public:
     bool isPaused{true};
 
     quint64 mostRecentlyUpdatedJackPlayheadForTimerTick{0};
+    quint64 mostRecentlyUpdatedJackPlayheadForCumulativeTimerTick{0};
     quint64 jackPlayheadForTimerTick[StepRingCount];
+    quint64 jackPlayheadForCumulativeTimerTick[StepRingCount];
     jack_time_t current_usecs{0};
     jack_time_t refreshThingsAfter{0};
     quint64 jackPlayheadReturn{0};
@@ -547,6 +550,9 @@ public:
     // 0 here again)
     int stepPositionAdjustment{0};
     quint64 stepPositionAdjustedAppliedForStep{0};
+    quint64 midiTicksSinceLastRestart{UINT64_MAX};
+    quint64 mostRecentlyClockedSyncTimerTick{0};
+    quint64 jackCumulativePlayheadForMidiStartEvent{0};
     juce::MidiBuffer missingBitsBuffer[ZynthboxTrackCount + 1];
     int process(jack_nframes_t nframes) {
         // const std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
@@ -576,6 +582,7 @@ public:
         refreshThingsAfter = current_usecs + 5000;
         const quint64 microsecondsPerFrame = (next_usecs - current_usecs) / nframes;
 
+        const bool externalClockActive{transportManager->clockSourceAvailable()};
         const double externalBpm{transportManager->bpm()};
         // If the external BPM is above -1, use that and update the state if relevant
         if (externalBpm > -1) {
@@ -585,6 +592,7 @@ public:
                 jackPlayheadBpm = externalBpm;
             }
         }
+        bool adjustmentAppliedForThisRound{false};
         double thisStepBpm{jackPlayheadBpm};
         double thisStepSubbeatLengthInMicroseconds{double(timerThread->subbeatCountToNanoseconds(jackPlayheadBpm, 1)) / 1000.0};
 
@@ -599,6 +607,7 @@ public:
                 jackBar = jackBeat = jackBeatTick = jackTick = 0;
                 transportManager->restartTransport();
                 mostRecentlyUpdatedJackPlayheadForTimerTick = 0;
+                mostRecentlyUpdatedJackPlayheadForCumulativeTimerTick = 0;
                 stepPositionAdjustment = 0;
                 stepPositionAdjustedAppliedForStep = 0;
                 for (int step = 0; step < StepRingCount; ++step) {
@@ -632,34 +641,6 @@ public:
             }
         }
 
-        // If we are using an external clock, make sure that if we are ahead of that clock, our
-        // steps line up in time with what TransportManager says reality is supposed to be
-        // TODO Move this down to be handled per-step instead, since the information is scheduled in now...
-        // Also, make sure we are pulling jackPlayheadAtStart and using that for our comparisons (since that's how MIDI would count things)
-        // if (externalBpm > -1) {
-        //     const quint64 mostRecentlySynchronisedSyncTimerTick{transportManager->mostRecentlyClockedSyncTimerTick()};
-        //     // If we have not yet applied the adjustments for the current playhead, and we have a remote clock tick to test against...
-        //     if (stepPositionAdjustedAppliedForStep < mostRecentlySynchronisedSyncTimerTick && mostRecentlySynchronisedSyncTimerTick < jackPlayhead) {
-        //         quint64 storedJackPlayheadForTimerTick{jackPlayheadForTimerTick[mostRecentlySynchronisedSyncTimerTick % StepRingCount]};
-        //         quint64 jackFrameForLastSyncTimerTick{transportManager->jackFrameForLastSyncTimerTick()};
-        //         // If these two don't match, it means we have a discrepancy, and we should adjust our current playhead's position by that amount,
-        //         // forward or backward as appropriate... and also remember to actually ensure we adjust our playback as appropriate, not *just*
-        //         // the first one, in case it ends up not matching (so if we're attempting to schedule behind, make sure the next one is also
-        //         // scheduled backward, and if we're scheduling forward outside our current period, adjust the next step's playback position)
-        //         // NOTE Also remember to update the usecs position for (for stepNextPlaybackPosition and whatnot)
-        //         if (storedJackPlayheadForTimerTick < jackFrameForLastSyncTimerTick) {
-        //             // We are behind, so we need to adjust our timing to push the next steps forward (so, positive adjustment)
-        //             stepPositionAdjustment += int(jackFrameForLastSyncTimerTick - storedJackPlayheadForTimerTick);
-        //             qDebug() << Q_FUNC_INFO << "Adjusting step position for" << mostRecentlySynchronisedSyncTimerTick << "for playhead" << jackPlayhead << "forward by" << int(jackFrameForLastSyncTimerTick - storedJackPlayheadForTimerTick);
-        //         } else if (storedJackPlayheadForTimerTick > jackFrameForLastSyncTimerTick) {
-        //             // We are ahead, so we need to adjust our timing to pull the next steps back (so, negative adjustment)
-        //             stepPositionAdjustment -= int(storedJackPlayheadForTimerTick - jackFrameForLastSyncTimerTick);
-        //             qDebug() << Q_FUNC_INFO << "Adjusting step position for" << mostRecentlySynchronisedSyncTimerTick << "for playhead" << jackPlayhead << "backward by" << int(storedJackPlayheadForTimerTick - jackFrameForLastSyncTimerTick);
-        //         }
-        //         stepPositionAdjustedAppliedForStep = mostRecentlySynchronisedSyncTimerTick;
-        //     }
-        // }
-
         // As long as the next playback position is before this period is supposed to end, and we have frames for it, let's post some events
         while (stepNextPlaybackPosition < next_usecs && firstAvailableFrame < nframes) {
             StepData *stepData = stepReadHead;
@@ -680,11 +661,12 @@ public:
             if (stepPositionAdjustment < 0) {
                 // Negative adjustment means we need to pull the step back a bit in time...
                 // NB: Don't push things further back than the first available frame
+                const jack_nframes_t maximumFrameAdjustment{firstAvailableFrame - formerFirstAvailableFrames};
                 jack_nframes_t actualFrameAdjustment{jack_nframes_t(abs(stepPositionAdjustment))};
-                if (formerFirstAvailableFrames < actualFrameAdjustment) {
-                    const jack_nframes_t stillToAdjust{actualFrameAdjustment - formerFirstAvailableFrames};
+                if (maximumFrameAdjustment < actualFrameAdjustment) {
+                    const jack_nframes_t stillToAdjust{actualFrameAdjustment - maximumFrameAdjustment};
                     actualFrameAdjustment = actualFrameAdjustment - stillToAdjust;
-                    qDebug() << Q_FUNC_INFO << "Adjusting things backwards" << stepPositionAdjustment << actualFrameAdjustment << stillToAdjust;
+                    qDebug() << Q_FUNC_INFO << "Adjusting things backwards" << stepPositionAdjustment << actualFrameAdjustment << stillToAdjust << "resulting in a relative position of" << relativePosition - actualFrameAdjustment;
                     stepPositionAdjustment = -int(stillToAdjust);
                 } else {
                     qDebug() << Q_FUNC_INFO << "Adjusting things backwards (final adjustment)" << stepPositionAdjustment << actualFrameAdjustment;
@@ -692,6 +674,8 @@ public:
                 }
                 relativePosition -= actualFrameAdjustment;
                 firstAvailableFrame = relativePosition;
+                // Also adjust stepNextPlaybackPosition back by the same amount (this is a bit more fluffy due to floating point conversions and whatnot, but...)
+                stepNextPlaybackPosition -= actualFrameAdjustment * microsecondsPerFrame;
             } else if (0 < stepPositionAdjustment) {
                 // Positive adjustment means we need to push the step forward in time a bit
                 // NB: Don't push further ahead than the last frame in the period
@@ -708,10 +692,14 @@ public:
                 }
                 relativePosition += actualFrameAdjustment;
                 firstAvailableFrame = relativePosition;
+                // Also adjust stepNextPlaybackPosition forward by the same amount (this is a bit more fluffy due to floating point conversions and whatnot, but...)
+                stepNextPlaybackPosition += std::clamp(actualFrameAdjustment * microsecondsPerFrame, quint64(0), quint64(period_usecs));
             }
             // Assign this step's position, so we can retrieve it if any consumers need that (such as for live recording reasons)
             mostRecentlyUpdatedJackPlayheadForTimerTick = jackPlayhead;
             jackPlayheadForTimerTick[jackPlayhead % StepRingCount] = current_frames + relativePosition;
+            mostRecentlyUpdatedJackPlayheadForCumulativeTimerTick = jackCumulativePlayhead;
+            jackPlayheadForCumulativeTimerTick[jackCumulativePlayhead % StepRingCount] = current_frames + relativePosition;
             // Make sure there's a midi beat pulse going out if one is needed (that is, on tick 0)
             if (jackMidiBeatTick == TicksPerMidiBeatClock) {
                 jackMidiBeatTick = 0;
@@ -780,7 +768,7 @@ public:
                     switch (command->operation) {
                         case TimerCommand::StartPlaybackOperation:
                             if (startPlayback(command, firstAvailableFrame + current_frames, stepNextPlaybackPosition)) {
-                                if (transportManager->bpm() > -1) {
+                                if (externalClockActive) {
                                     // When starting playback from externally, we suddenly end up in that weird situation where playback *already began* before we did anything.
                                     // Consequently, we set the playhead at start to whatever the jack frame was when the most recent start event was sent through the transport manager
                                     jackPlayheadAtStart = transportManager->jackFrameForLastRestart();
@@ -788,8 +776,9 @@ public:
                                     // Start playback does in fact happen here, but anything scheduled for step 0 of playback will happen on /next/ step.
                                     // Consequently, we'll need to kind of lie a little bit, since playback actually will start next step, not this step.
                                     jackPlayheadAtStart = firstAvailableFrame + current_frames + (thisStepSubbeatLengthInMicroseconds / microsecondsPerFrame);
+                                    // Tell any listener that playback should begin (if transport manager's handling things, just use that)
+                                    jack_midi_event_write(bufferSequencer[ZynthboxTrackCount], relativePosition, &jackMidiStartMessage, 1);
                                 }
-                                jack_midi_event_write(bufferSequencer[ZynthboxTrackCount], relativePosition, &jackMidiStartMessage, 1); // Tell any listener that playback should begin
                                 jackMidiBeatTick = 0; // Ensure a tick heads out on the next loop, so that playback actually starts on anything that is expected to
                             }
                             break;
@@ -897,13 +886,97 @@ public:
                                 break;
                             }
                         case TimerCommand::SetSongPositionOperation:
-                            qDebug() << Q_FUNC_INFO << "Received Song Position Pointer (SPP):" << command->parameter << "making it bar.beat" << QString("%1.%2").arg(int(command->parameter / 16 + 1)).arg(command->parameter % 16 + 1) << "or offset" << command->parameter * songPositionToTimerTickMultiplier;
                             songPosition = command->parameter;
                             QMetaObject::invokeMethod(q, &SyncTimer::songPositionChanged, Qt::QueuedConnection);
-                            PlayfieldManager::instance()->setGlobalOffset((songPosition * songPositionToTimerTickMultiplier) - qint64(jackPlayhead));
                             break;
                         case TimerCommand::RegisterMidiClockSyncOperation:
-                            
+                            switch(command->parameter2) {
+                                case 0xf2: // Song Position Pointer
+                                {
+                                    // Only allow song position calls when playback is stopped
+                                    if (timerThread->isPaused()) {
+                                        songPosition = command->parameter3;
+                                        QMetaObject::invokeMethod(q, &SyncTimer::songPositionChanged, Qt::QueuedConnection);
+                                        PlayfieldManager::instance()->setGlobalOffset((songPosition * songPositionToTimerTickMultiplier));
+                                        qDebug() << Q_FUNC_INFO << "Received Song Position Pointer (SPP):" << songPosition << "making it bar.beat" << QString("%1.%2").arg(int(songPosition / 16 + 1)).arg(songPosition % 16 + 1) << "resulting in global offset" << (songPosition * songPositionToTimerTickMultiplier);
+                                    }
+                                    break;
+                                }
+                                case 0xf8: // clock
+                                {
+                                    // Update the SyncTimer tick adjustment values, so it can catch up (or fall behind) according to whatever the midi ticks are telling us to do
+                                    // That is, when we get a midi clock event, make sure we count up, so things can be scheduled as required.
+                                    // Optimally we want to also do some interpolation logic here, so we can intersperse ticks inside that timer... perhaps we can do
+                                    // that by synctimer knowing the BPM, and adjusting to each tick (either by pushing forward or backward) when it slips out of sync
+                                    // with the midi ticks, and otherwise "simply" operate entirely on BPM value the way we're doing already? That seems like it'd
+                                    // likely work reasonably well and scale both up and down...
+                                    if (midiTicksSinceLastRestart < UINT64_MAX) {
+                                        ++midiTicksSinceLastRestart;
+                                    } else {
+                                        // On the first run, we'll hit the first down-beat, so count that as 0 (yes, the ++ should also do this, but let's be very extremely explicit here)
+                                        midiTicksSinceLastRestart = 0;
+                                    }
+                                    quint64 jackFrameForLastSyncTimerTick{0};
+                                    bool applyAdjustment{false};
+                                    // Update the SyncTimer tick data, so it can keep itself in sync
+                                    if (BeatSubdivisions > command->parameter3) {
+                                        // If the internal PPQN is higher than the clock source, make sure we're counting up the most recent time we got a clock event by by the number of sync timer steps that are in the clock source's clock period
+                                        const quint64 syncTimerIncrementPerTick = quint64(BeatSubdivisions / command->parameter3);
+                                        mostRecentlyClockedSyncTimerTick += syncTimerIncrementPerTick;
+                                        jackFrameForLastSyncTimerTick = quint64(command->parameter);
+                                        applyAdjustment = true;
+
+                                    } else {
+                                        // If the external PPQN is the same or higher, update the ticks when we have an appropriate multiple of ticks since the last update
+                                        const quint64 syncTimerIncrementPerTick = quint64(command->parameter3 / BeatSubdivisions);
+                                        if (midiTicksSinceLastRestart == ((1 + mostRecentlyClockedSyncTimerTick) * syncTimerIncrementPerTick)) {
+                                            ++mostRecentlyClockedSyncTimerTick;
+                                            jackFrameForLastSyncTimerTick = quint64(command->parameter);
+                                            applyAdjustment = true;
+                                        }
+                                    }
+                                    // If we are using an external clock, make sure that if we are ahead of or behind that clock, our
+                                    // steps line up in time with what TransportManager says reality is supposed to be
+                                    if (externalClockActive && mostRecentlyClockedSyncTimerTick <= jackPlayhead && applyAdjustment && adjustmentAppliedForThisRound == false) {
+                                        // We only want to apply the adjustment once per process run (otherwise we're going to be introducing some nasty wibbly wobbly timey wimey stuff that we really want to avoid)
+                                        adjustmentAppliedForThisRound = true;
+                                        quint64 storedJackFramesForTimerTick{jackPlayheadForCumulativeTimerTick[(jackCumulativePlayheadForMidiStartEvent + mostRecentlyClockedSyncTimerTick) % StepRingCount]};
+                                        // If these two don't match, it means we have a discrepancy, and we should adjust our current playhead's position by that amount,
+                                        // forward or backward as appropriate... and also remember to actually ensure we adjust our playback as appropriate, not *just*
+                                        // the first one, in case it ends up not matching (so if we're attempting to schedule behind, make sure the next one is also
+                                        // scheduled backward, and if we're scheduling forward outside our current period, adjust the next step's playback position)
+                                        if (storedJackFramesForTimerTick < jackFrameForLastSyncTimerTick) {
+                                            // We are behind, so we need to adjust our timing to push the next steps forward (so, positive adjustment)
+                                            stepPositionAdjustment += int(jackFrameForLastSyncTimerTick - storedJackFramesForTimerTick);
+                                            qDebug() << Q_FUNC_INFO << "Adjusting step position for" << mostRecentlyClockedSyncTimerTick << "for playhead" << jackPlayhead << "forward by" << int(jackFrameForLastSyncTimerTick - storedJackFramesForTimerTick);
+                                        } else if (storedJackFramesForTimerTick > jackFrameForLastSyncTimerTick) {
+                                            // We are ahead, so we need to adjust our timing to pull the next steps back (so, negative adjustment)
+                                            stepPositionAdjustment -= int(storedJackFramesForTimerTick - jackFrameForLastSyncTimerTick);
+                                            qDebug() << Q_FUNC_INFO << "Adjusting step position for" << mostRecentlyClockedSyncTimerTick << "for playhead" << jackPlayhead << "backward by" << int(storedJackFramesForTimerTick - jackFrameForLastSyncTimerTick);
+                                        }
+                                    }
+                                    break;
+                                }
+                                case 0xfa: // start
+                                case 0xfb: // continue
+                                    // MIDI Continue should continue where we started from (that is, not resetting the song position)
+                                    // MIDI Start should reset the song position and start from the beginning
+                                    if (command->parameter2 == 0xfa) {
+                                        songPosition = 0;
+                                        QMetaObject::invokeMethod(q, &SyncTimer::songPositionChanged, Qt::QueuedConnection);
+                                        PlayfieldManager::instance()->setGlobalOffset(0);
+                                    }
+                                    // For both, though, we should reset the number of ticks since the restart, and start counting from scratch
+                                    jackCumulativePlayheadForMidiStartEvent = jackCumulativePlayhead;
+                                    // We need the first tick to be a downbeat that we synchronise to, so... ensure that that happens by starting with -1 ticks (we're counting 0-indexed here for maths reasons)
+                                    midiTicksSinceLastRestart = UINT64_MAX;
+                                    mostRecentlyClockedSyncTimerTick = 0;
+                                    stepPositionAdjustment = 0;
+                                    break;
+                                case 0xfc: // stop
+                                    // MIDI Stop simply stops playback, and doesn't change any of the other playback data
+                                    break;
+                            }
                             break;
                         case TimerCommand::StartClipOperation:
                         case TimerCommand::StopClipOperation:
@@ -1580,6 +1653,22 @@ const quint64 SyncTimer::timerTickForJackPlayhead(const quint64& jackPlayhead, q
         if (d->jackPlayheadForTimerTick[checkingPosition] <= jackPlayhead) {
             if (remainder) {
                 *remainder = jackPlayhead - d->jackPlayheadForTimerTick[checkingPosition];
+            }
+            position = checkingPosition;
+            break;
+        }
+    }
+    return position;
+}
+
+const quint64 SyncTimer::cumulativeTimerTickForJackPlayhead(const quint64& jackPlayhead, quint64* remainder) const
+{
+    quint64 position = 0;
+    for (; position < StepRingCount; ++position) {
+        quint64 checkingPosition{(d->mostRecentlyUpdatedJackPlayheadForCumulativeTimerTick - position) % StepRingCount};
+        if (d->jackPlayheadForCumulativeTimerTick[checkingPosition] <= jackPlayhead) {
+            if (remainder) {
+                *remainder = jackPlayhead - d->jackPlayheadForCumulativeTimerTick[checkingPosition];
             }
             position = checkingPosition;
             break;

@@ -65,6 +65,10 @@ public:
      * @param device The device which should be used as clock source (or null to reset to none)
      */
     void setClockSource(MidiRouterDevice* device);
+    /**
+     * \brief Whether the external clock source is currently available
+     */
+    bool clockSourceAvailable() const;
 private:
     TransportManagerPrivate *d{nullptr};
 };

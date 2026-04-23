@@ -69,14 +69,17 @@ public:
                 }
                 break;
             } else {
+                const jack_nframes_t currentMidiClockFrame{(current_frames + event.time)};
                 switch(event.buffer[0]) {
                     case 0xf2: // Song Position Pointer
                     {
                         // The SSP is a 14 bit value which holds the position of the song in a number of MIDI Beats (a midi beat being one 16th of a note/bar, or a quarter of a quarter note to use ppqn terms)
                         const int newSongPosition = (event.buffer[2]<<7) | event.buffer[1];
                         TimerCommand *command = syncTimer->getTimerCommand();
-                        command->operation = TimerCommand::SetSongPositionOperation;
-                        command->parameter = newSongPosition;
+                        command->operation = TimerCommand::RegisterMidiClockSyncOperation;
+                        command->parameter = int(currentMidiClockFrame);
+                        command->parameter2 = event.buffer[0];
+                        command->parameter3 = newSongPosition;
                         syncTimer->scheduleTimerCommand(0, command);
                         songPosition = newSongPosition;
                         // Reset the position counter, to ensure the song position stays in sync with the clock progression as expected
@@ -116,8 +119,6 @@ public:
                             // That should basically not be possible, and we can't really work with that
                             continue;
                         }
-                        const jack_nframes_t currentMidiClockFrame{(current_frames + event.time)};
-                        // const jack_time_t currentTimestamp{jack_frames_to_time(client, currentMidiClockFrame)};
                         // Logic is, have a rolling number of timestamps up to 16, depending on a couple of things:
                         // - If there is only a small amount of change, assume this is not a jump in bpm, and instead that it is a smooth slide to another (or jitter), and allow that
                         // - If there is a larger jump in the timestamp delta between the previous and the incoming one, assume we are jumping to a new bpm, clear out previous timestamps, and start calculations from scratch
@@ -200,35 +201,14 @@ public:
                                 }
                             }
                         }
-                        // Update the SyncTimer tick adjustment values, so it can catch up (or fall behind) according to whatever the midi ticks are telling us to do
-                        // That is, when we get a midi clock event, make sure we count up and push ticks to SyncTimer, so things can be scheduled as required.
-                        // Optimally we want to also do some interpolation logic here, so we can intersperse ticks inside that timer... perhaps we can do
-                        // that by synctimer knowing the BPM, and adjusting to each tick (either by pushing forward or backward) when it slips out of sync
-                        // with the midi ticks, and otherwise "simply" operate entirely on BPM value the way we're doing already? That seems like it'd
-                        // likely work reasonably well and scale both up and down...
-                        ++midiTicksSinceLastRestart;
-                        mostRecentTickJackFrame = currentMidiClockFrame;
-                        // Update the SyncTimer tick data, so it can keep itself in sync
-                        if (internalPPQN > clockSourcePPQN) {
-                            // If the internal PPQN is higher than the clock source, make sure we're counting up the most recent time we got a clock event by by the number of sync timer steps that are in the clock source's clock period
-                            mostRecentlyClockedSyncTimerTick += syncTimerIncrementPerTick;
-                            jackFrameForLastSyncTimerTick = currentMidiClockFrame;
+                        // Finally, make sure SyncTimer is aware of the operation
+                        {
                             TimerCommand *command = syncTimer->getTimerCommand();
                             command->operation = TimerCommand::RegisterMidiClockSyncOperation;
-                            command->parameter = int(jackFrameForLastSyncTimerTick);
-                            command->parameter2 = mostRecentlyClockedSyncTimerTick;
+                            command->parameter = int(currentMidiClockFrame);
+                            command->parameter2 = event.buffer[0];
+                            command->parameter3 = clockSourcePPQN;
                             syncTimer->scheduleTimerCommand(0, command);
-                        } else {
-                            // If the external PPQN is the same or higher, update the ticks when we have an appropriate multiple of ticks since the last update
-                            if (midiTicksSinceLastRestart == ((1 + mostRecentlyClockedSyncTimerTick) * syncTimerIncrementPerTick)) {
-                                ++mostRecentlyClockedSyncTimerTick;
-                                jackFrameForLastSyncTimerTick = currentMidiClockFrame;
-                                TimerCommand *command = syncTimer->getTimerCommand();
-                                command->operation = TimerCommand::RegisterMidiClockSyncOperation;
-                                command->parameter = int(jackFrameForLastSyncTimerTick);
-                                command->parameter2 = mostRecentlyClockedSyncTimerTick;
-                                syncTimer->scheduleTimerCommand(0, command);
-                            }
                         }
                         break;
                     }
@@ -261,6 +241,13 @@ public:
                         // Also reset the clock times for bpm estimation (as we'll need to be starting from scratch with that - a START or CONTINUE message indicating that the next midi beat clock event is the downbeat)
                         memset(previousMidiClockFrames, 0, sizeof(jack_nframes_t)*16);
                         mostRecentPlaybackControlEvent = event.buffer[0];
+                        {
+                            TimerCommand *command = syncTimer->getTimerCommand();
+                            command->operation = TimerCommand::RegisterMidiClockSyncOperation;
+                            command->parameter = int(currentMidiClockFrame);
+                            command->parameter2 = event.buffer[0];
+                            syncTimer->scheduleTimerCommand(0, command);
+                        }
                         break;
                     case 0xfc: // stop
                         // Spec says to ignore stop messages if they arrive while playback is already stopped
@@ -271,6 +258,13 @@ public:
                             syncTimer->scheduleStopPlayback(0);
                         }
                         mostRecentPlaybackControlEvent = event.buffer[0];
+                        {
+                            TimerCommand *command = syncTimer->getTimerCommand();
+                            command->operation = TimerCommand::RegisterMidiClockSyncOperation;
+                            command->parameter = int(currentMidiClockFrame);
+                            command->parameter2 = event.buffer[0];
+                            syncTimer->scheduleTimerCommand(0, command);
+                        }
                         break;
                     case 0xf9: // tick
                         // qDebug() << Q_FUNC_INFO << "Received MIDI Tick";
@@ -464,4 +458,9 @@ void TransportManager::setClockSource(MidiRouterDevice* device)
     command->parameter = d->songPosition;
     d->syncTimer->scheduleTimerCommand(0, command);
     Q_EMIT d->syncTimer->effectiveBpmChanged();
+}
+
+bool TransportManager::clockSourceAvailable() const
+{
+    return d->clockSourceDevice != nullptr;
 }
