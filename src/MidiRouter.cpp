@@ -532,6 +532,12 @@ public:
                             }
                             passthroughOutputPort->routerDevice->writeEventToOutput(*event, eventDeviceFilterEntry);
                         }
+                    } else if (event->size > 3) {
+                        QList<int> list;
+                        for (size_t i = 0; i < event->size; ++i) {
+                            list << event->buffer[i];
+                        }
+                        qWarning() << "ZLRouter: Got ourselves a" << event->size << "bytes long message from" << eventDevice->humanReadableName() << "here:" << list;
                     } else {
                         qWarning() << "ZLRouter: Something's badly wrong and we've ended up with a message supposedly on channel" << eventChannel << event->size << event->buffer[0] << (event->size > 1 ? event->buffer[1] : 0) << (event->size > 2 ? event->buffer[2] : 0);
                     }
