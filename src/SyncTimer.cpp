@@ -768,17 +768,11 @@ public:
                     switch (command->operation) {
                         case TimerCommand::StartPlaybackOperation:
                             if (startPlayback(command, firstAvailableFrame + current_frames, stepNextPlaybackPosition)) {
-                                if (externalClockActive) {
-                                    // When starting playback from externally, we suddenly end up in that weird situation where playback *already began* before we did anything.
-                                    // Consequently, we set the playhead at start to whatever the jack frame was when the most recent start event was sent through the transport manager
-                                    jackPlayheadAtStart = transportManager->jackFrameForLastRestart();
-                                } else {
-                                    // Start playback does in fact happen here, but anything scheduled for step 0 of playback will happen on /next/ step.
-                                    // Consequently, we'll need to kind of lie a little bit, since playback actually will start next step, not this step.
-                                    jackPlayheadAtStart = firstAvailableFrame + current_frames + (thisStepSubbeatLengthInMicroseconds / microsecondsPerFrame);
-                                    // Tell any listener that playback should begin (if transport manager's handling things, just use that)
-                                    jack_midi_event_write(bufferSequencer[ZynthboxTrackCount], relativePosition, &jackMidiStartMessage, 1);
-                                }
+                                // Start playback does in fact happen here, but anything scheduled for step 0 of playback will happen on /next/ step.
+                                // Consequently, we'll need to kind of lie a little bit, since playback actually will start next step, not this step.
+                                jackPlayheadAtStart = firstAvailableFrame + current_frames + (thisStepSubbeatLengthInMicroseconds / microsecondsPerFrame);
+                                // Tell any listener that playback should begin (if transport manager's handling things, just use that)
+                                jack_midi_event_write(bufferSequencer[ZynthboxTrackCount], relativePosition, &jackMidiStartMessage, 1);
                                 jackMidiBeatTick = 0; // Ensure a tick heads out on the next loop, so that playback actually starts on anything that is expected to
                             }
                             break;
@@ -972,9 +966,20 @@ public:
                                     midiTicksSinceLastRestart = UINT64_MAX;
                                     mostRecentlyClockedSyncTimerTick = 0;
                                     stepPositionAdjustment = 0;
+                                    // Actually perform playback start at this point
+                                    if (startPlayback(command, firstAvailableFrame + current_frames, stepNextPlaybackPosition)) {
+                                        // When starting playback from externally, we suddenly end up in that weird situation where playback *already began* before we did anything.
+                                        // Consequently, we set the playhead at start to whatever the jack frame was when the most recent start event was sent through the transport manager
+                                        jackPlayheadAtStart = transportManager->jackFrameForLastRestart();
+                                        jackMidiBeatTick = 0; // Ensure a tick heads out on the next loop, so that playback actually starts on anything that is expected to
+                                    }
                                     break;
                                 case 0xfc: // stop
                                     // MIDI Stop simply stops playback, and doesn't change any of the other playback data
+                                    if (stopPlayback(firstAvailableFrame + current_frames, stepNextPlaybackPosition) == false) {
+                                        // Unless we were already stopped (at which point we want to send a panic command out)
+                                        q->sendAllNotesOffEverywhereImmediately();
+                                    }
                                     break;
                             }
                             break;

@@ -236,7 +236,6 @@ public:
                                 command->parameter = songPosition;
                                 syncTimer->scheduleTimerCommand(0, command);
                             }
-                            syncTimer->scheduleStartPlayback(0);
                         }
                         // Also reset the clock times for bpm estimation (as we'll need to be starting from scratch with that - a START or CONTINUE message indicating that the next midi beat clock event is the downbeat)
                         memset(previousMidiClockFrames, 0, sizeof(jack_nframes_t)*16);
@@ -252,11 +251,6 @@ public:
                     case 0xfc: // stop
                         // Spec says to ignore stop messages if they arrive while playback is already stopped
                         qDebug() << Q_FUNC_INFO << "Received MIDI STOP message";
-                        if (mostRecentPlaybackControlEvent == 0xfc) {
-                            syncTimer->sendAllNotesOffEverywhereImmediately();
-                        } else {
-                            syncTimer->scheduleStopPlayback(0);
-                        }
                         mostRecentPlaybackControlEvent = event.buffer[0];
                         {
                             TimerCommand *command = syncTimer->getTimerCommand();
