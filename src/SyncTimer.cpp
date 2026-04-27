@@ -411,6 +411,7 @@ public:
     // The next step to be read in the step ring
     StepData* stepReadHead{nullptr};
     quint64 stepNextPlaybackPosition{0};
+    quint64 stepNextPlaybackPositionFrames{0};
     /**
      * \brief Get the ring buffer position based on the given delay from the current playback position (cumulativeBeat if playing, or stepReadHead if not playing)
      * @param delay The delay of the position to use
@@ -619,6 +620,7 @@ public:
         }
         if (stepNextPlaybackPosition == 0) {
             stepNextPlaybackPosition = current_usecs;
+            stepNextPlaybackPositionFrames = current_frames;
         }
 
         jack_time_t currentStepUsecsStart{0};
@@ -676,6 +678,7 @@ public:
                 firstAvailableFrame = relativePosition;
                 // Also adjust stepNextPlaybackPosition back by the same amount (this is a bit more fluffy due to floating point conversions and whatnot, but...)
                 stepNextPlaybackPosition -= actualFrameAdjustment * microsecondsPerFrame;
+                stepNextPlaybackPositionFrames = stepNextPlaybackPosition / microsecondsPerFrame;
             } else if (0 < stepPositionAdjustment) {
                 // Positive adjustment means we need to push the step forward in time a bit
                 // NB: Don't push further ahead than the last frame in the period
@@ -694,6 +697,7 @@ public:
                 firstAvailableFrame = relativePosition;
                 // Also adjust stepNextPlaybackPosition forward by the same amount (this is a bit more fluffy due to floating point conversions and whatnot, but...)
                 stepNextPlaybackPosition += std::clamp(actualFrameAdjustment * microsecondsPerFrame, quint64(0), quint64(period_usecs));
+                stepNextPlaybackPositionFrames = stepNextPlaybackPosition / microsecondsPerFrame;
             }
             // Assign this step's position, so we can retrieve it if any consumers need that (such as for live recording reasons)
             mostRecentlyUpdatedJackPlayheadForTimerTick = jackPlayhead;
@@ -931,6 +935,7 @@ public:
                                     }
                                     // If we are using an external clock, make sure that if we are ahead of or behind that clock, our
                                     // steps line up in time with what TransportManager says reality is supposed to be
+                                    // TODO Don't test against jackPlayhead, test against a "have we applied stuff for this tick yet" variable... like it was before (thanks past me ;) )
                                     if (externalClockActive && mostRecentlyClockedSyncTimerTick <= jackPlayhead && applyAdjustment && adjustmentAppliedForThisRound == false) {
                                         // We only want to apply the adjustment once per process run (otherwise we're going to be introducing some nasty wibbly wobbly timey wimey stuff that we really want to avoid)
                                         adjustmentAppliedForThisRound = true;
@@ -1038,6 +1043,7 @@ public:
             }
             // Now roll to the next step's playback position
             stepNextPlaybackPosition += thisStepSubbeatLengthInMicroseconds;
+            stepNextPlaybackPositionFrames = stepNextPlaybackPosition / microsecondsPerFrame;
         }
         // Finally, update with whatever is left
         updatedJackBeatsPerMinute += jackPlayheadBpm * double(currentStepUsecsEnd - currentStepUsecsStart) / period_usecs;
@@ -1583,6 +1589,11 @@ const quint64 &SyncTimer::jackPlayhead() const
         return (*d->stepReadHead).index;
     }
     return d->jackPlayhead;
+}
+
+const quint64 SyncTimer::jackPlayheadFrames() const
+{
+    return d->stepNextPlaybackPositionFrames;
 }
 
 const quint64 &SyncTimer::jackPlayheadUsecs() const

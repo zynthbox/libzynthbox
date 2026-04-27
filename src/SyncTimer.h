@@ -187,6 +187,11 @@ public:
    */
   const quint64 &jackPlayhead() const;
   /**
+   * \brief The frame position at the end of the most recent Jack process run
+   * @returns The internal jack playhead position in frames
+   */
+  Q_INVOKABLE const quint64 jackPlayheadFrames() const;
+  /**
    * \brief Used for playback purposes, for synchronising the sampler synth loop playback
    * In short - you probably don't need this, unless you need to sync specifically with jack's internal playback position
    * (which is the usecs position of the jack playhead)
